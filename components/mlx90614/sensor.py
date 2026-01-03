@@ -9,18 +9,14 @@ from esphome.const import (
     UNIT_CELSIUS,
 )
 
-CODEOWNERS = ["@you"]
 DEPENDENCIES = ["i2c"]
 
-mlx_ns = cg.esphome_ns.namespace("mlx90614_esf")
-MLX90614ESFComponent = mlx_ns.class_(
-    "MLX90614ESFComponent", cg.PollingComponent, i2c.I2CDevice
-)
+mlx_ns = cg.esphome_ns.namespace("mlx90614")
+MLX90614Component = mlx_ns.class_("MLX90614Component", cg.PollingComponent, i2c.I2CDevice)
 
 CONF_AMBIENT = "ambient"
 CONF_OBJECT = "object"
 CONF_OBJECT2 = "object2"
-CONF_VERIFY_PEC = "verify_pec"
 
 SENSOR_SCHEMA = sensor.sensor_schema(
     unit_of_measurement=UNIT_CELSIUS,
@@ -32,13 +28,10 @@ SENSOR_SCHEMA = sensor.sensor_schema(
 CONFIG_SCHEMA = (
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(MLX90614ESFComponent),
-
+            cv.GenerateID(): cv.declare_id(MLX90614Component),
             cv.Optional(CONF_AMBIENT): SENSOR_SCHEMA,
             cv.Optional(CONF_OBJECT): SENSOR_SCHEMA,
             cv.Optional(CONF_OBJECT2): SENSOR_SCHEMA,
-
-            cv.Optional(CONF_VERIFY_PEC, default=True): cv.boolean,
         }
     )
     .extend(cv.polling_component_schema("60s"))
@@ -50,18 +43,17 @@ async def to_code(config):
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
-    # Keep a copy of the address for PEC calculation.
+    # Needed for PEC calculation.
     cg.add(var.set_slave_address(config[CONF_ADDRESS]))
-    cg.add(var.set_verify_pec(config[CONF_VERIFY_PEC]))
 
     if CONF_AMBIENT in config:
-        sens = await sensor.new_sensor(config[CONF_AMBIENT])
-        cg.add(var.set_ambient_sensor(sens))
+        s = await sensor.new_sensor(config[CONF_AMBIENT])
+        cg.add(var.set_ambient_sensor(s))
 
     if CONF_OBJECT in config:
-        sens = await sensor.new_sensor(config[CONF_OBJECT])
-        cg.add(var.set_object_sensor(sens))
+        s = await sensor.new_sensor(config[CONF_OBJECT])
+        cg.add(var.set_object_sensor(s))
 
     if CONF_OBJECT2 in config:
-        sens = await sensor.new_sensor(config[CONF_OBJECT2])
-        cg.add(var.set_object2_sensor(sens))
+        s = await sensor.new_sensor(config[CONF_OBJECT2])
+        cg.add(var.set_object2_sensor(s))
