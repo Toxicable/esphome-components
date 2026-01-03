@@ -14,7 +14,7 @@ from esphome.const import (
 
 DEPENDENCIES = ["i2c"]
 
-lps25hb_ns = cg.esphome_ns.namespace("lps25hb")
+lps25hb_ns = cg.esphome_ns.namespace("LPS25hb")
 LPS25HBComponent = lps25hb_ns.class_("LPS25HBComponent", cg.PollingComponent, i2c.I2CDevice)
 
 CONFIG_SCHEMA = (
