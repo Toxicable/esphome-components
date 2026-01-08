@@ -21,56 +21,25 @@ static constexpr uint32_t ACK_PULSE_US = 22;
 
 const char *DRV8243Output::handshake_result_str_(HandshakeResult r) const {
   switch (r) {
-    case HandshakeResult::NOT_RUN:
-      return "not_run";
-    case HandshakeResult::VERIFIED_OK:
-      return "verified_ok";
-    case HandshakeResult::VERIFIED_FAIL:
-      return "verified_fail";
-    case HandshakeResult::UNVERIFIED:
-      return "unverified";
-    default:
-      return "unknown";
+    case HandshakeResult::NOT_RUN: return "not_run";
+    case HandshakeResult::VERIFIED_OK: return "verified_ok";
+    case HandshakeResult::VERIFIED_FAIL: return "verified_fail";
+    case HandshakeResult::UNVERIFIED: return "unverified";
+    default: return "unknown";
   }
-}
-
-void DRV8243Output::set_flip_polarity(bool flip) {
-  // Keep the same meaning as your existing config option:
-  // flip_polarity is the default OUT2 level.
-  flip_polarity_ = flip;
-
-  // Also apply to runtime so changes take effect immediately
-  this->set_polarity_level(flip);
-}
-
-void DRV8243Output::set_polarity_level(bool level) {
-  polarity_level_ = level;
-  if (out2_pin_ != nullptr) {
-    out2_pin_->digital_write(polarity_level_);
-  }
-  ESP_LOGI(TAG, "Polarity OUT2 now %s", polarity_level_ ? "HIGH" : "LOW");
-}
-
-void DRV8243Output::toggle_polarity() {
-  this->set_polarity_level(!polarity_level_);
-  // Keep the config variable aligned with the runtime state so logs/UI make sense
-  flip_polarity_ = polarity_level_;
 }
 
 void DRV8243Output::dump_config() {
   ESP_LOGCONFIG(TAG, "DRV8243 Output");
-  ESP_LOGCONFIG(TAG, "  OUT1 (PWM): configured");
+  ESP_LOGCONFIG(TAG, "  OUT1 (PWM): %s", out1_output_ ? "configured" : "NOT SET");
   ESP_LOGCONFIG(TAG, "  nSLEEP pin: %s", nsleep_pin_ ? nsleep_pin_->dump_summary().c_str() : "NOT SET");
   ESP_LOGCONFIG(TAG, "  nFAULT pin: %s", nfault_pin_ ? nfault_pin_->dump_summary().c_str() : "NOT SET");
 
   if (out2_pin_ != nullptr) {
     ESP_LOGCONFIG(TAG, "  OUT2 pin: %s", out2_pin_->dump_summary().c_str());
-    ESP_LOGCONFIG(TAG, "  Default polarity (flip_polarity): %s (OUT2=%s)",
-                  flip_polarity_ ? "true" : "false",
-                  flip_polarity_ ? "HIGH" : "LOW");
-    ESP_LOGCONFIG(TAG, "  Runtime polarity: %s", polarity_level_ ? "HIGH" : "LOW");
+    ESP_LOGCONFIG(TAG, "  Flip polarity (OUT2=%s)", flip_polarity_ ? "HIGH" : "LOW");
   } else {
-    ESP_LOGCONFIG(TAG, "  OUT2 pin: NOT SET");
+    ESP_LOGCONFIG(TAG, "  OUT2 pin: NOT SET (polarity should be controlled externally)");
   }
 
   ESP_LOGCONFIG(TAG, "  Handshake: %s", handshake_result_str_(handshake_result_));
@@ -89,13 +58,11 @@ void DRV8243Output::setup() {
     nfault_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
   }
 
+  // OUT2 is optional
   if (out2_pin_) {
     out2_pin_->setup();
     out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
-
-    // Initialize runtime polarity from configured default
-    polarity_level_ = flip_polarity_;
-    out2_pin_->digital_write(polarity_level_);
+    out2_pin_->digital_write(flip_polarity_);
   }
 }
 
@@ -147,14 +114,9 @@ void DRV8243Output::write_state(float state) {
   if (!out1_output_)
     return;
 
-  // Apply runtime polarity every time we drive
-  if (out2_pin_ != nullptr) {
-    out2_pin_->digital_write(polarity_level_);
-  }
-
   // Run handshake once, first time we're asked to turn on
   if (!handshake_ran_ && state > 0.0005f) {
-    ESP_LOGI(TAG, "DRV8243 start (polarity_out2=%s)", polarity_level_ ? "HIGH" : "LOW");
+    ESP_LOGI(TAG, "DRV8243 start");
     handshake_result_ = do_handshake_();
     handshake_ran_ = true;
 
@@ -165,6 +127,11 @@ void DRV8243Output::write_state(float state) {
     } else {
       ESP_LOGE(TAG, "DRV8243 failed to start (check wiring / nSLEEP / nFAULT)");
     }
+  }
+
+  // Only drive OUT2 if configured (otherwise ESPHome controls polarity separately)
+  if (out2_pin_) {
+    out2_pin_->digital_write(flip_polarity_);
   }
 
   if (state <= 0.0005f) {
