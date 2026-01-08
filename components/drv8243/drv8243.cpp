@@ -34,6 +34,28 @@ const char *DRV8243Output::handshake_result_str_(HandshakeResult r) const {
   }
 }
 
+void DRV8243Output::set_flip_polarity(bool flip) {
+  // Keep backwards-compatible meaning:
+  // flip_polarity is the default/out2 level we want when driving.
+  flip_polarity_ = flip;
+  // Also update the runtime level immediately so HA button changes take effect.
+  this->set_polarity_level(flip);
+}
+
+void DRV8243Output::set_polarity_level(bool level) {
+  polarity_level_ = level;
+  if (out2_pin_ != nullptr) {
+    out2_pin_->digital_write(polarity_level_);
+  }
+  ESP_LOGI(TAG, "Polarity OUT2 now %s", polarity_level_ ? "HIGH" : "LOW");
+}
+
+void DRV8243Output::toggle_polarity() {
+  this->set_polarity_level(!polarity_level_);
+  // Keep flip_polarity_ aligned with what we’re actually doing at runtime
+  flip_polarity_ = polarity_level_;
+}
+
 void DRV8243Output::dump_config() {
   ESP_LOGCONFIG(TAG, "DRV8243 Output");
   ESP_LOGCONFIG(TAG, "  OUT1 (PWM): configured");
@@ -42,7 +64,7 @@ void DRV8243Output::dump_config() {
 
   if (out2_pin_ != nullptr) {
     ESP_LOGCONFIG(TAG, "  OUT2 pin: %s", out2_pin_->dump_summary().c_str());
-    ESP_LOGCONFIG(TAG, "  Flip polarity: %s (OUT2=%s)",
+    ESP_LOGCONFIG(TAG, "  Flip polarity default: %s (OUT2=%s)",
                   flip_polarity_ ? "true" : "false",
                   flip_polarity_ ? "HIGH" : "LOW");
   } else {
@@ -50,7 +72,7 @@ void DRV8243Output::dump_config() {
   }
 
   ESP_LOGCONFIG(TAG, "  Handshake: %s", handshake_result_str_(handshake_result_));
-  ESP_LOGCONFIG(TAG, "  Tip: if LED doesn't light, toggle 'flip_polarity'.");
+  ESP_LOGCONFIG(TAG, "  Tip: if device drives the wrong direction, toggle polarity.");
 }
 
 void DRV8243Output::setup() {
@@ -58,7 +80,7 @@ void DRV8243Output::setup() {
   if (nsleep_pin_) {
     nsleep_pin_->setup();
     nsleep_pin_->pin_mode(gpio::FLAG_OUTPUT);
-    nsleep_pin_->digital_write(true);  // default awake
+    nsleep_pin_->digital_write(true);  // default awake (handshake later still forces sleep/wake)
   }
 
   if (nfault_pin_) {
@@ -66,12 +88,14 @@ void DRV8243Output::setup() {
     nfault_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
   }
 
-if (out2_pin_) {
-  out2_pin_->setup();
-  out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
-  polarity_level_ = flip_polarity_;        // initial default
-  out2_pin_->digital_write(polarity_level_);
-}
+  if (out2_pin_) {
+    out2_pin_->setup();
+    out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
+
+    // Initialize runtime polarity from configured default
+    polarity_level_ = flip_polarity_;
+    out2_pin_->digital_write(polarity_level_);
+  }
 }
 
 DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
@@ -124,7 +148,7 @@ void DRV8243Output::write_state(float state) {
 
   // Run handshake once, first time we're asked to turn on (so users see logs)
   if (!handshake_ran_ && state > 0.0005f) {
-    ESP_LOGI(TAG, "DRV8243 start (flip_polarity=%s)", flip_polarity_ ? "true" : "false");
+    ESP_LOGI(TAG, "DRV8243 start (polarity_out2=%s)", polarity_level_ ? "HIGH" : "LOW");
     handshake_result_ = do_handshake_();
     handshake_ran_ = true;
 
@@ -137,14 +161,14 @@ void DRV8243Output::write_state(float state) {
     }
   }
 
+  // Always apply the runtime polarity level (so HA button changes take effect)
+  if (out2_pin_ != nullptr) {
+    out2_pin_->digital_write(polarity_level_);
+  }
+
   if (state <= 0.0005f) {
     out1_output_->set_level(0.0f);
     return;
-  }
-
-// ensure the polarity is set
-  if (out2_pin_ != nullptr) {
-    out2_pin_->digital_write(polarity_level_);
   }
 
   float x = state;
@@ -162,18 +186,6 @@ void DRV8243Output::write_state(float state) {
   if (y > 1.0f) y = 1.0f;
 
   out1_output_->set_level(y);
-}
-
-void DRV8243Output::set_polarity(bool level) {
-  polarity_level_ = level;
-  if (out2_pin_ != nullptr) {
-    out2_pin_->digital_write(polarity_level_);
-  }
-  ESP_LOGI(TAG, "DRV8243 polarity now %s", polarity_level_ ? "HIGH" : "LOW");
-}
-
-void DRV8243Output::toggle_polarity() {
-  set_polarity(!polarity_level_);
 }
 
 }  // namespace drv8243

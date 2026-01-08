@@ -24,9 +24,15 @@ class DRV8243Output : public Component, public output::FloatOutput {
   void dump_config() override;
   void write_state(float state) override;
 
+  // Existing config semantics: "flip_polarity" is the default OUT2 level
+  // We keep this method so your YAML/codegen continues to work.
+  void set_flip_polarity(bool flip);
+  bool get_flip_polarity() const { return flip_polarity_; }
+
+  // Runtime polarity control (what you asked for)
+  void set_polarity_level(bool level);
+  bool get_polarity_level() const { return polarity_level_; }
   void toggle_polarity();
-  void set_polarity(bool level);
-  bool get_polarity() const { return polarity_level_; }
 
  protected:
   enum class HandshakeResult : uint8_t { NOT_RUN = 0, VERIFIED_OK, VERIFIED_FAIL, UNVERIFIED };
