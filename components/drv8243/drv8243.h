@@ -24,6 +24,10 @@ class DRV8243Output : public Component, public output::FloatOutput {
   void dump_config() override;
   void write_state(float state) override;
 
+  void toggle_polarity();
+  void set_polarity(bool level);
+  bool get_polarity() const { return polarity_level_; }
+
  protected:
   enum class HandshakeResult : uint8_t { NOT_RUN = 0, VERIFIED_OK, VERIFIED_FAIL, UNVERIFIED };
 
@@ -38,6 +42,8 @@ class DRV8243Output : public Component, public output::FloatOutput {
   float min_level_{0.014f};
   float exponent_{1.8f};
   bool flip_polarity_{false};
+  bool polarity_level_{false};
+
 
   bool handshake_ran_{false};
   HandshakeResult handshake_result_{HandshakeResult::NOT_RUN};

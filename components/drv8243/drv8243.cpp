@@ -66,11 +66,12 @@ void DRV8243Output::setup() {
     nfault_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
   }
 
-  if (out2_pin_) {
-    out2_pin_->setup();
-    out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
-    out2_pin_->digital_write(flip_polarity_);  // default false => LOW
-  }
+if (out2_pin_) {
+  out2_pin_->setup();
+  out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
+  polarity_level_ = flip_polarity_;        // initial default
+  out2_pin_->digital_write(polarity_level_);
+}
 }
 
 DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
@@ -141,9 +142,10 @@ void DRV8243Output::write_state(float state) {
     return;
   }
 
-  // ensure the polarity is set
-  out2_pin_->digital_write(flip_polarity_);  // default false => LOW
-
+// ensure the polarity is set
+  if (out2_pin_ != nullptr) {
+    out2_pin_->digital_write(polarity_level_);
+  }
 
   float x = state;
   if (x < 0.0f) x = 0.0f;
@@ -160,6 +162,18 @@ void DRV8243Output::write_state(float state) {
   if (y > 1.0f) y = 1.0f;
 
   out1_output_->set_level(y);
+}
+
+void DRV8243Output::set_polarity(bool level) {
+  polarity_level_ = level;
+  if (out2_pin_ != nullptr) {
+    out2_pin_->digital_write(polarity_level_);
+  }
+  ESP_LOGI(TAG, "DRV8243 polarity now %s", polarity_level_ ? "HIGH" : "LOW");
+}
+
+void DRV8243Output::toggle_polarity() {
+  set_polarity(!polarity_level_);
 }
 
 }  // namespace drv8243
