@@ -141,6 +141,10 @@ void DRV8243Output::write_state(float state) {
     return;
   }
 
+  // ensure the polarity is set
+  out2_pin_->digital_write(flip_polarity_);  // default false => LOW
+
+
   float x = state;
   if (x < 0.0f) x = 0.0f;
   if (x > 1.0f) x = 1.0f;
