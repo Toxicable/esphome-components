@@ -8,6 +8,7 @@ from esphome import pins
 from . import DRV8243Output
 
 DEPENDENCIES = ["ledc"]
+AUTO_LOAD = ["ledc"]
 
 CONF_OUT1 = "out1"
 CONF_LEDC = "ledc"
