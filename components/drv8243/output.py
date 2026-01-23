@@ -54,7 +54,6 @@ async def to_code(config):
     if CONF_LEDC in config:
         ledc_config = config[CONF_LEDC]
         cg.add_define("USE_LEDC")
-        cg.add_global(cg.RawExpression('#include "esphome/components/ledc/ledc_output.h"'))
         await ledc_output.to_code(ledc_config)
         out1 = await cg.get_variable(ledc_config[CONF_ID])
     else:
