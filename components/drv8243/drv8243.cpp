@@ -41,12 +41,31 @@ namespace esphome
     {
       ESP_LOGCONFIG(TAG, "DRV8243 Output");
       ESP_LOGCONFIG(TAG, "  OUT1 (PWM): %s", out1_output_ ? "configured" : "NOT SET");
-      ESP_LOGCONFIG(TAG, "  nSLEEP pin: %s", nsleep_pin_ ? nsleep_pin_->dump_summary().c_str() : "NOT SET");
-      ESP_LOGCONFIG(TAG, "  nFAULT pin: %s", nfault_pin_ ? nfault_pin_->dump_summary().c_str() : "NOT SET");
+      char pin_summary[64];
+      if (nsleep_pin_)
+      {
+        nsleep_pin_->dump_summary(pin_summary, sizeof(pin_summary));
+        ESP_LOGCONFIG(TAG, "  nSLEEP pin: %s", pin_summary);
+      }
+      else
+      {
+        ESP_LOGCONFIG(TAG, "  nSLEEP pin: NOT SET");
+      }
+
+      if (nfault_pin_)
+      {
+        nfault_pin_->dump_summary(pin_summary, sizeof(pin_summary));
+        ESP_LOGCONFIG(TAG, "  nFAULT pin: %s", pin_summary);
+      }
+      else
+      {
+        ESP_LOGCONFIG(TAG, "  nFAULT pin: NOT SET");
+      }
 
       if (out2_pin_ != nullptr)
       {
-        ESP_LOGCONFIG(TAG, "  OUT2 pin: %s", out2_pin_->dump_summary().c_str());
+        out2_pin_->dump_summary(pin_summary, sizeof(pin_summary));
+        ESP_LOGCONFIG(TAG, "  OUT2 pin: %s", pin_summary);
         ESP_LOGCONFIG(TAG, "  Flip polarity (OUT2=%s)", flip_polarity_ ? "HIGH" : "LOW");
       }
       else
