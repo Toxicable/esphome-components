@@ -1,6 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import ledc, output
+from esphome.components import output
+from esphome.components.ledc import output as ledc_output
 from esphome.const import CONF_ID
 from esphome import pins
 
@@ -29,7 +30,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(DRV8243Output),
 
             cv.Optional(CONF_OUT1): cv.use_id(output.FloatOutput),
-            cv.Optional(CONF_LEDC): ledc.CONFIG_SCHEMA,
+            cv.Optional(CONF_LEDC): ledc_output.CONFIG_SCHEMA,
 
             cv.Required(CONF_NSLEEP_PIN): pins.gpio_output_pin_schema,
             cv.Optional(CONF_NFAULT_PIN): pins.gpio_input_pin_schema,
@@ -52,7 +53,7 @@ async def to_code(config):
 
     if CONF_LEDC in config:
         ledc_config = config[CONF_LEDC]
-        await ledc.to_code(ledc_config)
+        await ledc_output.to_code(ledc_config)
         out1 = await cg.get_variable(ledc_config[CONF_ID])
     else:
         out1 = await cg.get_variable(config[CONF_OUT1])
