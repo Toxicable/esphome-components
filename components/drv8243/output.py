@@ -7,6 +7,8 @@ from esphome import pins
 
 from . import DRV8243Output
 
+DEPENDENCIES = ["ledc"]
+
 CONF_OUT1 = "out1"
 CONF_LEDC = "ledc"
 CONF_NSLEEP_PIN = "nsleep_pin"
@@ -54,6 +56,7 @@ async def to_code(config):
     if CONF_LEDC in config:
         ledc_config = config[CONF_LEDC]
         cg.add_define("USE_LEDC")
+        cg.add_define("USE_LEDC_OUTPUT")
         await ledc_output.to_code(ledc_config)
         out1 = await cg.get_variable(ledc_config[CONF_ID])
     else:
