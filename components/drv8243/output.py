@@ -75,10 +75,12 @@ async def to_code(config):
 
     ch1 = await _resolve_channel(config[CONF_CH1])
     cg.add(var.set_out1_output(ch1))
+    cg.add(var.set_out1_component(ch1))
 
     if CONF_CH2 in config:
         ch2 = await _resolve_channel(config[CONF_CH2])
         cg.add(var.set_out2_output(ch2))
+        cg.add(var.set_out2_component(ch2))
 
     nsleep = await cg.gpio_pin_expression(config[CONF_NSLEEP_PIN])
     cg.add(var.set_nsleep_pin(nsleep))

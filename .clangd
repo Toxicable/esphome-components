@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -std=gnu++17
+    - -x
+    - c++
+    - -I/usr/local/lib/python3.11/dist-packages
+    - -I/usr/local/lib/python3.11/site-packages
+    - -I/workspaces/esphome-components

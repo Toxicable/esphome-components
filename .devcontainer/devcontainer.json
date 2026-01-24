@@ -1,0 +1,33 @@
+{
+  "name": "esphome-components",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceFolder": "/workspaces/esphome-components",
+  "mounts": [
+    "source=${localEnv:HOME}/.codex,target=/home/vscode/.codex,type=bind,consistency=cached"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-vscode.cpptools",
+        "openai.chatgpt"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "C_Cpp.default.includePath": [
+          "/usr/local/lib/python3.11/dist-packages",
+          "/usr/local/lib/python3.11/site-packages",
+          "${workspaceFolder}/**"
+        ],
+        "C_Cpp.default.browse.path": [
+          "/usr/local/lib/python3.11/dist-packages",
+          "/usr/local/lib/python3.11/site-packages",
+          "${workspaceFolder}/**"
+        ]
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

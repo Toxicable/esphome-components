@@ -1,0 +1,21 @@
+BasedOnStyle: LLVM
+
+# Braces on the same line for control statements.
+BreakBeforeBraces: Attach
+
+# Indentation and wrapping.
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+
+# Readability tweaks.
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: Inline
+SpaceBeforeParens: ControlStatements
+BinPackArguments: false
+BinPackParameters: false
+SortIncludes: true
