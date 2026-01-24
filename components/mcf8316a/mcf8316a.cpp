@@ -1,8 +1,5 @@
 #include "mcf8316a.h"
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
 namespace esphome {
 namespace mcf8316a {
 
@@ -110,7 +107,7 @@ void MCF8316AComponent::update() {
                last_electrical_hz_,
                last_mech_rpm_);
     } else {
-      last_mech_rpm_ = NAN;
+      last_mech_rpm_ = std::numeric_limits<float>::quiet_NaN();
       ESP_LOGI(TAG,
                "cmd=%.1f%% | SPEED_FDBK=0x%08X | elec=%.2f Hz",
                last_cmd_percent_,
@@ -118,14 +115,14 @@ void MCF8316AComponent::update() {
                last_electrical_hz_);
     }
   } else {
-    last_electrical_hz_ = NAN;
-    last_mech_rpm_ = NAN;
+    last_electrical_hz_ = std::numeric_limits<float>::quiet_NaN();
+    last_mech_rpm_ = std::numeric_limits<float>::quiet_NaN();
     ESP_LOGI(TAG, "cmd=%.1f%% | SPEED_FDBK=0x%08X (MAX_SPEED unknown)", last_cmd_percent_, (unsigned)speed_fdbk);
   }
 }
 
 bool MCF8316AComponent::set_speed_percent(float percent) {
-  if (std::isnan(percent))
+  if (percent != percent)
     return false;
   if (percent < 0.0f)
     percent = 0.0f;
@@ -133,7 +130,8 @@ bool MCF8316AComponent::set_speed_percent(float percent) {
     percent = 100.0f;
 
   // Map 0..100% -> 0..32767 (Q15-like)
-  uint16_t q15 = static_cast<uint16_t>(lroundf((percent / 100.0f) * 32767.0f));
+  float scaled = (percent / 100.0f) * 32767.0f;
+  uint16_t q15 = static_cast<uint16_t>(scaled + 0.5f);
 
   // Read-modify-write ALGO_CTRL1 @ 0x0000EC:
   // bit31 OVERRIDE=1, bits30:16 DIGITAL_SPEED_CTRL=q15

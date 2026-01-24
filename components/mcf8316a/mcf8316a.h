@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
@@ -11,6 +11,9 @@
 #endif
 
 // ESP32-C3 uses ESP-IDF; I2C driver is available
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
 #include "driver/i2c.h"
 
 namespace esphome {
@@ -73,8 +76,8 @@ private:
 
   float last_cmd_percent_{0.0f};
   uint32_t last_speed_fdbk_raw_{0};
-  float last_electrical_hz_{NAN};
-  float last_mech_rpm_{NAN};
+  float last_electrical_hz_{std::numeric_limits<float>::quiet_NaN()};
+  float last_mech_rpm_{std::numeric_limits<float>::quiet_NaN()};
 };
 
 } // namespace mcf8316a
