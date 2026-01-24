@@ -1,6 +1,6 @@
 CompileFlags:
   Add:
-    - -std=gnu++17
+    - -std=gnu++20
     - -x
     - c++
     - -I/usr/local/lib/python3.11/dist-packages
