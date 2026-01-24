@@ -19,6 +19,8 @@ output:
     id: light_drive
     nsleep_pin: GPIO4
     nfault_pin: GPIO5
+    out2_pin: GPIO19
+    flip_polarity: false  # Optional / default: false
     ch1:
       id: light_pwm
       pin: GPIO18
@@ -28,24 +30,6 @@ light:
   - platform: monochromatic
     name: "DRV8243 Light"
     output: light_drive
-```
-
-### Single-channel output with optional polarity control
-
-Use this when you want to set the DRV8243 polarity internally instead of wiring it externally.
-
-```yaml
-output:
-  - platform: drv8243
-    id: light_drive_pol
-    nsleep_pin: GPIO4
-    nfault_pin: GPIO5
-    ch1:
-      id: light_pwm
-      pin: GPIO18
-      frequency: 20000 Hz
-    out2_pin: GPIO19
-    flip_polarity: false  # Optional / default: false
 ```
 
 ### Two-channel output (both channels follow the same level)
@@ -76,4 +60,5 @@ Notes:
 - `ch2` is optional and may be either an inline `ledc` config or a reference to another float output.
 - `ch2` and `out2_pin` are mutually exclusive.
 - To control two channels independently, use two `drv8243` outputs with different PWM pins.
-- `out2_pin` is optional / default unset and is intended for simple polarity/control, not PWM.
+- `out2_pin` is not optional electrically: OUT2 must be driven or tied to a defined level to avoid floating (use `out2_pin`, `ch2`, or a fixed external tie/pull).
+- `out2_pin` is intended for simple polarity/control, not PWM.

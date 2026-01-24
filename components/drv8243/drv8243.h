@@ -12,7 +12,7 @@ class DRV8243Output : public Component, public output::FloatOutput {
   void set_nsleep_pin(GPIOPin *pin) { nsleep_pin_ = pin; }
   void set_nfault_pin(GPIOPin *pin) { nfault_pin_ = pin; }
 
-  // Optional. If not set, ESPHome can control polarity externally.
+  // Optional when ch2 is used; otherwise OUT2 must be driven or tied.
   void set_out2_pin(GPIOPin *pin) { out2_pin_ = pin; }
   void set_flip_polarity(bool v) { flip_polarity_ = v; }
 
@@ -34,7 +34,7 @@ class DRV8243Output : public Component, public output::FloatOutput {
 
   GPIOPin *nsleep_pin_{nullptr};
   GPIOPin *nfault_pin_{nullptr};
-  GPIOPin *out2_pin_{nullptr};                   // OPTIONAL polarity pin
+  GPIOPin *out2_pin_{nullptr};                   // Optional polarity pin when using ch2
   output::FloatOutput *out1_output_{nullptr};    // REQUIRED PWM output
   output::FloatOutput *out2_output_{nullptr};    // OPTIONAL second PWM output
 

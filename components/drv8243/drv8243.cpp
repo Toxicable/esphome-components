@@ -2,8 +2,8 @@
 
 #include <cmath>
 
-#include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+#include "esphome/core/log.h"
 #include "esphome/components/ledc/ledc_output.h"
 
 namespace esphome
@@ -31,8 +31,6 @@ namespace esphome
                 return "verified_ok";
             case HandshakeResult::VERIFIED_FAIL:
                 return "verified_fail";
-            case HandshakeResult::UNVERIFIED:
-                return "unverified";
             default:
                 return "unknown";
             }
@@ -78,7 +76,7 @@ namespace esphome
             }
             else
             {
-                ESP_LOGCONFIG(TAG, "  Polarity pin: NOT SET (external control)");
+                ESP_LOGCONFIG(TAG, "  Polarity pin: NOT SET");
             }
 
             ESP_LOGCONFIG(TAG, "  Handshake: %s", handshake_result_str_(handshake_result_));
@@ -86,6 +84,12 @@ namespace esphome
 
         void DRV8243Output::setup()
         {
+            if (!out1_output_ || !nsleep_pin_ || (!out2_pin_ && !out2_output_))
+            {
+                mark_failed();
+                return;
+            }
+
             // Keep setup very light (no delays/pulses here)
             if (nsleep_pin_)
             {
@@ -107,6 +111,13 @@ namespace esphome
                 out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
                 out2_pin_->digital_write(flip_polarity_);
             }
+
+            handshake_result_ = do_handshake_();
+            handshake_ran_ = true;
+            if (handshake_result_ != HandshakeResult::VERIFIED_OK)
+            {
+                mark_failed();
+            }
         }
 
         DRV8243Output::HandshakeResult DRV8243Output::do_handshake_()
@@ -114,22 +125,10 @@ namespace esphome
             if (!nsleep_pin_)
                 return HandshakeResult::VERIFIED_FAIL;
 
-            if (nfault_pin_)
-            {
-                const bool nfault_initial = nfault_pin_->digital_read();
-                ESP_LOGI(TAG, "nFAULT initial=%s", nfault_initial ? "HIGH" : "LOW");
-            }
-
             // Force sleep then wake
             nsleep_pin_->digital_write(false);
             delay(SLEEP_FORCE_MS);
             nsleep_pin_->digital_write(true);
-
-            if (nfault_pin_)
-            {
-                const bool nfault_after_wake = nfault_pin_->digital_read();
-                ESP_LOGI(TAG, "nFAULT after wake=%s", nfault_after_wake ? "HIGH" : "LOW");
-            }
 
             // Wait for nFAULT LOW if available (device-ready indication)
             bool saw_ready_low = false;
@@ -148,35 +147,17 @@ namespace esphome
                     delayMicroseconds(POLL_STEP_US);
                 }
             }
-            if (nfault_pin_)
-            {
-                const bool nfault_after_poll = nfault_pin_->digital_read();
-                ESP_LOGI(TAG, "nFAULT after poll=%s (checks=%d saw_ready_low=%s)",
-                         nfault_after_poll ? "HIGH" : "LOW", checks, saw_ready_low ? "true" : "false");
-            }
 
             // ACK pulse
             nsleep_pin_->digital_write(false);
             delayMicroseconds(ACK_PULSE_US);
             nsleep_pin_->digital_write(true);
 
-            if (nfault_pin_)
-            {
-                const bool nfault_after_ack = nfault_pin_->digital_read();
-                ESP_LOGI(TAG, "nFAULT after ACK=%s", nfault_after_ack ? "HIGH" : "LOW");
-            }
-
             if (!nfault_pin_)
-            {
-                ESP_LOGI(TAG, "do_handshake: UNVERIFIED nfault_pin_=false");
-                return HandshakeResult::UNVERIFIED;
-            }
+                return HandshakeResult::VERIFIED_FAIL;
 
             if (!saw_ready_low)
-            {
-                ESP_LOGI(TAG, "do_handshake: UNVERIFIED saw_ready_low=false");
-                return HandshakeResult::UNVERIFIED;
-            }
+                return HandshakeResult::VERIFIED_FAIL;
 
             // Confirm nFAULT HIGH after ACK
             uint32_t start = micros();
@@ -192,29 +173,8 @@ namespace esphome
 
         void DRV8243Output::write_state(float state)
         {
-            if (!out1_output_)
+            if (this->is_failed())
                 return;
-
-            // Run handshake once, first time we're asked to turn on
-            if (!handshake_ran_ && state > 0.0005f)
-            {
-                ESP_LOGI(TAG, "DRV8243 start");
-                handshake_result_ = do_handshake_();
-                handshake_ran_ = true;
-
-                if (handshake_result_ == HandshakeResult::VERIFIED_OK)
-                {
-                    ESP_LOGI(TAG, "DRV8243 ready (verified via nFAULT)");
-                }
-                else if (handshake_result_ == HandshakeResult::UNVERIFIED)
-                {
-                    ESP_LOGW(TAG, "DRV8243 started (nFAULT not verified)");
-                }
-                else
-                {
-                    ESP_LOGE(TAG, "DRV8243 failed to start (check wiring / nSLEEP / nFAULT)");
-                }
-            }
 
             // Only drive OUT2 polarity if configured as a GPIO pin.
             if (out2_pin_)

@@ -26,6 +26,8 @@ def _validate_config(config):
 
     if has_ch2_output and has_out2_pin:
         raise cv.Invalid("ch2 and out2_pin are mutually exclusive")
+    if not has_ch2_output and not has_out2_pin:
+        raise cv.Invalid("out2_pin is required when ch2 is not provided")
 
     return config
 
