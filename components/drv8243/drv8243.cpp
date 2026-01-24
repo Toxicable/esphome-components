@@ -121,13 +121,13 @@ namespace esphome
 
             // Wait for nFAULT LOW if available (device-ready indication)
             bool saw_ready_low = false;
+            int checks = 0;
             if (nfault_pin_)
             {
                 uint32_t start = micros();
                 while ((micros() - start) < READY_WAIT_TIMEOUT_US)
                 {
-                    ESP_LOGI(TAG, "do_handshake: UNVERIFIED nfaul_pin=%s", nfault_pin_->digital_read());
-                    if (!nfault_pin_->digital_read())
+                    ++checks if (!nfault_pin_->digital_read())
                     { // LOW
                         saw_ready_low = true;
                         break;
@@ -135,6 +135,7 @@ namespace esphome
                     delayMicroseconds(POLL_STEP_US);
                 }
             }
+            ESP_LOGI(TAG, "nfault check count=%n", checks);
 
             // ACK pulse
             nsleep_pin_->digital_write(false);
