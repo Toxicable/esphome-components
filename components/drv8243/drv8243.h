@@ -17,6 +17,7 @@ class DRV8243Output : public Component, public output::FloatOutput {
   void set_flip_polarity(bool v) { flip_polarity_ = v; }
 
   void set_out1_output(output::FloatOutput *out) { out1_output_ = out; }
+  void set_out2_output(output::FloatOutput *out) { out2_output_ = out; }
 
   void set_min_level(float v) { min_level_ = v; }
   void set_exponent(float e) { exponent_ = e; }
@@ -33,8 +34,9 @@ class DRV8243Output : public Component, public output::FloatOutput {
 
   GPIOPin *nsleep_pin_{nullptr};
   GPIOPin *nfault_pin_{nullptr};
-  GPIOPin *out2_pin_{nullptr};                  // OPTIONAL
-  output::FloatOutput *out1_output_{nullptr};   // REQUIRED
+  GPIOPin *out2_pin_{nullptr};                   // OPTIONAL polarity pin
+  output::FloatOutput *out1_output_{nullptr};    // REQUIRED PWM output
+  output::FloatOutput *out2_output_{nullptr};    // OPTIONAL second PWM output
 
   float min_level_{0.014f};
   float exponent_{1.8f};

@@ -41,7 +41,8 @@ namespace esphome
         void DRV8243Output::dump_config()
         {
             ESP_LOGCONFIG(TAG, "DRV8243 Output");
-            ESP_LOGCONFIG(TAG, "  OUT1 (PWM): %s", out1_output_ ? "configured" : "NOT SET");
+            ESP_LOGCONFIG(TAG, "  Channel 1 (PWM): %s", out1_output_ ? "configured" : "NOT SET");
+            ESP_LOGCONFIG(TAG, "  Channel 2 (PWM): %s", out2_output_ ? "configured" : "not configured");
             char pin_summary[64];
             if (nsleep_pin_)
             {
@@ -66,12 +67,12 @@ namespace esphome
             if (out2_pin_ != nullptr)
             {
                 out2_pin_->dump_summary(pin_summary, sizeof(pin_summary));
-                ESP_LOGCONFIG(TAG, "  OUT2 pin: %s", pin_summary);
-                ESP_LOGCONFIG(TAG, "  Flip polarity (OUT2=%s)", flip_polarity_ ? "HIGH" : "LOW");
+                ESP_LOGCONFIG(TAG, "  Channel 2 control pin: %s", pin_summary);
+                ESP_LOGCONFIG(TAG, "  Flip polarity (pin=%s)", flip_polarity_ ? "HIGH" : "LOW");
             }
             else
             {
-                ESP_LOGCONFIG(TAG, "  OUT2 pin: NOT SET (polarity should be controlled externally)");
+                ESP_LOGCONFIG(TAG, "  Channel 2 control pin: NOT SET (polarity should be controlled externally)");
             }
 
             ESP_LOGCONFIG(TAG, "  Handshake: %s", handshake_result_str_(handshake_result_));
@@ -177,7 +178,7 @@ namespace esphome
                 }
             }
 
-            // Only drive OUT2 if configured (otherwise ESPHome controls polarity separately)
+            // Only drive OUT2 polarity if configured as a GPIO pin.
             if (out2_pin_)
             {
                 out2_pin_->digital_write(flip_polarity_);
@@ -186,6 +187,10 @@ namespace esphome
             if (state <= 0.0005f)
             {
                 out1_output_->set_level(0.0f);
+                if (out2_output_ != nullptr)
+                {
+                    out2_output_->set_level(0.0f);
+                }
                 return;
             }
 
@@ -211,6 +216,11 @@ namespace esphome
                 y = 1.0f;
 
             out1_output_->set_level(y);
+
+            if (out2_output_ != nullptr)
+            {
+                out2_output_->set_level(y);
+            }
         }
 
     } // namespace drv8243
