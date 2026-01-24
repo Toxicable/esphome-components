@@ -136,7 +136,7 @@ namespace esphome
                     delayMicroseconds(POLL_STEP_US);
                 }
             }
-            ESP_LOGI(TAG, "nfault check count=%n", checks);
+            ESP_LOGI(TAG, "nFAULT check count=%d", checks);
 
             // ACK pulse
             nsleep_pin_->digital_write(false);
