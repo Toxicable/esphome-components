@@ -3,6 +3,15 @@ CompileFlags:
     - -std=gnu++20
     - -x
     - c++
+    - --target=riscv32-esp-elf
+    - --gcc-toolchain=/opt/esp-idf-tools/tools/riscv32-esp-elf/esp-12.2.0_20230208/riscv32-esp-elf
+    - --sysroot=/opt/esp-idf-tools/tools/riscv32-esp-elf/esp-12.2.0_20230208/riscv32-esp-elf/riscv32-esp-elf
+    - -isystem
+    - /opt/esp-idf-tools/tools/riscv32-esp-elf/esp-12.2.0_20230208/riscv32-esp-elf/riscv32-esp-elf/include/c++/12.2.0
+    - -isystem
+    - /opt/esp-idf-tools/tools/riscv32-esp-elf/esp-12.2.0_20230208/riscv32-esp-elf/riscv32-esp-elf/include/c++/12.2.0/riscv32-esp-elf
+    - -isystem
+    - /opt/esp-idf-tools/tools/riscv32-esp-elf/esp-12.2.0_20230208/riscv32-esp-elf/riscv32-esp-elf/include/c++/12.2.0/backward
     - -I/usr/local/lib/python3.11/dist-packages
     - -I/usr/local/lib/python3.11/site-packages
     - -I/workspaces/esphome-components
@@ -196,6 +205,7 @@ CompileFlags:
     - -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/linux/include
     - -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/priv_include
     - -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/include
+    - -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/riscv/include/freertos
     - -I/opt/esp-idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include
     - -I/opt/esp-idf/components/freertos/esp_additions/arch/linux/include
     - -I/opt/esp-idf/components/freertos/esp_additions/arch/riscv/include

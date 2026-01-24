@@ -18,6 +18,7 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
     libssl-dev \
     dfu-util \
     libusb-1.0-0 \
+    ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
