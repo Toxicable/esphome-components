@@ -141,10 +141,16 @@ namespace esphome
             nsleep_pin_->digital_write(true);
 
             if (!nfault_pin_)
+            {
+                ESP_LOGI(TAG, "do_handshake: UNVERIFIED nfault_pin_=false");
                 return HandshakeResult::UNVERIFIED;
+            }
 
             if (!saw_ready_low)
+            {
+                ESP_LOGI(TAG, "do_handshake: UNVERIFIED saw_read_low=false");
                 return HandshakeResult::UNVERIFIED;
+            }
 
             // Confirm nFAULT HIGH after ACK
             uint32_t start = micros();
