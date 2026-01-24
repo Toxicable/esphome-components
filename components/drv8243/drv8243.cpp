@@ -126,6 +126,7 @@ namespace esphome
                 uint32_t start = micros();
                 while ((micros() - start) < READY_WAIT_TIMEOUT_US)
                 {
+                    ESP_LOGI(TAG, "do_handshake: UNVERIFIED nfaul_pin=%s", nfault_pin_->digital_read());
                     if (!nfault_pin_->digital_read())
                     { // LOW
                         saw_ready_low = true;
@@ -148,7 +149,7 @@ namespace esphome
 
             if (!saw_ready_low)
             {
-                ESP_LOGI(TAG, "do_handshake: UNVERIFIED saw_read_low=false");
+                ESP_LOGI(TAG, "do_handshake: UNVERIFIED saw_ready_low=false");
                 return HandshakeResult::UNVERIFIED;
             }
 
