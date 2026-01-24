@@ -127,7 +127,8 @@ namespace esphome
                 uint32_t start = micros();
                 while ((micros() - start) < READY_WAIT_TIMEOUT_US)
                 {
-                    ++checks if (!nfault_pin_->digital_read())
+                    ++checks;
+                    if (!nfault_pin_->digital_read())
                     { // LOW
                         saw_ready_low = true;
                         break;
