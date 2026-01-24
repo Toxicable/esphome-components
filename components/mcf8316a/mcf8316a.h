@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 
 #include "esphome/core/component.h"
 #include "esphome/core/log.h"
@@ -18,18 +18,18 @@ namespace mcf8316a {
 
 class MCF8316AComponent : public PollingComponent
 #ifdef USE_API
-    , public api::CustomAPIDevice
+    ,
+                          public api::CustomAPIDevice
 #endif
 {
- public:
-  MCF8316AComponent(
-      gpio_num_t sda_pin,
-      gpio_num_t scl_pin,
-      uint32_t i2c_freq_hz = 50000,
-      uint8_t i2c_addr_7bit = 0x01,
-      uint32_t poll_ms = 1000,
-      bool crc_enable = false,
-      uint16_t pole_pairs = 0);
+public:
+  MCF8316AComponent(gpio_num_t sda_pin,
+                    gpio_num_t scl_pin,
+                    uint32_t i2c_freq_hz = 50000,
+                    uint8_t i2c_addr_7bit = 0x01,
+                    uint32_t poll_ms = 1000,
+                    bool crc_enable = false,
+                    uint16_t pole_pairs = 0);
 
   void setup() override;
   void dump_config() override;
@@ -38,11 +38,17 @@ class MCF8316AComponent : public PollingComponent
   bool set_speed_percent(float percent);
   void stop();
 
-  float get_last_electrical_hz() const { return last_electrical_hz_; }
-  float get_last_mech_rpm() const { return last_mech_rpm_; }
-  uint32_t get_last_speed_fdbk_raw() const { return last_speed_fdbk_raw_; }
+  float get_last_electrical_hz() const {
+    return last_electrical_hz_;
+  }
+  float get_last_mech_rpm() const {
+    return last_mech_rpm_;
+  }
+  uint32_t get_last_speed_fdbk_raw() const {
+    return last_speed_fdbk_raw_;
+  }
 
- private:
+private:
 #ifdef USE_API
   void api_set_speed_percent_(float percent);
   void api_stop_();
@@ -71,5 +77,5 @@ class MCF8316AComponent : public PollingComponent
   float last_mech_rpm_{NAN};
 };
 
-}  // namespace mcf8316a
-}  // namespace esphome
+} // namespace mcf8316a
+} // namespace esphome

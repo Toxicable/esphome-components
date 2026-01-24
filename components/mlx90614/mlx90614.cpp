@@ -20,33 +20,43 @@ void MLX90614Component::dump_config() {
   ESP_LOGCONFIG(TAG, "  PEC/CRC: enabled (always verified)");
   LOG_UPDATE_INTERVAL(this);
 
-  if (ambient_sensor_ != nullptr) LOG_SENSOR("  ", "Ambient", ambient_sensor_);
-  if (object_sensor_ != nullptr) LOG_SENSOR("  ", "Object", object_sensor_);
-  if (object2_sensor_ != nullptr) LOG_SENSOR("  ", "Object2", object2_sensor_);
+  if (ambient_sensor_ != nullptr)
+    LOG_SENSOR("  ", "Ambient", ambient_sensor_);
+  if (object_sensor_ != nullptr)
+    LOG_SENSOR("  ", "Object", object_sensor_);
+  if (object2_sensor_ != nullptr)
+    LOG_SENSOR("  ", "Object2", object2_sensor_);
 }
 
 void MLX90614Component::update() {
   float v;
 
   if (ambient_sensor_ != nullptr) {
-    if (this->read_temp_c_(RAM_TA_, &v)) ambient_sensor_->publish_state(v);
-    else ESP_LOGW(TAG, "Failed reading Ta (0x%02X)", RAM_TA_);
+    if (this->read_temp_c_(RAM_TA_, &v))
+      ambient_sensor_->publish_state(v);
+    else
+      ESP_LOGW(TAG, "Failed reading Ta (0x%02X)", RAM_TA_);
   }
 
   if (object_sensor_ != nullptr) {
-    if (this->read_temp_c_(RAM_TOBJ1_, &v)) object_sensor_->publish_state(v);
-    else ESP_LOGW(TAG, "Failed reading Tobj1 (0x%02X)", RAM_TOBJ1_);
+    if (this->read_temp_c_(RAM_TOBJ1_, &v))
+      object_sensor_->publish_state(v);
+    else
+      ESP_LOGW(TAG, "Failed reading Tobj1 (0x%02X)", RAM_TOBJ1_);
   }
 
   if (object2_sensor_ != nullptr) {
-    if (this->read_temp_c_(RAM_TOBJ2_, &v)) object2_sensor_->publish_state(v);
-    else ESP_LOGW(TAG, "Failed reading Tobj2 (0x%02X)", RAM_TOBJ2_);
+    if (this->read_temp_c_(RAM_TOBJ2_, &v))
+      object2_sensor_->publish_state(v);
+    else
+      ESP_LOGW(TAG, "Failed reading Tobj2 (0x%02X)", RAM_TOBJ2_);
   }
 }
 
 bool MLX90614Component::read_temp_c_(uint8_t ram_addr, float *out_c) {
   uint16_t word = 0;
-  if (!this->read_word_with_pec_(ram_addr, &word)) return false;
+  if (!this->read_word_with_pec_(ram_addr, &word))
+    return false;
 
   // Datasheet notes MSB may be error flag for linearized temps.
   if (word & 0x8000) {
@@ -97,12 +107,14 @@ uint8_t MLX90614Component::crc8_smbus_(const uint8_t *data, size_t len) const {
   for (size_t i = 0; i < len; i++) {
     crc ^= data[i];
     for (uint8_t bit = 0; bit < 8; bit++) {
-      if (crc & 0x80) crc = (crc << 1) ^ 0x07;
-      else crc <<= 1;
+      if (crc & 0x80)
+        crc = (crc << 1) ^ 0x07;
+      else
+        crc <<= 1;
     }
   }
   return crc;
 }
 
-}  // namespace mlx90614
-}  // namespace esphome
+} // namespace mlx90614
+} // namespace esphome

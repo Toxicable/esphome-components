@@ -3,15 +3,15 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "esphome/core/component.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/core/component.h"
 
 namespace esphome {
 namespace mlx90614 {
 
 class MLX90614Component : public PollingComponent, public i2c::I2CDevice {
- public:
+public:
   void set_slave_address(uint8_t addr) { slave_address_ = addr; }
 
   void set_ambient_sensor(sensor::Sensor *s) { ambient_sensor_ = s; }
@@ -22,7 +22,7 @@ class MLX90614Component : public PollingComponent, public i2c::I2CDevice {
   void update() override;
   void dump_config() override;
 
- protected:
+protected:
   // MLX90614 RAM addresses
   static constexpr uint8_t RAM_TA_ = 0x06;
   static constexpr uint8_t RAM_TOBJ1_ = 0x07;
@@ -39,5 +39,5 @@ class MLX90614Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t slave_address_{0x5A};
 };
 
-}  // namespace mlx90614
-}  // namespace esphome
+} // namespace mlx90614
+} // namespace esphome

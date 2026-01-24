@@ -15,15 +15,17 @@ static constexpr uint8_t REG_CTRL_REG1 = 0x20;
 static constexpr uint8_t REG_CTRL_REG2 = 0x21;
 static constexpr uint8_t REG_STATUS = 0x27;
 
-static constexpr uint8_t REG_PRESS_OUT_XL = 0x28;  // 0x28..0x2A
-static constexpr uint8_t REG_TEMP_OUT_L = 0x2B;    // 0x2B..0x2C
+static constexpr uint8_t REG_PRESS_OUT_XL = 0x28; // 0x28..0x2A
+static constexpr uint8_t REG_TEMP_OUT_L = 0x2B;   // 0x2B..0x2C
 
-// CTRL_REG1 bits per datasheet: PD bit enables device; ODR=000 enables one-shot; BDU blocks partial updates. :contentReference[oaicite:1]{index=1}
+// CTRL_REG1 bits per datasheet: PD bit enables device; ODR=000 enables one-shot; BDU blocks partial updates.
+// :contentReference[oaicite:1]{index=1}
 static constexpr uint8_t CTRL1_PD = 0x80;
 static constexpr uint8_t CTRL1_BDU = 0x04;
 // ODR[2:0] are bits 6..4; leaving them 0 => one-shot mode enabled. :contentReference[oaicite:2]{index=2}
 
-// CTRL_REG2: ONE_SHOT is bit 0; writing 1 triggers a new dataset in one-shot mode. :contentReference[oaicite:3]{index=3}
+// CTRL_REG2: ONE_SHOT is bit 0; writing 1 triggers a new dataset in one-shot mode.
+// :contentReference[oaicite:3]{index=3}
 static constexpr uint8_t CTRL2_ONE_SHOT = 0x01;
 
 void LPS25HBComponent::setup() {
@@ -67,7 +69,8 @@ void LPS25HBComponent::dump_config() {
 }
 
 void LPS25HBComponent::update() {
-  if (this->is_failed()) return;
+  if (this->is_failed())
+    return;
 
   if (!this->trigger_one_shot_()) {
     ESP_LOGW(TAG, "Failed to trigger one-shot");
@@ -91,8 +94,10 @@ void LPS25HBComponent::update() {
 
   this->status_clear_warning();
 
-  if (this->temperature_sensor_ != nullptr) this->temperature_sensor_->publish_state(t_c);
-  if (this->pressure_sensor_ != nullptr) this->pressure_sensor_->publish_state(p_hpa);
+  if (this->temperature_sensor_ != nullptr)
+    this->temperature_sensor_->publish_state(t_c);
+  if (this->pressure_sensor_ != nullptr)
+    this->pressure_sensor_->publish_state(p_hpa);
 }
 
 bool LPS25HBComponent::read_who_am_i_(uint8_t &who) {
@@ -121,22 +126,29 @@ bool LPS25HBComponent::wait_data_ready_(uint32_t timeout_ms) {
 }
 
 bool LPS25HBComponent::read_measurements_(float &temp_c, float &pressure_hpa) {
-  // Pressure is 24-bit in registers 0x28..0x2A; temperature is 16-bit in 0x2B..0x2C. :contentReference[oaicite:6]{index=6}
+  // Pressure is 24-bit in registers 0x28..0x2A; temperature is 16-bit in 0x2B..0x2C.
+  // :contentReference[oaicite:6]{index=6}
   uint8_t pxl = 0, pl = 0, ph = 0;
-  if (!this->read_byte(REG_PRESS_OUT_XL, &pxl)) return false;
-  if (!this->read_byte(REG_PRESS_OUT_XL + 1, &pl)) return false;
-  if (!this->read_byte(REG_PRESS_OUT_XL + 2, &ph)) return false;
+  if (!this->read_byte(REG_PRESS_OUT_XL, &pxl))
+    return false;
+  if (!this->read_byte(REG_PRESS_OUT_XL + 1, &pl))
+    return false;
+  if (!this->read_byte(REG_PRESS_OUT_XL + 2, &ph))
+    return false;
 
   int32_t p_raw = (static_cast<int32_t>(ph) << 16) | (static_cast<int32_t>(pl) << 8) | static_cast<int32_t>(pxl);
   // Sign-extend 24-bit if needed (datasheet describes pressure output as 24-bit). :contentReference[oaicite:7]{index=7}
-  if (p_raw & 0x00800000) p_raw |= 0xFF000000;
+  if (p_raw & 0x00800000)
+    p_raw |= 0xFF000000;
 
   // Convert: pressure(mbar/hPa) = raw / 4096. :contentReference[oaicite:8]{index=8}
   pressure_hpa = static_cast<float>(p_raw) / 4096.0f;
 
   uint8_t tl = 0, th = 0;
-  if (!this->read_byte(REG_TEMP_OUT_L, &tl)) return false;
-  if (!this->read_byte(REG_TEMP_OUT_L + 1, &th)) return false;
+  if (!this->read_byte(REG_TEMP_OUT_L, &tl))
+    return false;
+  if (!this->read_byte(REG_TEMP_OUT_L + 1, &th))
+    return false;
 
   int16_t t_raw = static_cast<int16_t>((static_cast<uint16_t>(th) << 8) | static_cast<uint16_t>(tl));
   // Convert: Temp(°C) = 42.5 + raw/480. :contentReference[oaicite:9]{index=9}
@@ -145,5 +157,5 @@ bool LPS25HBComponent::read_measurements_(float &temp_c, float &pressure_hpa) {
   return true;
 }
 
-}  // namespace lps25hb
-}  // namespace esphome
+} // namespace lps25hb
+} // namespace esphome
