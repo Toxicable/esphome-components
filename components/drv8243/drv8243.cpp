@@ -3,7 +3,7 @@
 #include <cmath>
 
 #include "esphome/core/log.h"
-#include "esphome/core/hal.h" // delay(), delayMicroseconds(), micros()
+#include "esphome/core/hal.h"
 #include "esphome/components/ledc/ledc_output.h"
 
 namespace esphome
@@ -41,8 +41,10 @@ namespace esphome
         void DRV8243Output::dump_config()
         {
             ESP_LOGCONFIG(TAG, "DRV8243 Output");
+            const bool two_channel = out2_output_ != nullptr;
+            ESP_LOGCONFIG(TAG, "  Mode: %s", two_channel ? "2-channel (ch1 + ch2 PWM)" : "1-channel (ch1 PWM)");
             ESP_LOGCONFIG(TAG, "  Channel 1 (PWM): %s", out1_output_ ? "configured" : "NOT SET");
-            ESP_LOGCONFIG(TAG, "  Channel 2 (PWM): %s", out2_output_ ? "configured" : "not configured");
+            ESP_LOGCONFIG(TAG, "  Channel 2 (PWM): %s", two_channel ? "configured" : "not configured");
             char pin_summary[64];
             if (nsleep_pin_)
             {
@@ -67,12 +69,16 @@ namespace esphome
             if (out2_pin_ != nullptr)
             {
                 out2_pin_->dump_summary(pin_summary, sizeof(pin_summary));
-                ESP_LOGCONFIG(TAG, "  Channel 2 control pin: %s", pin_summary);
-                ESP_LOGCONFIG(TAG, "  Flip polarity (pin=%s)", flip_polarity_ ? "HIGH" : "LOW");
+                ESP_LOGCONFIG(TAG, "  Polarity pin: %s (flip=%s)", pin_summary,
+                              flip_polarity_ ? "HIGH" : "LOW");
+            }
+            else if (two_channel)
+            {
+                ESP_LOGCONFIG(TAG, "  Polarity pin: not used (ch2 PWM configured)");
             }
             else
             {
-                ESP_LOGCONFIG(TAG, "  Channel 2 control pin: NOT SET (polarity should be controlled externally)");
+                ESP_LOGCONFIG(TAG, "  Polarity pin: NOT SET (external control)");
             }
 
             ESP_LOGCONFIG(TAG, "  Handshake: %s", handshake_result_str_(handshake_result_));
