@@ -114,10 +114,22 @@ namespace esphome
             if (!nsleep_pin_)
                 return HandshakeResult::VERIFIED_FAIL;
 
+            if (nfault_pin_)
+            {
+                const bool nfault_initial = nfault_pin_->digital_read();
+                ESP_LOGI(TAG, "nFAULT initial=%s", nfault_initial ? "HIGH" : "LOW");
+            }
+
             // Force sleep then wake
             nsleep_pin_->digital_write(false);
             delay(SLEEP_FORCE_MS);
             nsleep_pin_->digital_write(true);
+
+            if (nfault_pin_)
+            {
+                const bool nfault_after_wake = nfault_pin_->digital_read();
+                ESP_LOGI(TAG, "nFAULT after wake=%s", nfault_after_wake ? "HIGH" : "LOW");
+            }
 
             // Wait for nFAULT LOW if available (device-ready indication)
             bool saw_ready_low = false;
@@ -136,12 +148,23 @@ namespace esphome
                     delayMicroseconds(POLL_STEP_US);
                 }
             }
-            ESP_LOGI(TAG, "nFAULT check count=%d", checks);
+            if (nfault_pin_)
+            {
+                const bool nfault_after_poll = nfault_pin_->digital_read();
+                ESP_LOGI(TAG, "nFAULT after poll=%s (checks=%d saw_ready_low=%s)",
+                         nfault_after_poll ? "HIGH" : "LOW", checks, saw_ready_low ? "true" : "false");
+            }
 
             // ACK pulse
             nsleep_pin_->digital_write(false);
             delayMicroseconds(ACK_PULSE_US);
             nsleep_pin_->digital_write(true);
+
+            if (nfault_pin_)
+            {
+                const bool nfault_after_ack = nfault_pin_->digital_read();
+                ESP_LOGI(TAG, "nFAULT after ACK=%s", nfault_after_ack ? "HIGH" : "LOW");
+            }
 
             if (!nfault_pin_)
             {
