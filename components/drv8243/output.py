@@ -2,16 +2,18 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import output
 from esphome.components.ledc import output as ledc_output
-from esphome.const import CONF_ID
+from esphome.const import CONF_FREQUENCY, CONF_ID, CONF_PIN
 from esphome import pins
 
-from . import DRV8243Output
+from . import DRV8243ChannelOutput, DRV8243Output
 
 DEPENDENCIES = ["ledc"]
 AUTO_LOAD = ["ledc"]
 
 CONF_CH1 = "ch1"
+CONF_CH1_ID = "ch1_id"
 CONF_CH2 = "ch2"
+CONF_CH2_ID = "ch2_id"
 CONF_NSLEEP_PIN = "nsleep_pin"
 CONF_NFAULT_PIN = "nfault_pin"
 CONF_OUT2_PIN = "out2_pin"
@@ -23,17 +25,33 @@ CONF_EXPONENT = "exponent"
 def _validate_config(config):
     has_ch2_output = CONF_CH2 in config
     has_out2_pin = CONF_OUT2_PIN in config
+    has_ch2_id = CONF_CH2_ID in config
+    has_ch1_id = CONF_CH1_ID in config
 
     if has_ch2_output and has_out2_pin:
         raise cv.Invalid("ch2 and out2_pin are mutually exclusive")
     if not has_ch2_output and not has_out2_pin:
         raise cv.Invalid("out2_pin is required when ch2 is not provided")
+    if has_ch2_id and not has_ch2_output:
+        raise cv.Invalid("ch2_id requires ch2 to be provided")
+    if has_ch1_id and CONF_CH1 not in config:
+        raise cv.Invalid("ch1_id requires ch1 to be provided")
 
     return config
 
 
+def _internal_ledc_schema():
+    return cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(ledc_output.LEDCOutput),
+            cv.Required(CONF_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Optional(CONF_FREQUENCY, default="20kHz"): cv.frequency,
+        }
+    )
+
+
 def _channel_schema():
-    return cv.Any(ledc_output.CONFIG_SCHEMA, cv.use_id(output.FloatOutput))
+    return cv.Any(_internal_ledc_schema(), cv.use_id(output.FloatOutput))
 
 
 CONFIG_SCHEMA = cv.All(
@@ -42,6 +60,8 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(DRV8243Output),
             cv.Required(CONF_CH1): _channel_schema(),
             cv.Optional(CONF_CH2): _channel_schema(),
+            cv.Optional(CONF_CH1_ID): cv.declare_id(DRV8243ChannelOutput),
+            cv.Optional(CONF_CH2_ID): cv.declare_id(DRV8243ChannelOutput),
             cv.Required(CONF_NSLEEP_PIN): pins.gpio_output_pin_schema,
             cv.Optional(CONF_NFAULT_PIN): pins.gpio_input_pin_schema,
             cv.Optional(CONF_OUT2_PIN): pins.gpio_output_pin_schema,
@@ -76,11 +96,29 @@ async def to_code(config):
     ch1 = await _resolve_channel(config[CONF_CH1])
     cg.add(var.set_out1_output(ch1))
     cg.add(var.set_out1_component(ch1))
+    if CONF_CH1_ID in config:
+        ch1_var = cg.new_Pvariable(config[CONF_CH1_ID])
+        ch1_config = dict(config)
+        ch1_config[CONF_ID] = config[CONF_CH1_ID]
+        await cg.register_component(ch1_var, ch1_config)
+        await output.register_output(ch1_var, ch1_config)
+        cg.add(ch1_var.set_parent(var))
+        cg.add(ch1_var.set_channel(1))
+        cg.add(var.set_ch1_output(ch1_var))
 
     if CONF_CH2 in config:
         ch2 = await _resolve_channel(config[CONF_CH2])
         cg.add(var.set_out2_output(ch2))
         cg.add(var.set_out2_component(ch2))
+        if CONF_CH2_ID in config:
+            ch2_var = cg.new_Pvariable(config[CONF_CH2_ID])
+            ch2_config = dict(config)
+            ch2_config[CONF_ID] = config[CONF_CH2_ID]
+            await cg.register_component(ch2_var, ch2_config)
+            await output.register_output(ch2_var, ch2_config)
+            cg.add(ch2_var.set_parent(var))
+            cg.add(ch2_var.set_channel(2))
+            cg.add(var.set_ch2_output(ch2_var))
 
     nsleep = await cg.gpio_pin_expression(config[CONF_NSLEEP_PIN])
     cg.add(var.set_nsleep_pin(nsleep))

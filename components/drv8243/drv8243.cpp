@@ -41,11 +41,17 @@ void DRV8243Output::dump_config() {
     ESP_LOGCONFIG(TAG, "  Channel 1 config:");
     out1_component_->dump_config();
   }
+  if (out1_output_ != nullptr) {
+    ESP_LOGCONFIG(TAG, "  Channel 1 output: %s", ch1_output_ != nullptr ? "separate" : "primary");
+  }
 
   ESP_LOGCONFIG(TAG, "  Channel 2: %s", two_channel ? "configured" : "not configured");
   if (two_channel && out2_component_ != nullptr && out2_component_ != this) {
     ESP_LOGCONFIG(TAG, "  Channel 2 config:");
     out2_component_->dump_config();
+  }
+  if (two_channel) {
+    ESP_LOGCONFIG(TAG, "  Channel 2 output: %s", ch2_output_ != nullptr ? "separate" : "mirrored");
   }
   char pin_summary[64];
   if (nsleep_pin_) {
@@ -151,7 +157,23 @@ DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
 }
 
 void DRV8243Output::write_state(float state) {
-  if (this->is_failed())
+  this->write_to_output_(out1_output_, state);
+  if (out2_output_ != nullptr && ch2_output_ == nullptr) {
+    this->write_to_output_(out2_output_, state);
+  }
+}
+
+void DRV8243Output::write_channel(uint8_t channel, float state) {
+  if (channel == 2) {
+    this->write_to_output_(out2_output_, state);
+    return;
+  }
+
+  this->write_to_output_(out1_output_, state);
+}
+
+void DRV8243Output::write_to_output_(output::FloatOutput *out, float state) {
+  if (this->is_failed() || out == nullptr)
     return;
 
   // Only drive OUT2 polarity if configured as a GPIO pin.
@@ -160,10 +182,7 @@ void DRV8243Output::write_state(float state) {
   }
 
   if (state <= 0.0005f) {
-    out1_output_->set_level(0.0f);
-    if (out2_output_ != nullptr) {
-      out2_output_->set_level(0.0f);
-    }
+    out->set_level(0.0f);
     return;
   }
 
@@ -186,11 +205,13 @@ void DRV8243Output::write_state(float state) {
   if (y > 1.0f)
     y = 1.0f;
 
-  out1_output_->set_level(y);
+  out->set_level(y);
+}
 
-  if (out2_output_ != nullptr) {
-    out2_output_->set_level(y);
-  }
+void DRV8243ChannelOutput::write_state(float state) {
+  if (parent_ == nullptr)
+    return;
+  parent_->write_channel(channel_, state);
 }
 
 } // namespace drv8243

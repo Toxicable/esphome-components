@@ -8,3 +8,9 @@ DRV8243Output = drv8243_ns.class_(
     cg.Component,
     output.FloatOutput,
 )
+
+DRV8243ChannelOutput = drv8243_ns.class_(
+    "DRV8243ChannelOutput",
+    cg.Component,
+    output.FloatOutput,
+)
