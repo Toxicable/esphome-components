@@ -61,7 +61,7 @@ void A02YYUWComponent::loop() {
 
 void A02YYUWComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "A02YYUW Ultrasonic Sensor:");
-  LOG_UART_DEVICE(this);
+  // LOG_UART_DEVICE(this);
   LOG_SENSOR("  ", "Distance", this->distance_sensor_);
   LOG_UPDATE_INTERVAL(this);
 }
