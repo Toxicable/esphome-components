@@ -51,7 +51,10 @@ void L04XMTWComponent::loop() {
     while (this->available() > 0) {
       this->read_byte(&dump);
     }
-    this->status_set_warning();
+    this->consecutive_timeouts_++;
+    if (this->consecutive_timeouts_ >= TIMEOUT_WARN_THRESHOLD) {
+      this->status_set_warning();
+    }
     return;
   }
 
@@ -106,6 +109,7 @@ void L04XMTWComponent::loop() {
       ESP_LOGD(TAG, "No distance sensor configured; skipping publish");
     }
 
+    this->consecutive_timeouts_ = 0;
     this->status_clear_warning();
     this->waiting_ = false;
     this->buffer_index_ = 0;
