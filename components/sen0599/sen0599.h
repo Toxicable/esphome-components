@@ -5,9 +5,9 @@
 #include "esphome/core/component.h"
 
 namespace esphome {
-namespace a02yyuw {
+namespace sen0599 {
 
-class A02YYUWComponent : public PollingComponent, public uart::UARTDevice {
+class SEN0599Component : public PollingComponent, public uart::UARTDevice {
 public:
   void set_distance_sensor(sensor::Sensor *distance_sensor) { distance_sensor_ = distance_sensor; }
 
@@ -22,5 +22,5 @@ protected:
   uint32_t last_byte_time_{0};
 };
 
-} // namespace a02yyuw
+} // namespace sen0599
 } // namespace esphome
