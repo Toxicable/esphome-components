@@ -1,0 +1,21 @@
+name: Compile checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  clangd-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare devcontainer mount points
+        run: |
+          mkdir -p "$HOME/.codex" "$HOME/.ssh"
+
+      - name: Run clangd checks in devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          runCmd: ./check.bash
