@@ -11,6 +11,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare devcontainer mount points
+        run: |
+          mkdir -p "$HOME/.codex" "$HOME/.ssh"
+
       - name: Run clangd checks in devcontainer
         uses: devcontainers/ci@v0.3
         with:
