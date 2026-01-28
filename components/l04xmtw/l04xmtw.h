@@ -21,6 +21,12 @@ protected:
   uint8_t buffer_[4]{};
   uint8_t buffer_index_{0};
   uint32_t last_byte_time_{0};
+  bool waiting_{false};
+  bool warned_this_cycle_{false};
+  uint32_t trigger_ms_{0};
+  uint32_t rx_deadline_ms_{0};
+  static constexpr uint32_t RX_WINDOW_MS = 80;
+  static constexpr uint32_t INTERBYTE_TIMEOUT_MS = 30;
 };
 
 } // namespace l04xmtw
