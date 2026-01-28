@@ -11,15 +11,15 @@ from esphome.const import (
 
 DEPENDENCIES = ["uart"]
 
-sen0599_ns = cg.esphome_ns.namespace("sen0599")
-SEN0599Component = sen0599_ns.class_(
-    "SEN0599Component", cg.PollingComponent, uart.UARTDevice
+l04xmtw_ns = cg.esphome_ns.namespace("l04xmtw")
+L04XMTWComponent = l04xmtw_ns.class_(
+    "L04XMTWComponent", cg.PollingComponent, uart.UARTDevice
 )
 
 CONFIG_SCHEMA = (
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(SEN0599Component),
+            cv.GenerateID(): cv.declare_id(L04XMTWComponent),
             cv.Required(CONF_DISTANCE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_MILLIMETER,
                 accuracy_decimals=0,

@@ -1,9 +1,12 @@
-# SEN0599
+# L04xMTW
 
 [Datasheet](https://wiki.dfrobot.com/Underwater_Ultrasonic_Obstacle_Avoidance_Sensor_6m_SKU_SEN0599)
 
 ## What it does
-Reads distance in millimeters from the DFRobot SEN0599 underwater ultrasonic obstacle avoidance sensor over UART.
+Reads distance in millimeters from the DFRobot underwater ultrasonic obstacle avoidance sensor over UART.
+
+Product code: **5AE0077**  
+Model tested: **DYP-L041MTW-V1.0** (L04xMTW)
 
 ## How to use it
 Minimal configuration:
@@ -15,9 +18,9 @@ uart:
   baud_rate: 115200
 
 sensor:
-  - platform: sen0599
+  - platform: l04xmtw
     distance:
-      name: "SEN0599 Distance"
+      name: "L04xMTW Distance"
 ```
 
 Notes:

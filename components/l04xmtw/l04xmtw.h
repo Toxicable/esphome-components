@@ -5,12 +5,13 @@
 #include "esphome/core/component.h"
 
 namespace esphome {
-namespace sen0599 {
+namespace l04xmtw {
 
-class SEN0599Component : public PollingComponent, public uart::UARTDevice {
+class L04XMTWComponent : public PollingComponent, public uart::UARTDevice {
 public:
   void set_distance_sensor(sensor::Sensor *distance_sensor) { distance_sensor_ = distance_sensor; }
 
+  void setup() override;
   void update() override;
   void loop() override;
   void dump_config() override;
@@ -22,5 +23,5 @@ protected:
   uint32_t last_byte_time_{0};
 };
 
-} // namespace sen0599
+} // namespace l04xmtw
 } // namespace esphome
