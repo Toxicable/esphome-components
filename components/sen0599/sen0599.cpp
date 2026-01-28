@@ -1,24 +1,24 @@
-#include "a02yyuw.h"
+#include "sen0599.h"
 
 #include "esphome/components/uart/uart_component.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
-namespace a02yyuw {
+namespace sen0599 {
 
-static const char *const TAG = "a02yyuw";
+static const char *const TAG = "sen0599";
 
 static constexpr uint8_t COMMAND_TRIGGER = 0x55;
 static constexpr uint8_t RESPONSE_HEADER = 0xFF;
 static constexpr uint8_t FRAME_LENGTH = 4;
 static constexpr uint32_t INTERBYTE_TIMEOUT_MS = 10;
 
-void A02YYUWComponent::update() {
+void SEN0599Component::update() {
   this->write_byte(COMMAND_TRIGGER);
 }
 
-void A02YYUWComponent::loop() {
+void SEN0599Component::loop() {
   if (this->buffer_index_ > 0 && (millis() - this->last_byte_time_ > INTERBYTE_TIMEOUT_MS)) {
     this->buffer_index_ = 0;
   }
@@ -59,12 +59,12 @@ void A02YYUWComponent::loop() {
   }
 }
 
-void A02YYUWComponent::dump_config() {
-  ESP_LOGCONFIG(TAG, "A02YYUW Ultrasonic Sensor:");
+void SEN0599Component::dump_config() {
+  ESP_LOGCONFIG(TAG, "SEN0599 Ultrasonic Sensor:");
   // LOG_UART_DEVICE(this);
   LOG_SENSOR("  ", "Distance", this->distance_sensor_);
   LOG_UPDATE_INTERVAL(this);
 }
 
-} // namespace a02yyuw
+} // namespace sen0599
 } // namespace esphome
