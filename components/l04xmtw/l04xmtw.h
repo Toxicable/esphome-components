@@ -23,8 +23,10 @@ protected:
   uint32_t last_byte_time_{0};
   bool waiting_{false};
   bool warned_this_cycle_{false};
+  uint8_t consecutive_timeouts_{0};
   uint32_t trigger_ms_{0};
   uint32_t rx_deadline_ms_{0};
+  static constexpr uint8_t TIMEOUT_WARN_THRESHOLD = 3;
   static constexpr uint32_t RX_WINDOW_MS = 80;
   static constexpr uint32_t INTERBYTE_TIMEOUT_MS = 30;
 };
