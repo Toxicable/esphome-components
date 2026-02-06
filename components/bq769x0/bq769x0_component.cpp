@@ -175,6 +175,8 @@ void BQ769X0Component::update() {
       uint8_t lo = cell_buffer[reg_index * 2 + 1];
       uint16_t adc14 = static_cast<uint16_t>(((hi & 0x3F) << 8) | lo);
       int mv = driver_.cell_mV_from_adc(adc14, cal_);
+      ESP_LOGD(TAG, "Cell %u from VC%u: hi=0x%02X lo=0x%02X adc14=%u mv=%d", static_cast<unsigned>(i + 1),
+               static_cast<unsigned>(reg_index + 1), hi, lo, adc14, mv);
       sum_mv += mv;
       min_mv = std::min(min_mv, mv);
       max_mv = std::max(max_mv, mv);
