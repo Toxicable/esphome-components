@@ -12,7 +12,6 @@ namespace bq769x0 {
 namespace {
 constexpr const char *TAG = "bq769x0";
 
-constexpr uint8_t SYS_STAT_CC_READY = 0x80;
 constexpr uint8_t SYS_STAT_DEVICE_XREADY = 0x20;
 constexpr uint8_t SYS_STAT_UV = 0x08;
 constexpr uint8_t SYS_STAT_OV = 0x04;
@@ -20,13 +19,43 @@ constexpr uint8_t SYS_STAT_SCD = 0x02;
 constexpr uint8_t SYS_STAT_OCD = 0x01;
 
 constexpr uint8_t SYS_CTRL2_CC_EN = 0x40;
-constexpr uint8_t SYS_CTRL2_CC_ONESHOT = 0x20;
 constexpr uint8_t SYS_CTRL2_DSG_ON = 0x02;
 constexpr uint8_t SYS_CTRL2_CHG_ON = 0x01;
 
 constexpr float CC_LSB_UV = 8.44f;
 constexpr float CC_WARN_UV = 200000.0f;
 constexpr uint32_t PERSIST_INTERVAL_MS = 60000;
+
+constexpr int DEFAULT_RSENSE_MILLIOHM = 2;
+constexpr float SOC_REST_CURRENT_THRESHOLD_MA = 200.0f;
+constexpr float SOC_REST_MIN_SECONDS = 30.0f;
+constexpr float SOC_REST_FULL_WEIGHT_SECONDS = 300.0f;
+constexpr float SOC_REST_DVDT_THRESHOLD_MV_PER_S = 1.0f;
+constexpr bool SOC_USE_MIN_CELL = true;
+
+constexpr float SOC_FULL_CELL_MV = 4180.0f;
+constexpr float SOC_FULL_HOLD_SECONDS = 10.0f;
+constexpr float SOC_EMPTY_CELL_MV = 3300.0f;
+constexpr float SOC_EMPTY_HOLD_SECONDS = 2.0f;
+constexpr float SOC_EMPTY_DISCHARGE_CURRENT_MA = 1000.0f;
+
+constexpr float SOC_COULOMBIC_EFF_DISCHARGE = 1.0f;
+constexpr float SOC_COULOMBIC_EFF_CHARGE = 1.0f;
+constexpr float SOC_LEARN_ALPHA = 0.2f;
+
+constexpr float SOC_CHARGE_GATE_DV_MV = 2.0f;
+
+static const OcvPoint LIION_LIPO_OCV_TABLE[] = {
+    {3300, 0.0f},
+    {3500, 10.0f},
+    {3600, 20.0f},
+    {3700, 40.0f},
+    {3800, 60.0f},
+    {3900, 75.0f},
+    {4000, 85.0f},
+    {4100, 95.0f},
+    {4200, 100.0f},
+};
 } // namespace
 
 BQ769X0Component::BQ769X0Component() : driver_(this) {}
@@ -37,20 +66,24 @@ void BQ769X0Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor *se
   }
 }
 
-void BQ769X0Component::add_ocv_point(int mv, float soc) { soc_cfg_.ocv_table.push_back({mv, soc}); }
-
 void BQ769X0Component::setup() {
-  if (alert_pin_ != nullptr) {
-    alert_pin_->setup();
-  }
-
-  driver_.set_crc_enabled(crc_enabled_);
+  rsense_milliohm_ = DEFAULT_RSENSE_MILLIOHM;
+  driver_.set_crc_enabled(false);
   driver_.set_i2c_address(this->address_);
 
-  if (!driver_.read_calibration(&cal_)) {
-    ESP_LOGE(TAG, "Failed to read ADC calibration (error=%d)", static_cast<int>(driver_.last_error()));
-  } else {
+  if (driver_.read_calibration(&cal_)) {
+    crc_enabled_ = false;
     cal_valid_ = true;
+  } else {
+    driver_.set_crc_enabled(true);
+    if (driver_.read_calibration(&cal_)) {
+      crc_enabled_ = true;
+      cal_valid_ = true;
+    } else {
+      ESP_LOGE(TAG, "Failed to read ADC calibration (error=%d)", static_cast<int>(driver_.last_error()));
+    }
+  }
+  if (cal_valid_) {
     ESP_LOGI(TAG, "ADC calibration: gain=%d uV/LSB, offset=%d mV", cal_.gain_uV_per_lsb, cal_.offset_mV);
   }
 
@@ -68,6 +101,32 @@ void BQ769X0Component::setup() {
 
   if (!ensure_cc_enabled_()) {
     ESP_LOGE(TAG, "Failed to enable CC (error=%d)", static_cast<int>(driver_.last_error()));
+  }
+
+  soc_cfg_ = SocConfig{};
+  soc_cfg_.use_min_cell = SOC_USE_MIN_CELL;
+  soc_cfg_.rest_current_threshold_ma = SOC_REST_CURRENT_THRESHOLD_MA;
+  soc_cfg_.rest_min_seconds = SOC_REST_MIN_SECONDS;
+  soc_cfg_.rest_full_weight_seconds = SOC_REST_FULL_WEIGHT_SECONDS;
+  soc_cfg_.rest_dvdt_threshold_mv_per_s = SOC_REST_DVDT_THRESHOLD_MV_PER_S;
+  soc_cfg_.full_cell_mv = SOC_FULL_CELL_MV;
+  soc_cfg_.full_hold_seconds = SOC_FULL_HOLD_SECONDS;
+  soc_cfg_.empty_cell_mv = SOC_EMPTY_CELL_MV;
+  soc_cfg_.empty_hold_seconds = SOC_EMPTY_HOLD_SECONDS;
+  soc_cfg_.empty_discharge_current_ma = SOC_EMPTY_DISCHARGE_CURRENT_MA;
+  soc_cfg_.use_hw_fault_anchors = false;
+  soc_cfg_.current_positive_is_discharge = true;
+  soc_cfg_.coulombic_eff_discharge = SOC_COULOMBIC_EFF_DISCHARGE;
+  soc_cfg_.coulombic_eff_charge = SOC_COULOMBIC_EFF_CHARGE;
+  soc_cfg_.learn_alpha = SOC_LEARN_ALPHA;
+  soc_cfg_.balance.enabled = false;
+  soc_cfg_.ocv_table.clear();
+  switch (chemistry_) {
+    case Chemistry::LIION_LIPO:
+      for (const auto &pt : LIION_LIPO_OCV_TABLE) {
+        soc_cfg_.ocv_table.push_back(pt);
+      }
+      break;
   }
 
   soc_estimator_.configure(soc_cfg_);
@@ -89,9 +148,6 @@ void BQ769X0Component::update() {
   }
   if (device_ready_sensor_ != nullptr) {
     device_ready_sensor_->publish_state((sys_stat & SYS_STAT_DEVICE_XREADY) != 0);
-  }
-  if (cc_ready_sensor_ != nullptr) {
-    cc_ready_sensor_->publish_state((sys_stat & SYS_STAT_CC_READY) != 0);
   }
 
   std::array<uint8_t, 10> cell_buffer{};
@@ -146,9 +202,6 @@ void BQ769X0Component::update() {
     dt_s = (now - last_cc_ms_) / 1000.0f;
   }
   last_cc_ms_ = now;
-  if (alert_pin_ != nullptr) {
-    dt_s = std::clamp(dt_s, 0.2f, 0.35f);
-  }
 
   int16_t cc = 0;
   if (!check_i2c_(driver_.read_cc16(&cc), "read CC"))
@@ -157,11 +210,10 @@ void BQ769X0Component::update() {
   if (std::abs(sense_uV) > CC_WARN_UV) {
     ESP_LOGW(TAG, "CC sense voltage %.1f uV exceeds recommended range", sense_uV);
   }
-  float current_ma_raw = sense_uV / static_cast<float>(rsense_milliohm_);
-  float current_ma = soc_cfg_.current_positive_is_discharge ? current_ma_raw : -current_ma_raw;
+  float current_ma_signed = sense_uV / static_cast<float>(rsense_milliohm_);
 
   if (current_sensor_ != nullptr) {
-    current_sensor_->publish_state(current_ma);
+    current_sensor_->publish_state(current_ma_signed);
   }
 
   int balancing_cells = 0;
@@ -177,13 +229,18 @@ void BQ769X0Component::update() {
   }
 
   SocInputs soc_inputs{};
-  soc_inputs.current_ma = current_ma_raw;
+  float soc_current_ma = std::abs(current_ma_signed);
+  if (!std::isnan(last_vavg_mv_) && !std::isnan(avg_mv) && avg_mv > last_vavg_mv_ + SOC_CHARGE_GATE_DV_MV) {
+    soc_current_ma = 0.0f;
+  }
+  last_vavg_mv_ = avg_mv;
+  soc_inputs.current_ma = soc_current_ma;
   soc_inputs.vmin_cell_mv = min_mv == INT32_MAX ? NAN : static_cast<float>(min_mv);
   soc_inputs.vavg_cell_mv = avg_mv;
   soc_inputs.dt_s = dt_s;
   soc_inputs.sys_ov = (sys_stat & SYS_STAT_OV) != 0;
   soc_inputs.sys_uv = (sys_stat & SYS_STAT_UV) != 0;
-  soc_inputs.is_discharging = current_ma >= 0.0f;
+  soc_inputs.is_discharging = soc_current_ma > 0.0f;
   soc_inputs.balancing_cells = balancing_cells;
 
   update_soc_(soc_inputs);
@@ -217,7 +274,10 @@ void BQ769X0Component::update() {
 void BQ769X0Component::dump_config() {
   ESP_LOGCONFIG(TAG, "BQ769X0:");
   ESP_LOGCONFIG(TAG, "  Cell count: %u", cell_count_);
-  ESP_LOGCONFIG(TAG, "  CRC enabled: %s", crc_enabled_ ? "true" : "false");
+  const char *chemistry = chemistry_ == Chemistry::LIION_LIPO ? "liion_lipo" : "unknown";
+  ESP_LOGCONFIG(TAG, "  Chemistry: %s", chemistry);
+  ESP_LOGCONFIG(TAG, "  CRC enabled (auto): %s", crc_enabled_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  Rsense (mOhm): %d", rsense_milliohm_);
   if (cal_valid_) {
     ESP_LOGCONFIG(TAG, "  Gain: %d uV/LSB", cal_.gain_uV_per_lsb);
     ESP_LOGCONFIG(TAG, "  Offset: %d mV", cal_.offset_mV);
@@ -232,15 +292,6 @@ void BQ769X0Component::update_soc_(const SocInputs &inputs) {
 void BQ769X0Component::publish_soc_outputs_(const SocOutputs &outputs) {
   if (soc_percent_sensor_ != nullptr && !std::isnan(outputs.soc_percent)) {
     soc_percent_sensor_->publish_state(outputs.soc_percent);
-  }
-  if (soc_confidence_sensor_ != nullptr) {
-    soc_confidence_sensor_->publish_state(outputs.soc_confidence);
-  }
-  if (rest_state_sensor_ != nullptr) {
-    rest_state_sensor_->publish_state(outputs.rest_qualified ? "rest" : "active");
-  }
-  if (soc_valid_sensor_ != nullptr) {
-    soc_valid_sensor_->publish_state(outputs.soc_valid);
   }
 }
 
@@ -265,24 +316,6 @@ void BQ769X0Component::save_preferences_() {
   pref_.save(&state);
 }
 
-void BQ769X0Component::force_full_anchor() {
-  soc_estimator_.force_full_anchor();
-  publish_soc_outputs_(soc_estimator_.outputs());
-  save_preferences_();
-}
-
-void BQ769X0Component::force_empty_anchor() {
-  soc_estimator_.force_empty_anchor();
-  publish_soc_outputs_(soc_estimator_.outputs());
-  save_preferences_();
-}
-
-void BQ769X0Component::clear_learned_capacity() {
-  soc_estimator_.clear_capacity();
-  publish_soc_outputs_(soc_estimator_.outputs());
-  save_preferences_();
-}
-
 void BQ769X0Component::clear_faults() {
   uint8_t sys_stat = 0;
   if (!driver_.read_sys_stat(&sys_stat)) {
@@ -296,34 +329,6 @@ void BQ769X0Component::clear_faults() {
   if (!driver_.clear_sys_stat_bits(mask)) {
     ESP_LOGE(TAG, "Failed to clear SYS_STAT bits (error=%d)", static_cast<int>(driver_.last_error()));
   }
-}
-
-void BQ769X0Component::trigger_cc_oneshot() {
-  if (!ensure_cc_enabled_()) {
-    return;
-  }
-  uint8_t sys_ctrl2 = 0;
-  if (!read_sys_ctrl2_(sys_ctrl2)) {
-    ESP_LOGE(TAG, "Failed to read SYS_CTRL2 (error=%d)", static_cast<int>(driver_.last_error()));
-    return;
-  }
-  sys_ctrl2 |= SYS_CTRL2_CC_ONESHOT;
-  if (!write_sys_ctrl2_(sys_ctrl2)) {
-    ESP_LOGE(TAG, "Failed to write SYS_CTRL2 (error=%d)", static_cast<int>(driver_.last_error()));
-    return;
-  }
-  for (int attempt = 0; attempt < 50; attempt++) {
-    uint8_t stat = 0;
-    if (!driver_.read_sys_stat(&stat)) {
-      ESP_LOGE(TAG, "Failed to read SYS_STAT after oneshot (error=%d)", static_cast<int>(driver_.last_error()));
-      return;
-    }
-    if (stat & SYS_STAT_CC_READY) {
-      return;
-    }
-    delay(10);
-  }
-  ESP_LOGW(TAG, "CC_READY not asserted after oneshot request");
 }
 
 bool BQ769X0Component::ensure_cc_enabled_() {
@@ -348,25 +353,11 @@ bool BQ769X0Component::read_sys_ctrl2_(uint8_t &value) { return driver_.read_reg
 bool BQ769X0Component::write_sys_ctrl2_(uint8_t value) { return driver_.write_register8(Register::SYS_CTRL2, value); }
 
 bool BQ769X0Component::read_cell_block_(std::array<uint8_t, 10> &buffer, size_t count) {
-  if (count == 0 || count > 5) {
+  if (count == 0 || count > 4) {
     return false;
   }
   size_t len = count * 2;
   return driver_.read_register_block(Register::VC1_HI, buffer.data(), len);
-}
-
-void BQ769X0Component::publish_cell_block_(const std::array<uint8_t, 10> &buffer, size_t count) {
-  for (size_t i = 0; i < count; i++) {
-    auto *sensor = cell_sensors_[i];
-    if (sensor == nullptr) {
-      continue;
-    }
-    uint8_t hi = buffer[i * 2];
-    uint8_t lo = buffer[i * 2 + 1];
-    uint16_t adc14 = static_cast<uint16_t>(((hi & 0x3F) << 8) | lo);
-    int mv = driver_.cell_mV_from_adc(adc14, cal_);
-    sensor->publish_state(static_cast<float>(mv) / 1000.0f);
-  }
 }
 
 bool BQ769X0Component::check_i2c_(bool ok, const char *operation) {
@@ -380,30 +371,6 @@ bool BQ769X0Component::check_i2c_(bool ok, const char *operation) {
 void BQ769X0ClearFaultsButton::press_action() {
   if (parent_ != nullptr) {
     parent_->clear_faults();
-  }
-}
-
-void BQ769X0CCOneshotButton::press_action() {
-  if (parent_ != nullptr) {
-    parent_->trigger_cc_oneshot();
-  }
-}
-
-void BQ769X0ForceFullAnchorButton::press_action() {
-  if (parent_ != nullptr) {
-    parent_->force_full_anchor();
-  }
-}
-
-void BQ769X0ForceEmptyAnchorButton::press_action() {
-  if (parent_ != nullptr) {
-    parent_->force_empty_anchor();
-  }
-}
-
-void BQ769X0ClearCapacityButton::press_action() {
-  if (parent_ != nullptr) {
-    parent_->clear_learned_capacity();
   }
 }
 
