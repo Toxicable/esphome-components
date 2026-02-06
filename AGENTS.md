@@ -10,3 +10,7 @@
 - Component READMEs should present a single configuration example with optional items commented out instead of separate basic/full examples.
 - `components/bq769x0` auto-loads sensor/binary_sensor/text_sensor/button to keep optional header includes available, and ships a local crc8 helper header so external builds don't need shared helpers (shared crc8 helper removed).
 - Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.
+- Validate any chip assumptions against the datasheet before implementing or documenting behavior.
+- `tools/pdf_to_text.py` extracts verbatim text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
+- Devcontainer installs `pypdf` alongside `esphome` for the PDF ingestion tool.
+- Devcontainer shells default to the ESP-IDF Python venv; Python deps needed at runtime should be installed into that env (Dockerfile sources `export.sh` before installing).
