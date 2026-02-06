@@ -12,6 +12,7 @@
 - `components/bq769x0` exposes `mode` as a select that writes CHG_ON/DSG_ON with options `safe`, `standby`, `charge`, `discharge`, and `charge+discharge`.
 - For 4S BQ76920 wiring, the component maps cells to VC1/VC2/VC3/VC5 and expects VC4 shorted to VC3 per TI Table 9-2.
 - CRC-enabled BQ769x0 variants (e.g., BQ7692003) require CRC reads; auto-detection should try CRC first and fall back to non-CRC.
+- Quick CRC sanity check: if VCx_LO equals crc8([read_addr, VCx_HI]), you're reading CRC as data (CRC mode needed).
 - Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.
 - Validate any chip assumptions against the datasheet before implementing or documenting behavior.
 - `tools/pdf_to_text.py` extracts verbatim text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
