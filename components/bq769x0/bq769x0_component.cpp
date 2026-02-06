@@ -69,16 +69,16 @@ void BQ769X0Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor *se
 
 void BQ769X0Component::setup() {
   rsense_milliohm_ = DEFAULT_RSENSE_MILLIOHM;
-  driver_.set_crc_enabled(false);
   driver_.set_i2c_address(this->address_);
 
+  driver_.set_crc_enabled(true);
   if (driver_.read_calibration(&cal_)) {
-    crc_enabled_ = false;
+    crc_enabled_ = true;
     cal_valid_ = true;
   } else {
-    driver_.set_crc_enabled(true);
+    driver_.set_crc_enabled(false);
     if (driver_.read_calibration(&cal_)) {
-      crc_enabled_ = true;
+      crc_enabled_ = false;
       cal_valid_ = true;
     } else {
       ESP_LOGE(TAG, "Failed to read ADC calibration (error=%d)", static_cast<int>(driver_.last_error()));
