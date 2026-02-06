@@ -7,3 +7,4 @@
 
 ## Learned project notes
 - `components/bq769x0` now uses an ultra-simple YAML config: required `cell_count` (fixed to 4) and `chemistry` (`liion_lipo`), with SOC defaults hardcoded in C++. 
+- Component READMEs should present a single configuration example with optional items commented out instead of separate basic/full examples.
