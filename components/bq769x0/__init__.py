@@ -7,7 +7,6 @@ from esphome.const import (
     DEVICE_CLASS_VOLTAGE,
     STATE_CLASS_MEASUREMENT,
     UNIT_CELSIUS,
-    UNIT_MILLIAMPERE,
     UNIT_MILLIVOLT,
     UNIT_VOLT,
 )
@@ -85,7 +84,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CELL4_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
             cv.Optional(CONF_BOARD_TEMP): TEMPERATURE_SENSOR_SCHEMA,
             cv.Optional(CONF_CURRENT): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIAMPERE,
+                unit_of_measurement="mA",
                 accuracy_decimals=1,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
