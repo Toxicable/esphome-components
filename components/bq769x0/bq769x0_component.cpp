@@ -130,7 +130,9 @@ void BQ769X0Component::setup() {
   }
 
   soc_estimator_.configure(soc_cfg_);
-  pref_ = global_preferences->make_preference<PersistedState>(this->get_object_id_hash());
+  constexpr uint32_t BQ769X0_PREF_NAMESPACE = 0xB7690000u; // "B769" tag for bq769x0 preferences.
+  const uint32_t pref_key = BQ769X0_PREF_NAMESPACE | static_cast<uint32_t>(this->address_);
+  pref_ = global_preferences->make_preference<PersistedState>(pref_key);
   load_preferences_();
 
   delay(250);
