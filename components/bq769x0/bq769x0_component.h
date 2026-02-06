@@ -6,11 +6,11 @@
 
 #include "bq769x0.h"
 #include "bq769x0_soc.h"
-#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/select/select.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 
@@ -36,10 +36,10 @@ public:
   void set_min_cell_sensor(sensor::Sensor *sensor) { min_cell_sensor_ = sensor; }
   void set_avg_cell_sensor(sensor::Sensor *sensor) { avg_cell_sensor_ = sensor; }
 
-  void set_fault_sensor(binary_sensor::BinarySensor *sensor) { fault_sensor_ = sensor; }
-  void set_device_ready_sensor(binary_sensor::BinarySensor *sensor) { device_ready_sensor_ = sensor; }
+  void set_alerts_sensor(text_sensor::TextSensor *sensor) { alerts_sensor_ = sensor; }
 
-  void set_mode_select(select::Select *select) { mode_select_ = select; }
+  void set_power_path_select(select::Select *select) { power_path_select_ = select; }
+  void set_power_path_state_sensor(text_sensor::TextSensor *sensor) { power_path_state_sensor_ = sensor; }
 
   void setup() override;
   void update() override;
@@ -85,10 +85,10 @@ protected:
   sensor::Sensor *min_cell_sensor_{nullptr};
   sensor::Sensor *avg_cell_sensor_{nullptr};
 
-  binary_sensor::BinarySensor *fault_sensor_{nullptr};
-  binary_sensor::BinarySensor *device_ready_sensor_{nullptr};
+  text_sensor::TextSensor *alerts_sensor_{nullptr};
 
-  select::Select *mode_select_{nullptr};
+  select::Select *power_path_select_{nullptr};
+  text_sensor::TextSensor *power_path_state_sensor_{nullptr};
 
   SocConfig soc_cfg_{};
   BQ769X0SocEstimator soc_estimator_{};
@@ -101,7 +101,7 @@ protected:
   decltype(global_preferences->make_preference<PersistedState>(0)) pref_{};
 };
 
-class BQ769X0ModeSelect : public select::Select, public Parented<BQ769X0Component> {
+class BQ769X0PowerPathSelect : public select::Select, public Parented<BQ769X0Component> {
 protected:
   void control(size_t index) override;
 };

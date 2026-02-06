@@ -36,12 +36,12 @@ bq769x0:
   #   name: "Min Cell mV"
   # avg_cell_mv:
   #   name: "Avg Cell mV"
-  # fault:
-  #   name: "BQ Fault"
-  # device_ready:
-  #   name: "BQ Device Ready"
-  # mode:
-  #   name: "BQ Mode"
+  # alerts:
+  #   name: "BQ Alerts"
+  # power_path:
+  #   name: "BQ Power Path"
+  # power_path_state:
+  #   name: "BQ Power Path State"
   # clear_faults:
   #   name: "Clear BQ Faults"
 ```
@@ -51,13 +51,15 @@ bq769x0:
 All optional entities are opt-in:
 
 - Sensors: `pack_voltage`, `cell1_voltage` .. `cell4_voltage`, `board_temp`, `current`, `soc_percent`, `min_cell_mv`, `avg_cell_mv`
-- Binary sensors: `fault`, `device_ready`
-- Select: `mode`
+- Text sensors: `alerts`, `power_path_state`
+- Select: `power_path`
 - Button: `clear_faults`
 
 ## Notes
 
 - The CC integration window is 250 ms; the component polls at 250 ms by default.
 - SOC uses built-in hybrid CC + OCV defaults for 4S `liion_lipo`; charge integration is suppressed while average cell voltage is rising to avoid polarity configuration.
-- `mode` is a select backed by CHG_ON/DSG_ON; `charge+discharge` means both FETs are on (bidirectional if the external circuit allows it). `safe` is reported before DEVICE_XREADY and clears both FETs when selected.
+- `alerts` reports `none`, `protection`, `device`, or `protection+device` based on SYS_STAT (protection is UV/OV/SCD/OCD; `device` is DEVICE_XREADY).
+- `power_path` is a select backed by CHG_ON/DSG_ON; `bidirectional` means both FETs are on (bidirectional if the external circuit allows it).
+- `power_path_state` mirrors the live CHG_ON/DSG_ON state as `off`, `charge`, `discharge`, or `bidirectional`.
 - For 4S packs on BQ76920, wire per TI Table 9-2: short `VC4` to `VC3`, connect the top cell to `VC5` (and `BAT`). The component maps cells to VC1/VC2/VC3/VC5.

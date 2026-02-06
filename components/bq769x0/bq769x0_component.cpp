@@ -145,12 +145,18 @@ void BQ769X0Component::update() {
   if (!check_i2c_(driver_.read_sys_stat(&sys_stat), "read SYS_STAT"))
     return;
 
-  if (fault_sensor_ != nullptr) {
-    bool fault = (sys_stat & (SYS_STAT_UV | SYS_STAT_OV | SYS_STAT_SCD | SYS_STAT_OCD)) != 0;
-    fault_sensor_->publish_state(fault);
-  }
-  if (device_ready_sensor_ != nullptr) {
-    device_ready_sensor_->publish_state((sys_stat & SYS_STAT_DEVICE_XREADY) != 0);
+  const bool fault = (sys_stat & (SYS_STAT_UV | SYS_STAT_OV | SYS_STAT_SCD | SYS_STAT_OCD)) != 0;
+  const bool device_fault = (sys_stat & SYS_STAT_DEVICE_XREADY) != 0;
+  if (alerts_sensor_ != nullptr) {
+    const char *status = "none";
+    if (fault && device_fault) {
+      status = "protection+device";
+    } else if (fault) {
+      status = "protection";
+    } else if (device_fault) {
+      status = "device";
+    }
+    alerts_sensor_->publish_state(status);
   }
 
   size_t read_cells = cell_count_;
@@ -175,8 +181,6 @@ void BQ769X0Component::update() {
       uint8_t lo = cell_buffer[reg_index * 2 + 1];
       uint16_t adc14 = static_cast<uint16_t>(((hi & 0x3F) << 8) | lo);
       int mv = driver_.cell_mV_from_adc(adc14, cal_);
-      ESP_LOGD(TAG, "Cell %u from VC%u: hi=0x%02X lo=0x%02X adc14=%u mv=%d", static_cast<unsigned>(i + 1),
-               static_cast<unsigned>(reg_index + 1), hi, lo, adc14, mv);
       sum_mv += mv;
       min_mv = std::min(min_mv, mv);
       max_mv = std::max(max_mv, mv);
@@ -259,23 +263,25 @@ void BQ769X0Component::update() {
 
   update_soc_(soc_inputs);
 
-  if (mode_select_ != nullptr) {
+  if (power_path_select_ != nullptr || power_path_state_sensor_ != nullptr) {
     uint8_t sys_ctrl2 = 0;
     if (!check_i2c_(read_sys_ctrl2_(sys_ctrl2), "read SYS_CTRL2"))
       return;
-    const bool device_ready = (sys_stat & SYS_STAT_DEVICE_XREADY) != 0;
     const bool chg_on = (sys_ctrl2 & SYS_CTRL2_CHG_ON) != 0;
     const bool dsg_on = (sys_ctrl2 & SYS_CTRL2_DSG_ON) != 0;
-    if (!device_ready) {
-      mode_select_->publish_state("safe");
-    } else if (chg_on && dsg_on) {
-      mode_select_->publish_state("charge+discharge");
+    const char *fet_state = "off";
+    if (chg_on && dsg_on) {
+      fet_state = "bidirectional";
     } else if (chg_on) {
-      mode_select_->publish_state("charge");
+      fet_state = "charge";
     } else if (dsg_on) {
-      mode_select_->publish_state("discharge");
-    } else {
-      mode_select_->publish_state("standby");
+      fet_state = "discharge";
+    }
+    if (power_path_select_ != nullptr) {
+      power_path_select_->publish_state(fet_state);
+    }
+    if (power_path_state_sensor_ != nullptr) {
+      power_path_state_sensor_->publish_state(fet_state);
     }
   }
 
@@ -406,7 +412,7 @@ void BQ769X0ClearFaultsButton::press_action() {
   }
 }
 
-void BQ769X0ModeSelect::control(size_t index) {
+void BQ769X0PowerPathSelect::control(size_t index) {
   const char *option = this->option_at(index);
   if (option == nullptr) {
     return;
@@ -418,7 +424,7 @@ void BQ769X0ModeSelect::control(size_t index) {
     chg_on = true;
   } else if (std::strcmp(option, "discharge") == 0) {
     dsg_on = true;
-  } else if (std::strcmp(option, "charge+discharge") == 0) {
+  } else if (std::strcmp(option, "bidirectional") == 0) {
     chg_on = true;
     dsg_on = true;
   }

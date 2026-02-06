@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, button, i2c, sensor, select
+from esphome.components import button, i2c, sensor, select, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_TEMPERATURE,
@@ -13,12 +13,12 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["binary_sensor", "button", "sensor", "select"]
+AUTO_LOAD = ["button", "sensor", "select", "text_sensor"]
 
 bq769x0_ns = cg.esphome_ns.namespace("bq769x0")
 BQ769X0Component = bq769x0_ns.class_("BQ769X0Component", cg.PollingComponent, i2c.I2CDevice)
 BQ769X0ClearFaultsButton = bq769x0_ns.class_("BQ769X0ClearFaultsButton", button.Button)
-BQ769X0ModeSelect = bq769x0_ns.class_("BQ769X0ModeSelect", select.Select)
+BQ769X0PowerPathSelect = bq769x0_ns.class_("BQ769X0PowerPathSelect", select.Select)
 
 CONF_CELL_COUNT = "cell_count"
 CONF_CHEMISTRY = "chemistry"
@@ -34,10 +34,10 @@ CONF_SOC_PERCENT = "soc_percent"
 CONF_MIN_CELL_MV = "min_cell_mv"
 CONF_AVG_CELL_MV = "avg_cell_mv"
 
-CONF_FAULT = "fault"
-CONF_DEVICE_READY = "device_ready"
+CONF_ALERTS = "alerts"
 
-CONF_MODE = "mode"
+CONF_POWER_PATH = "power_path"
+CONF_POWER_PATH_STATE = "power_path_state"
 
 CONF_CLEAR_FAULTS = "clear_faults"
 
@@ -105,12 +105,12 @@ CONFIG_SCHEMA = cv.All(
                 accuracy_decimals=1,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_FAULT): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_DEVICE_READY): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_MODE): select.select_schema(
-                BQ769X0ModeSelect,
+            cv.Optional(CONF_ALERTS): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_POWER_PATH): select.select_schema(
+                BQ769X0PowerPathSelect,
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
+            cv.Optional(CONF_POWER_PATH_STATE): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CLEAR_FAULTS): button.button_schema(BQ769X0ClearFaultsButton),
         }
     )
@@ -163,20 +163,21 @@ async def to_code(config):
         sens = await sensor.new_sensor(config[CONF_AVG_CELL_MV])
         cg.add(var.set_avg_cell_sensor(sens))
 
-    if CONF_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_FAULT])
-        cg.add(var.set_fault_sensor(bs))
-    if CONF_DEVICE_READY in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_DEVICE_READY])
-        cg.add(var.set_device_ready_sensor(bs))
+    if CONF_ALERTS in config:
+        ts = await text_sensor.new_text_sensor(config[CONF_ALERTS])
+        cg.add(var.set_alerts_sensor(ts))
 
-    if CONF_MODE in config:
-        mode_select = await select.new_select(
-            config[CONF_MODE],
-            options=["safe", "standby", "charge", "discharge", "charge+discharge"],
+    if CONF_POWER_PATH in config:
+        power_path_select = await select.new_select(
+            config[CONF_POWER_PATH],
+            options=["off", "charge", "discharge", "bidirectional"],
         )
-        await cg.register_parented(mode_select, var)
-        cg.add(var.set_mode_select(mode_select))
+        await cg.register_parented(power_path_select, var)
+        cg.add(var.set_power_path_select(power_path_select))
+
+    if CONF_POWER_PATH_STATE in config:
+        ts = await text_sensor.new_text_sensor(config[CONF_POWER_PATH_STATE])
+        cg.add(var.set_power_path_state_sensor(ts))
 
     if CONF_CLEAR_FAULTS in config:
         btn = await button.new_button(config[CONF_CLEAR_FAULTS])
