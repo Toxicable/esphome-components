@@ -110,7 +110,7 @@ CONFIG_SCHEMA = cv.All(
         }
     )
     .extend(cv.polling_component_schema("250ms"))
-    .extend(i2c.i2c_device_schema()),
+    .extend(i2c.i2c_device_schema(default_address=0x08)),
     _validate_config,
 )
 
