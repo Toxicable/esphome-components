@@ -17,7 +17,6 @@ AUTO_LOAD = ["binary_sensor", "button", "sensor", "text_sensor"]
 bq769x0_ns = cg.esphome_ns.namespace("bq769x0")
 BQ769X0Component = bq769x0_ns.class_("BQ769X0Component", cg.PollingComponent, i2c.I2CDevice)
 BQ769X0ClearFaultsButton = bq769x0_ns.class_("BQ769X0ClearFaultsButton", button.Button)
-Chemistry = bq769x0_ns.enum("Chemistry")
 
 CONF_CELL_COUNT = "cell_count"
 CONF_CHEMISTRY = "chemistry"
@@ -122,8 +121,11 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
 
     cg.add(var.set_cell_count(config[CONF_CELL_COUNT]))
-    chemistry = Chemistry.LIION_LIPO if config[CONF_CHEMISTRY] == "liion_lipo" else Chemistry.LIION_LIPO
-    cg.add(var.set_chemistry(chemistry))
+    cg.add(
+        var.set_chemistry(
+            cg.RawExpression("esphome::bq769x0::Chemistry::LIION_LIPO")
+        )
+    )
 
     if CONF_PACK_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_PACK_VOLTAGE])
