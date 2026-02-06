@@ -15,7 +15,7 @@ bq769x0:
   cell_count: 4
   chemistry: liion_lipo
   # update_interval: 250ms
-  # address: 0x18
+  # address: 0x08
   # pack_voltage:
   #   name: "Pack Voltage"
   # cell1_voltage:
