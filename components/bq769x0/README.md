@@ -1,8 +1,8 @@
-# BQ769X0 Battery Monitor
+# BQ769X0 Battery Monitor (Hybrid SOC)
 
-ESPHome external component for the TI BQ76920/30/40 family. This component reads cell/pack voltages, a board-approximate temperature, and current from the coulomb counter ADC. It can also clear fault/status bits and report charge/discharge mode.
+ESPHome external component for the TI BQ76920/30/40 family. This component reads cell/pack voltages, board-approximate temperature, current, and estimates SOC using a hybrid coulomb-counter + OCV approach.
 
-## Basic Configuration
+## Basic Configuration (all required fields shown)
 
 ```yaml
 i2c:
@@ -15,7 +15,33 @@ bq769x0:
   address: 0x08
   cell_count: 4
   crc: true
-  update_interval: 5s
+  rsense_milliohm: 1
+
+  # Required SOC configuration
+  ocv_table:
+    - mv: 3300
+      soc: 0
+    - mv: 3600
+      soc: 50
+    - mv: 4200
+      soc: 100
+  rest_current_threshold_ma: 50
+  rest_min_seconds: 60
+  rest_full_weight_seconds: 600
+  rest_dvdt_threshold_mv_per_s: 0.5
+  ocv_source: min_cell
+  full_cell_mv: 4180
+  full_hold_seconds: 30
+  empty_cell_mv: 3300
+  empty_hold_seconds: 10
+  empty_discharge_current_ma: 200
+  current_positive_is_discharge: true
+  coulombic_eff_discharge: 1.0
+  coulombic_eff_charge: 1.0
+  learn_alpha: 0.2
+  use_hw_fault_anchors: false
+
+  # Optional sensors
   pack_voltage: # Optional
     name: "Pack Voltage"
   cell1_voltage: # Optional
@@ -28,63 +54,55 @@ bq769x0:
     name: "Cell 4"
   board_temp: # Optional
     name: "Board Temperature (approx)"
-  current: # Optional (requires rsense_milliohm)
+  current: # Optional
     name: "Pack Current"
-  soc: # Optional (requires capacity_mah)
-    name: "State of Charge"
-  rsense_milliohm: 1 # Optional (required when current is set)
-  capacity_mah: 2500 # Optional (required when soc is set)
-  initial_soc: 100 # Optional (default 100)
+  soc_percent: # Optional
+    name: "SOC (%)"
+  min_cell_mv: # Optional
+    name: "Min Cell (mV)"
+  avg_cell_mv: # Optional
+    name: "Avg Cell (mV)"
+  soc_confidence: # Optional
+    name: "SOC Confidence"
+  rest_state: # Optional
+    name: "Rest State"
+
+  # Optional binary sensors
   fault: # Optional
     name: "Fault"
   device_ready: # Optional
     name: "Device Ready"
   cc_ready: # Optional
     name: "CC Ready"
+  soc_valid: # Optional
+    name: "SOC Valid"
+
+  # Optional text sensors
   mode: # Optional
     name: "Charge/Discharge Mode"
+
+  # Optional controls
   clear_faults: # Optional
     name: "Clear Faults"
   cc_oneshot: # Optional
     name: "CC One Shot"
+  force_full_anchor: # Optional
+    name: "Force Full Anchor"
+  force_empty_anchor: # Optional
+    name: "Force Empty Anchor"
+  clear_learned_capacity: # Optional
+    name: "Clear Learned Capacity"
+
+  # Optional balance correction (explicit)
+  balance_correction:
+    enabled: false
+    balance_current_ma_per_cell: 50
+    balance_duty: 0.70
 ```
 
-## Configuration Options
+## Notes
 
-- **cell_count** (**Required**, 3–5): Number of cells in the stack.
-- **crc** (*Optional*, default `true`): Enable CRC-on-I²C (for CRC-capable variants).
-- **address** (*Optional*, default `0x08`): I²C address.
-- **update_interval** (*Optional*, default `5s`).
-- **rsense_milliohm** (*Required when `current` is configured*): Sense resistor value in milliohms.
-- **capacity_mah** (*Required when `soc` is configured*): Pack capacity in mAh.
-- **initial_soc** (*Optional*, default `100`): Initial SOC estimate for integration (%).
-
-## Optional Sensors
-
-- **pack_voltage**: Pack voltage sensor (V).
-- **cell1_voltage** ... **cell5_voltage**: Cell voltage sensors (V).
-- **board_temp**: Board-approximate temperature (°C).
-- **current**: Current in mA (requires `rsense_milliohm`).
-- **soc**: State of charge (%) estimated by integrating CC current over time.
-
-## Optional Binary Sensors
-
-- **fault**: True when any UV/OV/SCD/OCD status bit is set.
-- **device_ready**: SYS_STAT.DEVICE_XREADY.
-- **cc_ready**: SYS_STAT.CC_READY.
-
-## Optional Controls
-
-- **clear_faults**: Button to clear SYS_STAT fault bits.
-- **cc_oneshot**: Button to set CC_ONESHOT and wait for CC_READY.
-
-## Optional Text Sensors
-
-- **mode**: Charge/discharge mode derived from CHG_ON/DSG_ON bits (`charge`, `discharge`, `charge+discharge`, `standby`, or `safe` before DEVICE_XREADY).
-
-## Notes on CC and CHG/DSG
-
-- **CC** is the coulomb counter ADC that integrates the SRP/SRN sense voltage; the `current` sensor converts it using `rsense_milliohm` (polarity depends on SRP/SRN wiring).
-- **cc_oneshot** triggers a single CC conversion by setting `CC_ONESHOT` and then waiting for `CC_READY`.
-- **mode** reflects the CHG_ON/DSG_ON bits in `SYS_CTRL2`, which indicate whether the external charge/discharge FET drivers are enabled.
-- **SOC** is computed by integrating CC current over time, so it depends on accurate `capacity_mah`, a reasonable `initial_soc`, and a stable update interval.
+- The CC integration window is 250 ms; the component polls at 250 ms by default.
+- SOC is estimated by combining CC integration and OCV corrections during rest periods.
+- `rest_state` reports `rest` or `active`, while `soc_confidence` reports the current OCV blend weight (0–1).
+- `mode` is derived from CHG_ON/DSG_ON bits (`charge`, `discharge`, `charge+discharge`, `standby`, or `safe` before DEVICE_XREADY).
