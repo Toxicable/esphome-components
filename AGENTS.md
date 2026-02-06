@@ -9,3 +9,4 @@
 - `components/bq769x0` now uses an ultra-simple YAML config: required `cell_count` (fixed to 4) and `chemistry` (`liion_lipo`), with SOC defaults hardcoded in C++. 
 - Component READMEs should present a single configuration example with optional items commented out instead of separate basic/full examples.
 - `components/bq769x0` auto-loads sensor/binary_sensor/text_sensor/button to keep optional header includes available, and ships a local crc8 helper header so external builds don't need shared helpers (shared crc8 helper removed).
+- Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.

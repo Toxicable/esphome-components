@@ -144,9 +144,9 @@ bool BQ769X0Driver::read_register_block(uint8_t reg, uint8_t *data, size_t len) 
 
 bool BQ769X0Driver::write_register_block(uint8_t reg, const uint8_t *data, size_t len) {
   if (!this->crc_enabled_) {
-    auto error = this->dev_->write_bytes(reg, data, len);
-    this->last_error_ = error;
-    return error == i2c::ERROR_OK;
+    bool ok = this->dev_->write_bytes(reg, data, len);
+    this->last_error_ = ok ? i2c::ERROR_OK : i2c::ERROR_UNKNOWN;
+    return ok;
   }
   return this->write_register_block_crc_(reg, data, len);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace esphome {
@@ -52,10 +53,10 @@ struct SocInputs {
 };
 
 struct SocOutputs {
-  float soc_percent{NAN};
+  float soc_percent{std::numeric_limits<float>::quiet_NaN()};
   float soc_confidence{0.0f};
-  float capacity_mah{NAN};
-  float q_remaining_mah{NAN};
+  float capacity_mah{std::numeric_limits<float>::quiet_NaN()};
+  float q_remaining_mah{std::numeric_limits<float>::quiet_NaN()};
   bool soc_valid{false};
   bool rest_qualified{false};
 };
@@ -83,7 +84,7 @@ protected:
   SocOutputs outputs_{};
 
   float rest_seconds_{0.0f};
-  float prev_vrest_mv_{NAN};
+  float prev_vrest_mv_{std::numeric_limits<float>::quiet_NaN()};
 
   bool anchor_full_seen_{false};
   float discharged_since_full_mah_{0.0f};

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <limits>
 #include <vector>
 
 #include "bq769x0.h"
@@ -48,9 +49,9 @@ public:
 
 protected:
   struct PersistedState {
-    float soc_percent{NAN};
-    float capacity_mah{NAN};
-    float q_remaining_mah{NAN};
+    float soc_percent{std::numeric_limits<float>::quiet_NaN()};
+    float capacity_mah{std::numeric_limits<float>::quiet_NaN()};
+    float q_remaining_mah{std::numeric_limits<float>::quiet_NaN()};
     bool soc_valid{false};
   };
 
@@ -93,10 +94,10 @@ protected:
 
   uint32_t last_cc_ms_{0};
   uint32_t last_persist_ms_{0};
-  float last_vmin_mv_{NAN};
-  float last_vavg_mv_{NAN};
+  float last_vmin_mv_{std::numeric_limits<float>::quiet_NaN()};
+  float last_vavg_mv_{std::numeric_limits<float>::quiet_NaN()};
 
-  preferences::PreferenceObject pref_{};
+  decltype(global_preferences->make_preference<PersistedState>(0)) pref_{};
 };
 
 class BQ769X0ClearFaultsButton : public button::Button {
