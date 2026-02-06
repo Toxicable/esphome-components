@@ -3,7 +3,7 @@
 #include <cmath>
 #include <vector>
 
-#include "helpers/crc8.h"
+#include "crc8.h"
 
 namespace esphome {
 namespace bq769x0 {

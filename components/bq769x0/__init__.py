@@ -12,6 +12,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
+AUTO_LOAD = ["binary_sensor", "button", "sensor", "text_sensor"]
 
 bq769x0_ns = cg.esphome_ns.namespace("bq769x0")
 BQ769X0Component = bq769x0_ns.class_("BQ769X0Component", cg.PollingComponent, i2c.I2CDevice)
