@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
@@ -152,17 +153,26 @@ void BQ769X0Component::update() {
     device_ready_sensor_->publish_state((sys_stat & SYS_STAT_DEVICE_XREADY) != 0);
   }
 
+  size_t read_cells = cell_count_;
+  if (cell_count_ == 4) {
+    read_cells = 5; // VC1..VC5 needed; VC4 is shorted for 4S per datasheet.
+  }
   std::array<uint8_t, 10> cell_buffer{};
-  if (!check_i2c_(read_cell_block_(cell_buffer, cell_count_), "read cell block"))
+  if (!check_i2c_(read_cell_block_(cell_buffer, read_cells), "read cell block"))
     return;
 
   int min_mv = INT32_MAX;
   int max_mv = 0;
   int sum_mv = 0;
   if (cal_valid_) {
+    const uint8_t cell_map_4s[] = {0, 1, 2, 4};
     for (size_t i = 0; i < cell_count_; i++) {
-      uint8_t hi = cell_buffer[i * 2];
-      uint8_t lo = cell_buffer[i * 2 + 1];
+      size_t reg_index = i;
+      if (cell_count_ == 4) {
+        reg_index = cell_map_4s[i];
+      }
+      uint8_t hi = cell_buffer[reg_index * 2];
+      uint8_t lo = cell_buffer[reg_index * 2 + 1];
       uint16_t adc14 = static_cast<uint16_t>(((hi & 0x3F) << 8) | lo);
       int mv = driver_.cell_mV_from_adc(adc14, cal_);
       sum_mv += mv;
@@ -247,7 +257,7 @@ void BQ769X0Component::update() {
 
   update_soc_(soc_inputs);
 
-  if (mode_sensor_ != nullptr) {
+  if (mode_select_ != nullptr) {
     uint8_t sys_ctrl2 = 0;
     if (!check_i2c_(read_sys_ctrl2_(sys_ctrl2), "read SYS_CTRL2"))
       return;
@@ -255,15 +265,15 @@ void BQ769X0Component::update() {
     const bool chg_on = (sys_ctrl2 & SYS_CTRL2_CHG_ON) != 0;
     const bool dsg_on = (sys_ctrl2 & SYS_CTRL2_DSG_ON) != 0;
     if (!device_ready) {
-      mode_sensor_->publish_state("safe");
+      mode_select_->publish_state("safe");
     } else if (chg_on && dsg_on) {
-      mode_sensor_->publish_state("charge+discharge");
+      mode_select_->publish_state("charge+discharge");
     } else if (chg_on) {
-      mode_sensor_->publish_state("charge");
+      mode_select_->publish_state("charge");
     } else if (dsg_on) {
-      mode_sensor_->publish_state("discharge");
+      mode_select_->publish_state("discharge");
     } else {
-      mode_sensor_->publish_state("standby");
+      mode_select_->publish_state("standby");
     }
   }
 
@@ -350,12 +360,30 @@ bool BQ769X0Component::ensure_cc_enabled_() {
   return true;
 }
 
+bool BQ769X0Component::set_fet_state(bool chg_on, bool dsg_on) {
+  uint8_t sys_ctrl2 = 0;
+  if (!check_i2c_(read_sys_ctrl2_(sys_ctrl2), "read SYS_CTRL2")) {
+    return false;
+  }
+  sys_ctrl2 &= static_cast<uint8_t>(~(SYS_CTRL2_CHG_ON | SYS_CTRL2_DSG_ON));
+  if (chg_on) {
+    sys_ctrl2 |= SYS_CTRL2_CHG_ON;
+  }
+  if (dsg_on) {
+    sys_ctrl2 |= SYS_CTRL2_DSG_ON;
+  }
+  if (!check_i2c_(write_sys_ctrl2_(sys_ctrl2), "write SYS_CTRL2")) {
+    return false;
+  }
+  return true;
+}
+
 bool BQ769X0Component::read_sys_ctrl2_(uint8_t &value) { return driver_.read_register8(Register::SYS_CTRL2, &value); }
 
 bool BQ769X0Component::write_sys_ctrl2_(uint8_t value) { return driver_.write_register8(Register::SYS_CTRL2, value); }
 
 bool BQ769X0Component::read_cell_block_(std::array<uint8_t, 10> &buffer, size_t count) {
-  if (count == 0 || count > 4) {
+  if (count == 0 || count > 5) {
     return false;
   }
   size_t len = count * 2;
@@ -373,6 +401,28 @@ bool BQ769X0Component::check_i2c_(bool ok, const char *operation) {
 void BQ769X0ClearFaultsButton::press_action() {
   if (parent_ != nullptr) {
     parent_->clear_faults();
+  }
+}
+
+void BQ769X0ModeSelect::control(size_t index) {
+  const char *option = this->option_at(index);
+  if (option == nullptr) {
+    return;
+  }
+
+  bool chg_on = false;
+  bool dsg_on = false;
+  if (std::strcmp(option, "charge") == 0) {
+    chg_on = true;
+  } else if (std::strcmp(option, "discharge") == 0) {
+    dsg_on = true;
+  } else if (std::strcmp(option, "charge+discharge") == 0) {
+    chg_on = true;
+    dsg_on = true;
+  }
+
+  if (this->parent_ != nullptr && this->parent_->set_fet_state(chg_on, dsg_on)) {
+    this->publish_state(index);
   }
 }
 

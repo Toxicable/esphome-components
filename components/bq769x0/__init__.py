@@ -1,10 +1,11 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, button, i2c, sensor, text_sensor
+from esphome.components import binary_sensor, button, i2c, sensor, select
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
+    ENTITY_CATEGORY_CONFIG,
     STATE_CLASS_MEASUREMENT,
     UNIT_CELSIUS,
     UNIT_MILLIVOLT,
@@ -12,11 +13,12 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["binary_sensor", "button", "sensor", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "button", "sensor", "select"]
 
 bq769x0_ns = cg.esphome_ns.namespace("bq769x0")
 BQ769X0Component = bq769x0_ns.class_("BQ769X0Component", cg.PollingComponent, i2c.I2CDevice)
 BQ769X0ClearFaultsButton = bq769x0_ns.class_("BQ769X0ClearFaultsButton", button.Button)
+BQ769X0ModeSelect = bq769x0_ns.class_("BQ769X0ModeSelect", select.Select)
 
 CONF_CELL_COUNT = "cell_count"
 CONF_CHEMISTRY = "chemistry"
@@ -105,7 +107,10 @@ CONFIG_SCHEMA = cv.All(
             ),
             cv.Optional(CONF_FAULT): binary_sensor.binary_sensor_schema(),
             cv.Optional(CONF_DEVICE_READY): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_MODE): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_MODE): select.select_schema(
+                BQ769X0ModeSelect,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
             cv.Optional(CONF_CLEAR_FAULTS): button.button_schema(BQ769X0ClearFaultsButton),
         }
     )
@@ -166,8 +171,12 @@ async def to_code(config):
         cg.add(var.set_device_ready_sensor(bs))
 
     if CONF_MODE in config:
-        ts = await text_sensor.new_text_sensor(config[CONF_MODE])
-        cg.add(var.set_mode_sensor(ts))
+        mode_select = await select.new_select(
+            config[CONF_MODE],
+            options=["safe", "standby", "charge", "discharge", "charge+discharge"],
+        )
+        await cg.register_parented(mode_select, var)
+        cg.add(var.set_mode_select(mode_select))
 
     if CONF_CLEAR_FAULTS in config:
         btn = await button.new_button(config[CONF_CLEAR_FAULTS])

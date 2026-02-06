@@ -10,7 +10,7 @@
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/components/select/select.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 
@@ -39,13 +39,14 @@ public:
   void set_fault_sensor(binary_sensor::BinarySensor *sensor) { fault_sensor_ = sensor; }
   void set_device_ready_sensor(binary_sensor::BinarySensor *sensor) { device_ready_sensor_ = sensor; }
 
-  void set_mode_sensor(text_sensor::TextSensor *sensor) { mode_sensor_ = sensor; }
+  void set_mode_select(select::Select *select) { mode_select_ = select; }
 
   void setup() override;
   void update() override;
   void dump_config() override;
 
   void clear_faults();
+  bool set_fet_state(bool chg_on, bool dsg_on);
 
 protected:
   struct PersistedState {
@@ -87,7 +88,7 @@ protected:
   binary_sensor::BinarySensor *fault_sensor_{nullptr};
   binary_sensor::BinarySensor *device_ready_sensor_{nullptr};
 
-  text_sensor::TextSensor *mode_sensor_{nullptr};
+  select::Select *mode_select_{nullptr};
 
   SocConfig soc_cfg_{};
   BQ769X0SocEstimator soc_estimator_{};
@@ -98,6 +99,11 @@ protected:
   float last_vavg_mv_{std::numeric_limits<float>::quiet_NaN()};
 
   decltype(global_preferences->make_preference<PersistedState>(0)) pref_{};
+};
+
+class BQ769X0ModeSelect : public select::Select, public Parented<BQ769X0Component> {
+protected:
+  void control(size_t index) override;
 };
 
 class BQ769X0ClearFaultsButton : public button::Button {
