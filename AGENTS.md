@@ -19,4 +19,4 @@
 - `tools/pdf_to_text.py` extracts verbatim text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
 - Devcontainer installs `pypdf` alongside `esphome` for the PDF ingestion tool.
 - Devcontainer shells default to the ESP-IDF Python venv; Python deps needed at runtime should be installed into that env (Dockerfile sources `export.sh` before installing).
-- `components/fdc1004` is a `sensor` platform with optional `cin1`..`cin4` sensors; each channel supports optional `capdac` (0..31 steps at 3.125pF/step), `sample_rate` accepts 100/200/400 S/s, and init retries if the device is unavailable at boot.
+- `components/fdc1004` is a `sensor` platform with optional `cin1`..`cin4` sensors; each channel supports optional `capdac` (0..31 steps at 3.125pF/step), `sample_rate` accepts 100/200/400 S/s, init retries if the device is unavailable at boot, and optional `zero_now` button taring to current readings.

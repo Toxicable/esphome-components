@@ -1,12 +1,14 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import i2c, sensor
-from esphome.const import CONF_ID, STATE_CLASS_MEASUREMENT
+from esphome.components import button, i2c, sensor
+from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG, STATE_CLASS_MEASUREMENT
 
 DEPENDENCIES = ["i2c"]
+AUTO_LOAD = ["button"]
 
 fdc1004_ns = cg.esphome_ns.namespace("fdc1004")
 FDC1004Component = fdc1004_ns.class_("FDC1004Component", cg.PollingComponent, i2c.I2CDevice)
+FDC1004ZeroButton = fdc1004_ns.class_("FDC1004ZeroButton", button.Button)
 
 CONF_SAMPLE_RATE = "sample_rate"
 CONF_CAPDAC = "capdac"
@@ -14,6 +16,7 @@ CONF_CIN1 = "cin1"
 CONF_CIN2 = "cin2"
 CONF_CIN3 = "cin3"
 CONF_CIN4 = "cin4"
+CONF_ZERO_NOW = "zero_now"
 
 CHANNEL_KEYS = (CONF_CIN1, CONF_CIN2, CONF_CIN3, CONF_CIN4)
 
@@ -62,6 +65,10 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CIN2): _channel_schema(),
             cv.Optional(CONF_CIN3): _channel_schema(),
             cv.Optional(CONF_CIN4): _channel_schema(),
+            cv.Optional(CONF_ZERO_NOW): button.button_schema(
+                FDC1004ZeroButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
         }
     )
     .extend(cv.polling_component_schema("200ms"))
@@ -85,3 +92,7 @@ async def to_code(config):
         sens = await sensor.new_sensor(channel_config)
         cg.add(var.set_channel_sensor(channel_index, sens))
         cg.add(var.set_channel_capdac(channel_index, channel_config[CONF_CAPDAC]))
+
+    if CONF_ZERO_NOW in config:
+        zero_button = await button.new_button(config[CONF_ZERO_NOW])
+        cg.add(zero_button.set_parent(var))

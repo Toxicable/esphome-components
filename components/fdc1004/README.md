@@ -26,9 +26,12 @@ sensor:
     # cin4:
     #   name: "FDC1004 CIN4"
     #   capdac: 0
+    # zero_now:
+    #   name: "FDC1004 Zero Now"
 ```
 
 Notes:
 - Configure at least one of `cin1`..`cin4`.
 - CAPDAC is applied as `CAPDAC * 3.125pF` and included in the published result.
 - If the chip is powered/enabled later by another GPIO, the component keeps retrying initialization automatically.
+- `zero_now` captures the current reading as a software tare offset for each enabled channel (not persisted across reboot).

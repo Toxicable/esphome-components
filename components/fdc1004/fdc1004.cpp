@@ -58,6 +58,48 @@ void FDC1004Component::set_sample_rate(uint16_t sample_rate_sps) {
   }
 }
 
+void FDC1004Component::tare_to_current() {
+  if (this->is_failed()) {
+    ESP_LOGW(TAG, "Cannot tare while component is failed");
+    return;
+  }
+
+  if (!this->initialized_) {
+    ESP_LOGW(TAG, "Cannot tare: FDC1004 is not initialized yet");
+    this->status_set_warning();
+    return;
+  }
+
+  bool any_channel = false;
+  bool all_ok = true;
+  for (uint8_t i = 0; i < this->channel_sensors_.size(); i++) {
+    if ((this->enabled_mask_ & static_cast<uint8_t>(1U << i)) == 0) {
+      continue;
+    }
+
+    float capacitance_pf = 0.0f;
+    if (!this->read_measurement_pf_(i, capacitance_pf)) {
+      ESP_LOGW(TAG, "Tare read failed for measurement %u", i + 1);
+      all_ok = false;
+      continue;
+    }
+
+    this->tare_offsets_pf_[i] = capacitance_pf;
+    any_channel = true;
+    if (this->channel_sensors_[i] != nullptr) {
+      this->channel_sensors_[i]->publish_state(0.0f);
+    }
+  }
+
+  if (!any_channel || !all_ok) {
+    this->status_set_warning();
+    return;
+  }
+
+  ESP_LOGI(TAG, "Captured tare offsets from current readings");
+  this->status_clear_warning();
+}
+
 void FDC1004Component::setup() {
   if (this->enabled_mask_ == 0) {
     ESP_LOGE(TAG, "No measurements enabled");
@@ -100,6 +142,14 @@ void FDC1004Component::dump_config() {
     ESP_LOGCONFIG(TAG, "  CIN3 CAPDAC: %.3f pF", this->capdac_pf_(2));
   if (this->channel_sensors_[3] != nullptr)
     ESP_LOGCONFIG(TAG, "  CIN4 CAPDAC: %.3f pF", this->capdac_pf_(3));
+  if (this->channel_sensors_[0] != nullptr)
+    ESP_LOGCONFIG(TAG, "  CIN1 Tare offset: %.4f pF", this->tare_offsets_pf_[0]);
+  if (this->channel_sensors_[1] != nullptr)
+    ESP_LOGCONFIG(TAG, "  CIN2 Tare offset: %.4f pF", this->tare_offsets_pf_[1]);
+  if (this->channel_sensors_[2] != nullptr)
+    ESP_LOGCONFIG(TAG, "  CIN3 Tare offset: %.4f pF", this->tare_offsets_pf_[2]);
+  if (this->channel_sensors_[3] != nullptr)
+    ESP_LOGCONFIG(TAG, "  CIN4 Tare offset: %.4f pF", this->tare_offsets_pf_[3]);
 }
 
 void FDC1004Component::update() {
@@ -160,7 +210,7 @@ void FDC1004Component::update() {
     }
 
     if (this->channel_sensors_[i] != nullptr) {
-      this->channel_sensors_[i]->publish_state(capacitance_pf);
+      this->channel_sensors_[i]->publish_state(capacitance_pf - this->tare_offsets_pf_[i]);
     }
   }
 
@@ -284,6 +334,12 @@ float FDC1004Component::capdac_pf_(uint8_t measurement_index) const {
     return 0.0f;
   }
   return static_cast<float>(this->capdac_steps_[measurement_index]) * CAPDAC_STEP_PF;
+}
+
+void FDC1004ZeroButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->tare_to_current();
+  }
 }
 
 } // namespace fdc1004
