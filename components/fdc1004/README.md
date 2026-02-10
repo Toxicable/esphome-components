@@ -31,3 +31,4 @@ sensor:
 Notes:
 - Configure at least one of `cin1`..`cin4`.
 - CAPDAC is applied as `CAPDAC * 3.125pF` and included in the published result.
+- If the chip is powered/enabled later by another GPIO, the component keeps retrying initialization automatically.

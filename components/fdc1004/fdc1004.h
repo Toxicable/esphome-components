@@ -21,6 +21,7 @@ public:
   void dump_config() override;
 
 protected:
+  bool initialize_();
   bool read_register16_(uint8_t reg, uint16_t &value);
   bool write_register16_(uint8_t reg, uint16_t value);
   bool configure_measurement_(uint8_t measurement_index);
@@ -33,6 +34,9 @@ protected:
   uint8_t enabled_mask_{0};
   uint16_t sample_rate_sps_{100};
   uint8_t rate_bits_{0b01};
+  bool initialized_{false};
+  uint32_t next_init_retry_ms_{0};
+  static constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
 };
 
 } // namespace fdc1004

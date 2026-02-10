@@ -1,5 +1,6 @@
 #include "fdc1004.h"
 
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -58,58 +59,22 @@ void FDC1004Component::set_sample_rate(uint16_t sample_rate_sps) {
 }
 
 void FDC1004Component::setup() {
-  uint16_t manufacturer_id = 0;
-  if (!this->read_register16_(REG_MANUFACTURER_ID, manufacturer_id)) {
-    ESP_LOGE(TAG, "Failed to read manufacturer ID");
-    this->mark_failed();
-    return;
-  }
-
-  uint16_t device_id = 0;
-  if (!this->read_register16_(REG_DEVICE_ID, device_id)) {
-    ESP_LOGE(TAG, "Failed to read device ID");
-    this->mark_failed();
-    return;
-  }
-
-  ESP_LOGI(TAG, "0x%02X: manufacturer=0x%04X device_id=0x%04X", this->address_, manufacturer_id, device_id);
-
-  if (manufacturer_id != EXPECTED_MANUFACTURER_ID) {
-    ESP_LOGE(TAG, "Unexpected manufacturer ID: 0x%04X (expected 0x%04X)", manufacturer_id, EXPECTED_MANUFACTURER_ID);
-    this->mark_failed();
-    return;
-  }
-
-  if (device_id != EXPECTED_DEVICE_ID) {
-    ESP_LOGE(TAG, "Unexpected device ID: 0x%04X (expected 0x%04X)", device_id, EXPECTED_DEVICE_ID);
-    this->mark_failed();
-    return;
-  }
-
   if (this->enabled_mask_ == 0) {
     ESP_LOGE(TAG, "No measurements enabled");
     this->mark_failed();
     return;
   }
 
-  for (uint8_t i = 0; i < this->channel_sensors_.size(); i++) {
-    if ((this->enabled_mask_ & static_cast<uint8_t>(1U << i)) == 0) {
-      continue;
-    }
-    if (!this->configure_measurement_(i)) {
-      ESP_LOGE(TAG, "Failed to configure measurement %u", i + 1);
-      this->mark_failed();
-      return;
-    }
-  }
+  this->initialized_ = false;
+  this->next_init_retry_ms_ = 0;
 
-  if (!this->write_fdc_conf_()) {
-    ESP_LOGE(TAG, "Failed to write FDC_CONF");
-    this->mark_failed();
-    return;
+  if (!this->initialize_()) {
+    ESP_LOGW(TAG, "FDC1004 not ready at startup; will retry initialization");
+    this->status_set_warning();
+    this->next_init_retry_ms_ = millis() + INIT_RETRY_INTERVAL_MS;
+  } else {
+    this->status_clear_warning();
   }
-
-  ESP_LOGI(TAG, "FDC1004 initialized (%u S/s, mask=0x%X)", this->sample_rate_sps_, this->enabled_mask_);
 }
 
 void FDC1004Component::dump_config() {
@@ -120,6 +85,7 @@ void FDC1004Component::dump_config() {
   }
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  Sample rate: %u S/s", this->sample_rate_sps_);
+  ESP_LOGCONFIG(TAG, "  Initialized: %s", this->initialized_ ? "yes" : "no (waiting for device)");
 
   LOG_SENSOR("  ", "CIN1", this->channel_sensors_[0]);
   LOG_SENSOR("  ", "CIN2", this->channel_sensors_[1]);
@@ -141,10 +107,28 @@ void FDC1004Component::update() {
     return;
   }
 
+  const uint32_t now = millis();
+  if (!this->initialized_) {
+    if (now < this->next_init_retry_ms_) {
+      return;
+    }
+
+    if (!this->initialize_()) {
+      this->status_set_warning();
+      this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
+      return;
+    }
+
+    this->status_clear_warning();
+    return;
+  }
+
   uint16_t fdc_conf = 0;
   if (!this->read_register16_(REG_FDC_CONF, fdc_conf)) {
-    ESP_LOGW(TAG, "Failed to read FDC_CONF");
+    ESP_LOGW(TAG, "Lost communication with FDC1004; reinitializing");
+    this->initialized_ = false;
     this->status_set_warning();
+    this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
     return;
   }
 
@@ -185,6 +169,44 @@ void FDC1004Component::update() {
   } else {
     this->status_set_warning();
   }
+}
+
+bool FDC1004Component::initialize_() {
+  uint16_t manufacturer_id = 0;
+  if (!this->read_register16_(REG_MANUFACTURER_ID, manufacturer_id)) {
+    ESP_LOGD(TAG, "Init probe: failed to read manufacturer ID");
+    return false;
+  }
+
+  uint16_t device_id = 0;
+  if (!this->read_register16_(REG_DEVICE_ID, device_id)) {
+    ESP_LOGD(TAG, "Init probe: failed to read device ID");
+    return false;
+  }
+
+  if (manufacturer_id != EXPECTED_MANUFACTURER_ID || device_id != EXPECTED_DEVICE_ID) {
+    ESP_LOGW(TAG, "Init probe IDs mismatch: manufacturer=0x%04X device_id=0x%04X", manufacturer_id, device_id);
+    return false;
+  }
+
+  for (uint8_t i = 0; i < this->channel_sensors_.size(); i++) {
+    if ((this->enabled_mask_ & static_cast<uint8_t>(1U << i)) == 0) {
+      continue;
+    }
+    if (!this->configure_measurement_(i)) {
+      ESP_LOGD(TAG, "Init probe: failed to configure measurement %u", i + 1);
+      return false;
+    }
+  }
+
+  if (!this->write_fdc_conf_()) {
+    ESP_LOGD(TAG, "Init probe: failed to write FDC_CONF");
+    return false;
+  }
+
+  this->initialized_ = true;
+  ESP_LOGI(TAG, "FDC1004 initialized (%u S/s, mask=0x%X)", this->sample_rate_sps_, this->enabled_mask_);
+  return true;
 }
 
 bool FDC1004Component::read_register16_(uint8_t reg, uint16_t &value) {
