@@ -14,36 +14,36 @@ bq769x0:
   id: bq
   cell_count: 4
   chemistry: liion_lipo
-  # update_interval: 250ms
-  # address: 0x08
-  # pack_voltage:
-  #   name: "Pack Voltage"
-  # cell1_voltage:
-  #   name: "Cell 1 Voltage"
-  # cell2_voltage:
-  #   name: "Cell 2 Voltage"
-  # cell3_voltage:
-  #   name: "Cell 3 Voltage"
-  # cell4_voltage:
-  #   name: "Cell 4 Voltage"
-  # board_temp:
-  #   name: "Board Temperature"
-  # current:
-  #   name: "Pack Current"
-  # soc_percent:
-  #   name: "State of Charge"
-  # min_cell_mv:
-  #   name: "Min Cell mV"
-  # avg_cell_mv:
-  #   name: "Avg Cell mV"
-  # alerts:
-  #   name: "BQ Alerts"
-  # power_path:
-  #   name: "BQ Power Path"
-  # power_path_state:
-  #   name: "BQ Power Path State"
-  # clear_faults:
-  #   name: "Clear BQ Faults"
+  update_interval: 250ms
+  address: 0x08
+  pack_voltage:
+    name: "Pack Voltage"
+  cell1_voltage:
+    name: "Cell 1 Voltage"
+  cell2_voltage:
+    name: "Cell 2 Voltage"
+  cell3_voltage:
+    name: "Cell 3 Voltage"
+  cell4_voltage:
+    name: "Cell 4 Voltage"
+  board_temp:
+    name: "Board Temperature"
+  current:
+    name: "Pack Current"
+  soc_percent:
+    name: "State of Charge"
+  min_cell_mv:
+    name: "Min Cell mV"
+  avg_cell_mv:
+    name: "Avg Cell mV"
+  alerts:
+    name: "BQ Alerts"
+  power_path:
+    name: "BQ Power Path"
+  power_path_state:
+    name: "BQ Power Path State"
+  clear_faults:
+    name: "Clear BQ Faults"
 ```
 
 ## Optional sensors and entities
