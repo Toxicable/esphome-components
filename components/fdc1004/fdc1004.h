@@ -15,6 +15,7 @@ class FDC1004Component : public PollingComponent, public i2c::I2CDevice {
 public:
   void set_channel_sensor(uint8_t index, sensor::Sensor *sensor);
   void set_channel_capdac(uint8_t index, uint8_t capdac_steps);
+  void set_offset_sensor(uint8_t index, sensor::Sensor *sensor);
   void set_sample_rate(uint16_t sample_rate_sps);
   void tare_to_current();
 
@@ -32,6 +33,7 @@ protected:
   float capdac_pf_(uint8_t measurement_index) const;
 
   std::array<sensor::Sensor *, 4> channel_sensors_{{nullptr, nullptr, nullptr, nullptr}};
+  std::array<sensor::Sensor *, 4> offset_sensors_{{nullptr, nullptr, nullptr, nullptr}};
   std::array<uint8_t, 4> capdac_steps_{{0, 0, 0, 0}};
   std::array<float, 4> tare_offsets_pf_{{0.0f, 0.0f, 0.0f, 0.0f}};
   uint8_t enabled_mask_{0};

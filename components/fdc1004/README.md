@@ -26,6 +26,14 @@ sensor:
     # cin4:
     #   name: "FDC1004 CIN4"
     #   capdac: 0
+    # cin1_offset:
+    #   name: "FDC1004 CIN1 Offset"
+    # cin2_offset:
+    #   name: "FDC1004 CIN2 Offset"
+    # cin3_offset:
+    #   name: "FDC1004 CIN3 Offset"
+    # cin4_offset:
+    #   name: "FDC1004 CIN4 Offset"
     # zero_now:
     #   name: "FDC1004 Zero Now"
 ```
@@ -35,3 +43,4 @@ Notes:
 - CAPDAC is applied as `CAPDAC * 3.125pF` and included in the published result.
 - If the chip is powered/enabled later by another GPIO, the component keeps retrying initialization automatically.
 - `zero_now` captures the current reading as a software tare offset for each enabled channel (not persisted across reboot).
+- `cin*_offset` sensors expose the current software tare offset in Home Assistant.

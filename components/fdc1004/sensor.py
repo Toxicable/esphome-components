@@ -16,9 +16,14 @@ CONF_CIN1 = "cin1"
 CONF_CIN2 = "cin2"
 CONF_CIN3 = "cin3"
 CONF_CIN4 = "cin4"
+CONF_CIN1_OFFSET = "cin1_offset"
+CONF_CIN2_OFFSET = "cin2_offset"
+CONF_CIN3_OFFSET = "cin3_offset"
+CONF_CIN4_OFFSET = "cin4_offset"
 CONF_ZERO_NOW = "zero_now"
 
 CHANNEL_KEYS = (CONF_CIN1, CONF_CIN2, CONF_CIN3, CONF_CIN4)
+OFFSET_KEYS = (CONF_CIN1_OFFSET, CONF_CIN2_OFFSET, CONF_CIN3_OFFSET, CONF_CIN4_OFFSET)
 
 
 def _channel_schema():
@@ -53,6 +58,11 @@ def _validate_sample_rate(value):
 def _validate_config(config):
     if not any(key in config for key in CHANNEL_KEYS):
         raise cv.Invalid("At least one channel sensor (cin1, cin2, cin3, cin4) must be configured")
+
+    for channel_key, offset_key in zip(CHANNEL_KEYS, OFFSET_KEYS):
+        if offset_key in config and channel_key not in config:
+            raise cv.Invalid(f"{offset_key} requires {channel_key} to be configured")
+
     return config
 
 
@@ -65,6 +75,26 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CIN2): _channel_schema(),
             cv.Optional(CONF_CIN3): _channel_schema(),
             cv.Optional(CONF_CIN4): _channel_schema(),
+            cv.Optional(CONF_CIN1_OFFSET): sensor.sensor_schema(
+                unit_of_measurement="pF",
+                accuracy_decimals=4,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_CIN2_OFFSET): sensor.sensor_schema(
+                unit_of_measurement="pF",
+                accuracy_decimals=4,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_CIN3_OFFSET): sensor.sensor_schema(
+                unit_of_measurement="pF",
+                accuracy_decimals=4,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_CIN4_OFFSET): sensor.sensor_schema(
+                unit_of_measurement="pF",
+                accuracy_decimals=4,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
             cv.Optional(CONF_ZERO_NOW): button.button_schema(
                 FDC1004ZeroButton,
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -92,6 +122,11 @@ async def to_code(config):
         sens = await sensor.new_sensor(channel_config)
         cg.add(var.set_channel_sensor(channel_index, sens))
         cg.add(var.set_channel_capdac(channel_index, channel_config[CONF_CAPDAC]))
+
+        offset_key = OFFSET_KEYS[channel_index]
+        if offset_key in config:
+            offset_sensor = await sensor.new_sensor(config[offset_key])
+            cg.add(var.set_offset_sensor(channel_index, offset_sensor))
 
     if CONF_ZERO_NOW in config:
         zero_button = await button.new_button(config[CONF_ZERO_NOW])

@@ -39,6 +39,13 @@ void FDC1004Component::set_channel_capdac(uint8_t index, uint8_t capdac_steps) {
   this->capdac_steps_[index] = capdac_steps > 31 ? 31 : capdac_steps;
 }
 
+void FDC1004Component::set_offset_sensor(uint8_t index, sensor::Sensor *sensor) {
+  if (index >= this->offset_sensors_.size()) {
+    return;
+  }
+  this->offset_sensors_[index] = sensor;
+}
+
 void FDC1004Component::set_sample_rate(uint16_t sample_rate_sps) {
   this->sample_rate_sps_ = sample_rate_sps;
   switch (sample_rate_sps) {
@@ -85,6 +92,9 @@ void FDC1004Component::tare_to_current() {
     }
 
     this->tare_offsets_pf_[i] = capacitance_pf;
+    if (this->offset_sensors_[i] != nullptr) {
+      this->offset_sensors_[i]->publish_state(this->tare_offsets_pf_[i]);
+    }
     any_channel = true;
     if (this->channel_sensors_[i] != nullptr) {
       this->channel_sensors_[i]->publish_state(0.0f);
@@ -117,6 +127,12 @@ void FDC1004Component::setup() {
   } else {
     this->status_clear_warning();
   }
+
+  for (uint8_t i = 0; i < this->offset_sensors_.size(); i++) {
+    if (this->offset_sensors_[i] != nullptr) {
+      this->offset_sensors_[i]->publish_state(this->tare_offsets_pf_[i]);
+    }
+  }
 }
 
 void FDC1004Component::dump_config() {
@@ -133,6 +149,10 @@ void FDC1004Component::dump_config() {
   LOG_SENSOR("  ", "CIN2", this->channel_sensors_[1]);
   LOG_SENSOR("  ", "CIN3", this->channel_sensors_[2]);
   LOG_SENSOR("  ", "CIN4", this->channel_sensors_[3]);
+  LOG_SENSOR("  ", "CIN1 Offset", this->offset_sensors_[0]);
+  LOG_SENSOR("  ", "CIN2 Offset", this->offset_sensors_[1]);
+  LOG_SENSOR("  ", "CIN3 Offset", this->offset_sensors_[2]);
+  LOG_SENSOR("  ", "CIN4 Offset", this->offset_sensors_[3]);
 
   if (this->channel_sensors_[0] != nullptr)
     ESP_LOGCONFIG(TAG, "  CIN1 CAPDAC: %.3f pF", this->capdac_pf_(0));
