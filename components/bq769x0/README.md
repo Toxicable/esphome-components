@@ -5,13 +5,20 @@ ESPHome external component for the TI BQ76920/30/40 family. This component reads
 ## Configuration (optional items commented out)
 
 ```yaml
+external_components:
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ bq769x0 ]
+
 i2c:
+  id: i2c_bus
   sda: GPIO21
   scl: GPIO22
   frequency: 100kHz
 
 bq769x0:
   id: bq
+  i2c_id: i2c_bus
   cell_count: 4
   chemistry: liion_lipo
   update_interval: 250ms

@@ -14,3 +14,12 @@ Implements a polling component that talks to a TI MCF8316A sensorless BLDC drive
 
 ## How to use it
 This component currently provides only the C++ implementation. There is no ESPHome YAML configuration schema in this repository yet, so it must be integrated via custom code (or by adding a Python schema).
+
+If you are importing this folder as an external component, include:
+
+```yaml
+external_components:
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ mcf8316a ]
+```

@@ -12,6 +12,11 @@ Model tested: **DYP-L041MTW-V1.0** (L04xMTW)
 Minimal configuration:
 
 ```yaml
+external_components:
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ l04xmtw ]
+
 uart:
   tx_pin: GPIO17
   rx_pin: GPIO16

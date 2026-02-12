@@ -14,6 +14,11 @@ In plain terms:
 ### Single-channel output (e.g., one light)
 
 ```yaml
+external_components:
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ drv8243 ]
+
 output:
   - platform: drv8243
     id: light_drive

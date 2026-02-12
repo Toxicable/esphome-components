@@ -9,8 +9,20 @@ Each configured channel publishes capacitance in `pF`.
 ## How to use it
 
 ```yaml
+external_components:
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ fdc1004 ]
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 400kHz
+
 sensor:
   - platform: fdc1004
+    i2c_id: i2c_bus
     address: 0x50  # Optional / default
     update_interval: 200ms  # Optional / default
     sample_rate: 100  # Optional: 100, 200, or 400 (S/s)
