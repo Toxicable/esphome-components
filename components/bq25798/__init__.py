@@ -7,6 +7,7 @@ from esphome.const import (
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
     ENTITY_CATEGORY_CONFIG,
+    ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     UNIT_CELSIUS,
     UNIT_MILLIAMP,
@@ -128,19 +129,45 @@ CONFIG_SCHEMA = (
             ),
             cv.Optional(CONF_CHARGE_STATUS): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_VBUS_STATUS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_STATUS_FLAGS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_PG_GOOD): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_VBUS_PRESENT): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_VBAT_PRESENT): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_WATCHDOG_EXPIRED): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_IINDPM_ACTIVE): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_VINDPM_ACTIVE): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_THERMAL_REGULATION): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_VSYS_REGULATION): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_TS_COLD): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_TS_COOL): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_TS_WARM): binary_sensor.binary_sensor_schema(),
-            cv.Optional(CONF_TS_HOT): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_STATUS_FLAGS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_PG_GOOD): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_VBUS_PRESENT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_VBAT_PRESENT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_WATCHDOG_EXPIRED): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_IINDPM_ACTIVE): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_VINDPM_ACTIVE): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_THERMAL_REGULATION): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_VSYS_REGULATION): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_TS_COLD): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_TS_COOL): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_TS_WARM): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_TS_HOT): binary_sensor.binary_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
             cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(
                 BQ25798ChargeEnableSwitch,
                 entity_category=ENTITY_CATEGORY_CONFIG,

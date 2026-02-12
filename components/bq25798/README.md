@@ -95,5 +95,3 @@ bq25798:
 - Switches: `charge_enable`, `hiz_mode`, `otg_mode`
 - Select: `watchdog` (`disable`, `0.5s`, `1s`, `2s`, `20s`, `40s`, `80s`, `160s`)
 - Buttons: `watchdog_reset`, `dump_registers`
-
-`status_flags` is now a concise comma-separated summary of active conditions (or `none`).
