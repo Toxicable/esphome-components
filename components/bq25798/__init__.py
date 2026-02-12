@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, i2c, select, sensor, switch as switch_, text_sensor
+from esphome.components import binary_sensor, button, i2c, select, sensor, switch as switch_, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
@@ -28,7 +28,7 @@ from esphome.const import (
 #   disable_watchdog: true
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "select", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["binary_sensor", "button", "select", "sensor", "switch", "text_sensor"]
 
 bq25798_ns = cg.esphome_ns.namespace("bq25798")
 BQ25798Component = bq25798_ns.class_("BQ25798Component", cg.PollingComponent, i2c.I2CDevice)
@@ -50,6 +50,18 @@ CONF_DIE_TEMPERATURE = "die_temperature"
 CONF_CHARGE_STATUS = "charge_status"
 CONF_VBUS_STATUS = "vbus_status"
 CONF_STATUS_FLAGS = "status_flags"
+CONF_PG_GOOD = "pg_good"
+CONF_VBUS_PRESENT = "vbus_present"
+CONF_VBAT_PRESENT = "vbat_present"
+CONF_WATCHDOG_EXPIRED = "watchdog_expired"
+CONF_IINDPM_ACTIVE = "iindpm_active"
+CONF_VINDPM_ACTIVE = "vindpm_active"
+CONF_THERMAL_REGULATION = "thermal_regulation"
+CONF_VSYS_REGULATION = "vsys_regulation"
+CONF_TS_COLD = "ts_cold"
+CONF_TS_COOL = "ts_cool"
+CONF_TS_WARM = "ts_warm"
+CONF_TS_HOT = "ts_hot"
 CONF_CHARGE_ENABLE = "charge_enable"
 CONF_HIZ_MODE = "hiz_mode"
 CONF_OTG_MODE = "otg_mode"
@@ -117,6 +129,18 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_CHARGE_STATUS): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_VBUS_STATUS): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_STATUS_FLAGS): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_PG_GOOD): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_VBUS_PRESENT): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_VBAT_PRESENT): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_WATCHDOG_EXPIRED): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_IINDPM_ACTIVE): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_VINDPM_ACTIVE): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_THERMAL_REGULATION): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_VSYS_REGULATION): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_TS_COLD): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_TS_COOL): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_TS_WARM): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_TS_HOT): binary_sensor.binary_sensor_schema(),
             cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(
                 BQ25798ChargeEnableSwitch,
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -186,6 +210,42 @@ async def to_code(config):
     if CONF_STATUS_FLAGS in config:
         ts = await text_sensor.new_text_sensor(config[CONF_STATUS_FLAGS])
         cg.add(var.set_status_flags_text_sensor(ts))
+    if CONF_PG_GOOD in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_PG_GOOD])
+        cg.add(var.set_pg_good_binary_sensor(bs))
+    if CONF_VBUS_PRESENT in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_VBUS_PRESENT])
+        cg.add(var.set_vbus_present_binary_sensor(bs))
+    if CONF_VBAT_PRESENT in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_VBAT_PRESENT])
+        cg.add(var.set_vbat_present_binary_sensor(bs))
+    if CONF_WATCHDOG_EXPIRED in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_WATCHDOG_EXPIRED])
+        cg.add(var.set_watchdog_expired_binary_sensor(bs))
+    if CONF_IINDPM_ACTIVE in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_IINDPM_ACTIVE])
+        cg.add(var.set_iindpm_active_binary_sensor(bs))
+    if CONF_VINDPM_ACTIVE in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_VINDPM_ACTIVE])
+        cg.add(var.set_vindpm_active_binary_sensor(bs))
+    if CONF_THERMAL_REGULATION in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_THERMAL_REGULATION])
+        cg.add(var.set_thermal_regulation_binary_sensor(bs))
+    if CONF_VSYS_REGULATION in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_VSYS_REGULATION])
+        cg.add(var.set_vsys_regulation_binary_sensor(bs))
+    if CONF_TS_COLD in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_TS_COLD])
+        cg.add(var.set_ts_cold_binary_sensor(bs))
+    if CONF_TS_COOL in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_TS_COOL])
+        cg.add(var.set_ts_cool_binary_sensor(bs))
+    if CONF_TS_WARM in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_TS_WARM])
+        cg.add(var.set_ts_warm_binary_sensor(bs))
+    if CONF_TS_HOT in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_TS_HOT])
+        cg.add(var.set_ts_hot_binary_sensor(bs))
 
     if CONF_CHARGE_ENABLE in config:
         sw = await switch_.new_switch(config[CONF_CHARGE_ENABLE])

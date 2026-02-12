@@ -249,6 +249,18 @@ void BQ25798Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "Charge Status", this->charge_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "VBUS Status", this->vbus_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Status Flags", this->status_flags_text_sensor_);
+  LOG_BINARY_SENSOR("  ", "PG Good", this->pg_good_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "VBUS Present", this->vbus_present_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "VBAT Present", this->vbat_present_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "Watchdog Expired", this->watchdog_expired_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "IINDPM Active", this->iindpm_active_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "VINDPM Active", this->vindpm_active_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "Thermal Regulation", this->thermal_regulation_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "VSYS Regulation", this->vsys_regulation_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "TS Cold", this->ts_cold_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "TS Cool", this->ts_cool_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "TS Warm", this->ts_warm_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "TS Hot", this->ts_hot_binary_sensor_);
   LOG_SWITCH("  ", "Charge Enable", this->charge_enable_switch_);
   LOG_SWITCH("  ", "HIZ Mode", this->hiz_mode_switch_);
   LOG_SWITCH("  ", "OTG Mode", this->otg_mode_switch_);
@@ -355,6 +367,19 @@ bool BQ25798Component::read_control_states_(bool &charge_enabled, bool &hiz_mode
 }
 
 void BQ25798Component::publish_status_texts_(const std::array<uint8_t, 5> &status) {
+  const bool pg_good = ((status[0] >> 3) & 0x01) != 0;
+  const bool vbus_present = (status[0] & 0x01) != 0;
+  const bool vbat_present = (status[2] & 0x01) != 0;
+  const bool watchdog_expired = ((status[0] >> 5) & 0x01) != 0;
+  const bool iindpm_active = ((status[0] >> 7) & 0x01) != 0;
+  const bool vindpm_active = ((status[0] >> 6) & 0x01) != 0;
+  const bool thermal_regulation = ((status[2] >> 2) & 0x01) != 0;
+  const bool vsys_regulation = ((status[3] >> 4) & 0x01) != 0;
+  const bool ts_cold = ((status[4] >> 3) & 0x01) != 0;
+  const bool ts_cool = ((status[4] >> 2) & 0x01) != 0;
+  const bool ts_warm = ((status[4] >> 1) & 0x01) != 0;
+  const bool ts_hot = (status[4] & 0x01) != 0;
+
   if (this->charge_status_text_sensor_ != nullptr) {
     const uint8_t charge_status = static_cast<uint8_t>((status[1] >> 5) & 0x07);
     this->charge_status_text_sensor_->publish_state(this->charge_status_to_string_(charge_status));
@@ -365,25 +390,90 @@ void BQ25798Component::publish_status_texts_(const std::array<uint8_t, 5> &statu
     this->vbus_status_text_sensor_->publish_state(this->vbus_status_to_string_(vbus_status));
   }
 
+  if (this->pg_good_binary_sensor_ != nullptr) {
+    this->pg_good_binary_sensor_->publish_state(pg_good);
+  }
+  if (this->vbus_present_binary_sensor_ != nullptr) {
+    this->vbus_present_binary_sensor_->publish_state(vbus_present);
+  }
+  if (this->vbat_present_binary_sensor_ != nullptr) {
+    this->vbat_present_binary_sensor_->publish_state(vbat_present);
+  }
+  if (this->watchdog_expired_binary_sensor_ != nullptr) {
+    this->watchdog_expired_binary_sensor_->publish_state(watchdog_expired);
+  }
+  if (this->iindpm_active_binary_sensor_ != nullptr) {
+    this->iindpm_active_binary_sensor_->publish_state(iindpm_active);
+  }
+  if (this->vindpm_active_binary_sensor_ != nullptr) {
+    this->vindpm_active_binary_sensor_->publish_state(vindpm_active);
+  }
+  if (this->thermal_regulation_binary_sensor_ != nullptr) {
+    this->thermal_regulation_binary_sensor_->publish_state(thermal_regulation);
+  }
+  if (this->vsys_regulation_binary_sensor_ != nullptr) {
+    this->vsys_regulation_binary_sensor_->publish_state(vsys_regulation);
+  }
+  if (this->ts_cold_binary_sensor_ != nullptr) {
+    this->ts_cold_binary_sensor_->publish_state(ts_cold);
+  }
+  if (this->ts_cool_binary_sensor_ != nullptr) {
+    this->ts_cool_binary_sensor_->publish_state(ts_cool);
+  }
+  if (this->ts_warm_binary_sensor_ != nullptr) {
+    this->ts_warm_binary_sensor_->publish_state(ts_warm);
+  }
+  if (this->ts_hot_binary_sensor_ != nullptr) {
+    this->ts_hot_binary_sensor_->publish_state(ts_hot);
+  }
+
   if (this->status_flags_text_sensor_ != nullptr) {
-    char flags[176];
-    std::snprintf(
-        flags,
-        sizeof(flags),
-        "pg=%u vbus_present=%u vbat_present=%u wd_expired=%u iindpm=%u vindpm=%u treg=%u vsys_min=%u ts[cold=%u,cool=%u,warm=%u,hot=%u]",
-        static_cast<unsigned>((status[0] >> 3) & 0x01),
-        static_cast<unsigned>(status[0] & 0x01),
-        static_cast<unsigned>(status[2] & 0x01),
-        static_cast<unsigned>((status[0] >> 5) & 0x01),
-        static_cast<unsigned>((status[0] >> 7) & 0x01),
-        static_cast<unsigned>((status[0] >> 6) & 0x01),
-        static_cast<unsigned>((status[2] >> 2) & 0x01),
-        static_cast<unsigned>((status[3] >> 4) & 0x01),
-        static_cast<unsigned>((status[4] >> 3) & 0x01),
-        static_cast<unsigned>((status[4] >> 2) & 0x01),
-        static_cast<unsigned>((status[4] >> 1) & 0x01),
-        static_cast<unsigned>(status[4] & 0x01));
-    this->status_flags_text_sensor_->publish_state(flags);
+    char flags[160];
+    size_t n = 0;
+    auto append_flag = [&](const char *name, bool active) {
+      if (!active || n >= sizeof(flags)) {
+        return;
+      }
+      if (n > 0) {
+        int written = std::snprintf(flags + n, sizeof(flags) - n, ",");
+        if (written <= 0 || static_cast<size_t>(written) >= (sizeof(flags) - n)) {
+          n = sizeof(flags) - 1;
+          return;
+        }
+        n += static_cast<size_t>(written);
+      }
+      int written = std::snprintf(flags + n, sizeof(flags) - n, "%s", name);
+      if (written <= 0 || static_cast<size_t>(written) >= (sizeof(flags) - n)) {
+        n = sizeof(flags) - 1;
+        return;
+      }
+      n += static_cast<size_t>(written);
+    };
+
+    append_flag("wd_expired", watchdog_expired);
+    append_flag("iindpm", iindpm_active);
+    append_flag("vindpm", vindpm_active);
+    append_flag("treg", thermal_regulation);
+    append_flag("vsys_reg", vsys_regulation);
+    append_flag("ts_cold", ts_cold);
+    append_flag("ts_cool", ts_cool);
+    append_flag("ts_warm", ts_warm);
+    append_flag("ts_hot", ts_hot);
+    if (!pg_good) {
+      append_flag("pg_low", true);
+    }
+    if (!vbus_present) {
+      append_flag("vbus_absent", true);
+    }
+    if (!vbat_present) {
+      append_flag("vbat_absent", true);
+    }
+
+    if (n == 0) {
+      this->status_flags_text_sensor_->publish_state("none");
+    } else {
+      this->status_flags_text_sensor_->publish_state(flags);
+    }
   }
 }
 

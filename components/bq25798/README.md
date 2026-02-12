@@ -47,6 +47,30 @@ bq25798:
   #   name: "BQ25798 Charge Status"
   # vbus_status:
   #   name: "BQ25798 VBUS Status"
+  # pg_good:
+  #   name: "BQ25798 PG Good"
+  # vbus_present:
+  #   name: "BQ25798 VBUS Present"
+  # vbat_present:
+  #   name: "BQ25798 VBAT Present"
+  # watchdog_expired:
+  #   name: "BQ25798 Watchdog Expired"
+  # iindpm_active:
+  #   name: "BQ25798 IINDPM Active"
+  # vindpm_active:
+  #   name: "BQ25798 VINDPM Active"
+  # thermal_regulation:
+  #   name: "BQ25798 Thermal Regulation"
+  # vsys_regulation:
+  #   name: "BQ25798 VSYS Regulation"
+  # ts_cold:
+  #   name: "BQ25798 TS Cold"
+  # ts_cool:
+  #   name: "BQ25798 TS Cool"
+  # ts_warm:
+  #   name: "BQ25798 TS Warm"
+  # ts_hot:
+  #   name: "BQ25798 TS Hot"
   # status_flags:
   #   name: "BQ25798 Status Flags"
   # charge_enable:
@@ -67,6 +91,9 @@ bq25798:
 
 - Sensors: `ibus_current`, `ibat_current`, `vbus_voltage`, `vbat_voltage`, `vsys_voltage`, `ts_percent`, `die_temperature`
 - Text sensors: `charge_status`, `vbus_status`, `status_flags`
+- Binary sensors: `pg_good`, `vbus_present`, `vbat_present`, `watchdog_expired`, `iindpm_active`, `vindpm_active`, `thermal_regulation`, `vsys_regulation`, `ts_cold`, `ts_cool`, `ts_warm`, `ts_hot`
 - Switches: `charge_enable`, `hiz_mode`, `otg_mode`
 - Select: `watchdog` (`disable`, `0.5s`, `1s`, `2s`, `20s`, `40s`, `80s`, `160s`)
 - Buttons: `watchdog_reset`, `dump_registers`
+
+`status_flags` is now a concise comma-separated summary of active conditions (or `none`).

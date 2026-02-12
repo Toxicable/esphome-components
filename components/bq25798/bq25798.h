@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/select/select.h"
@@ -30,6 +31,20 @@ public:
   void set_charge_status_text_sensor(text_sensor::TextSensor *sensor) { charge_status_text_sensor_ = sensor; }
   void set_vbus_status_text_sensor(text_sensor::TextSensor *sensor) { vbus_status_text_sensor_ = sensor; }
   void set_status_flags_text_sensor(text_sensor::TextSensor *sensor) { status_flags_text_sensor_ = sensor; }
+  void set_pg_good_binary_sensor(binary_sensor::BinarySensor *sensor) { pg_good_binary_sensor_ = sensor; }
+  void set_vbus_present_binary_sensor(binary_sensor::BinarySensor *sensor) { vbus_present_binary_sensor_ = sensor; }
+  void set_vbat_present_binary_sensor(binary_sensor::BinarySensor *sensor) { vbat_present_binary_sensor_ = sensor; }
+  void set_watchdog_expired_binary_sensor(binary_sensor::BinarySensor *sensor) { watchdog_expired_binary_sensor_ = sensor; }
+  void set_iindpm_active_binary_sensor(binary_sensor::BinarySensor *sensor) { iindpm_active_binary_sensor_ = sensor; }
+  void set_vindpm_active_binary_sensor(binary_sensor::BinarySensor *sensor) { vindpm_active_binary_sensor_ = sensor; }
+  void set_thermal_regulation_binary_sensor(binary_sensor::BinarySensor *sensor) {
+    thermal_regulation_binary_sensor_ = sensor;
+  }
+  void set_vsys_regulation_binary_sensor(binary_sensor::BinarySensor *sensor) { vsys_regulation_binary_sensor_ = sensor; }
+  void set_ts_cold_binary_sensor(binary_sensor::BinarySensor *sensor) { ts_cold_binary_sensor_ = sensor; }
+  void set_ts_cool_binary_sensor(binary_sensor::BinarySensor *sensor) { ts_cool_binary_sensor_ = sensor; }
+  void set_ts_warm_binary_sensor(binary_sensor::BinarySensor *sensor) { ts_warm_binary_sensor_ = sensor; }
+  void set_ts_hot_binary_sensor(binary_sensor::BinarySensor *sensor) { ts_hot_binary_sensor_ = sensor; }
 
   void set_charge_enable_switch(switch_::Switch *sw) { charge_enable_switch_ = sw; }
   void set_hiz_mode_switch(switch_::Switch *sw) { hiz_mode_switch_ = sw; }
@@ -82,6 +97,18 @@ protected:
   text_sensor::TextSensor *charge_status_text_sensor_{nullptr};
   text_sensor::TextSensor *vbus_status_text_sensor_{nullptr};
   text_sensor::TextSensor *status_flags_text_sensor_{nullptr};
+  binary_sensor::BinarySensor *pg_good_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *vbus_present_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *vbat_present_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *watchdog_expired_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *iindpm_active_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *vindpm_active_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *thermal_regulation_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *vsys_regulation_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *ts_cold_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *ts_cool_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *ts_warm_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *ts_hot_binary_sensor_{nullptr};
 
   switch_::Switch *charge_enable_switch_{nullptr};
   switch_::Switch *hiz_mode_switch_{nullptr};
