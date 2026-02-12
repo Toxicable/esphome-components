@@ -68,6 +68,7 @@ protected:
   void publish_control_states_();
   const char *charge_status_to_string_(uint8_t charge_status) const;
   const char *vbus_status_to_string_(uint8_t vbus_status) const;
+  bool initialize_();
   bool ensure_adc_enabled_();
 
   sensor::Sensor *ibus_current_sensor_{nullptr};
@@ -86,6 +87,10 @@ protected:
   switch_::Switch *hiz_mode_switch_{nullptr};
   switch_::Switch *otg_mode_switch_{nullptr};
   select::Select *watchdog_select_{nullptr};
+
+  bool initialized_{false};
+  uint32_t next_init_retry_ms_{0};
+  static constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
 
   bool disable_watchdog_{true};
 };

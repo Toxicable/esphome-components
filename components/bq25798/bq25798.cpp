@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdio>
 
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -65,11 +66,24 @@ bool BQ25798Component::reset_watchdog() {
 }
 
 void BQ25798Component::setup() {
+  this->initialized_ = false;
+  this->next_init_retry_ms_ = 0;
+
+  if (!this->initialize_()) {
+    ESP_LOGW(TAG, "BQ25798 init not ready at startup; will retry");
+    this->status_set_warning();
+    this->next_init_retry_ms_ = millis() + INIT_RETRY_INTERVAL_MS;
+    return;
+  }
+
+  this->status_clear_warning();
+}
+
+bool BQ25798Component::initialize_() {
   uint8_t reg10 = 0;
   if (!this->read_byte_(REG10_CHARGER_CONTROL_1, reg10)) {
-    ESP_LOGE(TAG, "Failed to read REG10 (0x10); device not responding");
-    this->mark_failed();
-    return;
+    ESP_LOGW(TAG, "Failed to read REG10 (0x10); device not responding yet");
+    return false;
   }
 
   ESP_LOGI(TAG, "BQ25798 detected, REG10=0x%02X", reg10);
@@ -96,17 +110,26 @@ void BQ25798Component::setup() {
 
   if (!this->ensure_adc_enabled_()) {
     ESP_LOGW(TAG, "ADC configuration failed; readings may be stale or zero");
-    this->status_set_warning();
-  } else {
-    this->status_clear_warning();
+    return false;
   }
 
   this->publish_control_states_();
+  this->initialized_ = true;
+  return true;
 }
 
 void BQ25798Component::update() {
-  if (this->is_failed()) {
-    return;
+  if (!this->initialized_) {
+    const uint32_t now = millis();
+    if (now < this->next_init_retry_ms_) {
+      return;
+    }
+    if (!this->initialize_()) {
+      this->status_set_warning();
+      this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
+      return;
+    }
+    this->status_clear_warning();
   }
 
   std::array<uint8_t, 5> status{};
@@ -270,7 +293,15 @@ bool BQ25798Component::read_bytes_(uint8_t reg, uint8_t *data, size_t len) {
     return true;
   }
   uint8_t reg_addr = reg;
-  return this->write_read(&reg_addr, 1, data, len);
+  if (this->write_read(&reg_addr, 1, data, len) == i2c::ERROR_OK) {
+    return true;
+  }
+
+  // Fallback for targets that require STOP between register address write and data read.
+  if (this->write(&reg_addr, 1) != i2c::ERROR_OK) {
+    return false;
+  }
+  return this->read(data, len) == i2c::ERROR_OK;
 }
 
 bool BQ25798Component::write_byte_(uint8_t reg, uint8_t value) {
