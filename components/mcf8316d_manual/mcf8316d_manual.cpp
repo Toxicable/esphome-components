@@ -3,8 +3,6 @@
 #include <cmath>
 #include <vector>
 
-#include "driver/i2c.h"
-
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
@@ -116,6 +114,9 @@ void MCF8316DManualComponent::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  Inter-byte delay: %u us", static_cast<unsigned>(this->inter_byte_delay_us_));
+  if (this->inter_byte_delay_us_ > 0) {
+    ESP_LOGCONFIG(TAG, "  Note: inter-byte delay is currently not applied with ESPHome I2C transactions");
+  }
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
 }
 
@@ -215,26 +216,9 @@ bool MCF8316DManualComponent::perform_read_(uint16_t offset, uint32_t &value) {
 
   uint8_t rx[4] = {0, 0, 0, 0};
 
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, static_cast<uint8_t>((this->address_ << 1) | 0), true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, cw[0], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, cw[1], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, cw[2], true);
-  this->delay_between_bytes_();
-
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, static_cast<uint8_t>((this->address_ << 1) | 1), true);
-  i2c_master_read(cmd, rx, sizeof(rx), I2C_MASTER_LAST_NACK);
-  i2c_master_stop(cmd);
-
-  const esp_err_t err = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(100));
-  i2c_cmd_link_delete(cmd);
-  if (err != ESP_OK) {
-    ESP_LOGW(TAG, "read_reg32(0x%04X) failed: %s", offset, esp_err_to_name(err));
+  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
     return false;
   }
 
@@ -257,29 +241,10 @@ bool MCF8316DManualComponent::perform_write_(uint16_t offset, uint32_t value) {
       static_cast<uint8_t>((value >> 24) & 0xFF),
   };
 
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-  i2c_master_start(cmd);
-  i2c_master_write_byte(cmd, static_cast<uint8_t>((this->address_ << 1) | 0), true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, cw[0], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, cw[1], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, cw[2], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, payload[0], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, payload[1], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, payload[2], true);
-  this->delay_between_bytes_();
-  i2c_master_write_byte(cmd, payload[3], true);
-  i2c_master_stop(cmd);
-
-  const esp_err_t err = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(100));
-  i2c_cmd_link_delete(cmd);
-  if (err != ESP_OK) {
-    ESP_LOGW(TAG, "write_reg32(0x%04X, 0x%08X) failed: %s", offset, value, esp_err_to_name(err));
+  const uint8_t tx[7] = {cw[0], cw[1], cw[2], payload[0], payload[1], payload[2], payload[3]};
+  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err));
     return false;
   }
   return true;

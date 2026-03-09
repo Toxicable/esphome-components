@@ -1,6 +1,7 @@
 # mcf8316d_manual
 
 Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
+`inter_byte_delay_us` is currently informational and not applied when using standard ESPHome I2C transactions.
 
 ```yaml
 external_components:
