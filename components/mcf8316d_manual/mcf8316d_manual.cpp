@@ -83,6 +83,10 @@ void MCF8316DManualComponent::setup() {
     ESP_LOGW(TAG, "Failed to force direction to hardware during setup");
   }
 
+  if (!this->seed_closed_loop_params_if_zero_()) {
+    ESP_LOGW(TAG, "Failed to seed one or more zero CLOSED_LOOP motor parameters");
+  }
+
   // Force manual mode by disabling any MPET command/config bits carried over at boot.
   if (!this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, 0)) {
     ESP_LOGW(TAG, "Failed to disable MPET control bits in ALGO_DEBUG2");
@@ -326,6 +330,106 @@ bool MCF8316DManualComponent::read_probe_and_publish_() {
   }
 
   return ok;
+}
+
+bool MCF8316DManualComponent::seed_closed_loop_params_if_zero_() {
+  uint32_t closed_loop2 = 0;
+  uint32_t closed_loop3 = 0;
+  uint32_t closed_loop4 = 0;
+  if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2) || !this->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
+      !this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+    ESP_LOGW(TAG, "Failed to read CLOSED_LOOP2/3/4 for MPET seed check");
+    return false;
+  }
+
+  const uint32_t motor_res =
+      static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT);
+  const uint32_t motor_ind =
+      static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT);
+  const uint32_t motor_bemf =
+      static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
+  const uint32_t spd_loop_kp_msb =
+      static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT);
+  const uint32_t spd_loop_kp_lsb =
+      static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
+  const uint32_t spd_loop_kp = (spd_loop_kp_msb << 7) | spd_loop_kp_lsb;
+  const uint32_t spd_loop_ki =
+      static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT);
+
+  uint32_t closed_loop2_next = closed_loop2;
+  uint32_t closed_loop3_next = closed_loop3;
+  uint32_t closed_loop4_next = closed_loop4;
+  bool needs_seed = false;
+
+  if (motor_res == 0U) {
+    closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_RES_MASK) |
+                        ((CLOSED_LOOP_SEED_MOTOR_RES << CLOSED_LOOP2_MOTOR_RES_SHIFT) & CLOSED_LOOP2_MOTOR_RES_MASK);
+    needs_seed = true;
+  }
+  if (motor_ind == 0U) {
+    closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_IND_MASK) |
+                        ((CLOSED_LOOP_SEED_MOTOR_IND << CLOSED_LOOP2_MOTOR_IND_SHIFT) & CLOSED_LOOP2_MOTOR_IND_MASK);
+    needs_seed = true;
+  }
+  if (motor_bemf == 0U) {
+    closed_loop3_next = (closed_loop3_next & ~CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) |
+                        ((CLOSED_LOOP_SEED_MOTOR_BEMF << CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT) &
+                         CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK);
+    needs_seed = true;
+  }
+  if (spd_loop_kp == 0U) {
+    closed_loop3_next = (closed_loop3_next & ~CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) |
+                        (((CLOSED_LOOP_SEED_SPD_KP >> 7) << CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT) &
+                         CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK);
+    closed_loop4_next = (closed_loop4_next & ~CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) |
+                        (((CLOSED_LOOP_SEED_SPD_KP & 0x7Fu) << CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT) &
+                         CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK);
+    needs_seed = true;
+  }
+  if (spd_loop_ki == 0U) {
+    closed_loop4_next = (closed_loop4_next & ~CLOSED_LOOP4_SPD_LOOP_KI_MASK) |
+                        ((CLOSED_LOOP_SEED_SPD_KI << CLOSED_LOOP4_SPD_LOOP_KI_SHIFT) & CLOSED_LOOP4_SPD_LOOP_KI_MASK);
+    needs_seed = true;
+  }
+
+  if (!needs_seed) {
+    ESP_LOGI(TAG, "CLOSED_LOOP params already non-zero; not seeding manual startup defaults");
+    return true;
+  }
+
+  ESP_LOGW(TAG,
+           "Seeding zero CLOSED_LOOP params to avoid forced MPET: cl2 0x%08X->0x%08X cl3 0x%08X->0x%08X "
+           "cl4 0x%08X->0x%08X",
+           closed_loop2, closed_loop2_next, closed_loop3, closed_loop3_next, closed_loop4, closed_loop4_next);
+  ESP_LOGW(TAG, "Seed codes: MOTOR_RES=0x%02X MOTOR_IND=0x%02X MOTOR_BEMF=0x%02X SPD_KP=%u SPD_KI=%u",
+           static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_RES), static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_IND),
+           static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_BEMF), static_cast<unsigned>(CLOSED_LOOP_SEED_SPD_KP),
+           static_cast<unsigned>(CLOSED_LOOP_SEED_SPD_KI));
+
+  bool ok = true;
+  if (closed_loop2_next != closed_loop2) {
+    ok &= this->write_reg32(REG_CLOSED_LOOP2, closed_loop2_next);
+  }
+  if (closed_loop3_next != closed_loop3) {
+    ok &= this->write_reg32(REG_CLOSED_LOOP3, closed_loop3_next);
+  }
+  if (closed_loop4_next != closed_loop4) {
+    ok &= this->write_reg32(REG_CLOSED_LOOP4, closed_loop4_next);
+  }
+  if (!ok) {
+    ESP_LOGW(TAG, "Failed writing one or more seeded CLOSED_LOOP registers");
+    return false;
+  }
+
+  uint32_t verify2 = 0;
+  uint32_t verify3 = 0;
+  uint32_t verify4 = 0;
+  if (this->read_reg32(REG_CLOSED_LOOP2, verify2) && this->read_reg32(REG_CLOSED_LOOP3, verify3) &&
+      this->read_reg32(REG_CLOSED_LOOP4, verify4)) {
+    ESP_LOGI(TAG, "CLOSED_LOOP after seed: cl2=0x%08X cl3=0x%08X cl4=0x%08X", verify2, verify3, verify4);
+  }
+
+  return true;
 }
 
 bool MCF8316DManualComponent::perform_read_(uint16_t offset, uint32_t &value) {

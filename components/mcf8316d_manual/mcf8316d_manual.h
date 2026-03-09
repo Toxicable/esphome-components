@@ -103,6 +103,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
+  bool seed_closed_loop_params_if_zero_();
   void log_mpet_diagnostics_(const char *context);
   void log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2);
   void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
@@ -217,6 +218,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_SHIFT = 14;
   static constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_MASK = 0x3FFFu;
   static constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_SHIFT = 0;
+  static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_RES = 0x01u;
+  static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_IND = 0x01u;
+  static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_BEMF = 0x01u;
+  static constexpr uint32_t CLOSED_LOOP_SEED_SPD_KP = 0x01u;
+  static constexpr uint32_t CLOSED_LOOP_SEED_SPD_KI = 0x01u;
 
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);

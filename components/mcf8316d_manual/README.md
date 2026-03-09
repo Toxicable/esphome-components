@@ -4,6 +4,7 @@ Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
 `inter_byte_delay_us` is currently informational and not applied when using standard ESPHome I2C transactions.
 The component forces MPET control bits off during setup so manual bring-up does not auto-enter MPET.
 MCF8316D can still auto-enter MPET on non-zero speed if `CLOSED_LOOP2/3/4` motor parameters are zero (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, speed-loop `Kp/Ki`).
+To avoid that forced MPET path on blank parts, setup now seeds those zero fields with minimal non-zero shadow values (no EEPROM write).
 For safety, the component forces speed to 0% on persistent faults, but allows controller `LOCK_LIMIT`/`HW_LOCK_LIMIT`-only startup events to auto-retry.
 
 ```yaml
