@@ -3,6 +3,8 @@
 #include <cmath>
 #include <vector>
 
+#include "driver/i2c.h"
+
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
@@ -290,7 +292,7 @@ uint32_t MCF8316DManualComponent::build_control_word_(bool is_read, uint16_t off
 
 void MCF8316DManualComponent::delay_between_bytes_() const {
   if (this->inter_byte_delay_us_ > 0) {
-    delay_microseconds_accurate(this->inter_byte_delay_us_);
+    delay_microseconds_safe(this->inter_byte_delay_us_);
   }
 }
 
