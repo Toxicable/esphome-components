@@ -3,6 +3,7 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "containerUser": "vscode",
   "workspaceFolder": "/workspaces/esphome-components",
   "mounts": [
     "source=${localEnv:HOME}/.codex,target=/home/vscode/.codex,type=bind,consistency=cached",
@@ -29,6 +30,5 @@
         ]
       }
     }
-  },
-  "remoteUser": "vscode"
+  }
 }

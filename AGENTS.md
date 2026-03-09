@@ -26,5 +26,5 @@
 - ESPHome `i2c::I2CDevice::write_read()` returns `i2c::ErrorCode` (not bool); always compare to `i2c::ERROR_OK` or reads will be inverted.
 - Component READMEs should include an `external_components` snippet; add an explicit `i2c` block when the component depends on I2C.
 - README `external_components` examples should use `source: github://Toxicable/esphome-components@main` with `refresh: 0s`, and list the specific component in `components: [ ... ]`.
-
 - `components/mcf8316d_manual` adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), fault-triggered speed shutdown, and no EEPROM writes.
+- ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.

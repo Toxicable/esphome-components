@@ -11,9 +11,6 @@ MCF8316DSpeedNumber = mcf8316d_manual_ns.class_("MCF8316DSpeedNumber", number.Nu
 
 CONFIG_SCHEMA = number.number_schema(
     MCF8316DSpeedNumber,
-    min_value=0,
-    max_value=100,
-    step=1,
     unit_of_measurement=UNIT_PERCENT,
     entity_category=ENTITY_CATEGORY_CONFIG,
 ).extend(
