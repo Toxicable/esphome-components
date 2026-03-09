@@ -160,6 +160,16 @@ void MCF8316DManualComponent::update() {
   }
   this->lock_limit_prev_active_ = lock_limit_active;
 
+  const bool buck_fault_active = gate_ok && ((gate_fault_status & (GATE_FAULT_BUCK_OCP | GATE_FAULT_BUCK_UV)) != 0);
+  if (buck_fault_active &&
+      ((this->last_buck_diag_log_ms_ == 0U) || (millis() - this->last_buck_diag_log_ms_ >= 2000U))) {
+    this->log_buck_fault_diagnostics_("loop_buck_fault", gate_fault_status);
+    this->last_buck_diag_log_ms_ = millis();
+  }
+  if (!buck_fault_active) {
+    this->last_buck_diag_log_ms_ = 0;
+  }
+
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
     const uint32_t vm_adc_code_8 = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
     const uint32_t vm_adc_code_q11 = (vm_voltage_raw & VM_VOLTAGE_Q11_MASK) >> VM_VOLTAGE_Q11_SHIFT;
@@ -284,6 +294,11 @@ void MCF8316DManualComponent::pulse_clear_faults() {
     const bool force_shutdown =
         this->should_force_speed_shutdown_(gate_after, gate_after_ok, ctrl_after, ctrl_after_ok);
     this->handle_fault_shutdown_(force_shutdown);
+  }
+
+  if (gate_after_ok && ((gate_after & (GATE_FAULT_BUCK_OCP | GATE_FAULT_BUCK_UV)) != 0)) {
+    ESP_LOGW(TAG, "CLR_FLT did not clear buck faults; condition likely still active");
+    this->log_buck_fault_diagnostics_("clear_faults", gate_after);
   }
 }
 
@@ -620,6 +635,57 @@ void MCF8316DManualComponent::publish_faults_(uint32_t gate_fault_status, bool g
       ESP_LOGW(TAG, "Active faults: %s", summary.c_str());
     }
     this->last_fault_summary_ = summary;
+  }
+}
+
+void MCF8316DManualComponent::log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status) {
+  uint32_t gd_config2 = 0;
+  const bool gd_ok = this->read_reg32(REG_GD_CONFIG2, gd_config2);
+
+  const bool buck_ocp = (gate_fault_status & GATE_FAULT_BUCK_OCP) != 0;
+  const bool buck_uv = (gate_fault_status & GATE_FAULT_BUCK_UV) != 0;
+  const bool vcp_uv = (gate_fault_status & GATE_FAULT_VCP_UV) != 0;
+
+  if (!gd_ok) {
+    ESP_LOGW(TAG, "[%s] BUCK fault diag: gate=0x%08X buck_ocp=%s buck_uv=%s vcp_uv=%s gd_config2=READ_FAIL", context,
+             gate_fault_status, YESNO(buck_ocp), YESNO(buck_uv), YESNO(vcp_uv));
+    return;
+  }
+
+  const bool buck_disabled = (gd_config2 & GD_CONFIG2_BUCK_DIS_MASK) != 0;
+  const bool buck_ps_disabled = (gd_config2 & GD_CONFIG2_BUCK_PS_DIS_MASK) != 0;
+  const bool buck_cl_150ma = (gd_config2 & GD_CONFIG2_BUCK_CL_MASK) != 0;
+  const uint32_t buck_sel = (gd_config2 & GD_CONFIG2_BUCK_SEL_MASK) >> GD_CONFIG2_BUCK_SEL_SHIFT;
+
+  const char *buck_sel_label = "unknown";
+  switch (buck_sel) {
+    case 0:
+      buck_sel_label = "3.3V";
+      break;
+    case 1:
+      buck_sel_label = "5.0V";
+      break;
+    case 2:
+      buck_sel_label = "4.0V";
+      break;
+    case 3:
+      buck_sel_label = "5.7V";
+      break;
+    default:
+      break;
+  }
+
+  ESP_LOGW(
+      TAG,
+      "[%s] BUCK fault diag: gate=0x%08X buck_ocp=%s buck_uv=%s vcp_uv=%s gd2=0x%08X buck_dis=%s buck_ps_dis=%s "
+      "buck_cl=%s buck_sel=%u(%s)",
+      context, gate_fault_status, YESNO(buck_ocp), YESNO(buck_uv), YESNO(vcp_uv), gd_config2, YESNO(buck_disabled),
+      YESNO(buck_ps_disabled), buck_cl_150ma ? "150mA" : "600mA", static_cast<unsigned>(buck_sel), buck_sel_label);
+
+  if (buck_disabled) {
+    ESP_LOGW(TAG, "[%s] BUCK is disabled while BUCK fault bits are set; check HW config and FB_BK wiring", context);
+  } else if (buck_cl_150ma) {
+    ESP_LOGW(TAG, "[%s] BUCK current limit is 150mA; external load may exceed limit and cause BUCK_OCP", context);
   }
 }
 

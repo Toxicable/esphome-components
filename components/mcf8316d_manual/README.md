@@ -6,6 +6,7 @@ The component forces MPET control bits off during setup so manual bring-up does 
 MCF8316D can still auto-enter MPET on non-zero speed if `CLOSED_LOOP2/3/4` motor parameters are zero (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, speed-loop `Kp/Ki`).
 To avoid that forced MPET path on blank parts, setup now seeds those zero fields with minimal non-zero shadow values (no EEPROM write).
 For safety, the component forces speed to 0% on persistent faults, but allows controller `LOCK_LIMIT`/`HW_LOCK_LIMIT`-only startup events to auto-retry.
+`DRV_BUCK_OCP`/`DRV_BUCK_UV` are condition-active buck faults; `clear_faults` cannot clear them while the buck rail/load issue persists.
 
 ```yaml
 external_components:

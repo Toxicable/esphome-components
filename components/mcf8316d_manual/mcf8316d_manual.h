@@ -104,6 +104,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
   bool seed_closed_loop_params_if_zero_();
+  void log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status);
   void log_mpet_diagnostics_(const char *context);
   void log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2);
   void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
@@ -127,6 +128,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
   static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
   static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
+  static constexpr uint16_t REG_GD_CONFIG2 = 0x00AE;
   static constexpr uint16_t REG_ISD_CONFIG = 0x0080;
   static constexpr uint16_t REG_REV_DRIVE_CONFIG = 0x0082;
   static constexpr uint16_t REG_DEVICE_CONFIG1 = 0x00A6;
@@ -224,6 +226,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP_SEED_SPD_KP = 0x01u;
   static constexpr uint32_t CLOSED_LOOP_SEED_SPD_KI = 0x01u;
 
+  static constexpr uint32_t GD_CONFIG2_BUCK_PS_DIS_MASK = (1u << 24);
+  static constexpr uint32_t GD_CONFIG2_BUCK_CL_MASK = (1u << 23);
+  static constexpr uint32_t GD_CONFIG2_BUCK_SEL_MASK = (0x3u << 21);
+  static constexpr uint32_t GD_CONFIG2_BUCK_SEL_SHIFT = 21;
+  static constexpr uint32_t GD_CONFIG2_BUCK_DIS_MASK = (1u << 20);
+
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OCP = (1u << 28);
@@ -279,6 +287,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool auto_tickle_watchdog_{false};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_lock_limit_diag_log_ms_{0};
+  uint32_t last_buck_diag_log_ms_{0};
   uint32_t last_mpet_diag_log_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   bool lock_limit_prev_active_{false};
