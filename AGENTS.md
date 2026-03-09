@@ -32,4 +32,5 @@
 - `components/mcf8316d_manual` VM voltage conversion must use the VM ADC field (`bits 23:16`) from `REG_VM_VOLTAGE`, not the full 32-bit register value.
 - `components/mcf8316d_manual` VM voltage full-scale should come from `DEVICE_CONFIG1.BUS_VOLT` (`15/30/40V`) when dynamic voltage gain is off; when `DEVICE_CONFIG2.DYNAMIC_VOLTAGE_GAIN_EN=1`, use `VOLTAGE_GAIN_FEEDBACK` (`0x0477`) as runtime `40/30/15V` feedback.
 - `components/mcf8316d_manual` `fault_active` should mirror asserted `nFAULT` behavior using gate + controller summary bits (`GATE_DRIVER_FAULT_STATUS[31]` OR `CONTROLLER_FAULT_STATUS[31]`), and controller detail bits are at their datasheet positions (for example `WATCHDOG_FAULT` is bit 3, not bit 1).
+- `components/mcf8316d_manual` `fault_summary` now combines decoded gate-driver + controller fault bits, and the component logs transitions as `Active faults: ...` / `Faults cleared` even without a configured text sensor.
 - `components/mcf8316d_manual/mcf8316d.pdf` is the local MCF8316D datasheet source; extracted Markdown is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).

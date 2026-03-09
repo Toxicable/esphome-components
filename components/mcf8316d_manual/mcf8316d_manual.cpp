@@ -99,14 +99,18 @@ void MCF8316DManualComponent::update() {
   if (this->read_reg32(REG_ALGO_STATUS, algo_status)) {
     this->publish_algo_status_(algo_status);
   }
-  if (this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status)) {
+  const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
+  if (gate_ok) {
     fault_active |= (gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0;
     fault_state_valid = true;
   }
-  if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status)) {
+  const bool controller_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status);
+  if (controller_ok) {
     fault_active |= (fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
     fault_state_valid = true;
-    this->publish_faults_(fault_status);
+  }
+  if (gate_ok || controller_ok) {
+    this->publish_faults_(gate_fault_status, gate_ok, fault_status, controller_ok);
   }
   if (fault_state_valid) {
     if (this->fault_active_binary_sensor_ != nullptr) {
@@ -287,8 +291,8 @@ bool MCF8316DManualComponent::read_probe_and_publish_() {
   if (algo_ok) {
     this->publish_algo_status_(algo_status);
   }
-  if (controller_ok) {
-    this->publish_faults_(fault_status);
+  if (gate_ok || controller_ok) {
+    this->publish_faults_(gate_fault_status, gate_ok, fault_status, controller_ok);
   }
   if (fault_state_valid && this->fault_active_binary_sensor_ != nullptr) {
     this->fault_active_binary_sensor_->publish_state(fault_active);
@@ -372,44 +376,86 @@ void MCF8316DManualComponent::delay_between_bytes_() const {
   }
 }
 
-void MCF8316DManualComponent::publish_faults_(uint32_t fault_status) {
-  if (this->fault_summary_text_sensor_ == nullptr) {
-    return;
-  }
-
+void MCF8316DManualComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t fault_status,
+                                              bool controller_fault_valid) {
   std::vector<std::string> faults;
-  if (fault_status & FAULT_WATCHDOG)
-    faults.emplace_back("WATCHDOG_FAULT");
-  if (fault_status & FAULT_NO_MTR)
-    faults.emplace_back("NO_MTR");
-  if (fault_status & FAULT_MTR_LCK)
-    faults.emplace_back("MTR_LCK");
-  if (fault_status & FAULT_ABN_SPEED)
-    faults.emplace_back("ABN_SPEED");
-  if (fault_status & FAULT_ABN_BEMF)
-    faults.emplace_back("ABN_BEMF");
-  if (fault_status & FAULT_MTR_UNDER_VOLTAGE)
-    faults.emplace_back("MTR_UNDER_VOLTAGE");
-  if (fault_status & FAULT_MTR_OVER_VOLTAGE)
-    faults.emplace_back("MTR_OVER_VOLTAGE");
-  if (fault_status & FAULT_I2C_CRC)
-    faults.emplace_back("I2C_CRC_FAULT_STATUS");
-  if (fault_status & FAULT_EEPROM_ERR)
-    faults.emplace_back("EEPROM_ERR_STATUS");
-
-  if (faults.empty()) {
-    this->fault_summary_text_sensor_->publish_state("none");
-    return;
+  if (gate_fault_valid) {
+    if (gate_fault_status & GATE_FAULT_OCP)
+      faults.emplace_back("DRV_OCP");
+    if (gate_fault_status & GATE_FAULT_OVP)
+      faults.emplace_back("DRV_OVP");
+    if (gate_fault_status & GATE_FAULT_OTW)
+      faults.emplace_back("DRV_OTW");
+    if (gate_fault_status & GATE_FAULT_OTS)
+      faults.emplace_back("DRV_OTS");
+    if (gate_fault_status & GATE_FAULT_OCP_HA)
+      faults.emplace_back("DRV_OCP_HA");
+    if (gate_fault_status & GATE_FAULT_OCP_LA)
+      faults.emplace_back("DRV_OCP_LA");
+    if (gate_fault_status & GATE_FAULT_OCP_HB)
+      faults.emplace_back("DRV_OCP_HB");
+    if (gate_fault_status & GATE_FAULT_OCP_LB)
+      faults.emplace_back("DRV_OCP_LB");
+    if (gate_fault_status & GATE_FAULT_OCP_HC)
+      faults.emplace_back("DRV_OCP_HC");
+    if (gate_fault_status & GATE_FAULT_OCP_LC)
+      faults.emplace_back("DRV_OCP_LC");
+    if (gate_fault_status & GATE_FAULT_BUCK_OCP)
+      faults.emplace_back("DRV_BUCK_OCP");
+    if (gate_fault_status & GATE_FAULT_BUCK_UV)
+      faults.emplace_back("DRV_BUCK_UV");
+    if (gate_fault_status & GATE_FAULT_VCP_UV)
+      faults.emplace_back("DRV_VCP_UV");
+  }
+  if (controller_fault_valid) {
+    if (fault_status & FAULT_WATCHDOG)
+      faults.emplace_back("WATCHDOG_FAULT");
+    if (fault_status & FAULT_NO_MTR)
+      faults.emplace_back("NO_MTR");
+    if (fault_status & FAULT_MTR_LCK)
+      faults.emplace_back("MTR_LCK");
+    if (fault_status & FAULT_ABN_SPEED)
+      faults.emplace_back("ABN_SPEED");
+    if (fault_status & FAULT_ABN_BEMF)
+      faults.emplace_back("ABN_BEMF");
+    if (fault_status & FAULT_MTR_UNDER_VOLTAGE)
+      faults.emplace_back("MTR_UNDER_VOLTAGE");
+    if (fault_status & FAULT_MTR_OVER_VOLTAGE)
+      faults.emplace_back("MTR_OVER_VOLTAGE");
+    if (fault_status & FAULT_I2C_CRC)
+      faults.emplace_back("I2C_CRC_FAULT_STATUS");
+    if (fault_status & FAULT_EEPROM_ERR)
+      faults.emplace_back("EEPROM_ERR_STATUS");
+    if (fault_status & FAULT_BOOT_STL)
+      faults.emplace_back("BOOT_STL_FAULT");
+    if (fault_status & FAULT_CPU_RESET)
+      faults.emplace_back("CPU_RESET_FAULT_STATUS");
+    if (fault_status & FAULT_WWDT)
+      faults.emplace_back("WWDT_FAULT_STATUS");
   }
 
-  std::string summary;
-  for (size_t i = 0; i < faults.size(); i++) {
-    if (i != 0) {
-      summary += ",";
+  std::string summary = "none";
+  if (!faults.empty()) {
+    summary.clear();
+    for (size_t i = 0; i < faults.size(); i++) {
+      if (i != 0) {
+        summary += ",";
+      }
+      summary += faults[i];
     }
-    summary += faults[i];
   }
-  this->fault_summary_text_sensor_->publish_state(summary);
+
+  if (this->fault_summary_text_sensor_ != nullptr) {
+    this->fault_summary_text_sensor_->publish_state(summary);
+  }
+  if (summary != this->last_fault_summary_) {
+    if (summary == "none") {
+      ESP_LOGI(TAG, "Faults cleared");
+    } else {
+      ESP_LOGW(TAG, "Active faults: %s", summary.c_str());
+    }
+    this->last_fault_summary_ = summary;
+  }
 }
 
 void MCF8316DManualComponent::publish_algo_status_(uint32_t algo_status) {

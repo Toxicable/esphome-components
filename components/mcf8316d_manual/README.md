@@ -69,4 +69,5 @@ text_sensor:
     mcf8316d_manual_id: mcf
     fault_summary:
       name: "MCF Fault Summary"
+      # Comma-separated active faults from gate-driver + controller status.
 ```

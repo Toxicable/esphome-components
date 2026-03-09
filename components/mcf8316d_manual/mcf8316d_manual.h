@@ -100,7 +100,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool perform_write_(uint16_t offset, uint32_t value);
   uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
   void delay_between_bytes_() const;
-  void publish_faults_(uint32_t fault_status);
+  void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
+                       bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
   void handle_fault_shutdown_(bool fault_active);
 
@@ -143,6 +144,19 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 15);
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
+  static constexpr uint32_t GATE_FAULT_OCP = (1u << 28);
+  static constexpr uint32_t GATE_FAULT_OVP = (1u << 26);
+  static constexpr uint32_t GATE_FAULT_OTW = (1u << 23);
+  static constexpr uint32_t GATE_FAULT_OTS = (1u << 22);
+  static constexpr uint32_t GATE_FAULT_OCP_HC = (1u << 21);
+  static constexpr uint32_t GATE_FAULT_OCP_LC = (1u << 20);
+  static constexpr uint32_t GATE_FAULT_OCP_HB = (1u << 19);
+  static constexpr uint32_t GATE_FAULT_OCP_LB = (1u << 18);
+  static constexpr uint32_t GATE_FAULT_OCP_HA = (1u << 17);
+  static constexpr uint32_t GATE_FAULT_OCP_LA = (1u << 16);
+  static constexpr uint32_t GATE_FAULT_BUCK_OCP = (1u << 13);
+  static constexpr uint32_t GATE_FAULT_BUCK_UV = (1u << 12);
+  static constexpr uint32_t GATE_FAULT_VCP_UV = (1u << 11);
   static constexpr uint16_t VOLTAGE_GAIN_FEEDBACK_40V = 0x0000;
   static constexpr uint16_t VOLTAGE_GAIN_FEEDBACK_30V = 0x0001;
   static constexpr uint16_t VOLTAGE_GAIN_FEEDBACK_15V = 0x0002;
@@ -160,12 +174,16 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_MTR_OVER_VOLTAGE = (1u << 16);
   static constexpr uint32_t FAULT_I2C_CRC = (1u << 6);
   static constexpr uint32_t FAULT_EEPROM_ERR = (1u << 5);
+  static constexpr uint32_t FAULT_BOOT_STL = (1u << 4);
+  static constexpr uint32_t FAULT_CPU_RESET = (1u << 2);
+  static constexpr uint32_t FAULT_WWDT = (1u << 1);
 
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   bool fault_latched_{false};
+  std::string last_fault_summary_{"none"};
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};
   MCF8316DDirectionSelect *direction_select_{nullptr};
