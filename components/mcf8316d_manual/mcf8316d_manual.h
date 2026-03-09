@@ -103,6 +103,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
+  bool ensure_buck_current_limit_for_manual_();
   bool seed_closed_loop_params_if_zero_();
   void log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status);
   void log_mpet_diagnostics_(const char *context);

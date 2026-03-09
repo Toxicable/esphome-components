@@ -83,6 +83,10 @@ void MCF8316DManualComponent::setup() {
     ESP_LOGW(TAG, "Failed to force direction to hardware during setup");
   }
 
+  if (!this->ensure_buck_current_limit_for_manual_()) {
+    ESP_LOGW(TAG, "Failed to ensure buck current limit for manual validation");
+  }
+
   if (!this->seed_closed_loop_params_if_zero_()) {
     ESP_LOGW(TAG, "Failed to seed one or more zero CLOSED_LOOP motor parameters");
   }
@@ -345,6 +349,35 @@ bool MCF8316DManualComponent::read_probe_and_publish_() {
   }
 
   return ok;
+}
+
+bool MCF8316DManualComponent::ensure_buck_current_limit_for_manual_() {
+  uint32_t gd_config2 = 0;
+  if (!this->read_reg32(REG_GD_CONFIG2, gd_config2)) {
+    ESP_LOGW(TAG, "Failed to read GD_CONFIG2 for BUCK_CL check");
+    return false;
+  }
+
+  const bool buck_cl_150ma = (gd_config2 & GD_CONFIG2_BUCK_CL_MASK) != 0;
+  if (!buck_cl_150ma) {
+    ESP_LOGI(TAG, "GD_CONFIG2 BUCK_CL already 600mA (gd2=0x%08X)", gd_config2);
+    return true;
+  }
+
+  ESP_LOGW(TAG, "GD_CONFIG2 has BUCK_CL=150mA (gd2=0x%08X); setting to 600mA for manual validation", gd_config2);
+  if (!this->update_bits32(REG_GD_CONFIG2, GD_CONFIG2_BUCK_CL_MASK, 0)) {
+    ESP_LOGW(TAG, "Failed to write GD_CONFIG2 BUCK_CL to 600mA");
+    return false;
+  }
+
+  uint32_t gd_verify = 0;
+  if (!this->read_reg32(REG_GD_CONFIG2, gd_verify)) {
+    ESP_LOGW(TAG, "Failed to verify GD_CONFIG2 after BUCK_CL update");
+    return false;
+  }
+  ESP_LOGI(TAG, "GD_CONFIG2 after BUCK_CL update: 0x%08X (BUCK_CL=%s)", gd_verify,
+           ((gd_verify & GD_CONFIG2_BUCK_CL_MASK) != 0) ? "150mA" : "600mA");
+  return true;
 }
 
 bool MCF8316DManualComponent::seed_closed_loop_params_if_zero_() {
