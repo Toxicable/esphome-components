@@ -130,6 +130,9 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_SHIFT = 16;
   static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 15);
 
+  static constexpr uint32_t VM_VOLTAGE_ADC_MASK = (0xFFu << 16);
+  static constexpr uint32_t VM_VOLTAGE_ADC_SHIFT = 16;
+
   static constexpr uint32_t CONTROLLER_FAULT_ACTIVE_MASK = (1u << 0);
   static constexpr uint32_t FAULT_WATCHDOG = (1u << 1);
   static constexpr uint32_t FAULT_NO_MTR = (1u << 2);

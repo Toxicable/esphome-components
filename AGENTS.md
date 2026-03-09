@@ -29,3 +29,4 @@
 - `components/mcf8316d_manual` adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), fault-triggered speed shutdown, and no EEPROM writes.
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
 - `components/mcf8316d_manual` should follow the repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
+- `components/mcf8316d_manual` VM voltage conversion must use the VM ADC field (`bits 23:16`) from `REG_VM_VOLTAGE`, not the full 32-bit register value.

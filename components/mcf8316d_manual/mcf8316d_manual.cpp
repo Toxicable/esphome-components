@@ -100,7 +100,8 @@ void MCF8316DManualComponent::update() {
     this->handle_fault_shutdown_(fault_active);
   }
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
-    const float vm_v = static_cast<float>(vm_voltage_raw) * (60.0f / 227.0f);
+    const uint32_t vm_adc_code = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
+    const float vm_v = static_cast<float>(vm_adc_code) * (60.0f / 227.0f);
     this->vm_voltage_sensor_->publish_state(vm_v);
   }
 
