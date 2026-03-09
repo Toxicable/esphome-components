@@ -70,6 +70,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void dump_config() override;
 
   bool read_reg32(uint16_t offset, uint32_t &value);
+  bool read_reg16(uint16_t offset, uint16_t &value);
   bool write_reg32(uint16_t offset, uint32_t value);
   bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value);
 
@@ -94,20 +95,23 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
  protected:
   bool read_probe_and_publish_();
+  bool perform_read16_(uint16_t offset, uint16_t &value);
   bool perform_read_(uint16_t offset, uint32_t &value);
   bool perform_write_(uint16_t offset, uint32_t value);
-  uint32_t build_control_word_(bool is_read, uint16_t offset) const;
+  uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
   void delay_between_bytes_() const;
   void publish_faults_(uint32_t fault_status);
   void publish_algo_status_(uint32_t algo_status);
   void handle_fault_shutdown_(bool fault_active);
 
   static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
+  static constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
   static constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
   static constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
   static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
+  static constexpr uint16_t REG_VOLTAGE_GAIN_FEEDBACK = 0x0477;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x047C;
 
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 10);
@@ -130,19 +134,24 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_SHIFT = 16;
   static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 15);
 
+  static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
+  static constexpr uint16_t VOLTAGE_GAIN_FEEDBACK_40V = 0x0000;
+  static constexpr uint16_t VOLTAGE_GAIN_FEEDBACK_30V = 0x0001;
+  static constexpr uint16_t VOLTAGE_GAIN_FEEDBACK_15V = 0x0002;
+
   static constexpr uint32_t VM_VOLTAGE_ADC_MASK = (0xFFu << 16);
   static constexpr uint32_t VM_VOLTAGE_ADC_SHIFT = 16;
 
-  static constexpr uint32_t CONTROLLER_FAULT_ACTIVE_MASK = (1u << 0);
-  static constexpr uint32_t FAULT_WATCHDOG = (1u << 1);
-  static constexpr uint32_t FAULT_NO_MTR = (1u << 2);
-  static constexpr uint32_t FAULT_MTR_LCK = (1u << 3);
-  static constexpr uint32_t FAULT_ABN_SPEED = (1u << 4);
-  static constexpr uint32_t FAULT_ABN_BEMF = (1u << 5);
-  static constexpr uint32_t FAULT_MTR_UNDER_VOLTAGE = (1u << 6);
-  static constexpr uint32_t FAULT_MTR_OVER_VOLTAGE = (1u << 7);
-  static constexpr uint32_t FAULT_I2C_CRC = (1u << 8);
-  static constexpr uint32_t FAULT_EEPROM_ERR = (1u << 9);
+  static constexpr uint32_t CONTROLLER_FAULT_ACTIVE_MASK = (1u << 31);
+  static constexpr uint32_t FAULT_WATCHDOG = (1u << 3);
+  static constexpr uint32_t FAULT_NO_MTR = (1u << 21);
+  static constexpr uint32_t FAULT_MTR_LCK = (1u << 20);
+  static constexpr uint32_t FAULT_ABN_SPEED = (1u << 23);
+  static constexpr uint32_t FAULT_ABN_BEMF = (1u << 22);
+  static constexpr uint32_t FAULT_MTR_UNDER_VOLTAGE = (1u << 17);
+  static constexpr uint32_t FAULT_MTR_OVER_VOLTAGE = (1u << 16);
+  static constexpr uint32_t FAULT_I2C_CRC = (1u << 6);
+  static constexpr uint32_t FAULT_EEPROM_ERR = (1u << 5);
 
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};

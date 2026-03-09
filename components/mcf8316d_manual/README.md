@@ -50,6 +50,7 @@ binary_sensor:
     mcf8316d_manual_id: mcf
     fault_active:
       name: "MCF Fault Active"
+      # true means fault asserted (nFAULT active/low)
     sys_enable:
       name: "MCF Sys Enable"
 

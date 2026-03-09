@@ -84,24 +84,58 @@ void MCF8316DManualComponent::setup() {
 }
 
 void MCF8316DManualComponent::update() {
+  uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t fault_status = 0;
   uint32_t vm_voltage_raw = 0;
+  uint16_t voltage_gain_feedback = VOLTAGE_GAIN_FEEDBACK_40V;
+  float vm_full_scale = 60.0f;
+  bool fault_active = false;
+  bool fault_state_valid = false;
 
   if (this->read_reg32(REG_ALGO_STATUS, algo_status)) {
     this->publish_algo_status_(algo_status);
   }
+  if (this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status)) {
+    fault_active |= (gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0;
+    fault_state_valid = true;
+  }
   if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status)) {
-    const bool fault_active = (fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
+    fault_active |= (fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
+    fault_state_valid = true;
+    this->publish_faults_(fault_status);
+  }
+  if (fault_state_valid) {
     if (this->fault_active_binary_sensor_ != nullptr) {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
-    this->publish_faults_(fault_status);
     this->handle_fault_shutdown_(fault_active);
+  }
+  if (this->read_reg16(REG_VOLTAGE_GAIN_FEEDBACK, voltage_gain_feedback)) {
+    const uint8_t gain_lsb = static_cast<uint8_t>(voltage_gain_feedback & 0x00FFu);
+    const uint8_t gain_msb = static_cast<uint8_t>((voltage_gain_feedback >> 8) & 0x00FFu);
+    const uint16_t gain_code = (gain_lsb <= VOLTAGE_GAIN_FEEDBACK_15V)
+                                   ? gain_lsb
+                                   : (gain_msb <= VOLTAGE_GAIN_FEEDBACK_15V ? gain_msb : 0xFFFFu);
+
+    switch (gain_code) {
+      case VOLTAGE_GAIN_FEEDBACK_40V:
+        vm_full_scale = 40.0f;
+        break;
+      case VOLTAGE_GAIN_FEEDBACK_30V:
+        vm_full_scale = 30.0f;
+        break;
+      case VOLTAGE_GAIN_FEEDBACK_15V:
+        vm_full_scale = 15.0f;
+        break;
+      default:
+        ESP_LOGW(TAG, "Unexpected voltage gain feedback 0x%04X, using 60V full-scale", voltage_gain_feedback);
+        break;
+    }
   }
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
     const uint32_t vm_adc_code = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
-    const float vm_v = static_cast<float>(vm_adc_code) * (60.0f / 227.0f);
+    const float vm_v = static_cast<float>(vm_adc_code) * (vm_full_scale / 227.0f);
     this->vm_voltage_sensor_->publish_state(vm_v);
   }
 
@@ -122,6 +156,8 @@ void MCF8316DManualComponent::dump_config() {
 }
 
 bool MCF8316DManualComponent::read_reg32(uint16_t offset, uint32_t &value) { return this->perform_read_(offset, value); }
+
+bool MCF8316DManualComponent::read_reg16(uint16_t offset, uint16_t &value) { return this->perform_read16_(offset, value); }
 
 bool MCF8316DManualComponent::write_reg32(uint16_t offset, uint32_t value) { return this->perform_write_(offset, value); }
 
@@ -189,26 +225,44 @@ void MCF8316DManualComponent::pulse_watchdog_tickle() {
 }
 
 bool MCF8316DManualComponent::read_probe_and_publish_() {
+  uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t fault_status = 0;
+  bool fault_active = false;
+  bool fault_state_valid = false;
   bool ok = true;
 
-  ok &= this->read_reg32(REG_ALGO_STATUS, algo_status);
-  ok &= this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status);
+  const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
+  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
+  const bool controller_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status);
+  ok &= algo_ok;
+  ok &= gate_ok;
+  ok &= controller_ok;
 
-  if (ok) {
+  if (gate_ok) {
+    fault_active |= (gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0;
+    fault_state_valid = true;
+  }
+  if (controller_ok) {
+    fault_active |= (fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
+    fault_state_valid = true;
+  }
+
+  if (algo_ok) {
     this->publish_algo_status_(algo_status);
+  }
+  if (controller_ok) {
     this->publish_faults_(fault_status);
-    if (this->fault_active_binary_sensor_ != nullptr) {
-      this->fault_active_binary_sensor_->publish_state((fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0);
-    }
+  }
+  if (fault_state_valid && this->fault_active_binary_sensor_ != nullptr) {
+    this->fault_active_binary_sensor_->publish_state(fault_active);
   }
 
   return ok;
 }
 
 bool MCF8316DManualComponent::perform_read_(uint16_t offset, uint32_t &value) {
-  const uint32_t control_word = this->build_control_word_(true, offset);
+  const uint32_t control_word = this->build_control_word_(true, offset, true);
   const uint8_t cw[3] = {
       static_cast<uint8_t>((control_word >> 16) & 0xFF),
       static_cast<uint8_t>((control_word >> 8) & 0xFF),
@@ -228,8 +282,28 @@ bool MCF8316DManualComponent::perform_read_(uint16_t offset, uint32_t &value) {
   return true;
 }
 
+bool MCF8316DManualComponent::perform_read16_(uint16_t offset, uint16_t &value) {
+  const uint32_t control_word = this->build_control_word_(true, offset, false);
+  const uint8_t cw[3] = {
+      static_cast<uint8_t>((control_word >> 16) & 0xFF),
+      static_cast<uint8_t>((control_word >> 8) & 0xFF),
+      static_cast<uint8_t>(control_word & 0xFF),
+  };
+
+  uint8_t rx[2] = {0, 0};
+
+  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+    return false;
+  }
+
+  value = static_cast<uint16_t>(rx[0]) | (static_cast<uint16_t>(rx[1]) << 8);
+  return true;
+}
+
 bool MCF8316DManualComponent::perform_write_(uint16_t offset, uint32_t value) {
-  const uint32_t control_word = this->build_control_word_(false, offset);
+  const uint32_t control_word = this->build_control_word_(false, offset, true);
   const uint8_t cw[3] = {
       static_cast<uint8_t>((control_word >> 16) & 0xFF),
       static_cast<uint8_t>((control_word >> 8) & 0xFF),
@@ -251,9 +325,9 @@ bool MCF8316DManualComponent::perform_write_(uint16_t offset, uint32_t value) {
   return true;
 }
 
-uint32_t MCF8316DManualComponent::build_control_word_(bool is_read, uint16_t offset) const {
-  const uint32_t dlen_32bit = 0x1;
-  return ((is_read ? 1u : 0u) << 23) | (dlen_32bit << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
+uint32_t MCF8316DManualComponent::build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const {
+  const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
+  return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
 }
 
 void MCF8316DManualComponent::delay_between_bytes_() const {
