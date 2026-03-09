@@ -104,6 +104,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
   void log_mpet_diagnostics_(const char *context);
+  void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
   const char *algorithm_state_to_string_(uint16_t state) const;
   void handle_fault_shutdown_(bool fault_active);
 
@@ -116,6 +117,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
   static constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
   static constexpr uint16_t REG_ALGORITHM_STATE = 0x018E;
+  static constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
+  static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
+  static constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
+  static constexpr uint16_t REG_ISD_CONFIG = 0x0080;
+  static constexpr uint16_t REG_REV_DRIVE_CONFIG = 0x0082;
   static constexpr uint16_t REG_DEVICE_CONFIG1 = 0x00A6;
   static constexpr uint16_t REG_DEVICE_CONFIG2 = 0x00A8;
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
@@ -164,6 +170,15 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_STATUS_MPET_MECH_DONE_MASK = (1u << 28);
   static constexpr uint32_t ALGO_STATUS_MPET_PWM_FREQ_MASK = (0xFu << 24);
   static constexpr uint32_t ALGO_STATUS_MPET_PWM_FREQ_SHIFT = 24;
+
+  static constexpr uint32_t FAULT_CONFIG1_ILIMIT_MASK = (0xFu << 27);
+  static constexpr uint32_t FAULT_CONFIG1_ILIMIT_SHIFT = 27;
+  static constexpr uint32_t FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK = (0xFu << 23);
+  static constexpr uint32_t FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT = 23;
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MASK = (0xFu << 19);
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_SHIFT = 19;
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK = (0x7u << 15);
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT = 15;
 
   static constexpr uint32_t MTR_PARAMS_R_MASK = (0xFFu << 24);
   static constexpr uint32_t MTR_PARAMS_R_SHIFT = 24;
@@ -226,8 +241,10 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
   uint32_t last_watchdog_tickle_ms_{0};
+  uint32_t last_lock_limit_diag_log_ms_{0};
   uint32_t last_mpet_diag_log_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
+  bool lock_limit_prev_active_{false};
   bool fault_latched_{false};
   std::string last_fault_summary_{"none"};
 

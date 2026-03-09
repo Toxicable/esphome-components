@@ -141,6 +141,16 @@ void MCF8316DManualComponent::update() {
     this->last_mpet_diag_log_ms_ = 0;
   }
 
+  const bool lock_limit_active = controller_ok && ((fault_status & (FAULT_LOCK_LIMIT | FAULT_HW_LOCK_LIMIT)) != 0);
+  if (lock_limit_active && (!this->lock_limit_prev_active_ || (millis() - this->last_lock_limit_diag_log_ms_ >= 2000U))) {
+    this->log_lock_limit_diagnostics_("loop_lock_limit", fault_status);
+    this->last_lock_limit_diag_log_ms_ = millis();
+  }
+  if (!lock_limit_active) {
+    this->last_lock_limit_diag_log_ms_ = 0;
+  }
+  this->lock_limit_prev_active_ = lock_limit_active;
+
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
     const uint32_t vm_adc_code_8 = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
     const uint32_t vm_adc_code_q11 = (vm_voltage_raw & VM_VOLTAGE_Q11_MASK) >> VM_VOLTAGE_Q11_SHIFT;
@@ -548,6 +558,56 @@ void MCF8316DManualComponent::log_mpet_diagnostics_(const char *context) {
   if (!(ctrl_ok && dbg2_ok && mpet_ok && mtr_ok && state_ok)) {
     ESP_LOGW(TAG, "[%s] MPET diag read warning: ctrl=%s dbg2=%s mpet=%s mtr=%s state=%s", context, YESNO(ctrl_ok),
              YESNO(dbg2_ok), YESNO(mpet_ok), YESNO(mtr_ok), YESNO(state_ok));
+  }
+}
+
+void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status) {
+  uint16_t algorithm_state = 0;
+  uint32_t algo_status = 0;
+  uint32_t algo_debug1 = 0;
+  uint32_t algo_debug2 = 0;
+  uint32_t fault_config1 = 0;
+  uint32_t startup1 = 0;
+  uint32_t startup2 = 0;
+  uint32_t isd_config = 0;
+  uint32_t rev_drive_config = 0;
+
+  const bool state_ok = this->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
+  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
+  const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
+  const bool dbg2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
+  const bool fault_cfg_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
+  const bool startup1_ok = this->read_reg32(REG_MOTOR_STARTUP1, startup1);
+  const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
+  const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
+  const bool rev_ok = this->read_reg32(REG_REV_DRIVE_CONFIG, rev_drive_config);
+
+  ESP_LOGW(
+      TAG,
+      "[%s] LOCK_LIMIT diag: ctrl=0x%08X state=0x%04X(%s) algo=0x%08X dbg1=0x%08X dbg2=0x%08X fcfg1=0x%08X s1=0x%08X "
+      "s2=0x%08X isd=0x%08X rev=0x%08X",
+      context, controller_fault_status, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
+      algo_status, algo_debug1, algo_debug2, fault_config1, startup1, startup2, isd_config, rev_drive_config);
+
+  if (fault_cfg_ok) {
+    const uint32_t ilimit = (fault_config1 & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT;
+    const uint32_t hw_lock_ilimit =
+        (fault_config1 & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT;
+    const uint32_t lock_ilimit = (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_SHIFT;
+    const uint32_t lock_mode =
+        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
+    const bool lock_limit = (controller_fault_status & FAULT_LOCK_LIMIT) != 0;
+    const bool hw_lock_limit = (controller_fault_status & FAULT_HW_LOCK_LIMIT) != 0;
+
+    ESP_LOGW(TAG, "[%s] LOCK_LIMIT fields: lock=%s hw_lock=%s ILIMIT=%u LOCK_ILIMIT=%u HW_LOCK_ILIMIT=%u LOCK_MODE=%u",
+             context, YESNO(lock_limit), YESNO(hw_lock_limit), static_cast<unsigned>(ilimit),
+             static_cast<unsigned>(lock_ilimit), static_cast<unsigned>(hw_lock_ilimit), static_cast<unsigned>(lock_mode));
+  }
+
+  if (!(state_ok && algo_ok && dbg1_ok && dbg2_ok && fault_cfg_ok && startup1_ok && startup2_ok && isd_ok && rev_ok)) {
+    ESP_LOGW(TAG, "[%s] LOCK_LIMIT diag read warning: state=%s algo=%s dbg1=%s dbg2=%s fcfg1=%s s1=%s s2=%s isd=%s rev=%s",
+             context, YESNO(state_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(fault_cfg_ok),
+             YESNO(startup1_ok), YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
   }
 }
 
