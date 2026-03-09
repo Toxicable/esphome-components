@@ -8,14 +8,6 @@ external_components:
     refresh: 0s
     components: [ mcf8316d_manual ]
 
-esphome:
-  name: mcf8316d-test
-
-esp32:
-  board: esp32dev
-  framework:
-    type: esp-idf
-
 i2c:
   sda: GPIO21
   scl: GPIO22
