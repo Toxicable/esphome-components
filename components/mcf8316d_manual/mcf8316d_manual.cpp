@@ -560,11 +560,73 @@ void MCF8316DManualComponent::log_mpet_diagnostics_(const char *context) {
              YESNO(mpet_write_shadow), YESNO(mpet_r_done), YESNO(mpet_l_done), YESNO(mpet_ke_done),
              YESNO(mpet_mech_done), static_cast<unsigned>(mpet_pwm_freq), static_cast<unsigned>(motor_r),
              static_cast<unsigned>(motor_l), static_cast<unsigned>(motor_ke));
+
+    this->log_mpet_entry_conditions_(context, algo_debug2);
   }
 
   if (!(ctrl_ok && dbg2_ok && mpet_ok && mtr_ok && state_ok)) {
     ESP_LOGW(TAG, "[%s] MPET diag read warning: ctrl=%s dbg2=%s mpet=%s mtr=%s state=%s", context, YESNO(ctrl_ok),
              YESNO(dbg2_ok), YESNO(mpet_ok), YESNO(mtr_ok), YESNO(state_ok));
+  }
+}
+
+void MCF8316DManualComponent::log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2) {
+  uint32_t closed_loop2 = 0;
+  uint32_t closed_loop3 = 0;
+  uint32_t closed_loop4 = 0;
+
+  const bool cl2_ok = this->read_reg32(REG_CLOSED_LOOP2, closed_loop2);
+  const bool cl3_ok = this->read_reg32(REG_CLOSED_LOOP3, closed_loop3);
+  const bool cl4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
+
+  if (cl2_ok && cl3_ok && cl4_ok) {
+    const uint32_t motor_res =
+        static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT);
+    const uint32_t motor_ind =
+        static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT);
+    const uint32_t motor_bemf = static_cast<uint32_t>(
+        (closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
+    const uint32_t curr_loop_kp =
+        static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_CURR_LOOP_KP_MASK) >> CLOSED_LOOP3_CURR_LOOP_KP_SHIFT);
+    const uint32_t curr_loop_ki =
+        static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_CURR_LOOP_KI_MASK) >> CLOSED_LOOP3_CURR_LOOP_KI_SHIFT);
+    const uint32_t spd_loop_kp_msb = static_cast<uint32_t>(
+        (closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT);
+    const uint32_t spd_loop_kp_lsb = static_cast<uint32_t>(
+        (closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
+    const uint32_t spd_loop_kp = (spd_loop_kp_msb << 7) | spd_loop_kp_lsb;
+    const uint32_t spd_loop_ki =
+        static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT);
+    const uint32_t max_speed =
+        static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT);
+
+    const bool mpet_cmd = (algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0;
+    const bool mpet_r = (algo_debug2 & ALGO_DEBUG2_MPET_R_MASK) != 0;
+    const bool mpet_l = (algo_debug2 & ALGO_DEBUG2_MPET_L_MASK) != 0;
+    const bool mpet_ke = (algo_debug2 & ALGO_DEBUG2_MPET_KE_MASK) != 0;
+    const bool mpet_mech = (algo_debug2 & ALGO_DEBUG2_MPET_MECH_MASK) != 0;
+
+    const bool rl_forced_by_zero = (motor_res == 0U) || (motor_ind == 0U);
+    const bool ke_forced_by_zero = (motor_bemf == 0U);
+    const bool mech_forced_by_zero = (spd_loop_kp == 0U) || (spd_loop_ki == 0U);
+    const bool mpet_on_nonzero_speed = mpet_r || mpet_l || mpet_ke || mpet_mech || rl_forced_by_zero ||
+                                       ke_forced_by_zero || mech_forced_by_zero;
+
+    ESP_LOGI(TAG,
+             "[%s] MPET cfg: cl2=0x%08X cl3=0x%08X cl4=0x%08X motor_res=0x%02X motor_ind=0x%02X motor_bemf=0x%02X "
+             "curr_kp=%u curr_ki=%u spd_kp=%u spd_ki=%u max_speed=%u",
+             context, closed_loop2, closed_loop3, closed_loop4, static_cast<unsigned>(motor_res),
+             static_cast<unsigned>(motor_ind), static_cast<unsigned>(motor_bemf), static_cast<unsigned>(curr_loop_kp),
+             static_cast<unsigned>(curr_loop_ki), static_cast<unsigned>(spd_loop_kp), static_cast<unsigned>(spd_loop_ki),
+             static_cast<unsigned>(max_speed));
+    ESP_LOGI(
+        TAG,
+        "[%s] MPET triggers: cmd=%s bits[r=%s l=%s ke=%s mech=%s] zero_forced[rl=%s ke=%s mech=%s] enter_on_speed=%s",
+        context, YESNO(mpet_cmd), YESNO(mpet_r), YESNO(mpet_l), YESNO(mpet_ke), YESNO(mpet_mech), YESNO(rl_forced_by_zero),
+        YESNO(ke_forced_by_zero), YESNO(mech_forced_by_zero), YESNO(mpet_on_nonzero_speed));
+  } else {
+    ESP_LOGW(TAG, "[%s] MPET cfg read warning: cl2=%s cl3=%s cl4=%s", context, YESNO(cl2_ok), YESNO(cl3_ok),
+             YESNO(cl4_ok));
   }
 }
 
@@ -595,6 +657,8 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
       "s2=0x%08X isd=0x%08X rev=0x%08X",
       context, controller_fault_status, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
       algo_status, algo_debug1, algo_debug2, fault_config1, startup1, startup2, isd_config, rev_drive_config);
+
+  this->log_mpet_entry_conditions_(context, algo_debug2);
 
   if (fault_cfg_ok) {
     const uint32_t ilimit = (fault_config1 & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT;

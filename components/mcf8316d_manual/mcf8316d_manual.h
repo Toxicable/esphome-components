@@ -104,6 +104,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
   void log_mpet_diagnostics_(const char *context);
+  void log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2);
   void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
   bool should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                                     bool controller_fault_valid) const;
@@ -122,6 +123,9 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
   static constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
+  static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
+  static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
+  static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
   static constexpr uint16_t REG_ISD_CONFIG = 0x0080;
   static constexpr uint16_t REG_REV_DRIVE_CONFIG = 0x0082;
   static constexpr uint16_t REG_DEVICE_CONFIG1 = 0x00A6;
@@ -192,6 +196,27 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t MTR_PARAMS_KE_SHIFT = 16;
   static constexpr uint32_t MTR_PARAMS_L_MASK = (0xFFu << 8);
   static constexpr uint32_t MTR_PARAMS_L_SHIFT = 8;
+
+  static constexpr uint32_t CLOSED_LOOP2_MOTOR_RES_MASK = (0xFFu << 8);
+  static constexpr uint32_t CLOSED_LOOP2_MOTOR_RES_SHIFT = 8;
+  static constexpr uint32_t CLOSED_LOOP2_MOTOR_IND_MASK = 0xFFu;
+  static constexpr uint32_t CLOSED_LOOP2_MOTOR_IND_SHIFT = 0;
+
+  static constexpr uint32_t CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK = (0xFFu << 23);
+  static constexpr uint32_t CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT = 23;
+  static constexpr uint32_t CLOSED_LOOP3_CURR_LOOP_KP_MASK = (0x3FFu << 13);
+  static constexpr uint32_t CLOSED_LOOP3_CURR_LOOP_KP_SHIFT = 13;
+  static constexpr uint32_t CLOSED_LOOP3_CURR_LOOP_KI_MASK = (0x3FFu << 3);
+  static constexpr uint32_t CLOSED_LOOP3_CURR_LOOP_KI_SHIFT = 3;
+  static constexpr uint32_t CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK = 0x7u;
+  static constexpr uint32_t CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT = 0;
+
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK = (0x7Fu << 24);
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT = 24;
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_MASK = (0x3FFu << 14);
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_SHIFT = 14;
+  static constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_MASK = 0x3FFFu;
+  static constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_SHIFT = 0;
 
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
