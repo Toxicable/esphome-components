@@ -103,13 +103,19 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
+  void log_mpet_diagnostics_(const char *context);
+  const char *algorithm_state_to_string_(uint16_t state) const;
   void handle_fault_shutdown_(bool fault_active);
 
   static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
   static constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
   static constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
+  static constexpr uint16_t REG_MTR_PARAMS = 0x00E6;
+  static constexpr uint16_t REG_ALGO_STATUS_MPET = 0x00E8;
   static constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
   static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
+  static constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
+  static constexpr uint16_t REG_ALGORITHM_STATE = 0x018E;
   static constexpr uint16_t REG_DEVICE_CONFIG1 = 0x00A6;
   static constexpr uint16_t REG_DEVICE_CONFIG2 = 0x00A8;
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
@@ -138,10 +144,31 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_CTRL1_CLR_FLT_MASK = (1u << 0);
   static constexpr uint32_t ALGO_CTRL1_WATCHDOG_TICKLE_MASK = (1u << 1);
 
+  static constexpr uint32_t ALGO_DEBUG2_MPET_CMD_MASK = (1u << 5);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_R_MASK = (1u << 4);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_L_MASK = (1u << 3);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_KE_MASK = (1u << 2);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_MECH_MASK = (1u << 1);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK = (1u << 0);
+
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = 0x0FFFu;
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_MASK = (0x7FFFu << 16);
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_SHIFT = 16;
   static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 15);
+  static constexpr uint32_t ALGO_STATUS_MPET_R_DONE_MASK = (1u << 31);
+  static constexpr uint32_t ALGO_STATUS_MPET_L_DONE_MASK = (1u << 30);
+  static constexpr uint32_t ALGO_STATUS_MPET_KE_DONE_MASK = (1u << 29);
+  static constexpr uint32_t ALGO_STATUS_MPET_MECH_DONE_MASK = (1u << 28);
+  static constexpr uint32_t ALGO_STATUS_MPET_PWM_FREQ_MASK = (0xFu << 24);
+  static constexpr uint32_t ALGO_STATUS_MPET_PWM_FREQ_SHIFT = 24;
+
+  static constexpr uint32_t MTR_PARAMS_R_MASK = (0xFFu << 24);
+  static constexpr uint32_t MTR_PARAMS_R_SHIFT = 24;
+  static constexpr uint32_t MTR_PARAMS_KE_MASK = (0xFFu << 16);
+  static constexpr uint32_t MTR_PARAMS_KE_SHIFT = 16;
+  static constexpr uint32_t MTR_PARAMS_L_MASK = (0xFFu << 8);
+  static constexpr uint32_t MTR_PARAMS_L_SHIFT = 8;
+
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OCP = (1u << 28);
@@ -196,6 +223,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
   uint32_t last_watchdog_tickle_ms_{0};
+  uint32_t last_mpet_diag_log_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   bool fault_latched_{false};
   std::string last_fault_summary_{"none"};

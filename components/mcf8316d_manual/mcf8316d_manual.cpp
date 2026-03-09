@@ -81,6 +81,8 @@ void MCF8316DManualComponent::setup() {
   if (!this->set_direction_mode("hardware")) {
     ESP_LOGW(TAG, "Failed to force direction to hardware during setup");
   }
+
+  this->log_mpet_diagnostics_("setup");
 }
 
 void MCF8316DManualComponent::update() {
@@ -113,6 +115,16 @@ void MCF8316DManualComponent::update() {
     }
     this->handle_fault_shutdown_(fault_active);
   }
+
+  const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
+  if (mpet_fault_active && ((this->last_mpet_diag_log_ms_ == 0U) || (millis() - this->last_mpet_diag_log_ms_ >= 2000U))) {
+    this->log_mpet_diagnostics_("loop_mpet_fault");
+    this->last_mpet_diag_log_ms_ = millis();
+  }
+  if (!mpet_fault_active) {
+    this->last_mpet_diag_log_ms_ = 0;
+  }
+
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
     const uint32_t vm_adc_code_8 = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
     const uint32_t vm_adc_code_q11 = (vm_voltage_raw & VM_VOLTAGE_Q11_MASK) >> VM_VOLTAGE_Q11_SHIFT;
@@ -471,6 +483,112 @@ void MCF8316DManualComponent::publish_faults_(uint32_t gate_fault_status, bool g
       ESP_LOGW(TAG, "Active faults: %s", summary.c_str());
     }
     this->last_fault_summary_ = summary;
+  }
+}
+
+void MCF8316DManualComponent::log_mpet_diagnostics_(const char *context) {
+  uint32_t ctrl_fault = 0;
+  uint32_t algo_debug2 = 0;
+  uint32_t algo_status_mpet = 0;
+  uint32_t mtr_params = 0;
+  uint16_t algorithm_state = 0;
+
+  const bool ctrl_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_fault);
+  const bool dbg2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
+  const bool mpet_ok = this->read_reg32(REG_ALGO_STATUS_MPET, algo_status_mpet);
+  const bool mtr_ok = this->read_reg32(REG_MTR_PARAMS, mtr_params);
+  const bool state_ok = this->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
+
+  ESP_LOGI(TAG, "[%s] MPET diag: state=0x%04X(%s) ctrl=0x%08X dbg2=0x%08X mpet=0x%08X mtr=0x%08X", context,
+           static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state), ctrl_fault,
+           algo_debug2, algo_status_mpet, mtr_params);
+
+  if (dbg2_ok || mpet_ok || mtr_ok) {
+    const bool mpet_cmd = (algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0;
+    const bool mpet_r = (algo_debug2 & ALGO_DEBUG2_MPET_R_MASK) != 0;
+    const bool mpet_l = (algo_debug2 & ALGO_DEBUG2_MPET_L_MASK) != 0;
+    const bool mpet_ke = (algo_debug2 & ALGO_DEBUG2_MPET_KE_MASK) != 0;
+    const bool mpet_mech = (algo_debug2 & ALGO_DEBUG2_MPET_MECH_MASK) != 0;
+    const bool mpet_write_shadow = (algo_debug2 & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) != 0;
+    const bool mpet_r_done = (algo_status_mpet & ALGO_STATUS_MPET_R_DONE_MASK) != 0;
+    const bool mpet_l_done = (algo_status_mpet & ALGO_STATUS_MPET_L_DONE_MASK) != 0;
+    const bool mpet_ke_done = (algo_status_mpet & ALGO_STATUS_MPET_KE_DONE_MASK) != 0;
+    const bool mpet_mech_done = (algo_status_mpet & ALGO_STATUS_MPET_MECH_DONE_MASK) != 0;
+    const uint32_t mpet_pwm_freq =
+        static_cast<uint32_t>((algo_status_mpet & ALGO_STATUS_MPET_PWM_FREQ_MASK) >> ALGO_STATUS_MPET_PWM_FREQ_SHIFT);
+    const uint32_t motor_r = static_cast<uint32_t>((mtr_params & MTR_PARAMS_R_MASK) >> MTR_PARAMS_R_SHIFT);
+    const uint32_t motor_l = static_cast<uint32_t>((mtr_params & MTR_PARAMS_L_MASK) >> MTR_PARAMS_L_SHIFT);
+    const uint32_t motor_ke = static_cast<uint32_t>((mtr_params & MTR_PARAMS_KE_MASK) >> MTR_PARAMS_KE_SHIFT);
+
+    ESP_LOGI(TAG,
+             "[%s] MPET fields: cmd=%s r=%s l=%s ke=%s mech=%s wr_shadow=%s done[r=%s l=%s ke=%s mech=%s] pwm=%u "
+             "params[R=%u L=%u Ke=%u]",
+             context, YESNO(mpet_cmd), YESNO(mpet_r), YESNO(mpet_l), YESNO(mpet_ke), YESNO(mpet_mech),
+             YESNO(mpet_write_shadow), YESNO(mpet_r_done), YESNO(mpet_l_done), YESNO(mpet_ke_done),
+             YESNO(mpet_mech_done), static_cast<unsigned>(mpet_pwm_freq), static_cast<unsigned>(motor_r),
+             static_cast<unsigned>(motor_l), static_cast<unsigned>(motor_ke));
+  }
+
+  if (!(ctrl_ok && dbg2_ok && mpet_ok && mtr_ok && state_ok)) {
+    ESP_LOGW(TAG, "[%s] MPET diag read warning: ctrl=%s dbg2=%s mpet=%s mtr=%s state=%s", context, YESNO(ctrl_ok),
+             YESNO(dbg2_ok), YESNO(mpet_ok), YESNO(mtr_ok), YESNO(state_ok));
+  }
+}
+
+const char *MCF8316DManualComponent::algorithm_state_to_string_(uint16_t state) const {
+  switch (state) {
+    case 0x00:
+      return "MOTOR_IDLE";
+    case 0x01:
+      return "MOTOR_ISD";
+    case 0x02:
+      return "MOTOR_TRISTATE";
+    case 0x03:
+      return "MOTOR_BRAKE_ON_START";
+    case 0x04:
+      return "MOTOR_IPD";
+    case 0x05:
+      return "MOTOR_SLOW_FIRST_CYCLE";
+    case 0x06:
+      return "MOTOR_ALIGN";
+    case 0x07:
+      return "MOTOR_OPEN_LOOP";
+    case 0x08:
+      return "MOTOR_CLOSED_LOOP_UNALIGNED";
+    case 0x09:
+      return "MOTOR_CLOSED_LOOP_ALIGNED";
+    case 0x0A:
+      return "MOTOR_CLOSED_LOOP_ACTIVE_BRAKING";
+    case 0x0B:
+      return "MOTOR_SOFT_STOP";
+    case 0x0C:
+      return "MOTOR_RECIRCULATE_STOP";
+    case 0x0D:
+      return "MOTOR_BRAKE_ON_STOP";
+    case 0x0E:
+      return "MOTOR_FAULT";
+    case 0x0F:
+      return "MOTOR_MPET_MOTOR_STOP_CHECK";
+    case 0x10:
+      return "MOTOR_MPET_MOTOR_STOP_WAIT";
+    case 0x11:
+      return "MOTOR_MPET_MOTOR_BRAKE";
+    case 0x12:
+      return "MOTOR_MPET_ALGORITHM_PARAMETERS_INIT";
+    case 0x13:
+      return "MOTOR_MPET_RL_MEASURE";
+    case 0x14:
+      return "MOTOR_MPET_KE_MEASURE";
+    case 0x15:
+      return "MOTOR_MPET_STALL_CURRENT_MEASURE";
+    case 0x16:
+      return "MOTOR_MPET_TORQUE_MODE";
+    case 0x17:
+      return "MOTOR_MPET_DONE";
+    case 0x18:
+      return "MOTOR_MPET_FAULT";
+    default:
+      return "UNKNOWN";
   }
 }
 
