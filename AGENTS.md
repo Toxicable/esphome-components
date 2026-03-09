@@ -30,6 +30,6 @@
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
 - `components/mcf8316d_manual` should follow the repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
 - `components/mcf8316d_manual` VM voltage conversion must use the VM ADC field (`bits 23:16`) from `REG_VM_VOLTAGE`, not the full 32-bit register value.
-- `components/mcf8316d_manual` VM voltage scaling should use `VOLTAGE_GAIN_FEEDBACK` (`0x0477`) with 16-bit reads: gain code `0/1/2` maps to `40/30/15V` full-scale for the VM ADC conversion.
+- `components/mcf8316d_manual` VM voltage full-scale should come from `DEVICE_CONFIG1.BUS_VOLT` (`15/30/40V`) when dynamic voltage gain is off; when `DEVICE_CONFIG2.DYNAMIC_VOLTAGE_GAIN_EN=1`, use `VOLTAGE_GAIN_FEEDBACK` (`0x0477`) as runtime `40/30/15V` feedback.
 - `components/mcf8316d_manual` `fault_active` should mirror asserted `nFAULT` behavior using gate + controller summary bits (`GATE_DRIVER_FAULT_STATUS[31]` OR `CONTROLLER_FAULT_STATUS[31]`), and controller detail bits are at their datasheet positions (for example `WATCHDOG_FAULT` is bit 3, not bit 1).
 - `components/mcf8316d_manual/mcf8316d.pdf` is the local MCF8316D datasheet source; extracted Markdown is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).

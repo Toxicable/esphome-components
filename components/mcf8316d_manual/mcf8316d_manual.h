@@ -109,6 +109,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
   static constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
   static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
+  static constexpr uint16_t REG_DEVICE_CONFIG1 = 0x00A6;
+  static constexpr uint16_t REG_DEVICE_CONFIG2 = 0x00A8;
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
   static constexpr uint16_t REG_VOLTAGE_GAIN_FEEDBACK = 0x0477;
@@ -122,6 +124,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_HARDWARE = (0x0u << 0);
   static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_CW = (0x1u << 0);
   static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_CCW = (0x2u << 0);
+
+  static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_MASK = (0x3u << 0);
+  static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_15V = (0x0u << 0);
+  static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_30V = (0x1u << 0);
+  static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_40V = (0x2u << 0);
+  static constexpr uint32_t DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK = (1u << 12);
 
   static constexpr uint32_t ALGO_DEBUG1_OVERRIDE_MASK = (1u << 31);
   static constexpr uint32_t ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK = (0x7FFFu << 16);
@@ -156,6 +164,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
   uint32_t last_watchdog_tickle_ms_{0};
+  uint32_t last_vm_diag_log_ms_{0};
   bool fault_latched_{false};
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};

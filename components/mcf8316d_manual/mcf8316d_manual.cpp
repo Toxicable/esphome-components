@@ -87,9 +87,12 @@ void MCF8316DManualComponent::update() {
   uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t fault_status = 0;
+  uint32_t device_config1 = 0;
+  uint32_t device_config2 = 0;
   uint32_t vm_voltage_raw = 0;
   uint16_t voltage_gain_feedback = VOLTAGE_GAIN_FEEDBACK_40V;
   float vm_full_scale = 60.0f;
+  bool vm_full_scale_set = false;
   bool fault_active = false;
   bool fault_state_valid = false;
 
@@ -111,7 +114,12 @@ void MCF8316DManualComponent::update() {
     }
     this->handle_fault_shutdown_(fault_active);
   }
-  if (this->read_reg16(REG_VOLTAGE_GAIN_FEEDBACK, voltage_gain_feedback)) {
+  bool dynamic_voltage_gain = false;
+  if (this->read_reg32(REG_DEVICE_CONFIG2, device_config2)) {
+    dynamic_voltage_gain = (device_config2 & DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK) != 0;
+  }
+
+  if (dynamic_voltage_gain && this->read_reg16(REG_VOLTAGE_GAIN_FEEDBACK, voltage_gain_feedback)) {
     const uint8_t gain_lsb = static_cast<uint8_t>(voltage_gain_feedback & 0x00FFu);
     const uint8_t gain_msb = static_cast<uint8_t>((voltage_gain_feedback >> 8) & 0x00FFu);
     const uint16_t gain_code = (gain_lsb <= VOLTAGE_GAIN_FEEDBACK_15V)
@@ -121,15 +129,36 @@ void MCF8316DManualComponent::update() {
     switch (gain_code) {
       case VOLTAGE_GAIN_FEEDBACK_40V:
         vm_full_scale = 40.0f;
+        vm_full_scale_set = true;
         break;
       case VOLTAGE_GAIN_FEEDBACK_30V:
         vm_full_scale = 30.0f;
+        vm_full_scale_set = true;
         break;
       case VOLTAGE_GAIN_FEEDBACK_15V:
         vm_full_scale = 15.0f;
+        vm_full_scale_set = true;
         break;
       default:
-        ESP_LOGW(TAG, "Unexpected voltage gain feedback 0x%04X, using 60V full-scale", voltage_gain_feedback);
+        break;
+    }
+  }
+
+  if (!vm_full_scale_set && this->read_reg32(REG_DEVICE_CONFIG1, device_config1)) {
+    switch (device_config1 & DEVICE_CONFIG1_BUS_VOLT_MASK) {
+      case DEVICE_CONFIG1_BUS_VOLT_15V:
+        vm_full_scale = 15.0f;
+        vm_full_scale_set = true;
+        break;
+      case DEVICE_CONFIG1_BUS_VOLT_30V:
+        vm_full_scale = 30.0f;
+        vm_full_scale_set = true;
+        break;
+      case DEVICE_CONFIG1_BUS_VOLT_40V:
+        vm_full_scale = 40.0f;
+        vm_full_scale_set = true;
+        break;
+      default:
         break;
     }
   }
@@ -137,6 +166,13 @@ void MCF8316DManualComponent::update() {
     const uint32_t vm_adc_code = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
     const float vm_v = static_cast<float>(vm_adc_code) * (vm_full_scale / 227.0f);
     this->vm_voltage_sensor_->publish_state(vm_v);
+    if ((millis() - this->last_vm_diag_log_ms_) >= 5000U) {
+      ESP_LOGD(TAG,
+               "VM decode: raw=0x%08X adc=%u full_scale=%.1fV dyn_vgain=%s vgain_fb=0x%04X dev_cfg1=0x%08X -> %.2fV",
+               vm_voltage_raw, static_cast<unsigned>(vm_adc_code), vm_full_scale, YESNO(dynamic_voltage_gain),
+               static_cast<unsigned>(voltage_gain_feedback), device_config1, vm_v);
+      this->last_vm_diag_log_ms_ = millis();
+    }
   }
 
   if (this->auto_tickle_watchdog_ && (millis() - this->last_watchdog_tickle_ms_ >= 500U)) {
