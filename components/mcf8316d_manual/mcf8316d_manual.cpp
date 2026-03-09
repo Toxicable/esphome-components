@@ -129,7 +129,12 @@ void MCF8316DManualComponent::update() {
     if (this->fault_active_binary_sensor_ != nullptr) {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
-    this->handle_fault_shutdown_(fault_active);
+    const bool force_shutdown =
+        this->should_force_speed_shutdown_(gate_fault_status, gate_ok, fault_status, controller_ok);
+    if (fault_active && !force_shutdown) {
+      ESP_LOGD(TAG, "Fault active but allowing retry (lock-limit-only)");
+    }
+    this->handle_fault_shutdown_(force_shutdown);
   }
 
   const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
@@ -272,7 +277,9 @@ void MCF8316DManualComponent::pulse_clear_faults() {
     if (this->fault_active_binary_sensor_ != nullptr) {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
-    this->handle_fault_shutdown_(fault_active);
+    const bool force_shutdown =
+        this->should_force_speed_shutdown_(gate_after, gate_after_ok, ctrl_after, ctrl_after_ok);
+    this->handle_fault_shutdown_(force_shutdown);
   }
 }
 
@@ -596,12 +603,36 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
     const uint32_t lock_ilimit = (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_SHIFT;
     const uint32_t lock_mode =
         (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
+    const uint32_t lock_deg =
+        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT;
+    const uint32_t lck_retry = (fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT;
     const bool lock_limit = (controller_fault_status & FAULT_LOCK_LIMIT) != 0;
     const bool hw_lock_limit = (controller_fault_status & FAULT_HW_LOCK_LIMIT) != 0;
 
-    ESP_LOGW(TAG, "[%s] LOCK_LIMIT fields: lock=%s hw_lock=%s ILIMIT=%u LOCK_ILIMIT=%u HW_LOCK_ILIMIT=%u LOCK_MODE=%u",
-             context, YESNO(lock_limit), YESNO(hw_lock_limit), static_cast<unsigned>(ilimit),
-             static_cast<unsigned>(lock_ilimit), static_cast<unsigned>(hw_lock_ilimit), static_cast<unsigned>(lock_mode));
+    static const float kCurrentThresholdA[16] = {0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f,
+                                                 3.5f,   4.0f,  4.5f, 5.0f, 5.5f, 6.0f, 7.0f, 8.0f};
+    static const float kLockDegMs[16] = {0.0f,   0.1f,  0.2f, 0.5f, 1.0f, 2.5f, 5.0f, 7.5f,
+                                         10.0f, 25.0f, 50.0f, 75.0f, 100.0f, 200.0f, 500.0f, 1000.0f};
+    static const uint16_t kLckRetryMs[16] = {300,   500,   1000, 2000, 3000, 4000, 5000, 6000,
+                                             7000,  8000,  9000, 10000, 11000, 12000, 13000, 14000};
+    static const char *const kLockModeName[8] = {"latched_hiz",      "latched_ls_brake", "latched_hs_brake",
+                                                 "retry_hiz",         "retry_ls_brake",   "retry_hs_brake",
+                                                 "report_only",       "disabled"};
+
+    const float ilimit_a = kCurrentThresholdA[ilimit & 0xFu];
+    const float lock_ilimit_a = kCurrentThresholdA[lock_ilimit & 0xFu];
+    const float hw_lock_ilimit_a = kCurrentThresholdA[hw_lock_ilimit & 0xFu];
+    const float lock_deg_ms = kLockDegMs[lock_deg & 0xFu];
+    const float lck_retry_s = static_cast<float>(kLckRetryMs[lck_retry & 0xFu]) / 1000.0f;
+    const char *lock_mode_name = kLockModeName[lock_mode & 0x7u];
+
+    ESP_LOGW(TAG,
+             "[%s] LOCK_LIMIT fields: lock=%s hw_lock=%s ILIMIT=%u(%.3gA) LOCK_ILIMIT=%u(%.3gA) "
+             "HW_LOCK_ILIMIT=%u(%.3gA) LOCK_MODE=%u(%s) LOCK_DEG=%u(%.1fms) LCK_RETRY=%u(%.1fs)",
+             context, YESNO(lock_limit), YESNO(hw_lock_limit), static_cast<unsigned>(ilimit), ilimit_a,
+             static_cast<unsigned>(lock_ilimit), lock_ilimit_a, static_cast<unsigned>(hw_lock_ilimit), hw_lock_ilimit_a,
+             static_cast<unsigned>(lock_mode), lock_mode_name, static_cast<unsigned>(lock_deg), lock_deg_ms,
+             static_cast<unsigned>(lck_retry), lck_retry_s);
   }
 
   if (!(state_ok && algo_ok && dbg1_ok && dbg2_ok && fault_cfg_ok && startup1_ok && startup2_ok && isd_ok && rev_ok)) {
@@ -609,6 +640,23 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
              context, YESNO(state_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(fault_cfg_ok),
              YESNO(startup1_ok), YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
   }
+}
+
+bool MCF8316DManualComponent::should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid,
+                                                            uint32_t controller_fault_status,
+                                                            bool controller_fault_valid) const {
+  if (gate_fault_valid && ((gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0)) {
+    return true;
+  }
+
+  if (!controller_fault_valid || ((controller_fault_status & CONTROLLER_FAULT_ACTIVE_MASK) == 0)) {
+    return false;
+  }
+
+  // Allow device retry behavior for transient lock-current-limit startup faults.
+  const uint32_t controller_detail_bits = controller_fault_status & ~CONTROLLER_FAULT_ACTIVE_MASK;
+  const uint32_t transient_retry_faults = FAULT_LOCK_LIMIT | FAULT_HW_LOCK_LIMIT;
+  return (controller_detail_bits & ~transient_retry_faults) != 0;
 }
 
 const char *MCF8316DManualComponent::algorithm_state_to_string_(uint16_t state) const {

@@ -26,7 +26,7 @@
 - ESPHome `i2c::I2CDevice::write_read()` returns `i2c::ErrorCode` (not bool); always compare to `i2c::ERROR_OK` or reads will be inverted.
 - Component READMEs should include an `external_components` snippet; add an explicit `i2c` block when the component depends on I2C.
 - README `external_components` examples should use `source: github://Toxicable/esphome-components@main` with `refresh: 0s`, and list the specific component in `components: [ ... ]`.
-- `components/mcf8316d_manual` adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), fault-triggered speed shutdown, and no EEPROM writes.
+- `components/mcf8316d_manual` adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), fault-triggered speed shutdown (except lock-limit-only startup faults), and no EEPROM writes.
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
 - `components/mcf8316d_manual` should follow the repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
 - `components/mcf8316d_manual` VM voltage decode currently uses an 11-bit field from `REG_VM_VOLTAGE` (`bits 26:16`) with scaling `60/2048`, and the debug log prints both `adc8` and `adc_q11` to help validate against measured VM.
@@ -36,4 +36,5 @@
 - `components/mcf8316d_manual` MPET startup diagnostics now log `ALGORITHM_STATE`, `ALGO_DEBUG2` MPET control bits, `ALGO_STATUS_MPET` completion bits, and `MTR_PARAMS`; these logs emit once at setup and periodically while MPET faults are active.
 - `components/mcf8316d_manual` setup now force-clears `ALGO_DEBUG2` MPET bits (`MPET_CMD/R/L/KE/MECH/WRITE_SHADOW`) and triggers a startup fault clear if MPET fault bits are latched, to keep manual validation from auto-entering MPET.
 - `components/mcf8316d_manual` now emits `LOCK_LIMIT` diagnostics on event edges (and throttled while active), logging `ALGORITHM_STATE`, `ALGO_STATUS`, `ALGO_DEBUG1/2`, `FAULT_CONFIG1`, startup config (`ISD/REV/MOTOR_STARTUP1/2`), and decoded lock-threshold fields.
+- `components/mcf8316d_manual` no longer forces speed to 0% for controller `LOCK_LIMIT`/`HW_LOCK_LIMIT`-only conditions so the device can auto-retry startup; gate-driver faults and other controller faults still trigger forced shutdown.
 - `components/mcf8316d_manual/mcf8316d.pdf` is the local MCF8316D datasheet source; extracted Markdown is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).
