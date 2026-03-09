@@ -87,12 +87,7 @@ void MCF8316DManualComponent::update() {
   uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t fault_status = 0;
-  uint32_t device_config1 = 0;
-  uint32_t device_config2 = 0;
   uint32_t vm_voltage_raw = 0;
-  uint16_t voltage_gain_feedback = VOLTAGE_GAIN_FEEDBACK_40V;
-  float vm_full_scale = 60.0f;
-  bool vm_full_scale_set = false;
   bool fault_active = false;
   bool fault_state_valid = false;
 
@@ -118,63 +113,14 @@ void MCF8316DManualComponent::update() {
     }
     this->handle_fault_shutdown_(fault_active);
   }
-  bool dynamic_voltage_gain = false;
-  if (this->read_reg32(REG_DEVICE_CONFIG2, device_config2)) {
-    dynamic_voltage_gain = (device_config2 & DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK) != 0;
-  }
-
-  if (dynamic_voltage_gain && this->read_reg16(REG_VOLTAGE_GAIN_FEEDBACK, voltage_gain_feedback)) {
-    const uint8_t gain_lsb = static_cast<uint8_t>(voltage_gain_feedback & 0x00FFu);
-    const uint8_t gain_msb = static_cast<uint8_t>((voltage_gain_feedback >> 8) & 0x00FFu);
-    const uint16_t gain_code = (gain_lsb <= VOLTAGE_GAIN_FEEDBACK_15V)
-                                   ? gain_lsb
-                                   : (gain_msb <= VOLTAGE_GAIN_FEEDBACK_15V ? gain_msb : 0xFFFFu);
-
-    switch (gain_code) {
-      case VOLTAGE_GAIN_FEEDBACK_40V:
-        vm_full_scale = 40.0f;
-        vm_full_scale_set = true;
-        break;
-      case VOLTAGE_GAIN_FEEDBACK_30V:
-        vm_full_scale = 30.0f;
-        vm_full_scale_set = true;
-        break;
-      case VOLTAGE_GAIN_FEEDBACK_15V:
-        vm_full_scale = 15.0f;
-        vm_full_scale_set = true;
-        break;
-      default:
-        break;
-    }
-  }
-
-  if (!vm_full_scale_set && this->read_reg32(REG_DEVICE_CONFIG1, device_config1)) {
-    switch (device_config1 & DEVICE_CONFIG1_BUS_VOLT_MASK) {
-      case DEVICE_CONFIG1_BUS_VOLT_15V:
-        vm_full_scale = 15.0f;
-        vm_full_scale_set = true;
-        break;
-      case DEVICE_CONFIG1_BUS_VOLT_30V:
-        vm_full_scale = 30.0f;
-        vm_full_scale_set = true;
-        break;
-      case DEVICE_CONFIG1_BUS_VOLT_40V:
-        vm_full_scale = 40.0f;
-        vm_full_scale_set = true;
-        break;
-      default:
-        break;
-    }
-  }
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
-    const uint32_t vm_adc_code = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
-    const float vm_v = static_cast<float>(vm_adc_code) * (vm_full_scale / 227.0f);
+    const uint32_t vm_adc_code_8 = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
+    const uint32_t vm_adc_code_q11 = (vm_voltage_raw & VM_VOLTAGE_Q11_MASK) >> VM_VOLTAGE_Q11_SHIFT;
+    const float vm_v = static_cast<float>(vm_adc_code_q11) * (60.0f / 2048.0f);
     this->vm_voltage_sensor_->publish_state(vm_v);
     if ((millis() - this->last_vm_diag_log_ms_) >= 5000U) {
-      ESP_LOGD(TAG,
-               "VM decode: raw=0x%08X adc=%u full_scale=%.1fV dyn_vgain=%s vgain_fb=0x%04X dev_cfg1=0x%08X -> %.2fV",
-               vm_voltage_raw, static_cast<unsigned>(vm_adc_code), vm_full_scale, YESNO(dynamic_voltage_gain),
-               static_cast<unsigned>(voltage_gain_feedback), device_config1, vm_v);
+      ESP_LOGD(TAG, "VM decode: raw=0x%08X adc8=%u adc_q11=%u -> %.2fV", vm_voltage_raw,
+               static_cast<unsigned>(vm_adc_code_8), static_cast<unsigned>(vm_adc_code_q11), vm_v);
       this->last_vm_diag_log_ms_ = millis();
     }
   }
@@ -251,8 +197,44 @@ bool MCF8316DManualComponent::set_speed_percent(float speed_percent) {
 
 void MCF8316DManualComponent::pulse_clear_faults() {
   ESP_LOGI(TAG, "Pulsing clear faults");
-  if (this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
-    (void) this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 0);
+  uint32_t gate_before = 0;
+  uint32_t ctrl_before = 0;
+  uint32_t gate_after = 0;
+  uint32_t ctrl_after = 0;
+  const bool gate_before_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_before);
+  const bool ctrl_before_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_before);
+
+  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
+    ESP_LOGW(TAG, "Failed to assert CLR_FLT");
+    return;
+  }
+  delay_microseconds_safe(2000);
+  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 0)) {
+    ESP_LOGW(TAG, "Failed to deassert CLR_FLT");
+  }
+  delay_microseconds_safe(2000);
+
+  const bool gate_after_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_after);
+  const bool ctrl_after_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_after);
+
+  if (gate_before_ok || ctrl_before_ok || gate_after_ok || ctrl_after_ok) {
+    ESP_LOGI(TAG, "CLR_FLT status: gate 0x%08X -> 0x%08X, ctrl 0x%08X -> 0x%08X", gate_before, gate_after, ctrl_before,
+             ctrl_after);
+  }
+
+  if (gate_after_ok || ctrl_after_ok) {
+    this->publish_faults_(gate_after, gate_after_ok, ctrl_after, ctrl_after_ok);
+    bool fault_active = false;
+    if (gate_after_ok) {
+      fault_active |= (gate_after & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0;
+    }
+    if (ctrl_after_ok) {
+      fault_active |= (ctrl_after & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
+    }
+    if (this->fault_active_binary_sensor_ != nullptr) {
+      this->fault_active_binary_sensor_->publish_state(fault_active);
+    }
+    this->handle_fault_shutdown_(fault_active);
   }
 }
 
@@ -379,59 +361,93 @@ void MCF8316DManualComponent::delay_between_bytes_() const {
 void MCF8316DManualComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t fault_status,
                                               bool controller_fault_valid) {
   std::vector<std::string> faults;
+  bool gate_detail_found = false;
+  bool controller_detail_found = false;
   if (gate_fault_valid) {
     if (gate_fault_status & GATE_FAULT_OCP)
-      faults.emplace_back("DRV_OCP");
+      faults.emplace_back("DRV_OCP"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OVP)
-      faults.emplace_back("DRV_OVP");
+      faults.emplace_back("DRV_OVP"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OTW)
-      faults.emplace_back("DRV_OTW");
+      faults.emplace_back("DRV_OTW"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OTS)
-      faults.emplace_back("DRV_OTS");
+      faults.emplace_back("DRV_OTS"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OCP_HA)
-      faults.emplace_back("DRV_OCP_HA");
+      faults.emplace_back("DRV_OCP_HA"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OCP_LA)
-      faults.emplace_back("DRV_OCP_LA");
+      faults.emplace_back("DRV_OCP_LA"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OCP_HB)
-      faults.emplace_back("DRV_OCP_HB");
+      faults.emplace_back("DRV_OCP_HB"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OCP_LB)
-      faults.emplace_back("DRV_OCP_LB");
+      faults.emplace_back("DRV_OCP_LB"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OCP_HC)
-      faults.emplace_back("DRV_OCP_HC");
+      faults.emplace_back("DRV_OCP_HC"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_OCP_LC)
-      faults.emplace_back("DRV_OCP_LC");
+      faults.emplace_back("DRV_OCP_LC"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_BUCK_OCP)
-      faults.emplace_back("DRV_BUCK_OCP");
+      faults.emplace_back("DRV_BUCK_OCP"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_BUCK_UV)
-      faults.emplace_back("DRV_BUCK_UV");
+      faults.emplace_back("DRV_BUCK_UV"), gate_detail_found = true;
     if (gate_fault_status & GATE_FAULT_VCP_UV)
-      faults.emplace_back("DRV_VCP_UV");
+      faults.emplace_back("DRV_VCP_UV"), gate_detail_found = true;
+    if ((gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0 && !gate_detail_found) {
+      faults.emplace_back("DRV_FAULT_ACTIVE");
+    }
   }
   if (controller_fault_valid) {
+    if (fault_status & FAULT_IPD_FREQ)
+      faults.emplace_back("IPD_FREQ_FAULT"), controller_detail_found = true;
+    if (fault_status & FAULT_IPD_T1)
+      faults.emplace_back("IPD_T1_FAULT"), controller_detail_found = true;
+    if (fault_status & FAULT_IPD_T2)
+      faults.emplace_back("IPD_T2_FAULT"), controller_detail_found = true;
+    if (fault_status & FAULT_MPET_IPD)
+      faults.emplace_back("MPET_IPD_FAULT"), controller_detail_found = true;
+    if (fault_status & FAULT_MPET_BEMF)
+      faults.emplace_back("MPET_BEMF_FAULT"), controller_detail_found = true;
     if (fault_status & FAULT_WATCHDOG)
-      faults.emplace_back("WATCHDOG_FAULT");
+      faults.emplace_back("WATCHDOG_FAULT"), controller_detail_found = true;
     if (fault_status & FAULT_NO_MTR)
-      faults.emplace_back("NO_MTR");
+      faults.emplace_back("NO_MTR"), controller_detail_found = true;
     if (fault_status & FAULT_MTR_LCK)
-      faults.emplace_back("MTR_LCK");
+      faults.emplace_back("MTR_LCK"), controller_detail_found = true;
+    if (fault_status & FAULT_LOCK_LIMIT)
+      faults.emplace_back("LOCK_LIMIT"), controller_detail_found = true;
+    if (fault_status & FAULT_HW_LOCK_LIMIT)
+      faults.emplace_back("HW_LOCK_LIMIT"), controller_detail_found = true;
     if (fault_status & FAULT_ABN_SPEED)
-      faults.emplace_back("ABN_SPEED");
+      faults.emplace_back("ABN_SPEED"), controller_detail_found = true;
     if (fault_status & FAULT_ABN_BEMF)
-      faults.emplace_back("ABN_BEMF");
+      faults.emplace_back("ABN_BEMF"), controller_detail_found = true;
     if (fault_status & FAULT_MTR_UNDER_VOLTAGE)
-      faults.emplace_back("MTR_UNDER_VOLTAGE");
+      faults.emplace_back("MTR_UNDER_VOLTAGE"), controller_detail_found = true;
     if (fault_status & FAULT_MTR_OVER_VOLTAGE)
-      faults.emplace_back("MTR_OVER_VOLTAGE");
+      faults.emplace_back("MTR_OVER_VOLTAGE"), controller_detail_found = true;
+    if (fault_status & FAULT_SPEED_LOOP_SATURATION)
+      faults.emplace_back("SPEED_LOOP_SATURATION"), controller_detail_found = true;
+    if (fault_status & FAULT_CURRENT_LOOP_SATURATION)
+      faults.emplace_back("CURRENT_LOOP_SATURATION"), controller_detail_found = true;
+    if (fault_status & FAULT_MAX_SPEED_SATURATION)
+      faults.emplace_back("MAX_SPEED_SATURATION"), controller_detail_found = true;
+    if (fault_status & FAULT_BUS_POWER_LIMIT_SATURATION)
+      faults.emplace_back("BUS_POWER_LIMIT_SATURATION"), controller_detail_found = true;
+    if (fault_status & FAULT_EEPROM_WRITE_LOCK_SET)
+      faults.emplace_back("EEPROM_WRITE_LOCK_SET"), controller_detail_found = true;
+    if (fault_status & FAULT_EEPROM_READ_LOCK_SET)
+      faults.emplace_back("EEPROM_READ_LOCK_SET"), controller_detail_found = true;
     if (fault_status & FAULT_I2C_CRC)
-      faults.emplace_back("I2C_CRC_FAULT_STATUS");
+      faults.emplace_back("I2C_CRC_FAULT_STATUS"), controller_detail_found = true;
     if (fault_status & FAULT_EEPROM_ERR)
-      faults.emplace_back("EEPROM_ERR_STATUS");
+      faults.emplace_back("EEPROM_ERR_STATUS"), controller_detail_found = true;
     if (fault_status & FAULT_BOOT_STL)
-      faults.emplace_back("BOOT_STL_FAULT");
+      faults.emplace_back("BOOT_STL_FAULT"), controller_detail_found = true;
     if (fault_status & FAULT_CPU_RESET)
-      faults.emplace_back("CPU_RESET_FAULT_STATUS");
+      faults.emplace_back("CPU_RESET_FAULT_STATUS"), controller_detail_found = true;
     if (fault_status & FAULT_WWDT)
-      faults.emplace_back("WWDT_FAULT_STATUS");
+      faults.emplace_back("WWDT_FAULT_STATUS"), controller_detail_found = true;
+    if ((fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0 && !controller_detail_found) {
+      faults.emplace_back("CTRL_FAULT_ACTIVE");
+    }
   }
 
   std::string summary = "none";

@@ -70,4 +70,5 @@ text_sensor:
     fault_summary:
       name: "MCF Fault Summary"
       # Comma-separated active faults from gate-driver + controller status.
+      # Falls back to DRV_FAULT_ACTIVE / CTRL_FAULT_ACTIVE if only summary bits are set.
 ```

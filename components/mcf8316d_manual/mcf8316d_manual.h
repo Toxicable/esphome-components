@@ -163,15 +163,30 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t VM_VOLTAGE_ADC_MASK = (0xFFu << 16);
   static constexpr uint32_t VM_VOLTAGE_ADC_SHIFT = 16;
+  static constexpr uint32_t VM_VOLTAGE_Q11_MASK = (0x7FFu << 16);
+  static constexpr uint32_t VM_VOLTAGE_Q11_SHIFT = 16;
 
   static constexpr uint32_t CONTROLLER_FAULT_ACTIVE_MASK = (1u << 31);
+  static constexpr uint32_t FAULT_IPD_FREQ = (1u << 29);
+  static constexpr uint32_t FAULT_IPD_T1 = (1u << 28);
+  static constexpr uint32_t FAULT_IPD_T2 = (1u << 27);
+  static constexpr uint32_t FAULT_MPET_IPD = (1u << 25);
+  static constexpr uint32_t FAULT_MPET_BEMF = (1u << 24);
   static constexpr uint32_t FAULT_WATCHDOG = (1u << 3);
   static constexpr uint32_t FAULT_NO_MTR = (1u << 21);
   static constexpr uint32_t FAULT_MTR_LCK = (1u << 20);
+  static constexpr uint32_t FAULT_LOCK_LIMIT = (1u << 19);
+  static constexpr uint32_t FAULT_HW_LOCK_LIMIT = (1u << 18);
   static constexpr uint32_t FAULT_ABN_SPEED = (1u << 23);
   static constexpr uint32_t FAULT_ABN_BEMF = (1u << 22);
   static constexpr uint32_t FAULT_MTR_UNDER_VOLTAGE = (1u << 17);
   static constexpr uint32_t FAULT_MTR_OVER_VOLTAGE = (1u << 16);
+  static constexpr uint32_t FAULT_SPEED_LOOP_SATURATION = (1u << 15);
+  static constexpr uint32_t FAULT_CURRENT_LOOP_SATURATION = (1u << 14);
+  static constexpr uint32_t FAULT_MAX_SPEED_SATURATION = (1u << 13);
+  static constexpr uint32_t FAULT_BUS_POWER_LIMIT_SATURATION = (1u << 12);
+  static constexpr uint32_t FAULT_EEPROM_WRITE_LOCK_SET = (1u << 11);
+  static constexpr uint32_t FAULT_EEPROM_READ_LOCK_SET = (1u << 10);
   static constexpr uint32_t FAULT_I2C_CRC = (1u << 6);
   static constexpr uint32_t FAULT_EEPROM_ERR = (1u << 5);
   static constexpr uint32_t FAULT_BOOT_STL = (1u << 4);
