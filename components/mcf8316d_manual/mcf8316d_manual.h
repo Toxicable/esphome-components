@@ -150,6 +150,9 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_DEBUG2_MPET_KE_MASK = (1u << 2);
   static constexpr uint32_t ALGO_DEBUG2_MPET_MECH_MASK = (1u << 1);
   static constexpr uint32_t ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK = (1u << 0);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_ALL_MASK =
+      ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_R_MASK | ALGO_DEBUG2_MPET_L_MASK | ALGO_DEBUG2_MPET_KE_MASK |
+      ALGO_DEBUG2_MPET_MECH_MASK | ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
 
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = 0x0FFFu;
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_MASK = (0x7FFFu << 16);

@@ -34,4 +34,5 @@
 - `components/mcf8316d_manual` `fault_summary` now combines decoded gate-driver + controller fault bits, and the component logs transitions as `Active faults: ...` / `Faults cleared` even without a configured text sensor.
 - `components/mcf8316d_manual` clear-fault flow now logs before/after gate+controller raw status and republishes `fault_summary` immediately; if only aggregate bits are set it uses fallback labels `DRV_FAULT_ACTIVE` / `CTRL_FAULT_ACTIVE` instead of `none`.
 - `components/mcf8316d_manual` MPET startup diagnostics now log `ALGORITHM_STATE`, `ALGO_DEBUG2` MPET control bits, `ALGO_STATUS_MPET` completion bits, and `MTR_PARAMS`; these logs emit once at setup and periodically while MPET faults are active.
+- `components/mcf8316d_manual` setup now force-clears `ALGO_DEBUG2` MPET bits (`MPET_CMD/R/L/KE/MECH/WRITE_SHADOW`) and triggers a startup fault clear if MPET fault bits are latched, to keep manual validation from auto-entering MPET.
 - `components/mcf8316d_manual/mcf8316d.pdf` is the local MCF8316D datasheet source; extracted Markdown is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).

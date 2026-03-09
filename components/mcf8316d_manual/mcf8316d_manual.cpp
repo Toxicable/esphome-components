@@ -55,6 +55,7 @@ void MCF8316DWatchdogTickleButton::press_action() {
 
 void MCF8316DManualComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
+  uint32_t ctrl_fault = 0;
 
   if (!this->read_probe_and_publish_()) {
     ESP_LOGW(TAG, "Read-only probe failed");
@@ -80,6 +81,21 @@ void MCF8316DManualComponent::setup() {
   }
   if (!this->set_direction_mode("hardware")) {
     ESP_LOGW(TAG, "Failed to force direction to hardware during setup");
+  }
+
+  // Force manual mode by disabling any MPET command/config bits carried over at boot.
+  if (!this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, 0)) {
+    ESP_LOGW(TAG, "Failed to disable MPET control bits in ALGO_DEBUG2");
+  } else {
+    uint32_t algo_debug2 = 0;
+    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+      ESP_LOGI(TAG, "ALGO_DEBUG2 after MPET disable: 0x%08X", algo_debug2);
+    }
+  }
+
+  if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_fault) && ((ctrl_fault & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0)) {
+    ESP_LOGW(TAG, "MPET fault latched at startup (0x%08X), attempting clear", ctrl_fault);
+    this->pulse_clear_faults();
   }
 
   this->log_mpet_diagnostics_("setup");
