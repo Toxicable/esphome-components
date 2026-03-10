@@ -294,6 +294,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
   static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 1u;  // Double-align startup
+  static constexpr uint32_t STARTUP_TUNE_ALIGN_TIME = 2u;  // 100ms
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OPN_CL_HANDOFF_THR = 0x08u;

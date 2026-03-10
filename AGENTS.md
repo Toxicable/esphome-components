@@ -59,3 +59,4 @@
 - For cleaner field logs with `logger: level: INFO`, `mcf8316d_manual` now emits lock-limit retry notice at INFO only on edge transitions, and state/control diagnostic lines are emitted on state changes rather than periodic 1s spam.
 - `components/mcf8316d_manual` lock-limit diagnostics now include a `[loop_lock_limit] DRIVE cfg` line decoding `CLOSED_LOOP1.PWM_FREQ_OUT`, `DEVICE_CONFIG2` dynamic gain bits, `GD_CONFIG1.CSA_GAIN`, and `CSA_GAIN_FEEDBACK` for current-path troubleshooting.
 - `components/mcf8316d_manual` `apply_startup_tune` now also sets `CLOSED_LOOP1.PWM_FREQ_OUT=60kHz`, enables `DEVICE_CONFIG2.DYNAMIC_CSA_GAIN_EN`, and sets `GD_CONFIG1.CSA_GAIN=0` (0.15V/A baseline) to improve low-inductance startup debug.
+- `components/mcf8316d_manual` `apply_startup_tune` now also forces `MOTOR_STARTUP1.ALIGN_TIME=100ms` so stale debug values (for example `ALIGN_TIME=1s`) do not persist across tuning runs.
