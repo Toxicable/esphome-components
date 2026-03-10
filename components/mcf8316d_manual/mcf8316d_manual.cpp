@@ -380,10 +380,13 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
 
   ok &= apply_masked_bits(
       "FAULT_CONFIG1 tuning", REG_FAULT_CONFIG1,
-      FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK | FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG1_LCK_RETRY_MASK,
+      FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK | FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK |
+          FAULT_CONFIG1_LCK_RETRY_MASK | FAULT_CONFIG1_MTR_LCK_MODE_MASK,
       (STARTUP_TUNE_HW_LOCK_ILIMIT << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) |
+          (STARTUP_TUNE_LOCK_ILIMIT_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
           (STARTUP_TUNE_LOCK_ILIMIT_DEG << FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) |
-          (STARTUP_TUNE_LCK_RETRY << FAULT_CONFIG1_LCK_RETRY_SHIFT));
+          (STARTUP_TUNE_LCK_RETRY << FAULT_CONFIG1_LCK_RETRY_SHIFT) |
+          (STARTUP_TUNE_MTR_LCK_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT));
   ok &= apply_masked_bits(
       "FAULT_CONFIG2 tuning", REG_FAULT_CONFIG2,
       FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK,
@@ -417,7 +420,7 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
 
 bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   ESP_LOGW(TAG, "Applying HW lock report-only debug profile");
-  ESP_LOGW(TAG, "WARNING: HW_LOCK_ILIMIT protection action is disabled (report-only mode)");
+  ESP_LOGW(TAG, "WARNING: HW/LOCK/MTR lock protective actions are disabled (report-only mode)");
 
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
@@ -432,7 +435,7 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   }
 
   const uint32_t mask = FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK;
-  const uint32_t value = (HW_LOCK_REPORT_ONLY_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
+  const uint32_t value = (LOCK_REPORT_ONLY_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
   const uint32_t next = (before & ~mask) | (value & mask);
   if (next != before && !this->write_reg32(REG_FAULT_CONFIG2, next)) {
     ESP_LOGW(TAG, "FAULT_CONFIG2 write failed: 0x%08X -> 0x%08X", before, next);
@@ -452,6 +455,35 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
              (after & mask));
   }
   ok &= mode_ok;
+
+  uint32_t fc1_before = 0;
+  if (!this->read_reg32(REG_FAULT_CONFIG1, fc1_before)) {
+    ESP_LOGW(TAG, "FAULT_CONFIG1 read failed");
+    return false;
+  }
+
+  const uint32_t fc1_mask = FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG1_MTR_LCK_MODE_MASK;
+  const uint32_t fc1_value = (LOCK_REPORT_ONLY_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
+                             (LOCK_REPORT_ONLY_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT);
+  const uint32_t fc1_next = (fc1_before & ~fc1_mask) | (fc1_value & fc1_mask);
+  if (fc1_next != fc1_before && !this->write_reg32(REG_FAULT_CONFIG1, fc1_next)) {
+    ESP_LOGW(TAG, "FAULT_CONFIG1 write failed: 0x%08X -> 0x%08X", fc1_before, fc1_next);
+    return false;
+  }
+
+  uint32_t fc1_after = 0;
+  if (!this->read_reg32(REG_FAULT_CONFIG1, fc1_after)) {
+    ESP_LOGW(TAG, "FAULT_CONFIG1 verify read failed");
+    return false;
+  }
+
+  ESP_LOGI(TAG, "FAULT_CONFIG1 LOCK/MTR modes: 0x%08X -> 0x%08X", fc1_before, fc1_after);
+  const bool fc1_mode_ok = (fc1_after & fc1_mask) == (fc1_value & fc1_mask);
+  if (!fc1_mode_ok) {
+    ESP_LOGW(TAG, "FAULT_CONFIG1 verify mismatch: expected mask=0x%08X actual mask=0x%08X", (fc1_value & fc1_mask),
+             (fc1_after & fc1_mask));
+  }
+  ok &= fc1_mode_ok;
 
   if (ok) {
     ESP_LOGI(TAG, "HW lock report-only profile applied; pulsing CLR_FLT");

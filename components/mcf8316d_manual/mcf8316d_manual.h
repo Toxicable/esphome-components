@@ -214,6 +214,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT = 11;
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_MASK = (0xFu << 7);
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_SHIFT = 7;
+  static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_MASK = (0x7u << 3);
+  static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_SHIFT = 3;
 
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK = (0x7u << 13);
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT = 13;
@@ -237,6 +239,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t STARTUP_TUNE_LOCK_ILIMIT_DEG = 6u;
   static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
+  static constexpr uint32_t STARTUP_TUNE_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
+  static constexpr uint32_t STARTUP_TUNE_MTR_LCK_MODE = 3u;      // retry_hiz
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
@@ -248,7 +252,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
   static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
-  static constexpr uint32_t HW_LOCK_REPORT_ONLY_MODE = 6u;
+  static constexpr uint32_t LOCK_REPORT_ONLY_MODE = 6u;
 
   static constexpr uint32_t MTR_PARAMS_R_MASK = (0xFFu << 24);
   static constexpr uint32_t MTR_PARAMS_R_SHIFT = 24;
