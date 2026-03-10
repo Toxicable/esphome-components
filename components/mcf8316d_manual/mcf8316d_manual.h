@@ -325,6 +325,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
+  static constexpr uint32_t STARTUP_TUNE_LOCK2_EN = 0u;             // disable ABN_BEMF lock during manual bring-up
+  static constexpr uint32_t STARTUP_TUNE_ABNORMAL_BEMF_THR = 7u;    // 70% (least sensitive)
   static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 1u;  // Double-align startup
   static constexpr uint32_t STARTUP_TUNE_ALIGN_TIME = 2u;  // 100ms
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;

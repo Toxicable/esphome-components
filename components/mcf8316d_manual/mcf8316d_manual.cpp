@@ -660,9 +660,12 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
           (STARTUP_TUNE_MTR_LCK_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT));
   ok &= apply_masked_bits(
       "FAULT_CONFIG2 tuning", REG_FAULT_CONFIG2,
-      FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK,
+      FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG2_LOCK2_EN_MASK |
+          FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK,
       (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) |
-          (STARTUP_TUNE_HW_LOCK_ILIMIT_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT));
+          (STARTUP_TUNE_HW_LOCK_ILIMIT_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) |
+          (STARTUP_TUNE_LOCK2_EN ? FAULT_CONFIG2_LOCK2_EN_MASK : 0u) |
+          (STARTUP_TUNE_ABNORMAL_BEMF_THR << FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT));
   ok &= apply_masked_bits(
       "MOTOR_STARTUP1 tuning", REG_MOTOR_STARTUP1,
       MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_TIME_MASK | MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
@@ -701,6 +704,9 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
     ESP_LOGI(TAG, "Startup tune profile applied; pulsing CLR_FLT");
   } else {
     ESP_LOGW(TAG, "Startup tune profile partially applied; pulsing CLR_FLT");
+  }
+  if (!STARTUP_TUNE_LOCK2_EN) {
+    ESP_LOGW(TAG, "Startup tune disables ABN_BEMF lock (LOCK2_EN=0) for manual bring-up stability");
   }
   this->pulse_clear_faults();
   return ok;

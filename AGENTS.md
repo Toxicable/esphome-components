@@ -63,5 +63,6 @@
 - `components/mcf8316d_manual` `apply_startup_tune` now also sets `CLOSED_LOOP1.PWM_FREQ_OUT=60kHz`, enables `DEVICE_CONFIG2.DYNAMIC_CSA_GAIN_EN`, and sets `GD_CONFIG1.CSA_GAIN=0` (0.15V/A baseline) to improve low-inductance startup debug.
 - `components/mcf8316d_manual` `apply_startup_tune` now also forces `MOTOR_STARTUP1.ALIGN_TIME=100ms` so stale debug values (for example `ALIGN_TIME=1s`) do not persist across tuning runs.
 - `components/mcf8316d_manual` `apply_startup_tune` now explicitly clears `MOTOR_STARTUP2.AUTO_HANDOFF_EN` (`0`) so the configured `OPN_CL_HANDOFF_THR` is always honored during manual startup debugging.
+- `components/mcf8316d_manual` `apply_startup_tune` now disables ABN_BEMF lock (`FAULT_CONFIG2.LOCK2_EN=0`) and sets `ABNORMAL_BEMF_THR=70%` during manual bring-up to avoid immediate `MTR_LCK,ABN_BEMF` trip loops with untuned motor constants.
 - `components/mcf8316d_manual` now supports optional `run_scope_probe_test` button for a non-blocking low-speed probe sequence (`5%`, `8%`, `12%`) with per-stage hold, inter-stage cooldown, and fault-clear retry to simplify scope capture timing.
 - `components/mcf8316d_manual` startup gates normal operation on I2C preflight with scan range `0x00..0x7E`, but scan failures are warning-only (no `mark_failed()`); component stays in deferred retry mode until comms recover.
