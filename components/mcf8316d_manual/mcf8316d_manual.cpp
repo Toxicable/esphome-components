@@ -92,7 +92,12 @@ void MCF8316DManualComponent::setup() {
   this->deferred_comms_last_retry_ms_ = 0u;
   this->deferred_comms_last_scan_ms_ = 0u;
 
-  this->scan_i2c_bus_();
+  if (!this->scan_i2c_bus_()) {
+    ESP_LOGE(TAG, "I2C scan failed; marking component failed");
+    this->status_set_warning();
+    this->mark_failed();
+    return;
+  }
   if (!this->establish_communications_(STARTUP_COMMS_ATTEMPTS, STARTUP_COMMS_RETRY_DELAY_MS, true)) {
     ESP_LOGW(TAG, "Unable to establish communications with I2C device 0x%02X during setup; deferring normal operation",
              this->address_);
@@ -302,10 +307,10 @@ bool MCF8316DManualComponent::probe_device_ack_(i2c::ErrorCode &error_code) cons
   return error_code == i2c::ERROR_OK;
 }
 
-void MCF8316DManualComponent::scan_i2c_bus_() {
+bool MCF8316DManualComponent::scan_i2c_bus_() {
   if (this->bus_ == nullptr) {
     ESP_LOGW(TAG, "I2C scan skipped: bus is not initialized");
-    return;
+    return false;
   }
 
   std::string discovered;
@@ -340,6 +345,8 @@ void MCF8316DManualComponent::scan_i2c_bus_() {
   } else {
     ESP_LOGW(TAG, "I2C target 0x%02X was not found during scan", this->address_);
   }
+
+  return device_count > 0u;
 }
 
 bool MCF8316DManualComponent::establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays) {
@@ -378,7 +385,12 @@ void MCF8316DManualComponent::process_deferred_startup_() {
   const bool should_scan = this->deferred_comms_last_scan_ms_ == 0u ||
                            (now - this->deferred_comms_last_scan_ms_) >= DEFERRED_SCAN_INTERVAL_MS;
   if (should_scan) {
-    this->scan_i2c_bus_();
+    if (!this->scan_i2c_bus_()) {
+      ESP_LOGE(TAG, "Deferred I2C scan failed; marking component failed");
+      this->status_set_warning();
+      this->mark_failed();
+      return;
+    }
     this->deferred_comms_last_scan_ms_ = now;
   }
 
