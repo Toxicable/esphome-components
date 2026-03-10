@@ -112,6 +112,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void set_duty_cmd_percent_sensor(sensor::Sensor *s) { duty_cmd_percent_sensor_ = s; }
   void set_volt_mag_percent_sensor(sensor::Sensor *s) { volt_mag_percent_sensor_ = s; }
   void set_fault_summary_text_sensor(text_sensor::TextSensor *s) { fault_summary_text_sensor_ = s; }
+  void set_algorithm_state_text_sensor(text_sensor::TextSensor *s) { algorithm_state_text_sensor_ = s; }
 
  protected:
   bool read_probe_and_publish_();
@@ -348,6 +349,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_BOOT_STL = (1u << 4);
   static constexpr uint32_t FAULT_CPU_RESET = (1u << 2);
   static constexpr uint32_t FAULT_WWDT = (1u << 1);
+  static constexpr uint32_t RUN_STATE_DIAG_LOG_INTERVAL_MS = 1000u;
 
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
@@ -356,8 +358,10 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t last_buck_diag_log_ms_{0};
   uint32_t last_mpet_diag_log_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
+  uint32_t last_run_state_diag_log_ms_{0};
   bool lock_limit_prev_active_{false};
   bool fault_latched_{false};
+  uint16_t last_run_state_diag_value_{0xFFFFu};
   std::string last_fault_summary_{"none"};
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};
@@ -369,6 +373,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor *duty_cmd_percent_sensor_{nullptr};
   sensor::Sensor *volt_mag_percent_sensor_{nullptr};
   text_sensor::TextSensor *fault_summary_text_sensor_{nullptr};
+  text_sensor::TextSensor *algorithm_state_text_sensor_{nullptr};
 };
 
 }  // namespace mcf8316d_manual

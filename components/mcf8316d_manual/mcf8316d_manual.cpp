@@ -133,7 +133,8 @@ void MCF8316DManualComponent::update() {
   bool fault_active = false;
   bool fault_state_valid = false;
 
-  if (this->read_reg32(REG_ALGO_STATUS, algo_status)) {
+  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
+  if (algo_ok) {
     this->publish_algo_status_(algo_status);
   }
   const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
@@ -159,6 +160,38 @@ void MCF8316DManualComponent::update() {
       ESP_LOGD(TAG, "Fault active but allowing retry (lock-limit-only)");
     }
     this->handle_fault_shutdown_(force_shutdown);
+  }
+
+  const uint16_t duty_raw = algo_status & ALGO_STATUS_DUTY_CMD_MASK;
+  const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
+  const bool run_state_diag_active = algo_ok && duty_raw > 0u && volt_mag_raw > 0u && (!fault_state_valid || !fault_active);
+  const bool need_algorithm_state = this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active;
+  if (need_algorithm_state) {
+    uint16_t algorithm_state = 0;
+    if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
+      const char *const state_name = this->algorithm_state_to_string_(algorithm_state);
+      if (this->algorithm_state_text_sensor_ != nullptr) {
+        this->algorithm_state_text_sensor_->publish_state(state_name);
+      }
+      if (run_state_diag_active) {
+        const uint32_t now = millis();
+        const bool should_log = (this->last_run_state_diag_log_ms_ == 0u) ||
+                                (algorithm_state != this->last_run_state_diag_value_) ||
+                                ((now - this->last_run_state_diag_log_ms_) >= RUN_STATE_DIAG_LOG_INTERVAL_MS);
+        if (should_log) {
+          const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
+          const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
+          ESP_LOGI(TAG, "[loop_run_state] state=0x%04X(%s) duty=%.1f%% volt_mag=%.1f%%", algorithm_state, state_name,
+                   duty_percent, volt_mag_percent);
+          this->last_run_state_diag_log_ms_ = now;
+          this->last_run_state_diag_value_ = algorithm_state;
+        }
+      }
+    }
+  }
+  if (!run_state_diag_active) {
+    this->last_run_state_diag_log_ms_ = 0u;
+    this->last_run_state_diag_value_ = 0xFFFFu;
   }
 
   const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
