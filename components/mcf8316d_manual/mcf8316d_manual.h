@@ -134,6 +134,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
   static constexpr uint16_t REG_ALGORITHM_STATE = 0x018E;
   static constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
+  static constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
   static constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
@@ -204,6 +205,9 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_MASK = (0xFu << 7);
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_SHIFT = 7;
 
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK = (0x7u << 13);
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT = 13;
+
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK = (0xFu << 17);
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT = 17;
 
@@ -217,6 +221,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t STARTUP_TUNE_LOCK_ILIMIT_DEG = 6u;
   static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
+  static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
+  static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OPN_CL_HANDOFF_THR = 0x0Fu;
