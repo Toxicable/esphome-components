@@ -93,10 +93,8 @@ void MCF8316DManualComponent::setup() {
   this->deferred_comms_last_scan_ms_ = 0u;
 
   if (!this->scan_i2c_bus_()) {
-    ESP_LOGE(TAG, "I2C scan failed; marking component failed");
+    ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
     this->status_set_warning();
-    this->mark_failed();
-    return;
   }
   if (!this->establish_communications_(STARTUP_COMMS_ATTEMPTS, STARTUP_COMMS_RETRY_DELAY_MS, true)) {
     ESP_LOGW(TAG, "Unable to establish communications with I2C device 0x%02X during setup; deferring normal operation",
@@ -386,10 +384,8 @@ void MCF8316DManualComponent::process_deferred_startup_() {
                            (now - this->deferred_comms_last_scan_ms_) >= DEFERRED_SCAN_INTERVAL_MS;
   if (should_scan) {
     if (!this->scan_i2c_bus_()) {
-      ESP_LOGE(TAG, "Deferred I2C scan failed; marking component failed");
+      ESP_LOGW(TAG, "Deferred I2C scan failed; keeping deferred retry mode");
       this->status_set_warning();
-      this->mark_failed();
-      return;
     }
     this->deferred_comms_last_scan_ms_ = now;
   }
