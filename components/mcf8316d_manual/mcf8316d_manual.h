@@ -63,6 +63,15 @@ class MCF8316DWatchdogTickleButton : public button::Button {
   MCF8316DManualComponent *parent_{nullptr};
 };
 
+class MCF8316DApplyStartupTuneButton : public button::Button {
+ public:
+  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8316DManualComponent *parent_{nullptr};
+};
+
 class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -79,6 +88,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool set_speed_percent(float speed_percent);
   void pulse_clear_faults();
   void pulse_watchdog_tickle();
+  bool apply_startup_tune_profile();
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
@@ -193,6 +203,25 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT = 11;
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_MASK = (0xFu << 7);
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_SHIFT = 7;
+
+  static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK = (0xFu << 17);
+  static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT = 17;
+
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_MASK = (0xFu << 27);
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
+  static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK = (0x1Fu << 13);
+  static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT = 13;
+  static constexpr uint32_t MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK = (0xFu << 4);
+  static constexpr uint32_t MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT = 4;
+  static constexpr uint32_t MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK = (1u << 3);
+
+  static constexpr uint32_t STARTUP_TUNE_LOCK_ILIMIT_DEG = 6u;
+  static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
+  static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
+  static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
+  static constexpr uint32_t STARTUP_TUNE_OPN_CL_HANDOFF_THR = 0x0Fu;
+  static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 4u;
+  static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
 
   static constexpr uint32_t MTR_PARAMS_R_MASK = (0xFFu << 24);
   static constexpr uint32_t MTR_PARAMS_R_SHIFT = 24;

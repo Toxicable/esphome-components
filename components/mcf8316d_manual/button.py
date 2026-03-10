@@ -11,6 +11,9 @@ MCF8316DClearFaultsButton = mcf8316d_manual_ns.class_("MCF8316DClearFaultsButton
 MCF8316DWatchdogTickleButton = mcf8316d_manual_ns.class_(
     "MCF8316DWatchdogTickleButton", button.Button
 )
+MCF8316DApplyStartupTuneButton = mcf8316d_manual_ns.class_(
+    "MCF8316DApplyStartupTuneButton", button.Button
+)
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -21,6 +24,10 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional("watchdog_tickle"): button.button_schema(
             MCF8316DWatchdogTickleButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+        ),
+        cv.Optional("apply_startup_tune"): button.button_schema(
+            MCF8316DApplyStartupTuneButton,
             entity_category=ENTITY_CATEGORY_CONFIG,
         ),
     }
@@ -36,3 +43,7 @@ async def to_code(config):
     if "watchdog_tickle" in config:
         watchdog_tickle = await button.new_button(config["watchdog_tickle"])
         cg.add(watchdog_tickle.set_parent(parent))
+
+    if "apply_startup_tune" in config:
+        apply_startup_tune = await button.new_button(config["apply_startup_tune"])
+        cg.add(apply_startup_tune.set_parent(parent))

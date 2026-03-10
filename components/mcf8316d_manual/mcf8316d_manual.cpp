@@ -53,6 +53,14 @@ void MCF8316DWatchdogTickleButton::press_action() {
   }
 }
 
+void MCF8316DApplyStartupTuneButton::press_action() {
+  if (this->parent_ != nullptr) {
+    if (!this->parent_->apply_startup_tune_profile()) {
+      ESP_LOGW(TAG, "Startup tune profile failed");
+    }
+  }
+}
+
 void MCF8316DManualComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
   uint32_t ctrl_fault = 0;
@@ -312,6 +320,63 @@ void MCF8316DManualComponent::pulse_watchdog_tickle() {
     (void) this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0);
   }
   this->last_watchdog_tickle_ms_ = millis();
+}
+
+bool MCF8316DManualComponent::apply_startup_tune_profile() {
+  ESP_LOGW(TAG, "Applying startup tune profile (lock-limit retry + startup torque)");
+  auto apply_masked_bits = [this](const char *label, uint16_t reg, uint32_t mask, uint32_t value) {
+    uint32_t before = 0;
+    if (!this->read_reg32(reg, before)) {
+      ESP_LOGW(TAG, "%s read failed (reg=0x%04X)", label, reg);
+      return false;
+    }
+
+    const uint32_t next = (before & ~mask) | (value & mask);
+    if (next != before && !this->write_reg32(reg, next)) {
+      ESP_LOGW(TAG, "%s write failed (reg=0x%04X): 0x%08X -> 0x%08X", label, reg, before, next);
+      return false;
+    }
+
+    uint32_t after = 0;
+    if (!this->read_reg32(reg, after)) {
+      ESP_LOGW(TAG, "%s verify read failed (reg=0x%04X)", label, reg);
+      return false;
+    }
+    ESP_LOGI(TAG, "%s: 0x%08X -> 0x%08X", label, before, after);
+
+    const bool fields_match = (after & mask) == (value & mask);
+    if (!fields_match) {
+      ESP_LOGW(TAG, "%s verify mismatch (reg=0x%04X): expected mask=0x%08X actual mask=0x%08X", label, reg,
+               (value & mask), (after & mask));
+    }
+    return fields_match;
+  };
+
+  bool ok = true;
+  ok &= apply_masked_bits(
+      "FAULT_CONFIG1 tuning", REG_FAULT_CONFIG1, FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG1_LCK_RETRY_MASK,
+      (STARTUP_TUNE_LOCK_ILIMIT_DEG << FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) |
+          (STARTUP_TUNE_LCK_RETRY << FAULT_CONFIG1_LCK_RETRY_SHIFT));
+  ok &= apply_masked_bits("MOTOR_STARTUP1 tuning", REG_MOTOR_STARTUP1,
+                          MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
+                          (STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT
+                           << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT));
+  ok &= apply_masked_bits(
+      "MOTOR_STARTUP2 tuning", REG_MOTOR_STARTUP2,
+      MOTOR_STARTUP2_OL_ILIMIT_MASK | MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK | MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK |
+          MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK,
+      (STARTUP_TUNE_OL_ILIMIT << MOTOR_STARTUP2_OL_ILIMIT_SHIFT) |
+          (STARTUP_TUNE_OPN_CL_HANDOFF_THR << MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) |
+          (STARTUP_TUNE_SLOW_FIRST_CYC_FREQ << MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT) |
+          (STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL ? MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK : 0u));
+
+  if (ok) {
+    ESP_LOGI(TAG, "Startup tune profile applied; pulsing CLR_FLT");
+  } else {
+    ESP_LOGW(TAG, "Startup tune profile partially applied; pulsing CLR_FLT");
+  }
+  this->pulse_clear_faults();
+  return ok;
 }
 
 bool MCF8316DManualComponent::read_probe_and_publish_() {

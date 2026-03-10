@@ -5,8 +5,10 @@ Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
 The component forces MPET control bits off during setup so manual bring-up does not auto-enter MPET.
 MCF8316D can still auto-enter MPET on non-zero speed if `CLOSED_LOOP2/3/4` motor parameters are zero (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, speed-loop `Kp/Ki`).
 To avoid that forced MPET path on blank parts, setup now seeds those zero fields with minimal non-zero shadow values (no EEPROM write).
+Setup also forces `GD_CONFIG2.BUCK_CL` to the 600mA mode in shadow registers for manual validation, because the 150mA mode can trip immediate `DRV_BUCK_OCP`/`DRV_BUCK_UV` on loaded boards.
 For safety, the component forces speed to 0% on persistent faults, but allows controller `LOCK_LIMIT`/`HW_LOCK_LIMIT`-only startup events to auto-retry.
 `DRV_BUCK_OCP`/`DRV_BUCK_UV` are condition-active buck faults; `clear_faults` cannot clear them while the buck rail/load issue persists.
+Optional `apply_startup_tune` button writes a practical startup profile in RAM (no EEPROM write): `LOCK_ILIMIT_DEG=5ms`, `LCK_RETRY=1s`, `ALIGN_OR_SLOW_CURRENT_ILIMIT=2.5A`, `OL_ILIMIT=2.5A`, `OPN_CL_HANDOFF_THR=16%`, `SLOW_FIRST_CYC_FREQ=1%`, and `FIRST_CYCLE_FREQ_SEL=1`.
 
 ```yaml
 external_components:
@@ -47,8 +49,11 @@ button:
     mcf8316d_manual_id: mcf
     clear_faults:
       name: "MCF Clear Faults"
-    watchdog_tickle:
-      name: "MCF Watchdog Tickle"
+    # Optional:
+    # watchdog_tickle:
+    #   name: "MCF Watchdog Tickle"
+    # apply_startup_tune:
+    #   name: "MCF Apply Startup Tune"
 
 binary_sensor:
   - platform: mcf8316d_manual
