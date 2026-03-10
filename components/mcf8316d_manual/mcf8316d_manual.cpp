@@ -165,9 +165,16 @@ void MCF8316DManualComponent::update() {
     const bool force_shutdown =
         this->should_force_speed_shutdown_(gate_fault_status, gate_ok, fault_status, controller_ok);
     if (fault_active && !force_shutdown) {
-      ESP_LOGD(TAG, "Fault active but allowing retry (lock-limit-only)");
+      if (!this->allow_retry_notice_active_) {
+        ESP_LOGI(TAG, "Fault active but allowing retry (lock-limit-only)");
+        this->allow_retry_notice_active_ = true;
+      }
+    } else {
+      this->allow_retry_notice_active_ = false;
     }
     this->handle_fault_shutdown_(force_shutdown);
+  } else {
+    this->allow_retry_notice_active_ = false;
   }
 
   const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
@@ -189,8 +196,7 @@ void MCF8316DManualComponent::update() {
       if (run_state_diag_active) {
         const uint32_t now = millis();
         const bool should_log = (this->last_run_state_diag_log_ms_ == 0u) ||
-                                (algorithm_state != this->last_run_state_diag_value_) ||
-                                ((now - this->last_run_state_diag_log_ms_) >= RUN_STATE_DIAG_LOG_INTERVAL_MS);
+                                (algorithm_state != this->last_run_state_diag_value_);
         if (should_log) {
           const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
           const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
@@ -203,8 +209,7 @@ void MCF8316DManualComponent::update() {
       if (control_diag_active) {
         const uint32_t now = millis();
         const bool should_log =
-            (this->last_control_diag_log_ms_ == 0u) || (algorithm_state != this->last_control_diag_state_) ||
-            ((now - this->last_control_diag_log_ms_) >= CONTROL_DIAG_LOG_INTERVAL_MS);
+            (this->last_control_diag_log_ms_ == 0u) || (algorithm_state != this->last_control_diag_state_);
         if (should_log) {
           this->log_control_diagnostics_("loop_control", algorithm_state, duty_raw, volt_mag_raw, fault_active);
           this->last_control_diag_log_ms_ = now;
@@ -636,9 +641,11 @@ bool MCF8316DManualComponent::start_startup_current_sweep() {
   }
 
   this->startup_sweep_active_ = true;
+  this->startup_sweep_step_pending_ = false;
   this->startup_sweep_step_index_ = 0u;
   this->startup_sweep_pass_count_ = 0u;
   this->startup_sweep_step_start_ms_ = 0u;
+  this->startup_sweep_next_step_due_ms_ = 0u;
   return this->begin_startup_sweep_step_();
 }
 
@@ -698,6 +705,7 @@ bool MCF8316DManualComponent::begin_startup_sweep_step_() {
     ESP_LOGI(TAG, "Startup current sweep finished: %u/%u steps reached open/closed loop",
              static_cast<unsigned>(this->startup_sweep_pass_count_), static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT));
     this->startup_sweep_active_ = false;
+    this->startup_sweep_step_pending_ = false;
     (void) this->set_speed_percent(0.0f);
     return true;
   }
@@ -740,6 +748,12 @@ bool MCF8316DManualComponent::begin_startup_sweep_step_() {
   return true;
 }
 
+void MCF8316DManualComponent::schedule_startup_sweep_step_(uint32_t delay_ms) {
+  (void) this->set_speed_percent(0.0f);
+  this->startup_sweep_step_pending_ = true;
+  this->startup_sweep_next_step_due_ms_ = millis() + delay_ms;
+}
+
 void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
                                                       bool fault_state_valid, bool controller_valid,
                                                       uint32_t controller_fault_status, uint16_t volt_mag_raw) {
@@ -748,6 +762,21 @@ void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid,
   }
 
   const uint32_t now = millis();
+  if (this->startup_sweep_step_pending_) {
+    if (now < this->startup_sweep_next_step_due_ms_) {
+      return;
+    }
+    if (fault_state_valid && fault_active) {
+      ESP_LOGI(TAG, "[startup_sweep] waiting for fault clear before step %u", static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+      this->pulse_clear_faults();
+      this->startup_sweep_next_step_due_ms_ = now + STARTUP_SWEEP_CLEAR_RETRY_MS;
+      return;
+    }
+    this->startup_sweep_step_pending_ = false;
+    (void) this->begin_startup_sweep_step_();
+    return;
+  }
+
   const uint32_t elapsed_ms = now - this->startup_sweep_step_start_ms_;
   const uint32_t current_limit_code = this->startup_sweep_current_code_(this->startup_sweep_step_index_);
   const float current_limit_a = this->current_limit_code_to_amps_(current_limit_code);
@@ -764,7 +793,7 @@ void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid,
              volt_mag_percent);
     this->startup_sweep_pass_count_++;
     this->startup_sweep_step_index_++;
-    (void) this->begin_startup_sweep_step_();
+    this->schedule_startup_sweep_step_(STARTUP_SWEEP_INTER_STEP_DELAY_MS);
     return;
   }
 
@@ -776,7 +805,7 @@ void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid,
              current_limit_a, static_cast<unsigned>(elapsed_ms), ctrl_fault_word, YESNO(controller_valid),
              algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
     this->startup_sweep_step_index_++;
-    (void) this->begin_startup_sweep_step_();
+    this->schedule_startup_sweep_step_(STARTUP_SWEEP_INTER_STEP_DELAY_MS);
     return;
   }
 
@@ -787,7 +816,7 @@ void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid,
              current_limit_a, algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
              volt_mag_percent);
     this->startup_sweep_step_index_++;
-    (void) this->begin_startup_sweep_step_();
+    this->schedule_startup_sweep_step_(STARTUP_SWEEP_INTER_STEP_DELAY_MS);
   }
 }
 

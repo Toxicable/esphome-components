@@ -54,3 +54,5 @@
 - If logs stay in `MOTOR_BRAKE_ON_START` with `VOLT_MAG=0`, inspect `ISD_CONFIG`; long startup brake from `BRAKE_EN/BRK_TIME` can stall bring-up. `apply_startup_tune` now also clears `ISD_EN`, `BRAKE_EN`, and `RESYNC_EN` to bypass this path during manual debug.
 - `components/mcf8316d_manual` `Duty Cmd %` should decode `ALGO_STATUS` bits `[15:4]` (shift 4), not bits `[11:0]`.
 - `components/mcf8316d_manual` now supports an optional `run_startup_sweep` button that auto-tests four startup current-limit steps (`1.0A`, `1.5A`, `2.0A`, `2.5A`) at fixed speed and logs PASS/FAIL/TIMEOUT per step using `ALGORITHM_STATE` + fault status.
+- `components/mcf8316d_manual` startup sweep now enforces inter-step cooldown and waits for fault clear (with periodic `CLR_FLT` retry) before launching the next step, to avoid stale latched faults contaminating later sweep steps.
+- For cleaner field logs with `logger: level: INFO`, `mcf8316d_manual` now emits lock-limit retry notice at INFO only on edge transitions, and state/control diagnostic lines are emitted on state changes rather than periodic 1s spam.

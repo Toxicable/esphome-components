@@ -10,10 +10,17 @@ For safety, the component forces speed to 0% on persistent faults, but allows co
 `DRV_BUCK_OCP`/`DRV_BUCK_UV` are condition-active buck faults; `clear_faults` cannot clear them while the buck rail/load issue persists.
 Optional `apply_startup_tune` button writes a practical startup profile in RAM (no EEPROM write): forces `speed=0%`, `direction=cw`, `brake=off`, `MTR_STARTUP=double_align`, `ALIGN_ANGLE=90°`, `MAX_SPEED=0x2710` (1666Hz electrical), `HW_LOCK_ILIMIT=8A`, `HW_LOCK_ILIMIT_DEG=7us`, `HW_LOCK_ILIMIT_MODE=retry_hiz`, `LOCK_ILIMIT_DEG=5ms`, `LCK_RETRY=1s`, `ALIGN_OR_SLOW_CURRENT_ILIMIT=2.5A`, `OL_ILIMIT=2.5A`, `OPN_CL_HANDOFF_THR=9%`, `SLOW_FIRST_CYC_FREQ=0.3%`, `FIRST_CYCLE_FREQ_SEL=1`, and disables ISD startup braking path (`ISD_EN=0`, `BRAKE_EN=0`, `RESYNC_EN=0`) to avoid long `MOTOR_BRAKE_ON_START` holds during manual bring-up.
 Optional `apply_hw_lock_report_only` button is a temporary diagnostic mode that sets `HW_LOCK_ILIMIT_MODE`, `LOCK_ILIMIT_MODE`, and `MTR_LCK_MODE` to `disabled` (no protective lock shutdown action), forces `direction=cw` + `brake=off`, and forces `MTR_STARTUP=align` with `ALIGN_TIME=100ms`; use only for brief no-load debugging and then run `apply_startup_tune` to restore normal `retry_hiz` modes.
-Optional `run_startup_sweep` button runs an automated 4-step startup test (`1.0A`, `1.5A`, `2.0A`, `2.5A` align/open-loop current limits) at `21%` speed command, logging PASS/FAIL/TIMEOUT per step based on state transition (`OPEN_LOOP`/`CLOSED_LOOP`) and fault status.
+Optional `run_startup_sweep` button runs an automated 4-step startup test (`1.0A`, `1.5A`, `2.0A`, `2.5A` align/open-loop current limits) at `21%` speed command, logging PASS/FAIL/TIMEOUT per step based on state transition (`OPEN_LOOP`/`CLOSED_LOOP`) and fault status. The sweep now inserts inter-step delay and waits for fault-clear before starting the next step so each step is independent.
 When commanded duty/voltage magnitude are non-zero and no fault is active, the component logs `[loop_run_state]` with `ALGORITHM_STATE` so startup stalls (for example stuck in `MOTOR_ALIGN`) are visible even without lock-limit faults.
 Brake and direction writes now log immediate register readback (`PIN_CONFIG` / `PERI_CONFIG1`), and commanded-run diagnostics log `[loop_control] CTRL diag` with decoded `brake_sel`/`dir_sel` and `ISD_CONFIG` fields so you can verify the chip is not being held in startup brake configuration.
 `Duty Cmd %` decodes `ALGO_STATUS[15:4]` per datasheet.
+
+Recommended logger settings for cleaner diagnostics:
+
+```yaml
+logger:
+  level: INFO
+```
 
 ```yaml
 external_components:
