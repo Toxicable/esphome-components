@@ -173,7 +173,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t startup_sweep_current_code_(uint8_t step_index) const;
   float current_limit_code_to_amps_(uint32_t current_limit_code) const;
   bool should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
-                                    bool controller_fault_valid) const;
+                                    bool controller_fault_valid);
   const char *algorithm_state_to_string_(uint16_t state) const;
   const char *brake_input_to_string_(uint32_t brake_input_value) const;
   const char *direction_input_to_string_(uint32_t direction_input_value) const;
@@ -332,6 +332,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_RESYNC_EN = 0u;   // disable re-sync path for static startup
   static constexpr uint32_t STARTUP_TUNE_BRK_CONFIG = 0u;  // time-only brake exit if ever enabled
   static constexpr uint32_t STARTUP_TUNE_BRK_TIME = 1u;    // 50ms
+  static constexpr uint32_t LOCK_MODE_AUTO_RECOVERY_MIN = 3u;
   static constexpr uint32_t LOCK_REPORT_ONLY_MODE = 6u;
   static constexpr uint32_t LOCK_DISABLED_MODE = 7u;
   static constexpr uint32_t DEBUG_ALIGN_MTR_STARTUP = 0u;  // Align startup

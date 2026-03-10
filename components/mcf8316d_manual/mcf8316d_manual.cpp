@@ -146,7 +146,7 @@ void MCF8316DManualComponent::update() {
         this->should_force_speed_shutdown_(gate_fault_status, gate_ok, fault_status, controller_ok);
     if (fault_active && !force_shutdown) {
       if (!this->allow_retry_notice_active_) {
-        ESP_LOGI(TAG, "Fault active but allowing retry (lock-limit-only)");
+        ESP_LOGI(TAG, "Fault active but allowing retry (configured lock mode)");
         this->allow_retry_notice_active_ = true;
       }
     } else {
@@ -1859,7 +1859,7 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
 
 bool MCF8316DManualComponent::should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid,
                                                             uint32_t controller_fault_status,
-                                                            bool controller_fault_valid) const {
+                                                            bool controller_fault_valid) {
   if (gate_fault_valid && ((gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0)) {
     return true;
   }
@@ -1868,10 +1868,50 @@ bool MCF8316DManualComponent::should_force_speed_shutdown_(uint32_t gate_fault_s
     return false;
   }
 
-  // Allow device retry behavior for transient lock-current-limit startup faults.
-  const uint32_t controller_detail_bits = controller_fault_status & ~CONTROLLER_FAULT_ACTIVE_MASK;
-  const uint32_t transient_retry_faults = FAULT_LOCK_LIMIT | FAULT_HW_LOCK_LIMIT;
-  return (controller_detail_bits & ~transient_retry_faults) != 0;
+  uint32_t remaining_faults = controller_fault_status & ~CONTROLLER_FAULT_ACTIVE_MASK;
+  if (remaining_faults == 0u) {
+    return false;
+  }
+
+  const uint32_t motor_lock_faults = FAULT_MTR_LCK | FAULT_ABN_SPEED | FAULT_ABN_BEMF | FAULT_NO_MTR;
+  uint32_t fault_config1 = 0;
+  bool fault_config1_valid = false;
+  if ((remaining_faults & (FAULT_LOCK_LIMIT | motor_lock_faults)) != 0u) {
+    fault_config1_valid = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
+    if (!fault_config1_valid) {
+      return true;
+    }
+  }
+
+  if ((remaining_faults & FAULT_LOCK_LIMIT) != 0u) {
+    const uint32_t lock_mode =
+        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
+    if (lock_mode >= LOCK_MODE_AUTO_RECOVERY_MIN) {
+      remaining_faults &= ~FAULT_LOCK_LIMIT;
+    }
+  }
+
+  if ((remaining_faults & motor_lock_faults) != 0u) {
+    const uint32_t mtr_lock_mode =
+        (fault_config1 & FAULT_CONFIG1_MTR_LCK_MODE_MASK) >> FAULT_CONFIG1_MTR_LCK_MODE_SHIFT;
+    if (mtr_lock_mode >= LOCK_MODE_AUTO_RECOVERY_MIN) {
+      remaining_faults &= ~motor_lock_faults;
+    }
+  }
+
+  if ((remaining_faults & FAULT_HW_LOCK_LIMIT) != 0u) {
+    uint32_t fault_config2 = 0;
+    if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2)) {
+      return true;
+    }
+    const uint32_t hw_lock_mode =
+        (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT;
+    if (hw_lock_mode >= LOCK_MODE_AUTO_RECOVERY_MIN) {
+      remaining_faults &= ~FAULT_HW_LOCK_LIMIT;
+    }
+  }
+
+  return remaining_faults != 0u;
 }
 
 const char *MCF8316DManualComponent::algorithm_state_to_string_(uint16_t state) const {
