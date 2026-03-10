@@ -295,6 +295,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_MASK = (0xFu << 27);
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
+  static constexpr uint32_t MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK = (1u << 18);
+  static constexpr uint32_t MOTOR_STARTUP2_AUTO_HANDOFF_EN_SHIFT = 18;
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK = (0x1Fu << 13);
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT = 13;
   static constexpr uint32_t MOTOR_STARTUP2_ALIGN_ANGLE_MASK = (0x1Fu << 8);
@@ -319,6 +321,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_ALIGN_TIME = 2u;  // 100ms
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
+  static constexpr uint32_t STARTUP_TUNE_AUTO_HANDOFF_EN = 0u;  // force manual handoff threshold
   static constexpr uint32_t STARTUP_TUNE_OPN_CL_HANDOFF_THR = 0x08u;
   static constexpr uint32_t STARTUP_TUNE_ALIGN_ANGLE = 0x08u;  // 90 deg
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
