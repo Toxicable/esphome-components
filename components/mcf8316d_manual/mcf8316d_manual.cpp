@@ -69,6 +69,14 @@ void MCF8316DApplyHwLockReportOnlyButton::press_action() {
   }
 }
 
+void MCF8316DRunStartupSweepButton::press_action() {
+  if (this->parent_ != nullptr) {
+    if (!this->parent_->start_startup_current_sweep()) {
+      ESP_LOGW(TAG, "Startup current sweep could not start");
+    }
+  }
+}
+
 void MCF8316DManualComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
   uint32_t ctrl_fault = 0;
@@ -166,11 +174,14 @@ void MCF8316DManualComponent::update() {
   const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
   const bool run_state_diag_active = algo_ok && duty_raw > 0u && volt_mag_raw > 0u && (!fault_state_valid || !fault_active);
   const bool control_diag_active = algo_ok && duty_raw > 8u;
+  uint16_t algorithm_state = 0;
+  bool algorithm_state_valid = false;
   const bool need_algorithm_state =
-      this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active || control_diag_active;
+      this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active || control_diag_active ||
+      this->startup_sweep_active_;
   if (need_algorithm_state) {
-    uint16_t algorithm_state = 0;
     if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
+      algorithm_state_valid = true;
       const char *const state_name = this->algorithm_state_to_string_(algorithm_state);
       if (this->algorithm_state_text_sensor_ != nullptr) {
         this->algorithm_state_text_sensor_->publish_state(state_name);
@@ -210,6 +221,8 @@ void MCF8316DManualComponent::update() {
     this->last_control_diag_log_ms_ = 0u;
     this->last_control_diag_state_ = 0xFFFFu;
   }
+  this->process_startup_sweep_(algorithm_state_valid, algorithm_state, fault_active, fault_state_valid, controller_ok,
+                               fault_status, volt_mag_raw);
 
   const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
   if (mpet_fault_active && ((this->last_mpet_diag_log_ms_ == 0U) || (millis() - this->last_mpet_diag_log_ms_ >= 2000U))) {
@@ -609,6 +622,173 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   }
   this->pulse_clear_faults();
   return ok;
+}
+
+bool MCF8316DManualComponent::start_startup_current_sweep() {
+  if (this->startup_sweep_active_) {
+    ESP_LOGW(TAG, "Startup current sweep already active; restarting from step 1");
+  } else {
+    ESP_LOGI(TAG, "Starting startup current sweep (%u steps)", static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT));
+  }
+
+  if (!this->apply_startup_tune_profile()) {
+    ESP_LOGW(TAG, "Startup tune baseline was partial; continuing with current sweep");
+  }
+
+  this->startup_sweep_active_ = true;
+  this->startup_sweep_step_index_ = 0u;
+  this->startup_sweep_pass_count_ = 0u;
+  this->startup_sweep_step_start_ms_ = 0u;
+  return this->begin_startup_sweep_step_();
+}
+
+uint32_t MCF8316DManualComponent::startup_sweep_current_code_(uint8_t step_index) const {
+  switch (step_index) {
+    case 0:
+      return 3u;  // 1.0A
+    case 1:
+      return 4u;  // 1.5A
+    case 2:
+      return 5u;  // 2.0A
+    case 3:
+    default:
+      return 6u;  // 2.5A
+  }
+}
+
+float MCF8316DManualComponent::current_limit_code_to_amps_(uint32_t current_limit_code) const {
+  static const float kCurrentThresholdA[16] = {0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f,
+                                               3.5f,   4.0f,  4.5f, 5.0f, 5.5f, 6.0f, 7.0f, 8.0f};
+  return kCurrentThresholdA[current_limit_code & 0xFu];
+}
+
+bool MCF8316DManualComponent::apply_startup_sweep_current_limits_(uint32_t current_limit_code) {
+  const uint32_t s1_value = (current_limit_code << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT);
+  const uint32_t s2_value = (current_limit_code << MOTOR_STARTUP2_OL_ILIMIT_SHIFT);
+  if (!this->update_bits32(REG_MOTOR_STARTUP1, MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK, s1_value)) {
+    ESP_LOGW(TAG, "Startup sweep MOTOR_STARTUP1 write failed");
+    return false;
+  }
+  if (!this->update_bits32(REG_MOTOR_STARTUP2, MOTOR_STARTUP2_OL_ILIMIT_MASK, s2_value)) {
+    ESP_LOGW(TAG, "Startup sweep MOTOR_STARTUP2 write failed");
+    return false;
+  }
+
+  uint32_t startup1 = 0;
+  uint32_t startup2 = 0;
+  const bool startup1_ok = this->read_reg32(REG_MOTOR_STARTUP1, startup1);
+  const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
+  if (startup1_ok && startup2_ok) {
+    const uint32_t align_ilimit =
+        (startup1 & MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK) >> MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT;
+    const uint32_t ol_ilimit = (startup2 & MOTOR_STARTUP2_OL_ILIMIT_MASK) >> MOTOR_STARTUP2_OL_ILIMIT_SHIFT;
+    ESP_LOGI(TAG, "Startup sweep current limits: startup1=0x%08X startup2=0x%08X align_ilimit=%u(%.3gA) ol_ilimit=%u(%.3gA)",
+             startup1, startup2, static_cast<unsigned>(align_ilimit), this->current_limit_code_to_amps_(align_ilimit),
+             static_cast<unsigned>(ol_ilimit), this->current_limit_code_to_amps_(ol_ilimit));
+  }
+  return true;
+}
+
+bool MCF8316DManualComponent::begin_startup_sweep_step_() {
+  if (!this->startup_sweep_active_) {
+    return false;
+  }
+
+  if (this->startup_sweep_step_index_ >= STARTUP_SWEEP_STEP_COUNT) {
+    ESP_LOGI(TAG, "Startup current sweep finished: %u/%u steps reached open/closed loop",
+             static_cast<unsigned>(this->startup_sweep_pass_count_), static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT));
+    this->startup_sweep_active_ = false;
+    (void) this->set_speed_percent(0.0f);
+    return true;
+  }
+
+  const uint32_t current_limit_code = this->startup_sweep_current_code_(this->startup_sweep_step_index_);
+  const float current_limit_a = this->current_limit_code_to_amps_(current_limit_code);
+
+  if (!this->set_speed_percent(0.0f)) {
+    ESP_LOGW(TAG, "Startup sweep step %u failed to set speed to 0%% before configuring",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+  }
+  if (!this->set_direction_mode("cw")) {
+    ESP_LOGW(TAG, "Startup sweep step %u failed to force direction cw",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+  }
+  if (!this->set_brake_override(false)) {
+    ESP_LOGW(TAG, "Startup sweep step %u failed to force brake OFF",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+  }
+
+  if (!this->apply_startup_sweep_current_limits_(current_limit_code)) {
+    ESP_LOGW(TAG, "Startup sweep step %u failed to apply current limits",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+    this->startup_sweep_active_ = false;
+    return false;
+  }
+
+  this->pulse_clear_faults();
+  if (!this->set_speed_percent(STARTUP_SWEEP_SPEED_PERCENT)) {
+    ESP_LOGW(TAG, "Startup sweep step %u failed to set speed to %.1f%%",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), STARTUP_SWEEP_SPEED_PERCENT);
+    this->startup_sweep_active_ = false;
+    return false;
+  }
+  this->startup_sweep_step_start_ms_ = millis();
+
+  ESP_LOGI(TAG, "[startup_sweep] Step %u/%u start: current_limit=%u (%.3gA), speed=%.1f%%",
+           static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT),
+           static_cast<unsigned>(current_limit_code), current_limit_a, STARTUP_SWEEP_SPEED_PERCENT);
+  return true;
+}
+
+void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
+                                                      bool fault_state_valid, bool controller_valid,
+                                                      uint32_t controller_fault_status, uint16_t volt_mag_raw) {
+  if (!this->startup_sweep_active_) {
+    return;
+  }
+
+  const uint32_t now = millis();
+  const uint32_t elapsed_ms = now - this->startup_sweep_step_start_ms_;
+  const uint32_t current_limit_code = this->startup_sweep_current_code_(this->startup_sweep_step_index_);
+  const float current_limit_a = this->current_limit_code_to_amps_(current_limit_code);
+  const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
+  const bool reached_drive_state =
+      algorithm_state_valid &&
+      ((algorithm_state == ALGORITHM_STATE_OPEN_LOOP) || (algorithm_state == ALGORITHM_STATE_CLOSED_LOOP_UNALIGNED) ||
+       (algorithm_state == ALGORITHM_STATE_CLOSED_LOOP_ALIGNED));
+
+  if (reached_drive_state && !fault_active && (volt_mag_raw > 0u)) {
+    ESP_LOGI(TAG, "[startup_sweep] Step %u PASS: current_limit=%u (%.3gA), elapsed=%ums, state=%s, volt_mag=%.1f%%",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(current_limit_code),
+             current_limit_a, static_cast<unsigned>(elapsed_ms), this->algorithm_state_to_string_(algorithm_state),
+             volt_mag_percent);
+    this->startup_sweep_pass_count_++;
+    this->startup_sweep_step_index_++;
+    (void) this->begin_startup_sweep_step_();
+    return;
+  }
+
+  if (fault_state_valid && fault_active) {
+    const uint32_t ctrl_fault_word = controller_valid ? controller_fault_status : 0u;
+    ESP_LOGW(TAG,
+             "[startup_sweep] Step %u FAIL: current_limit=%u (%.3gA), elapsed=%ums, ctrl_fault=0x%08X ctrl_valid=%s state=%s volt_mag=%.1f%%",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(current_limit_code),
+             current_limit_a, static_cast<unsigned>(elapsed_ms), ctrl_fault_word, YESNO(controller_valid),
+             algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
+    this->startup_sweep_step_index_++;
+    (void) this->begin_startup_sweep_step_();
+    return;
+  }
+
+  if (elapsed_ms >= STARTUP_SWEEP_STEP_TIMEOUT_MS) {
+    ESP_LOGW(TAG,
+             "[startup_sweep] Step %u TIMEOUT: current_limit=%u (%.3gA), state=%s, volt_mag=%.1f%%, no drive-state transition",
+             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(current_limit_code),
+             current_limit_a, algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
+             volt_mag_percent);
+    this->startup_sweep_step_index_++;
+    (void) this->begin_startup_sweep_step_();
+  }
 }
 
 bool MCF8316DManualComponent::read_probe_and_publish_() {

@@ -53,3 +53,4 @@
 - `components/mcf8316d_manual` brake/direction setters now log register readback (`PIN_CONFIG`, `PERI_CONFIG1`), and active-command logs include `[loop_control] CTRL diag` with decoded `brake_sel` and `dir_sel` plus `ALGO_DEBUG1` override/speed command for direct control-path verification.
 - If logs stay in `MOTOR_BRAKE_ON_START` with `VOLT_MAG=0`, inspect `ISD_CONFIG`; long startup brake from `BRAKE_EN/BRK_TIME` can stall bring-up. `apply_startup_tune` now also clears `ISD_EN`, `BRAKE_EN`, and `RESYNC_EN` to bypass this path during manual debug.
 - `components/mcf8316d_manual` `Duty Cmd %` should decode `ALGO_STATUS` bits `[15:4]` (shift 4), not bits `[11:0]`.
+- `components/mcf8316d_manual` now supports an optional `run_startup_sweep` button that auto-tests four startup current-limit steps (`1.0A`, `1.5A`, `2.0A`, `2.5A`) at fixed speed and logs PASS/FAIL/TIMEOUT per step using `ALGORITHM_STATE` + fault status.

@@ -81,6 +81,15 @@ class MCF8316DApplyHwLockReportOnlyButton : public button::Button {
   MCF8316DManualComponent *parent_{nullptr};
 };
 
+class MCF8316DRunStartupSweepButton : public button::Button {
+ public:
+  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8316DManualComponent *parent_{nullptr};
+};
+
 class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -99,6 +108,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void pulse_watchdog_tickle();
   bool apply_startup_tune_profile();
   bool apply_hw_lock_report_only_profile();
+  bool start_startup_current_sweep();
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
@@ -132,6 +142,13 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
   void log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw, uint16_t volt_mag_raw,
                                 bool fault_active);
+  bool apply_startup_sweep_current_limits_(uint32_t current_limit_code);
+  bool begin_startup_sweep_step_();
+  void process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
+                              bool fault_state_valid, bool controller_valid, uint32_t controller_fault_status,
+                              uint16_t volt_mag_raw);
+  uint32_t startup_sweep_current_code_(uint8_t step_index) const;
+  float current_limit_code_to_amps_(uint32_t current_limit_code) const;
   bool should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                                     bool controller_fault_valid) const;
   const char *algorithm_state_to_string_(uint16_t state) const;
@@ -369,6 +386,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_WWDT = (1u << 1);
   static constexpr uint32_t RUN_STATE_DIAG_LOG_INTERVAL_MS = 1000u;
   static constexpr uint32_t CONTROL_DIAG_LOG_INTERVAL_MS = 1000u;
+  static constexpr uint8_t STARTUP_SWEEP_STEP_COUNT = 4u;
+  static constexpr float STARTUP_SWEEP_SPEED_PERCENT = 21.0f;
+  static constexpr uint32_t STARTUP_SWEEP_STEP_TIMEOUT_MS = 2000u;
+  static constexpr uint16_t ALGORITHM_STATE_OPEN_LOOP = 0x0007u;
+  static constexpr uint16_t ALGORITHM_STATE_CLOSED_LOOP_UNALIGNED = 0x0008u;
+  static constexpr uint16_t ALGORITHM_STATE_CLOSED_LOOP_ALIGNED = 0x0009u;
 
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
@@ -381,8 +404,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t last_control_diag_log_ms_{0};
   bool lock_limit_prev_active_{false};
   bool fault_latched_{false};
+  bool startup_sweep_active_{false};
   uint16_t last_run_state_diag_value_{0xFFFFu};
   uint16_t last_control_diag_state_{0xFFFFu};
+  uint8_t startup_sweep_step_index_{0};
+  uint8_t startup_sweep_pass_count_{0};
+  uint32_t startup_sweep_step_start_ms_{0};
   std::string last_fault_summary_{"none"};
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};

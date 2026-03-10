@@ -17,6 +17,9 @@ MCF8316DApplyStartupTuneButton = mcf8316d_manual_ns.class_(
 MCF8316DApplyHwLockReportOnlyButton = mcf8316d_manual_ns.class_(
     "MCF8316DApplyHwLockReportOnlyButton", button.Button
 )
+MCF8316DRunStartupSweepButton = mcf8316d_manual_ns.class_(
+    "MCF8316DRunStartupSweepButton", button.Button
+)
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -35,6 +38,10 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional("apply_hw_lock_report_only"): button.button_schema(
             MCF8316DApplyHwLockReportOnlyButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+        ),
+        cv.Optional("run_startup_sweep"): button.button_schema(
+            MCF8316DRunStartupSweepButton,
             entity_category=ENTITY_CATEGORY_CONFIG,
         ),
     }
@@ -58,3 +65,7 @@ async def to_code(config):
     if "apply_hw_lock_report_only" in config:
         apply_hw_lock_report_only = await button.new_button(config["apply_hw_lock_report_only"])
         cg.add(apply_hw_lock_report_only.set_parent(parent))
+
+    if "run_startup_sweep" in config:
+        run_startup_sweep = await button.new_button(config["run_startup_sweep"])
+        cg.add(run_startup_sweep.set_parent(parent))
