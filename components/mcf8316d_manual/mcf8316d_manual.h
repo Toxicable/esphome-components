@@ -130,9 +130,13 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void log_mpet_diagnostics_(const char *context);
   void log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2);
   void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
+  void log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw, uint16_t volt_mag_raw,
+                                bool fault_active);
   bool should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                                     bool controller_fault_valid) const;
   const char *algorithm_state_to_string_(uint16_t state) const;
+  const char *brake_input_to_string_(uint32_t brake_input_value) const;
+  const char *direction_input_to_string_(uint32_t direction_input_value) const;
   void handle_fault_shutdown_(bool fault_active);
 
   static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
@@ -350,6 +354,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CPU_RESET = (1u << 2);
   static constexpr uint32_t FAULT_WWDT = (1u << 1);
   static constexpr uint32_t RUN_STATE_DIAG_LOG_INTERVAL_MS = 1000u;
+  static constexpr uint32_t CONTROL_DIAG_LOG_INTERVAL_MS = 1000u;
 
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
@@ -359,9 +364,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t last_mpet_diag_log_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   uint32_t last_run_state_diag_log_ms_{0};
+  uint32_t last_control_diag_log_ms_{0};
   bool lock_limit_prev_active_{false};
   bool fault_latched_{false};
   uint16_t last_run_state_diag_value_{0xFFFFu};
+  uint16_t last_control_diag_state_{0xFFFFu};
   std::string last_fault_summary_{"none"};
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};

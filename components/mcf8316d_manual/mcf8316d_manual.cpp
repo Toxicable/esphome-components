@@ -165,7 +165,9 @@ void MCF8316DManualComponent::update() {
   const uint16_t duty_raw = algo_status & ALGO_STATUS_DUTY_CMD_MASK;
   const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
   const bool run_state_diag_active = algo_ok && duty_raw > 0u && volt_mag_raw > 0u && (!fault_state_valid || !fault_active);
-  const bool need_algorithm_state = this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active;
+  const bool control_diag_active = algo_ok && duty_raw > 8u;
+  const bool need_algorithm_state =
+      this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active || control_diag_active;
   if (need_algorithm_state) {
     uint16_t algorithm_state = 0;
     if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
@@ -187,11 +189,26 @@ void MCF8316DManualComponent::update() {
           this->last_run_state_diag_value_ = algorithm_state;
         }
       }
+      if (control_diag_active) {
+        const uint32_t now = millis();
+        const bool should_log =
+            (this->last_control_diag_log_ms_ == 0u) || (algorithm_state != this->last_control_diag_state_) ||
+            ((now - this->last_control_diag_log_ms_) >= CONTROL_DIAG_LOG_INTERVAL_MS);
+        if (should_log) {
+          this->log_control_diagnostics_("loop_control", algorithm_state, duty_raw, volt_mag_raw, fault_active);
+          this->last_control_diag_log_ms_ = now;
+          this->last_control_diag_state_ = algorithm_state;
+        }
+      }
     }
   }
   if (!run_state_diag_active) {
     this->last_run_state_diag_log_ms_ = 0u;
     this->last_run_state_diag_value_ = 0xFFFFu;
+  }
+  if (!control_diag_active) {
+    this->last_control_diag_log_ms_ = 0u;
+    this->last_control_diag_state_ = 0xFFFFu;
   }
 
   const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
@@ -271,7 +288,17 @@ bool MCF8316DManualComponent::update_bits32(uint16_t offset, uint32_t mask, uint
 
 bool MCF8316DManualComponent::set_brake_override(bool brake_on) {
   const uint32_t value = brake_on ? PIN_CONFIG_BRAKE_INPUT_BRAKE : PIN_CONFIG_BRAKE_INPUT_NO_BRAKE;
-  return this->update_bits32(REG_PIN_CONFIG, PIN_CONFIG_BRAKE_INPUT_MASK, value);
+  if (!this->update_bits32(REG_PIN_CONFIG, PIN_CONFIG_BRAKE_INPUT_MASK, value)) {
+    return false;
+  }
+
+  uint32_t pin_config = 0;
+  if (this->read_reg32(REG_PIN_CONFIG, pin_config)) {
+    const uint32_t brake_input_value = (pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10;
+    ESP_LOGI(TAG, "Brake override write: request=%s pin_cfg=0x%08X brake_input=%u(%s)", brake_on ? "ON" : "OFF",
+             pin_config, static_cast<unsigned>(brake_input_value), this->brake_input_to_string_(brake_input_value));
+  }
+  return true;
 }
 
 bool MCF8316DManualComponent::set_direction_mode(const std::string &direction_mode) {
@@ -281,7 +308,17 @@ bool MCF8316DManualComponent::set_direction_mode(const std::string &direction_mo
   } else if (direction_mode == "ccw") {
     value = PERI_CONFIG1_DIR_INPUT_CCW;
   }
-  return this->update_bits32(REG_PERI_CONFIG1, PERI_CONFIG1_DIR_INPUT_MASK, value);
+  if (!this->update_bits32(REG_PERI_CONFIG1, PERI_CONFIG1_DIR_INPUT_MASK, value)) {
+    return false;
+  }
+
+  uint32_t peri_config1 = 0;
+  if (this->read_reg32(REG_PERI_CONFIG1, peri_config1)) {
+    const uint32_t direction_input_value = (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK);
+    ESP_LOGI(TAG, "Direction write: request=%s peri_cfg1=0x%08X dir_input=%u(%s)", direction_mode.c_str(), peri_config1,
+             static_cast<unsigned>(direction_input_value), this->direction_input_to_string_(direction_input_value));
+  }
+  return true;
 }
 
 bool MCF8316DManualComponent::set_speed_percent(float speed_percent) {
@@ -1253,6 +1290,66 @@ const char *MCF8316DManualComponent::algorithm_state_to_string_(uint16_t state) 
       return "MOTOR_MPET_FAULT";
     default:
       return "UNKNOWN";
+  }
+}
+
+const char *MCF8316DManualComponent::brake_input_to_string_(uint32_t brake_input_value) const {
+  switch (brake_input_value & 0x3u) {
+    case 0x0:
+      return "hardware_or_hiz";
+    case 0x1:
+      return "brake_on";
+    case 0x2:
+      return "brake_off";
+    default:
+      return "reserved";
+  }
+}
+
+const char *MCF8316DManualComponent::direction_input_to_string_(uint32_t direction_input_value) const {
+  switch (direction_input_value & 0x3u) {
+    case 0x0:
+      return "hardware";
+    case 0x1:
+      return "cw";
+    case 0x2:
+      return "ccw";
+    default:
+      return "reserved";
+  }
+}
+
+void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw,
+                                                       uint16_t volt_mag_raw, bool fault_active) {
+  uint32_t pin_config = 0;
+  uint32_t peri_config1 = 0;
+  uint32_t algo_debug1 = 0;
+  const bool pin_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
+  const bool peri_ok = this->read_reg32(REG_PERI_CONFIG1, peri_config1);
+  const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
+
+  const uint32_t brake_input_value = pin_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10) : 0u;
+  const uint32_t direction_input_value = peri_ok ? (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK) : 0u;
+  const bool digital_override = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_OVERRIDE_MASK) != 0u);
+  const uint16_t digital_speed_raw =
+      dbg1_ok ? static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16) : 0u;
+
+  const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
+  const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
+  const float digital_speed_percent = (static_cast<float>(digital_speed_raw) / 32767.0f) * 100.0f;
+
+  ESP_LOGI(TAG,
+           "[%s] CTRL diag: state=0x%04X(%s) fault=%s duty=%.1f%% volt_mag=%.1f%% pin=0x%08X brake_sel=%u(%s) "
+           "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%%",
+           context, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
+           YESNO(fault_active), duty_percent, volt_mag_percent, pin_config, static_cast<unsigned>(brake_input_value),
+           this->brake_input_to_string_(brake_input_value), peri_config1, static_cast<unsigned>(direction_input_value),
+           this->direction_input_to_string_(direction_input_value), algo_debug1, YESNO(digital_override),
+           digital_speed_percent);
+
+  if (!(pin_ok && peri_ok && dbg1_ok)) {
+    ESP_LOGW(TAG, "[%s] CTRL diag read warning: pin=%s peri=%s dbg1=%s", context, YESNO(pin_ok), YESNO(peri_ok),
+             YESNO(dbg1_ok));
   }
 }
 

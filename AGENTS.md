@@ -50,3 +50,4 @@
 - `components/mcf8316d_manual` `apply_startup_tune` now explicitly restores normal lock protection modes to `retry_hiz` (`HW_LOCK_ILIMIT_MODE`, `LOCK_ILIMIT_MODE`, `MTR_LCK_MODE`), so running startup tune exits report-only debug mode.
 - `components/mcf8316d_manual` now supports optional `algorithm_state` text sensor and emits throttled `[loop_run_state]` logs (state+duty+volt_mag) whenever drive output is active without faults, to debug no-spin startup stalls.
 - `components/mcf8316d_manual` `sys_enable` binary sensor should decode `ALGO_STATUS[2]` (not bit 15); this flag indicates register control readiness, not literal motor spin/enable state.
+- `components/mcf8316d_manual` brake/direction setters now log register readback (`PIN_CONFIG`, `PERI_CONFIG1`), and active-command logs include `[loop_control] CTRL diag` with decoded `brake_sel` and `dir_sel` plus `ALGO_DEBUG1` override/speed command for direct control-path verification.
