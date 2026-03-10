@@ -136,6 +136,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
  protected:
   bool read_probe_and_publish_();
+  bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
+  bool probe_device_ack_(i2c::ErrorCode &error_code) const;
+  void scan_i2c_bus_();
+  void process_deferred_startup_();
+  void apply_post_comms_setup_();
+  const char *i2c_error_to_string_(i2c::ErrorCode error_code) const;
   bool perform_read16_(uint16_t offset, uint16_t &value);
   bool perform_read_(uint16_t offset, uint32_t &value);
   bool perform_write_(uint16_t offset, uint32_t value);
@@ -422,6 +428,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_WWDT = (1u << 1);
   static constexpr uint32_t RUN_STATE_DIAG_LOG_INTERVAL_MS = 1000u;
   static constexpr uint32_t CONTROL_DIAG_LOG_INTERVAL_MS = 1000u;
+  static constexpr uint8_t STARTUP_COMMS_ATTEMPTS = 20u;
+  static constexpr uint32_t STARTUP_COMMS_RETRY_DELAY_MS = 250u;
+  static constexpr uint32_t DEFERRED_COMMS_RETRY_INTERVAL_MS = 1000u;
+  static constexpr uint32_t DEFERRED_SCAN_INTERVAL_MS = 5000u;
+  static constexpr uint8_t I2C_SCAN_ADDRESS_MIN = 0x01u;
+  static constexpr uint8_t I2C_SCAN_ADDRESS_MAX = 0x7Eu;
   static constexpr uint8_t STARTUP_SWEEP_STEP_COUNT = 4u;
   static constexpr float STARTUP_SWEEP_SPEED_PERCENT = 21.0f;
   static constexpr uint32_t STARTUP_SWEEP_STEP_TIMEOUT_MS = 2000u;
@@ -446,10 +458,13 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool lock_limit_prev_active_{false};
   bool fault_latched_{false};
   bool allow_retry_notice_active_{false};
+  bool normal_operation_ready_{false};
   bool startup_sweep_active_{false};
   bool startup_sweep_step_pending_{false};
   bool scope_probe_test_active_{false};
   bool scope_probe_stage_pending_{false};
+  uint32_t deferred_comms_last_retry_ms_{0};
+  uint32_t deferred_comms_last_scan_ms_{0};
   uint16_t last_run_state_diag_value_{0xFFFFu};
   uint16_t last_control_diag_state_{0xFFFFu};
   uint8_t startup_sweep_step_index_{0};

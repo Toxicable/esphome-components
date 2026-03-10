@@ -1,6 +1,7 @@
 #include "mcf8316d_manual.h"
 
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #include "esphome/core/hal.h"
@@ -87,61 +88,29 @@ void MCF8316DRunScopeProbeTestButton::press_action() {
 
 void MCF8316DManualComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
-  uint32_t ctrl_fault = 0;
+  this->normal_operation_ready_ = false;
+  this->deferred_comms_last_retry_ms_ = 0u;
+  this->deferred_comms_last_scan_ms_ = 0u;
 
-  if (!this->read_probe_and_publish_()) {
-    ESP_LOGW(TAG, "Read-only probe failed");
+  this->scan_i2c_bus_();
+  if (!this->establish_communications_(STARTUP_COMMS_ATTEMPTS, STARTUP_COMMS_RETRY_DELAY_MS, true)) {
+    ESP_LOGW(TAG, "Unable to establish communications with I2C device 0x%02X during setup; deferring normal operation",
+             this->address_);
     this->status_set_warning();
+    return;
   }
 
-  if (this->speed_number_ != nullptr) {
-    this->speed_number_->publish_state(0.0f);
-  }
-  if (!this->set_speed_percent(0.0f)) {
-    ESP_LOGW(TAG, "Failed to force speed to 0%% during setup");
-  }
-
-  if (this->brake_switch_ != nullptr) {
-    this->brake_switch_->publish_state(true);
-  }
-  if (!this->set_brake_override(true)) {
-    ESP_LOGW(TAG, "Failed to force brake ON during setup");
-  }
-
-  if (this->direction_select_ != nullptr) {
-    this->direction_select_->publish_state("hardware");
-  }
-  if (!this->set_direction_mode("hardware")) {
-    ESP_LOGW(TAG, "Failed to force direction to hardware during setup");
-  }
-
-  if (!this->ensure_buck_current_limit_for_manual_()) {
-    ESP_LOGW(TAG, "Failed to ensure buck current limit for manual validation");
-  }
-
-  if (!this->seed_closed_loop_params_if_zero_()) {
-    ESP_LOGW(TAG, "Failed to seed one or more zero CLOSED_LOOP motor parameters");
-  }
-
-  // Force manual mode by disabling any MPET command/config bits carried over at boot.
-  if (!this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, 0)) {
-    ESP_LOGW(TAG, "Failed to disable MPET control bits in ALGO_DEBUG2");
-  } else {
-    uint32_t algo_debug2 = 0;
-    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
-      ESP_LOGI(TAG, "ALGO_DEBUG2 after MPET disable: 0x%08X", algo_debug2);
-    }
-  }
-
-  if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_fault) && ((ctrl_fault & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0)) {
-    ESP_LOGW(TAG, "MPET fault latched at startup (0x%08X), attempting clear", ctrl_fault);
-    this->pulse_clear_faults();
-  }
-
-  this->log_mpet_diagnostics_("setup");
+  this->status_clear_warning();
+  this->normal_operation_ready_ = true;
+  this->apply_post_comms_setup_();
 }
 
 void MCF8316DManualComponent::update() {
+  if (!this->normal_operation_ready_) {
+    this->process_deferred_startup_();
+    return;
+  }
+
   uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t fault_status = 0;
