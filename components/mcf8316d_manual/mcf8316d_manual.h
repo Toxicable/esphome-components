@@ -72,6 +72,15 @@ class MCF8316DApplyStartupTuneButton : public button::Button {
   MCF8316DManualComponent *parent_{nullptr};
 };
 
+class MCF8316DApplyHwLockReportOnlyButton : public button::Button {
+ public:
+  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8316DManualComponent *parent_{nullptr};
+};
+
 class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -89,6 +98,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void pulse_clear_faults();
   void pulse_watchdog_tickle();
   bool apply_startup_tune_profile();
+  bool apply_hw_lock_report_only_profile();
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
@@ -207,6 +217,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK = (0x7u << 13);
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT = 13;
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK = (0x7u << 16);
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT = 16;
 
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK = (0xFu << 17);
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT = 17;
@@ -227,6 +239,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
+  static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
   static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 1u;  // Double-align startup
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
@@ -235,6 +248,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
   static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
+  static constexpr uint32_t HW_LOCK_REPORT_ONLY_MODE = 6u;
 
   static constexpr uint32_t MTR_PARAMS_R_MASK = (0xFFu << 24);
   static constexpr uint32_t MTR_PARAMS_R_SHIFT = 24;

@@ -61,6 +61,14 @@ void MCF8316DApplyStartupTuneButton::press_action() {
   }
 }
 
+void MCF8316DApplyHwLockReportOnlyButton::press_action() {
+  if (this->parent_ != nullptr) {
+    if (!this->parent_->apply_hw_lock_report_only_profile()) {
+      ESP_LOGW(TAG, "HW lock report-only profile failed");
+    }
+  }
+}
+
 void MCF8316DManualComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
   uint32_t ctrl_fault = 0;
@@ -376,8 +384,11 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
       (STARTUP_TUNE_HW_LOCK_ILIMIT << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) |
           (STARTUP_TUNE_LOCK_ILIMIT_DEG << FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) |
           (STARTUP_TUNE_LCK_RETRY << FAULT_CONFIG1_LCK_RETRY_SHIFT));
-  ok &= apply_masked_bits("FAULT_CONFIG2 tuning", REG_FAULT_CONFIG2, FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK,
-                          (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT));
+  ok &= apply_masked_bits(
+      "FAULT_CONFIG2 tuning", REG_FAULT_CONFIG2,
+      FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK,
+      (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) |
+          (STARTUP_TUNE_HW_LOCK_ILIMIT_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT));
   ok &= apply_masked_bits(
       "MOTOR_STARTUP1 tuning", REG_MOTOR_STARTUP1,
       MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
@@ -399,6 +410,53 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
     ESP_LOGI(TAG, "Startup tune profile applied; pulsing CLR_FLT");
   } else {
     ESP_LOGW(TAG, "Startup tune profile partially applied; pulsing CLR_FLT");
+  }
+  this->pulse_clear_faults();
+  return ok;
+}
+
+bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
+  ESP_LOGW(TAG, "Applying HW lock report-only debug profile");
+  ESP_LOGW(TAG, "WARNING: HW_LOCK_ILIMIT protection action is disabled (report-only mode)");
+
+  bool ok = true;
+  if (!this->set_speed_percent(0.0f)) {
+    ESP_LOGW(TAG, "Failed to set speed to 0%% before applying HW lock report-only mode");
+    ok = false;
+  }
+
+  uint32_t before = 0;
+  if (!this->read_reg32(REG_FAULT_CONFIG2, before)) {
+    ESP_LOGW(TAG, "FAULT_CONFIG2 read failed");
+    return false;
+  }
+
+  const uint32_t mask = FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK;
+  const uint32_t value = (HW_LOCK_REPORT_ONLY_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
+  const uint32_t next = (before & ~mask) | (value & mask);
+  if (next != before && !this->write_reg32(REG_FAULT_CONFIG2, next)) {
+    ESP_LOGW(TAG, "FAULT_CONFIG2 write failed: 0x%08X -> 0x%08X", before, next);
+    return false;
+  }
+
+  uint32_t after = 0;
+  if (!this->read_reg32(REG_FAULT_CONFIG2, after)) {
+    ESP_LOGW(TAG, "FAULT_CONFIG2 verify read failed");
+    return false;
+  }
+
+  ESP_LOGI(TAG, "FAULT_CONFIG2 HW_LOCK_ILIMIT_MODE: 0x%08X -> 0x%08X", before, after);
+  const bool mode_ok = (after & mask) == (value & mask);
+  if (!mode_ok) {
+    ESP_LOGW(TAG, "FAULT_CONFIG2 verify mismatch: expected mask=0x%08X actual mask=0x%08X", (value & mask),
+             (after & mask));
+  }
+  ok &= mode_ok;
+
+  if (ok) {
+    ESP_LOGI(TAG, "HW lock report-only profile applied; pulsing CLR_FLT");
+  } else {
+    ESP_LOGW(TAG, "HW lock report-only profile partially applied; pulsing CLR_FLT");
   }
   this->pulse_clear_faults();
   return ok;

@@ -14,6 +14,9 @@ MCF8316DWatchdogTickleButton = mcf8316d_manual_ns.class_(
 MCF8316DApplyStartupTuneButton = mcf8316d_manual_ns.class_(
     "MCF8316DApplyStartupTuneButton", button.Button
 )
+MCF8316DApplyHwLockReportOnlyButton = mcf8316d_manual_ns.class_(
+    "MCF8316DApplyHwLockReportOnlyButton", button.Button
+)
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -28,6 +31,10 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional("apply_startup_tune"): button.button_schema(
             MCF8316DApplyStartupTuneButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+        ),
+        cv.Optional("apply_hw_lock_report_only"): button.button_schema(
+            MCF8316DApplyHwLockReportOnlyButton,
             entity_category=ENTITY_CATEGORY_CONFIG,
         ),
     }
@@ -47,3 +54,7 @@ async def to_code(config):
     if "apply_startup_tune" in config:
         apply_startup_tune = await button.new_button(config["apply_startup_tune"])
         cg.add(apply_startup_tune.set_parent(parent))
+
+    if "apply_hw_lock_report_only" in config:
+        apply_hw_lock_report_only = await button.new_button(config["apply_hw_lock_report_only"])
+        cg.add(apply_hw_lock_report_only.set_parent(parent))

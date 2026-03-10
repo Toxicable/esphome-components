@@ -8,7 +8,8 @@ To avoid that forced MPET path on blank parts, setup now seeds those zero fields
 Setup also forces `GD_CONFIG2.BUCK_CL` to the 600mA mode in shadow registers for manual validation, because the 150mA mode can trip immediate `DRV_BUCK_OCP`/`DRV_BUCK_UV` on loaded boards.
 For safety, the component forces speed to 0% on persistent faults, but allows controller `LOCK_LIMIT`/`HW_LOCK_LIMIT`-only startup events to auto-retry.
 `DRV_BUCK_OCP`/`DRV_BUCK_UV` are condition-active buck faults; `clear_faults` cannot clear them while the buck rail/load issue persists.
-Optional `apply_startup_tune` button writes a practical startup profile in RAM (no EEPROM write): forces `speed=0%`, `direction=cw`, `brake=off`, `MTR_STARTUP=double_align`, `ALIGN_ANGLE=90°`, `MAX_SPEED=0x2710` (1666Hz electrical), `HW_LOCK_ILIMIT=8A`, `HW_LOCK_ILIMIT_DEG=7us`, `LOCK_ILIMIT_DEG=5ms`, `LCK_RETRY=1s`, `ALIGN_OR_SLOW_CURRENT_ILIMIT=2.5A`, `OL_ILIMIT=2.5A`, `OPN_CL_HANDOFF_THR=9%`, `SLOW_FIRST_CYC_FREQ=0.3%`, and `FIRST_CYCLE_FREQ_SEL=1`.
+Optional `apply_startup_tune` button writes a practical startup profile in RAM (no EEPROM write): forces `speed=0%`, `direction=cw`, `brake=off`, `MTR_STARTUP=double_align`, `ALIGN_ANGLE=90°`, `MAX_SPEED=0x2710` (1666Hz electrical), `HW_LOCK_ILIMIT=8A`, `HW_LOCK_ILIMIT_DEG=7us`, `HW_LOCK_ILIMIT_MODE=retry_hiz`, `LOCK_ILIMIT_DEG=5ms`, `LCK_RETRY=1s`, `ALIGN_OR_SLOW_CURRENT_ILIMIT=2.5A`, `OL_ILIMIT=2.5A`, `OPN_CL_HANDOFF_THR=9%`, `SLOW_FIRST_CYC_FREQ=0.3%`, and `FIRST_CYCLE_FREQ_SEL=1`.
+Optional `apply_hw_lock_report_only` button is a temporary diagnostic mode that sets `HW_LOCK_ILIMIT_MODE=report_only` (no protective shutdown on HW lock); use only for brief no-load debugging and then run `apply_startup_tune` to restore normal mode.
 
 ```yaml
 external_components:
@@ -54,6 +55,8 @@ button:
     #   name: "MCF Watchdog Tickle"
     # apply_startup_tune:
     #   name: "MCF Apply Startup Tune"
+    # apply_hw_lock_report_only:
+    #   name: "MCF HW Lock Report Only (Debug)"
 
 binary_sensor:
   - platform: mcf8316d_manual
