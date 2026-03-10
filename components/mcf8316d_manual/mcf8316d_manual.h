@@ -170,9 +170,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
   static constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
+  static constexpr uint16_t REG_CLOSED_LOOP1 = 0x0088;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
   static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
   static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
+  static constexpr uint16_t REG_GD_CONFIG1 = 0x00AC;
   static constexpr uint16_t REG_GD_CONFIG2 = 0x00AE;
   static constexpr uint16_t REG_ISD_CONFIG = 0x0080;
   static constexpr uint16_t REG_REV_DRIVE_CONFIG = 0x0082;
@@ -180,6 +182,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_DEVICE_CONFIG2 = 0x00A8;
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
+  static constexpr uint16_t REG_CSA_GAIN_FEEDBACK = 0x046C;
   static constexpr uint16_t REG_VOLTAGE_GAIN_FEEDBACK = 0x0477;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x047C;
 
@@ -196,6 +199,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_15V = (0x0u << 0);
   static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_30V = (0x1u << 0);
   static constexpr uint32_t DEVICE_CONFIG1_BUS_VOLT_40V = (0x2u << 0);
+  static constexpr uint32_t DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK = (1u << 13);
   static constexpr uint32_t DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK = (1u << 12);
 
   static constexpr uint32_t ALGO_DEBUG1_OVERRIDE_MASK = (1u << 31);
@@ -271,6 +275,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT = 4;
   static constexpr uint32_t MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK = (1u << 3);
 
+  static constexpr uint32_t CLOSED_LOOP1_PWM_FREQ_OUT_MASK = (0xFu << 15);
+  static constexpr uint32_t CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT = 15;
+  static constexpr uint32_t GD_CONFIG1_CSA_GAIN_MASK = 0x3u;
+  static constexpr uint32_t GD_CONFIG1_CSA_GAIN_SHIFT = 0;
+
   static constexpr uint32_t STARTUP_TUNE_LOCK_ILIMIT_DEG = 6u;
   static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
   static constexpr uint32_t STARTUP_TUNE_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
@@ -286,6 +295,9 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
   static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
+  static constexpr uint32_t STARTUP_TUNE_PWM_FREQ_OUT = 0x0Au;  // 60kHz
+  static constexpr uint32_t STARTUP_TUNE_DYNAMIC_CSA_GAIN_EN = 1u;
+  static constexpr uint32_t STARTUP_TUNE_CSA_GAIN = 0u;  // 0.15V/A
   static constexpr uint32_t STARTUP_TUNE_ISD_EN = 0u;      // disable ISD for manual startup
   static constexpr uint32_t STARTUP_TUNE_BRAKE_EN = 0u;    // disable ISD startup brake state
   static constexpr uint32_t STARTUP_TUNE_RESYNC_EN = 0u;   // disable re-sync path for static startup

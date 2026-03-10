@@ -494,6 +494,12 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
           (STARTUP_TUNE_ALIGN_ANGLE << MOTOR_STARTUP2_ALIGN_ANGLE_SHIFT) |
           (STARTUP_TUNE_SLOW_FIRST_CYC_FREQ << MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT) |
           (STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL ? MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK : 0u));
+  ok &= apply_masked_bits("CLOSED_LOOP1 tuning", REG_CLOSED_LOOP1, CLOSED_LOOP1_PWM_FREQ_OUT_MASK,
+                          (STARTUP_TUNE_PWM_FREQ_OUT << CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT));
+  ok &= apply_masked_bits("DEVICE_CONFIG2 tuning", REG_DEVICE_CONFIG2, DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK,
+                          STARTUP_TUNE_DYNAMIC_CSA_GAIN_EN ? DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK : 0u);
+  ok &= apply_masked_bits("GD_CONFIG1 tuning", REG_GD_CONFIG1, GD_CONFIG1_CSA_GAIN_MASK,
+                          (STARTUP_TUNE_CSA_GAIN << GD_CONFIG1_CSA_GAIN_SHIFT));
   ok &= apply_masked_bits(
       "ISD_CONFIG tuning", REG_ISD_CONFIG,
       ISD_CONFIG_ISD_EN_MASK | ISD_CONFIG_BRAKE_EN_MASK | ISD_CONFIG_RESYNC_EN_MASK | ISD_CONFIG_BRK_CONFIG_MASK |
@@ -1341,22 +1347,30 @@ void MCF8316DManualComponent::log_mpet_entry_conditions_(const char *context, ui
 
 void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status) {
   uint16_t algorithm_state = 0;
+  uint16_t csa_gain_feedback = 0;
   uint32_t algo_status = 0;
   uint32_t algo_debug1 = 0;
   uint32_t algo_debug2 = 0;
+  uint32_t closed_loop1 = 0;
+  uint32_t device_config2 = 0;
   uint32_t fault_config1 = 0;
   uint32_t fault_config2 = 0;
+  uint32_t gd_config1 = 0;
   uint32_t startup1 = 0;
   uint32_t startup2 = 0;
   uint32_t isd_config = 0;
   uint32_t rev_drive_config = 0;
 
   const bool state_ok = this->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
+  const bool csa_fb_ok = this->read_reg16(REG_CSA_GAIN_FEEDBACK, csa_gain_feedback);
   const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
   const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
   const bool dbg2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
+  const bool cl1_ok = this->read_reg32(REG_CLOSED_LOOP1, closed_loop1);
+  const bool dev2_ok = this->read_reg32(REG_DEVICE_CONFIG2, device_config2);
   const bool fault_cfg_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
   const bool fault_cfg2_ok = this->read_reg32(REG_FAULT_CONFIG2, fault_config2);
+  const bool gd1_ok = this->read_reg32(REG_GD_CONFIG1, gd_config1);
   const bool startup1_ok = this->read_reg32(REG_MOTOR_STARTUP1, startup1);
   const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
   const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
@@ -1371,6 +1385,97 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
       rev_drive_config);
 
   this->log_mpet_entry_conditions_(context, algo_debug2);
+
+  if (cl1_ok && dev2_ok && gd1_ok && csa_fb_ok) {
+    const uint32_t pwm_freq_code =
+        static_cast<uint32_t>((closed_loop1 & CLOSED_LOOP1_PWM_FREQ_OUT_MASK) >> CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT);
+    const bool dynamic_csa_gain = (device_config2 & DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK) != 0;
+    const bool dynamic_voltage_gain = (device_config2 & DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK) != 0;
+    const uint32_t csa_gain_cfg =
+        static_cast<uint32_t>((gd_config1 & GD_CONFIG1_CSA_GAIN_MASK) >> GD_CONFIG1_CSA_GAIN_SHIFT);
+
+    const char *pwm_freq_label = "n/a";
+    switch (pwm_freq_code) {
+      case 0:
+        pwm_freq_label = "10kHz";
+        break;
+      case 1:
+        pwm_freq_label = "15kHz";
+        break;
+      case 2:
+        pwm_freq_label = "20kHz";
+        break;
+      case 3:
+        pwm_freq_label = "25kHz";
+        break;
+      case 4:
+        pwm_freq_label = "30kHz";
+        break;
+      case 5:
+        pwm_freq_label = "35kHz";
+        break;
+      case 6:
+        pwm_freq_label = "40kHz";
+        break;
+      case 7:
+        pwm_freq_label = "45kHz";
+        break;
+      case 8:
+        pwm_freq_label = "50kHz";
+        break;
+      case 9:
+        pwm_freq_label = "55kHz";
+        break;
+      case 10:
+        pwm_freq_label = "60kHz";
+        break;
+      default:
+        break;
+    }
+
+    const char *csa_gain_cfg_label = "unknown";
+    switch (csa_gain_cfg) {
+      case 0:
+        csa_gain_cfg_label = "0.15V/A";
+        break;
+      case 1:
+        csa_gain_cfg_label = "0.3V/A";
+        break;
+      case 2:
+        csa_gain_cfg_label = "0.6V/A";
+        break;
+      case 3:
+        csa_gain_cfg_label = "1.2V/A";
+        break;
+      default:
+        break;
+    }
+
+    const char *csa_gain_fb_label = "unknown";
+    switch (csa_gain_feedback) {
+      case 0:
+        csa_gain_fb_label = "1.2V/A (min*8)";
+        break;
+      case 1:
+        csa_gain_fb_label = "0.6V/A (min*4)";
+        break;
+      case 2:
+        csa_gain_fb_label = "0.3V/A (min*2)";
+        break;
+      case 3:
+        csa_gain_fb_label = "0.15V/A (min*1)";
+        break;
+      default:
+        break;
+    }
+
+    ESP_LOGI(TAG,
+             "[%s] DRIVE cfg: cl1=0x%08X pwm_freq=%u(%s) dev2=0x%08X dyn_csa=%s dyn_vgain=%s gd1=0x%08X "
+             "csa_gain_cfg=%u(%s) csa_gain_fb=0x%04X(%s)",
+             context, closed_loop1, static_cast<unsigned>(pwm_freq_code), pwm_freq_label, device_config2,
+             YESNO(dynamic_csa_gain), YESNO(dynamic_voltage_gain), gd_config1, static_cast<unsigned>(csa_gain_cfg),
+             csa_gain_cfg_label, static_cast<unsigned>(csa_gain_feedback), csa_gain_fb_label);
+  }
 
   if (fault_cfg_ok) {
     const uint32_t ilimit = (fault_config1 & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT;
@@ -1426,13 +1531,14 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
              static_cast<unsigned>(hw_lock_deg), hw_lock_deg_us);
   }
 
-  if (!(state_ok && algo_ok && dbg1_ok && dbg2_ok && fault_cfg_ok && fault_cfg2_ok && startup1_ok && startup2_ok &&
-        isd_ok && rev_ok)) {
+  if (!(state_ok && csa_fb_ok && algo_ok && dbg1_ok && dbg2_ok && cl1_ok && dev2_ok && fault_cfg_ok && fault_cfg2_ok &&
+        gd1_ok && startup1_ok && startup2_ok && isd_ok && rev_ok)) {
     ESP_LOGW(TAG,
-             "[%s] LOCK_LIMIT diag read warning: state=%s algo=%s dbg1=%s dbg2=%s fcfg1=%s fcfg2=%s s1=%s s2=%s "
-             "isd=%s rev=%s",
-             context, YESNO(state_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(fault_cfg_ok),
-             YESNO(fault_cfg2_ok), YESNO(startup1_ok), YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
+             "[%s] LOCK_LIMIT diag read warning: state=%s csa_fb=%s algo=%s dbg1=%s dbg2=%s cl1=%s dev2=%s fcfg1=%s "
+             "fcfg2=%s gd1=%s s1=%s s2=%s isd=%s rev=%s",
+             context, YESNO(state_ok), YESNO(csa_fb_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(cl1_ok),
+             YESNO(dev2_ok), YESNO(fault_cfg_ok), YESNO(fault_cfg2_ok), YESNO(gd1_ok), YESNO(startup1_ok),
+             YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
   }
 }
 
