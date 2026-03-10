@@ -204,6 +204,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t ALGO_DEBUG1_OVERRIDE_MASK = (1u << 31);
   static constexpr uint32_t ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK = (0x7FFFu << 16);
+  static constexpr uint32_t ALGO_DEBUG1_CLOSED_LOOP_DIS_MASK = (1u << 15);
+  static constexpr uint32_t ALGO_DEBUG1_FORCE_ALIGN_EN_MASK = (1u << 14);
+  static constexpr uint32_t ALGO_DEBUG1_FORCE_SLOW_FIRST_CYCLE_EN_MASK = (1u << 13);
+  static constexpr uint32_t ALGO_DEBUG1_FORCE_IPD_EN_MASK = (1u << 12);
+  static constexpr uint32_t ALGO_DEBUG1_FORCE_ISD_EN_MASK = (1u << 11);
+  static constexpr uint32_t ALGO_DEBUG1_FORCE_ALIGN_ANGLE_SRC_SEL_MASK = (1u << 10);
 
   static constexpr uint32_t ALGO_CTRL1_CLR_FLT_MASK = (1u << 0);
   static constexpr uint32_t ALGO_CTRL1_WATCHDOG_TICKLE_MASK = (1u << 1);

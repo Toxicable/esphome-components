@@ -1658,6 +1658,12 @@ void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint
   const bool digital_override = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_OVERRIDE_MASK) != 0u);
   const uint16_t digital_speed_raw =
       dbg1_ok ? static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16) : 0u;
+  const bool closed_loop_disabled = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_CLOSED_LOOP_DIS_MASK) != 0u);
+  const bool force_align_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ALIGN_EN_MASK) != 0u);
+  const bool force_slow_first_cycle_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_SLOW_FIRST_CYCLE_EN_MASK) != 0u);
+  const bool force_ipd_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_IPD_EN_MASK) != 0u);
+  const bool force_isd_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ISD_EN_MASK) != 0u);
+  const bool force_align_angle_src = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ALIGN_ANGLE_SRC_SEL_MASK) != 0u);
   const uint32_t isd_en = isd_ok && ((isd_config & ISD_CONFIG_ISD_EN_MASK) != 0u);
   const uint32_t isd_brake_en = isd_ok && ((isd_config & ISD_CONFIG_BRAKE_EN_MASK) != 0u);
   const uint32_t isd_brk_cfg = isd_ok && ((isd_config & ISD_CONFIG_BRK_CONFIG_MASK) != 0u);
@@ -1669,14 +1675,16 @@ void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint
 
   ESP_LOGI(TAG,
            "[%s] CTRL diag: state=0x%04X(%s) fault=%s duty=%.1f%% volt_mag=%.1f%% pin=0x%08X brake_sel=%u(%s) "
-           "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%% isd=0x%08X isd_en=%s isd_brk=%s "
-           "isd_brk_cfg=%s isd_brk_time=%u",
+           "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%% cl_dis=%s "
+           "force[align=%s slow=%s ipd=%s isd=%s ang_src=%s] isd=0x%08X isd_en=%s isd_brk=%s isd_brk_cfg=%s "
+           "isd_brk_time=%u",
            context, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
            YESNO(fault_active), duty_percent, volt_mag_percent, pin_config, static_cast<unsigned>(brake_input_value),
            this->brake_input_to_string_(brake_input_value), peri_config1, static_cast<unsigned>(direction_input_value),
            this->direction_input_to_string_(direction_input_value), algo_debug1, YESNO(digital_override),
-           digital_speed_percent, isd_config, YESNO(isd_en), YESNO(isd_brake_en), YESNO(isd_brk_cfg),
-           static_cast<unsigned>(isd_brk_time));
+           digital_speed_percent, YESNO(closed_loop_disabled), YESNO(force_align_en), YESNO(force_slow_first_cycle_en),
+           YESNO(force_ipd_en), YESNO(force_isd_en), force_align_angle_src ? "forced_align_angle" : "align_angle",
+           isd_config, YESNO(isd_en), YESNO(isd_brake_en), YESNO(isd_brk_cfg), static_cast<unsigned>(isd_brk_time));
 
   if (!(pin_ok && peri_ok && dbg1_ok && isd_ok)) {
     ESP_LOGW(TAG, "[%s] CTRL diag read warning: pin=%s peri=%s dbg1=%s isd=%s", context, YESNO(pin_ok), YESNO(peri_ok),
