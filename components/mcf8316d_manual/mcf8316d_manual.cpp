@@ -77,6 +77,14 @@ void MCF8316DRunStartupSweepButton::press_action() {
   }
 }
 
+void MCF8316DRunScopeProbeTestButton::press_action() {
+  if (this->parent_ != nullptr) {
+    if (!this->parent_->start_scope_probe_test()) {
+      ESP_LOGW(TAG, "Scope probe test could not start");
+    }
+  }
+}
+
 void MCF8316DManualComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
   uint32_t ctrl_fault = 0;
@@ -185,7 +193,7 @@ void MCF8316DManualComponent::update() {
   bool algorithm_state_valid = false;
   const bool need_algorithm_state =
       this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active || control_diag_active ||
-      this->startup_sweep_active_;
+      this->startup_sweep_active_ || this->scope_probe_test_active_;
   if (need_algorithm_state) {
     if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
       algorithm_state_valid = true;
@@ -228,6 +236,8 @@ void MCF8316DManualComponent::update() {
   }
   this->process_startup_sweep_(algorithm_state_valid, algorithm_state, fault_active, fault_state_valid, controller_ok,
                                fault_status, volt_mag_raw);
+  this->process_scope_probe_test_(algorithm_state_valid, algorithm_state, fault_active, fault_state_valid, controller_ok,
+                                  fault_status, volt_mag_raw);
 
   const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
   if (mpet_fault_active && ((this->last_mpet_diag_log_ms_ == 0U) || (millis() - this->last_mpet_diag_log_ms_ >= 2000U))) {
@@ -637,6 +647,11 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
 }
 
 bool MCF8316DManualComponent::start_startup_current_sweep() {
+  if (this->scope_probe_test_active_) {
+    ESP_LOGW(TAG, "Scope probe test active; stopping probe sequence before startup sweep");
+    this->scope_probe_test_active_ = false;
+    this->scope_probe_stage_pending_ = false;
+  }
   if (this->startup_sweep_active_) {
     ESP_LOGW(TAG, "Startup current sweep already active; restarting from step 1");
   } else {
@@ -654,6 +669,144 @@ bool MCF8316DManualComponent::start_startup_current_sweep() {
   this->startup_sweep_step_start_ms_ = 0u;
   this->startup_sweep_next_step_due_ms_ = 0u;
   return this->begin_startup_sweep_step_();
+}
+
+bool MCF8316DManualComponent::start_scope_probe_test() {
+  if (this->startup_sweep_active_) {
+    ESP_LOGW(TAG, "Startup sweep is active; stopping sweep before scope probe test");
+    this->startup_sweep_active_ = false;
+    this->startup_sweep_step_pending_ = false;
+  }
+  if (this->scope_probe_test_active_) {
+    ESP_LOGW(TAG, "Scope probe test already active; restarting from stage 1");
+  } else {
+    ESP_LOGI(TAG, "Starting scope probe test (%u stages)", static_cast<unsigned>(SCOPE_PROBE_STAGE_COUNT));
+  }
+
+  if (!this->apply_startup_tune_profile()) {
+    ESP_LOGW(TAG, "Scope probe baseline startup tune was partial; continuing");
+  }
+
+  this->scope_probe_test_active_ = true;
+  this->scope_probe_stage_pending_ = false;
+  this->scope_probe_stage_index_ = 0u;
+  this->scope_probe_stage_start_ms_ = 0u;
+  this->scope_probe_next_stage_due_ms_ = 0u;
+  return this->begin_scope_probe_stage_();
+}
+
+float MCF8316DManualComponent::scope_probe_stage_speed_percent_(uint8_t stage_index) const {
+  switch (stage_index) {
+    case 0:
+      return 5.0f;
+    case 1:
+      return 8.0f;
+    case 2:
+    default:
+      return 12.0f;
+  }
+}
+
+uint32_t MCF8316DManualComponent::scope_probe_stage_hold_ms_(uint8_t stage_index) const {
+  (void) stage_index;
+  return 7000u;
+}
+
+bool MCF8316DManualComponent::begin_scope_probe_stage_() {
+  if (!this->scope_probe_test_active_) {
+    return false;
+  }
+
+  if (this->scope_probe_stage_index_ >= SCOPE_PROBE_STAGE_COUNT) {
+    ESP_LOGI(TAG, "Scope probe test finished");
+    this->scope_probe_test_active_ = false;
+    this->scope_probe_stage_pending_ = false;
+    (void) this->set_speed_percent(0.0f);
+    return true;
+  }
+
+  const float speed_percent = this->scope_probe_stage_speed_percent_(this->scope_probe_stage_index_);
+  const uint32_t hold_ms = this->scope_probe_stage_hold_ms_(this->scope_probe_stage_index_);
+
+  if (!this->set_speed_percent(0.0f)) {
+    ESP_LOGW(TAG, "Scope probe stage %u failed to set speed to 0%% before configure",
+             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+  }
+  if (!this->set_direction_mode("cw")) {
+    ESP_LOGW(TAG, "Scope probe stage %u failed to force direction cw",
+             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+  }
+  if (!this->set_brake_override(false)) {
+    ESP_LOGW(TAG, "Scope probe stage %u failed to force brake OFF",
+             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+  }
+  this->pulse_clear_faults();
+  if (!this->set_speed_percent(speed_percent)) {
+    ESP_LOGW(TAG, "Scope probe stage %u failed to set speed to %.1f%%",
+             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), speed_percent);
+    this->scope_probe_test_active_ = false;
+    return false;
+  }
+
+  this->scope_probe_stage_start_ms_ = millis();
+  ESP_LOGI(TAG, "[scope_probe] Stage %u/%u start: speed=%.1f%% hold=%ums",
+           static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), static_cast<unsigned>(SCOPE_PROBE_STAGE_COUNT),
+           speed_percent, static_cast<unsigned>(hold_ms));
+  return true;
+}
+
+void MCF8316DManualComponent::process_scope_probe_test_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
+                                                         bool fault_state_valid, bool controller_valid,
+                                                         uint32_t controller_fault_status, uint16_t volt_mag_raw) {
+  if (!this->scope_probe_test_active_) {
+    return;
+  }
+
+  const uint32_t now = millis();
+  if (this->scope_probe_stage_pending_) {
+    if (now < this->scope_probe_next_stage_due_ms_) {
+      return;
+    }
+    if (fault_state_valid && fault_active) {
+      ESP_LOGI(TAG, "[scope_probe] waiting for fault clear before stage %u",
+               static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+      this->pulse_clear_faults();
+      this->scope_probe_next_stage_due_ms_ = now + SCOPE_PROBE_CLEAR_RETRY_MS;
+      return;
+    }
+    this->scope_probe_stage_pending_ = false;
+    (void) this->begin_scope_probe_stage_();
+    return;
+  }
+
+  const uint32_t elapsed_ms = now - this->scope_probe_stage_start_ms_;
+  const uint32_t hold_ms = this->scope_probe_stage_hold_ms_(this->scope_probe_stage_index_);
+  const float speed_percent = this->scope_probe_stage_speed_percent_(this->scope_probe_stage_index_);
+  const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
+
+  if (fault_state_valid && fault_active) {
+    const uint32_t ctrl_fault_word = controller_valid ? controller_fault_status : 0u;
+    ESP_LOGW(TAG,
+             "[scope_probe] Stage %u FAULT: speed=%.1f%% elapsed=%ums ctrl_fault=0x%08X ctrl_valid=%s state=%s volt_mag=%.1f%%",
+             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), speed_percent, static_cast<unsigned>(elapsed_ms),
+             ctrl_fault_word, YESNO(controller_valid),
+             algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
+    (void) this->set_speed_percent(0.0f);
+    this->scope_probe_stage_index_++;
+    this->scope_probe_stage_pending_ = true;
+    this->scope_probe_next_stage_due_ms_ = now + SCOPE_PROBE_INTER_STAGE_DELAY_MS;
+    return;
+  }
+
+  if (elapsed_ms >= hold_ms) {
+    ESP_LOGI(TAG, "[scope_probe] Stage %u complete: speed=%.1f%% elapsed=%ums state=%s volt_mag=%.1f%%",
+             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), speed_percent, static_cast<unsigned>(elapsed_ms),
+             algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
+    (void) this->set_speed_percent(0.0f);
+    this->scope_probe_stage_index_++;
+    this->scope_probe_stage_pending_ = true;
+    this->scope_probe_next_stage_due_ms_ = now + SCOPE_PROBE_INTER_STAGE_DELAY_MS;
+  }
 }
 
 uint32_t MCF8316DManualComponent::startup_sweep_current_code_(uint8_t step_index) const {

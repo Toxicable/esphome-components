@@ -20,6 +20,9 @@ MCF8316DApplyHwLockReportOnlyButton = mcf8316d_manual_ns.class_(
 MCF8316DRunStartupSweepButton = mcf8316d_manual_ns.class_(
     "MCF8316DRunStartupSweepButton", button.Button
 )
+MCF8316DRunScopeProbeTestButton = mcf8316d_manual_ns.class_(
+    "MCF8316DRunScopeProbeTestButton", button.Button
+)
 
 CONFIG_SCHEMA = cv.Schema(
     {
@@ -42,6 +45,10 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional("run_startup_sweep"): button.button_schema(
             MCF8316DRunStartupSweepButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+        ),
+        cv.Optional("run_scope_probe_test"): button.button_schema(
+            MCF8316DRunScopeProbeTestButton,
             entity_category=ENTITY_CATEGORY_CONFIG,
         ),
     }
@@ -69,3 +76,7 @@ async def to_code(config):
     if "run_startup_sweep" in config:
         run_startup_sweep = await button.new_button(config["run_startup_sweep"])
         cg.add(run_startup_sweep.set_parent(parent))
+
+    if "run_scope_probe_test" in config:
+        run_scope_probe_test = await button.new_button(config["run_scope_probe_test"])
+        cg.add(run_scope_probe_test.set_parent(parent))

@@ -90,6 +90,15 @@ class MCF8316DRunStartupSweepButton : public button::Button {
   MCF8316DManualComponent *parent_{nullptr};
 };
 
+class MCF8316DRunScopeProbeTestButton : public button::Button {
+ public:
+  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8316DManualComponent *parent_{nullptr};
+};
+
 class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -109,6 +118,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool apply_startup_tune_profile();
   bool apply_hw_lock_report_only_profile();
   bool start_startup_current_sweep();
+  bool start_scope_probe_test();
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
@@ -148,6 +158,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
                               bool fault_state_valid, bool controller_valid, uint32_t controller_fault_status,
                               uint16_t volt_mag_raw);
+  bool begin_scope_probe_stage_();
+  void process_scope_probe_test_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
+                                 bool fault_state_valid, bool controller_valid, uint32_t controller_fault_status,
+                                 uint16_t volt_mag_raw);
+  float scope_probe_stage_speed_percent_(uint8_t stage_index) const;
+  uint32_t scope_probe_stage_hold_ms_(uint8_t stage_index) const;
   uint32_t startup_sweep_current_code_(uint8_t step_index) const;
   float current_limit_code_to_amps_(uint32_t current_limit_code) const;
   bool should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
@@ -411,6 +427,9 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_SWEEP_STEP_TIMEOUT_MS = 2000u;
   static constexpr uint32_t STARTUP_SWEEP_INTER_STEP_DELAY_MS = 1200u;
   static constexpr uint32_t STARTUP_SWEEP_CLEAR_RETRY_MS = 250u;
+  static constexpr uint8_t SCOPE_PROBE_STAGE_COUNT = 3u;
+  static constexpr uint32_t SCOPE_PROBE_INTER_STAGE_DELAY_MS = 1500u;
+  static constexpr uint32_t SCOPE_PROBE_CLEAR_RETRY_MS = 250u;
   static constexpr uint16_t ALGORITHM_STATE_OPEN_LOOP = 0x0007u;
   static constexpr uint16_t ALGORITHM_STATE_CLOSED_LOOP_UNALIGNED = 0x0008u;
   static constexpr uint16_t ALGORITHM_STATE_CLOSED_LOOP_ALIGNED = 0x0009u;
@@ -429,12 +448,17 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool allow_retry_notice_active_{false};
   bool startup_sweep_active_{false};
   bool startup_sweep_step_pending_{false};
+  bool scope_probe_test_active_{false};
+  bool scope_probe_stage_pending_{false};
   uint16_t last_run_state_diag_value_{0xFFFFu};
   uint16_t last_control_diag_state_{0xFFFFu};
   uint8_t startup_sweep_step_index_{0};
   uint8_t startup_sweep_pass_count_{0};
+  uint8_t scope_probe_stage_index_{0};
   uint32_t startup_sweep_step_start_ms_{0};
   uint32_t startup_sweep_next_step_due_ms_{0};
+  uint32_t scope_probe_stage_start_ms_{0};
+  uint32_t scope_probe_next_stage_due_ms_{0};
   std::string last_fault_summary_{"none"};
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};
