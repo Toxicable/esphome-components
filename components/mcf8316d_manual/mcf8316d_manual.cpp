@@ -419,13 +419,25 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
 }
 
 bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
-  ESP_LOGW(TAG, "Applying HW lock report-only debug profile");
-  ESP_LOGW(TAG, "WARNING: HW/LOCK/MTR lock protective actions are disabled (report-only mode)");
+  ESP_LOGW(TAG, "Applying locks-disabled + short-align debug profile");
+  ESP_LOGW(TAG, "WARNING: LOCK/HW_LOCK/MTR_LCK protective actions are disabled for this debug mode");
 
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
     ESP_LOGW(TAG, "Failed to set speed to 0%% before applying HW lock report-only mode");
     ok = false;
+  }
+  if (!this->set_direction_mode("cw")) {
+    ESP_LOGW(TAG, "Failed to force direction to cw for locks-disabled debug mode");
+    ok = false;
+  } else if (this->direction_select_ != nullptr) {
+    this->direction_select_->publish_state("cw");
+  }
+  if (!this->set_brake_override(false)) {
+    ESP_LOGW(TAG, "Failed to force brake OFF for locks-disabled debug mode");
+    ok = false;
+  } else if (this->brake_switch_ != nullptr) {
+    this->brake_switch_->publish_state(false);
   }
 
   uint32_t before = 0;
@@ -435,7 +447,7 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   }
 
   const uint32_t mask = FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK;
-  const uint32_t value = (LOCK_REPORT_ONLY_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
+  const uint32_t value = (LOCK_DISABLED_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
   const uint32_t next = (before & ~mask) | (value & mask);
   if (next != before && !this->write_reg32(REG_FAULT_CONFIG2, next)) {
     ESP_LOGW(TAG, "FAULT_CONFIG2 write failed: 0x%08X -> 0x%08X", before, next);
@@ -463,8 +475,8 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   }
 
   const uint32_t fc1_mask = FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG1_MTR_LCK_MODE_MASK;
-  const uint32_t fc1_value = (LOCK_REPORT_ONLY_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
-                             (LOCK_REPORT_ONLY_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT);
+  const uint32_t fc1_value = (LOCK_DISABLED_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
+                             (LOCK_DISABLED_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT);
   const uint32_t fc1_next = (fc1_before & ~fc1_mask) | (fc1_value & fc1_mask);
   if (fc1_next != fc1_before && !this->write_reg32(REG_FAULT_CONFIG1, fc1_next)) {
     ESP_LOGW(TAG, "FAULT_CONFIG1 write failed: 0x%08X -> 0x%08X", fc1_before, fc1_next);
@@ -485,10 +497,37 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   }
   ok &= fc1_mode_ok;
 
+  uint32_t s1_before = 0;
+  if (!this->read_reg32(REG_MOTOR_STARTUP1, s1_before)) {
+    ESP_LOGW(TAG, "MOTOR_STARTUP1 read failed");
+    return false;
+  }
+  const uint32_t s1_mask = MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_TIME_MASK;
+  const uint32_t s1_value = (DEBUG_ALIGN_MTR_STARTUP << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) |
+                            (DEBUG_ALIGN_TIME << MOTOR_STARTUP1_ALIGN_TIME_SHIFT);
+  const uint32_t s1_next = (s1_before & ~s1_mask) | (s1_value & s1_mask);
+  if (s1_next != s1_before && !this->write_reg32(REG_MOTOR_STARTUP1, s1_next)) {
+    ESP_LOGW(TAG, "MOTOR_STARTUP1 write failed: 0x%08X -> 0x%08X", s1_before, s1_next);
+    return false;
+  }
+
+  uint32_t s1_after = 0;
+  if (!this->read_reg32(REG_MOTOR_STARTUP1, s1_after)) {
+    ESP_LOGW(TAG, "MOTOR_STARTUP1 verify read failed");
+    return false;
+  }
+  ESP_LOGI(TAG, "MOTOR_STARTUP1 mode/align-time: 0x%08X -> 0x%08X", s1_before, s1_after);
+  const bool s1_ok = (s1_after & s1_mask) == (s1_value & s1_mask);
+  if (!s1_ok) {
+    ESP_LOGW(TAG, "MOTOR_STARTUP1 verify mismatch: expected mask=0x%08X actual mask=0x%08X", (s1_value & s1_mask),
+             (s1_after & s1_mask));
+  }
+  ok &= s1_ok;
+
   if (ok) {
-    ESP_LOGI(TAG, "HW lock report-only profile applied; pulsing CLR_FLT");
+    ESP_LOGI(TAG, "Locks-disabled debug profile applied; pulsing CLR_FLT");
   } else {
-    ESP_LOGW(TAG, "HW lock report-only profile partially applied; pulsing CLR_FLT");
+    ESP_LOGW(TAG, "Locks-disabled debug profile partially applied; pulsing CLR_FLT");
   }
   this->pulse_clear_faults();
   return ok;
