@@ -162,7 +162,7 @@ void MCF8316DManualComponent::update() {
     this->handle_fault_shutdown_(force_shutdown);
   }
 
-  const uint16_t duty_raw = algo_status & ALGO_STATUS_DUTY_CMD_MASK;
+  const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
   const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
   const bool run_state_diag_active = algo_ok && duty_raw > 0u && volt_mag_raw > 0u && (!fault_state_valid || !fault_active);
   const bool control_diag_active = algo_ok && duty_raw > 8u;
@@ -1370,7 +1370,7 @@ void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint
 }
 
 void MCF8316DManualComponent::publish_algo_status_(uint32_t algo_status) {
-  const uint16_t duty_raw = algo_status & ALGO_STATUS_DUTY_CMD_MASK;
+  const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
   const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
 
   if (this->duty_cmd_percent_sensor_ != nullptr) {

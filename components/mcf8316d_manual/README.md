@@ -12,6 +12,7 @@ Optional `apply_startup_tune` button writes a practical startup profile in RAM (
 Optional `apply_hw_lock_report_only` button is a temporary diagnostic mode that sets `HW_LOCK_ILIMIT_MODE`, `LOCK_ILIMIT_MODE`, and `MTR_LCK_MODE` to `disabled` (no protective lock shutdown action), forces `direction=cw` + `brake=off`, and forces `MTR_STARTUP=align` with `ALIGN_TIME=100ms`; use only for brief no-load debugging and then run `apply_startup_tune` to restore normal `retry_hiz` modes.
 When commanded duty/voltage magnitude are non-zero and no fault is active, the component logs `[loop_run_state]` with `ALGORITHM_STATE` so startup stalls (for example stuck in `MOTOR_ALIGN`) are visible even without lock-limit faults.
 Brake and direction writes now log immediate register readback (`PIN_CONFIG` / `PERI_CONFIG1`), and commanded-run diagnostics log `[loop_control] CTRL diag` with decoded `brake_sel`/`dir_sel` and `ISD_CONFIG` fields so you can verify the chip is not being held in startup brake configuration.
+`Duty Cmd %` decodes `ALGO_STATUS[15:4]` per datasheet.
 
 ```yaml
 external_components:
