@@ -987,6 +987,7 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
   uint32_t algo_debug1 = 0;
   uint32_t algo_debug2 = 0;
   uint32_t fault_config1 = 0;
+  uint32_t fault_config2 = 0;
   uint32_t startup1 = 0;
   uint32_t startup2 = 0;
   uint32_t isd_config = 0;
@@ -997,6 +998,7 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
   const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
   const bool dbg2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
   const bool fault_cfg_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
+  const bool fault_cfg2_ok = this->read_reg32(REG_FAULT_CONFIG2, fault_config2);
   const bool startup1_ok = this->read_reg32(REG_MOTOR_STARTUP1, startup1);
   const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
   const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
@@ -1004,10 +1006,11 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
 
   ESP_LOGW(
       TAG,
-      "[%s] LOCK_LIMIT diag: ctrl=0x%08X state=0x%04X(%s) algo=0x%08X dbg1=0x%08X dbg2=0x%08X fcfg1=0x%08X s1=0x%08X "
-      "s2=0x%08X isd=0x%08X rev=0x%08X",
+      "[%s] LOCK_LIMIT diag: ctrl=0x%08X state=0x%04X(%s) algo=0x%08X dbg1=0x%08X dbg2=0x%08X fcfg1=0x%08X "
+      "fcfg2=0x%08X s1=0x%08X s2=0x%08X isd=0x%08X rev=0x%08X",
       context, controller_fault_status, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
-      algo_status, algo_debug1, algo_debug2, fault_config1, startup1, startup2, isd_config, rev_drive_config);
+      algo_status, algo_debug1, algo_debug2, fault_config1, fault_config2, startup1, startup2, isd_config,
+      rev_drive_config);
 
   this->log_mpet_entry_conditions_(context, algo_debug2);
 
@@ -1041,19 +1044,37 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
     const float lck_retry_s = static_cast<float>(kLckRetryMs[lck_retry & 0xFu]) / 1000.0f;
     const char *lock_mode_name = kLockModeName[lock_mode & 0x7u];
 
+    uint32_t hw_lock_mode = 0;
+    uint32_t hw_lock_deg = 0;
+    const char *hw_lock_mode_name = "unknown";
+    float hw_lock_deg_us = 0.0f;
+    if (fault_cfg2_ok) {
+      hw_lock_mode =
+          (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT;
+      hw_lock_deg = (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT;
+      static const float kHwLockDegUs[8] = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
+      hw_lock_mode_name = kLockModeName[hw_lock_mode & 0x7u];
+      hw_lock_deg_us = kHwLockDegUs[hw_lock_deg & 0x7u];
+    }
+
     ESP_LOGW(TAG,
              "[%s] LOCK_LIMIT fields: lock=%s hw_lock=%s ILIMIT=%u(%.3gA) LOCK_ILIMIT=%u(%.3gA) "
-             "HW_LOCK_ILIMIT=%u(%.3gA) LOCK_MODE=%u(%s) LOCK_DEG=%u(%.1fms) LCK_RETRY=%u(%.1fs)",
+             "HW_LOCK_ILIMIT=%u(%.3gA) LOCK_MODE=%u(%s) LOCK_DEG=%u(%.1fms) LCK_RETRY=%u(%.1fs) "
+             "HW_LOCK_MODE=%u(%s) HW_LOCK_DEG=%u(%.1fus)",
              context, YESNO(lock_limit), YESNO(hw_lock_limit), static_cast<unsigned>(ilimit), ilimit_a,
              static_cast<unsigned>(lock_ilimit), lock_ilimit_a, static_cast<unsigned>(hw_lock_ilimit), hw_lock_ilimit_a,
              static_cast<unsigned>(lock_mode), lock_mode_name, static_cast<unsigned>(lock_deg), lock_deg_ms,
-             static_cast<unsigned>(lck_retry), lck_retry_s);
+             static_cast<unsigned>(lck_retry), lck_retry_s, static_cast<unsigned>(hw_lock_mode), hw_lock_mode_name,
+             static_cast<unsigned>(hw_lock_deg), hw_lock_deg_us);
   }
 
-  if (!(state_ok && algo_ok && dbg1_ok && dbg2_ok && fault_cfg_ok && startup1_ok && startup2_ok && isd_ok && rev_ok)) {
-    ESP_LOGW(TAG, "[%s] LOCK_LIMIT diag read warning: state=%s algo=%s dbg1=%s dbg2=%s fcfg1=%s s1=%s s2=%s isd=%s rev=%s",
+  if (!(state_ok && algo_ok && dbg1_ok && dbg2_ok && fault_cfg_ok && fault_cfg2_ok && startup1_ok && startup2_ok &&
+        isd_ok && rev_ok)) {
+    ESP_LOGW(TAG,
+             "[%s] LOCK_LIMIT diag read warning: state=%s algo=%s dbg1=%s dbg2=%s fcfg1=%s fcfg2=%s s1=%s s2=%s "
+             "isd=%s rev=%s",
              context, YESNO(state_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(fault_cfg_ok),
-             YESNO(startup1_ok), YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
+             YESNO(fault_cfg2_ok), YESNO(startup1_ok), YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
   }
 }
 
