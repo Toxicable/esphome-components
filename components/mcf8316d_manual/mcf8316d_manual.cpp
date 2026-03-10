@@ -323,7 +323,7 @@ void MCF8316DManualComponent::pulse_watchdog_tickle() {
 }
 
 bool MCF8316DManualComponent::apply_startup_tune_profile() {
-  ESP_LOGW(TAG, "Applying startup tune profile (IPD + higher max speed + startup current tuning)");
+  ESP_LOGW(TAG, "Applying startup tune profile (slow-first-cycle + higher max speed + startup current tuning)");
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
     ESP_LOGW(TAG, "Failed to set speed to 0%% before applying startup tune");
