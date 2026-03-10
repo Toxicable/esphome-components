@@ -323,7 +323,7 @@ void MCF8316DManualComponent::pulse_watchdog_tickle() {
 }
 
 bool MCF8316DManualComponent::apply_startup_tune_profile() {
-  ESP_LOGW(TAG, "Applying startup tune profile (slow-first-cycle + higher max speed + startup current tuning)");
+  ESP_LOGW(TAG, "Applying startup tune profile (double-align + higher max speed + startup current tuning)");
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
     ESP_LOGW(TAG, "Failed to set speed to 0%% before applying startup tune");
@@ -385,10 +385,11 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
       (STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT));
   ok &= apply_masked_bits(
       "MOTOR_STARTUP2 tuning", REG_MOTOR_STARTUP2,
-      MOTOR_STARTUP2_OL_ILIMIT_MASK | MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK | MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK |
-          MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK,
+      MOTOR_STARTUP2_OL_ILIMIT_MASK | MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK | MOTOR_STARTUP2_ALIGN_ANGLE_MASK |
+          MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK | MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK,
       (STARTUP_TUNE_OL_ILIMIT << MOTOR_STARTUP2_OL_ILIMIT_SHIFT) |
           (STARTUP_TUNE_OPN_CL_HANDOFF_THR << MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) |
+          (STARTUP_TUNE_ALIGN_ANGLE << MOTOR_STARTUP2_ALIGN_ANGLE_SHIFT) |
           (STARTUP_TUNE_SLOW_FIRST_CYC_FREQ << MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT) |
           (STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL ? MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK : 0u));
   ok &= apply_masked_bits("CLOSED_LOOP4 tuning", REG_CLOSED_LOOP4, CLOSED_LOOP4_MAX_SPEED_MASK,

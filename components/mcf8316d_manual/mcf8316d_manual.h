@@ -217,6 +217,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK = (0x1Fu << 13);
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT = 13;
+  static constexpr uint32_t MOTOR_STARTUP2_ALIGN_ANGLE_MASK = (0x1Fu << 8);
+  static constexpr uint32_t MOTOR_STARTUP2_ALIGN_ANGLE_SHIFT = 8;
   static constexpr uint32_t MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK = (0xFu << 4);
   static constexpr uint32_t MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT = 4;
   static constexpr uint32_t MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK = (1u << 3);
@@ -225,10 +227,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
-  static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 3u;  // Slow first cycle startup
+  static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 1u;  // Double-align startup
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OPN_CL_HANDOFF_THR = 0x08u;
+  static constexpr uint32_t STARTUP_TUNE_ALIGN_ANGLE = 0x08u;  // 90 deg
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
   static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
