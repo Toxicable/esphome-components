@@ -51,3 +51,4 @@
 - `components/mcf8316d_manual` now supports optional `algorithm_state` text sensor and emits throttled `[loop_run_state]` logs (state+duty+volt_mag) whenever drive output is active without faults, to debug no-spin startup stalls.
 - `components/mcf8316d_manual` `sys_enable` binary sensor should decode `ALGO_STATUS[2]` (not bit 15); this flag indicates register control readiness, not literal motor spin/enable state.
 - `components/mcf8316d_manual` brake/direction setters now log register readback (`PIN_CONFIG`, `PERI_CONFIG1`), and active-command logs include `[loop_control] CTRL diag` with decoded `brake_sel` and `dir_sel` plus `ALGO_DEBUG1` override/speed command for direct control-path verification.
+- If logs stay in `MOTOR_BRAKE_ON_START` with `VOLT_MAG=0`, inspect `ISD_CONFIG`; long startup brake from `BRAKE_EN/BRK_TIME` can stall bring-up. `apply_startup_tune` now also clears `ISD_EN`, `BRAKE_EN`, and `RESYNC_EN` to bypass this path during manual debug.

@@ -234,6 +234,14 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_TIME_MASK = (0xFu << 21);
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_TIME_SHIFT = 21;
 
+  static constexpr uint32_t ISD_CONFIG_ISD_EN_MASK = (1u << 30);
+  static constexpr uint32_t ISD_CONFIG_BRAKE_EN_MASK = (1u << 29);
+  static constexpr uint32_t ISD_CONFIG_HIZ_EN_MASK = (1u << 28);
+  static constexpr uint32_t ISD_CONFIG_RESYNC_EN_MASK = (1u << 26);
+  static constexpr uint32_t ISD_CONFIG_BRK_CONFIG_MASK = (1u << 20);
+  static constexpr uint32_t ISD_CONFIG_BRK_TIME_MASK = (0xFu << 13);
+  static constexpr uint32_t ISD_CONFIG_BRK_TIME_SHIFT = 13;
+
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_MASK = (0xFu << 27);
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK = (0x1Fu << 13);
@@ -259,6 +267,11 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
   static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
+  static constexpr uint32_t STARTUP_TUNE_ISD_EN = 0u;      // disable ISD for manual startup
+  static constexpr uint32_t STARTUP_TUNE_BRAKE_EN = 0u;    // disable ISD startup brake state
+  static constexpr uint32_t STARTUP_TUNE_RESYNC_EN = 0u;   // disable re-sync path for static startup
+  static constexpr uint32_t STARTUP_TUNE_BRK_CONFIG = 0u;  // time-only brake exit if ever enabled
+  static constexpr uint32_t STARTUP_TUNE_BRK_TIME = 1u;    // 50ms
   static constexpr uint32_t LOCK_REPORT_ONLY_MODE = 6u;
   static constexpr uint32_t LOCK_DISABLED_MODE = 7u;
   static constexpr uint32_t DEBUG_ALIGN_MTR_STARTUP = 0u;  // Align startup

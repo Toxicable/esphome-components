@@ -476,6 +476,14 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
           (STARTUP_TUNE_ALIGN_ANGLE << MOTOR_STARTUP2_ALIGN_ANGLE_SHIFT) |
           (STARTUP_TUNE_SLOW_FIRST_CYC_FREQ << MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT) |
           (STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL ? MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK : 0u));
+  ok &= apply_masked_bits(
+      "ISD_CONFIG tuning", REG_ISD_CONFIG,
+      ISD_CONFIG_ISD_EN_MASK | ISD_CONFIG_BRAKE_EN_MASK | ISD_CONFIG_RESYNC_EN_MASK | ISD_CONFIG_BRK_CONFIG_MASK |
+          ISD_CONFIG_BRK_TIME_MASK,
+      (STARTUP_TUNE_ISD_EN ? ISD_CONFIG_ISD_EN_MASK : 0u) | (STARTUP_TUNE_BRAKE_EN ? ISD_CONFIG_BRAKE_EN_MASK : 0u) |
+          (STARTUP_TUNE_RESYNC_EN ? ISD_CONFIG_RESYNC_EN_MASK : 0u) |
+          (STARTUP_TUNE_BRK_CONFIG ? ISD_CONFIG_BRK_CONFIG_MASK : 0u) |
+          (STARTUP_TUNE_BRK_TIME << ISD_CONFIG_BRK_TIME_SHIFT));
   ok &= apply_masked_bits("CLOSED_LOOP4 tuning", REG_CLOSED_LOOP4, CLOSED_LOOP4_MAX_SPEED_MASK,
                           (STARTUP_TUNE_MAX_SPEED << CLOSED_LOOP4_MAX_SPEED_SHIFT));
 
@@ -1324,15 +1332,21 @@ void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint
   uint32_t pin_config = 0;
   uint32_t peri_config1 = 0;
   uint32_t algo_debug1 = 0;
+  uint32_t isd_config = 0;
   const bool pin_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
   const bool peri_ok = this->read_reg32(REG_PERI_CONFIG1, peri_config1);
   const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
+  const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
 
   const uint32_t brake_input_value = pin_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10) : 0u;
   const uint32_t direction_input_value = peri_ok ? (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK) : 0u;
   const bool digital_override = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_OVERRIDE_MASK) != 0u);
   const uint16_t digital_speed_raw =
       dbg1_ok ? static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16) : 0u;
+  const uint32_t isd_en = isd_ok && ((isd_config & ISD_CONFIG_ISD_EN_MASK) != 0u);
+  const uint32_t isd_brake_en = isd_ok && ((isd_config & ISD_CONFIG_BRAKE_EN_MASK) != 0u);
+  const uint32_t isd_brk_cfg = isd_ok && ((isd_config & ISD_CONFIG_BRK_CONFIG_MASK) != 0u);
+  const uint32_t isd_brk_time = isd_ok ? ((isd_config & ISD_CONFIG_BRK_TIME_MASK) >> ISD_CONFIG_BRK_TIME_SHIFT) : 0u;
 
   const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
   const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
@@ -1340,16 +1354,18 @@ void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint
 
   ESP_LOGI(TAG,
            "[%s] CTRL diag: state=0x%04X(%s) fault=%s duty=%.1f%% volt_mag=%.1f%% pin=0x%08X brake_sel=%u(%s) "
-           "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%%",
+           "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%% isd=0x%08X isd_en=%s isd_brk=%s "
+           "isd_brk_cfg=%s isd_brk_time=%u",
            context, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
            YESNO(fault_active), duty_percent, volt_mag_percent, pin_config, static_cast<unsigned>(brake_input_value),
            this->brake_input_to_string_(brake_input_value), peri_config1, static_cast<unsigned>(direction_input_value),
            this->direction_input_to_string_(direction_input_value), algo_debug1, YESNO(digital_override),
-           digital_speed_percent);
+           digital_speed_percent, isd_config, YESNO(isd_en), YESNO(isd_brake_en), YESNO(isd_brk_cfg),
+           static_cast<unsigned>(isd_brk_time));
 
-  if (!(pin_ok && peri_ok && dbg1_ok)) {
-    ESP_LOGW(TAG, "[%s] CTRL diag read warning: pin=%s peri=%s dbg1=%s", context, YESNO(pin_ok), YESNO(peri_ok),
-             YESNO(dbg1_ok));
+  if (!(pin_ok && peri_ok && dbg1_ok && isd_ok)) {
+    ESP_LOGW(TAG, "[%s] CTRL diag read warning: pin=%s peri=%s dbg1=%s isd=%s", context, YESNO(pin_ok), YESNO(peri_ok),
+             YESNO(dbg1_ok), YESNO(isd_ok));
   }
 }
 
