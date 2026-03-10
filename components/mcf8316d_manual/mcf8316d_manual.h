@@ -210,6 +210,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK = (0xFu << 17);
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT = 17;
+  static constexpr uint32_t MOTOR_STARTUP1_MTR_STARTUP_MASK = (0x3u << 29);
+  static constexpr uint32_t MOTOR_STARTUP1_MTR_STARTUP_SHIFT = 29;
 
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_MASK = (0xFu << 27);
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
@@ -223,11 +225,13 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_LCK_RETRY = 2u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
+  static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 2u;  // IPD startup
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OPN_CL_HANDOFF_THR = 0x0Fu;
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 4u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
+  static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
 
   static constexpr uint32_t MTR_PARAMS_R_MASK = (0xFFu << 24);
   static constexpr uint32_t MTR_PARAMS_R_SHIFT = 24;
