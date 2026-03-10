@@ -263,6 +263,190 @@ void MCF8316DManualComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Note: inter-byte delay is currently not applied with ESPHome I2C transactions");
   }
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
+  ESP_LOGCONFIG(TAG, "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
+                static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
+                static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS), static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
+                static_cast<unsigned>(DEFERRED_COMMS_RETRY_INTERVAL_MS));
+}
+
+const char *MCF8316DManualComponent::i2c_error_to_string_(i2c::ErrorCode error_code) const {
+  switch (error_code) {
+    case i2c::ERROR_OK:
+      return "ok";
+    case i2c::ERROR_INVALID_ARGUMENT:
+      return "invalid_argument";
+    case i2c::ERROR_NOT_ACKNOWLEDGED:
+      return "not_acknowledged";
+    case i2c::ERROR_TIMEOUT:
+      return "timeout";
+    case i2c::ERROR_NOT_INITIALIZED:
+      return "not_initialized";
+    case i2c::ERROR_TOO_LARGE:
+      return "too_large";
+    case i2c::ERROR_UNKNOWN:
+      return "unknown";
+    case i2c::ERROR_CRC:
+      return "crc";
+    default:
+      return "other";
+  }
+}
+
+bool MCF8316DManualComponent::probe_device_ack_(i2c::ErrorCode &error_code) const {
+  if (this->bus_ == nullptr) {
+    error_code = i2c::ERROR_NOT_INITIALIZED;
+    return false;
+  }
+
+  error_code = this->bus_->write_readv(this->address_, nullptr, 0, nullptr, 0);
+  return error_code == i2c::ERROR_OK;
+}
+
+void MCF8316DManualComponent::scan_i2c_bus_() {
+  if (this->bus_ == nullptr) {
+    ESP_LOGW(TAG, "I2C scan skipped: bus is not initialized");
+    return;
+  }
+
+  std::string discovered;
+  uint8_t device_count = 0;
+  bool target_found = false;
+  for (uint8_t address = I2C_SCAN_ADDRESS_MIN; address <= I2C_SCAN_ADDRESS_MAX; address++) {
+    const i2c::ErrorCode err = this->bus_->write_readv(address, nullptr, 0, nullptr, 0);
+    if (err == i2c::ERROR_OK) {
+      char addr_text[8];
+      std::snprintf(addr_text, sizeof(addr_text), "0x%02X", address);
+      if (!discovered.empty()) {
+        discovered += ", ";
+      }
+      discovered += addr_text;
+      device_count++;
+      if (address == this->address_) {
+        target_found = true;
+      }
+    }
+    arch_feed_wdt();
+  }
+
+  if (device_count == 0u) {
+    ESP_LOGW(TAG, "I2C scan found no ACKing devices in range 0x%02X..0x%02X",
+             static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX));
+  } else {
+    ESP_LOGI(TAG, "I2C scan found %u device(s): %s", static_cast<unsigned>(device_count), discovered.c_str());
+  }
+
+  if (target_found) {
+    ESP_LOGI(TAG, "I2C target 0x%02X was found during scan", this->address_);
+  } else {
+    ESP_LOGW(TAG, "I2C target 0x%02X was not found during scan", this->address_);
+  }
+}
+
+bool MCF8316DManualComponent::establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays) {
+  if (attempts == 0u) {
+    return false;
+  }
+
+  for (uint8_t attempt = 1u; attempt <= attempts; attempt++) {
+    i2c::ErrorCode ack_error = i2c::ERROR_UNKNOWN;
+    if (!this->probe_device_ack_(ack_error)) {
+      ESP_LOGW(TAG, "Comms attempt %u/%u: address 0x%02X probe failed: %s (%d)", static_cast<unsigned>(attempt),
+               static_cast<unsigned>(attempts), this->address_, this->i2c_error_to_string_(ack_error),
+               static_cast<int>(ack_error));
+    } else if (this->read_probe_and_publish_()) {
+      ESP_LOGI(TAG, "I2C communications established with 0x%02X (attempt %u/%u)", this->address_,
+               static_cast<unsigned>(attempt), static_cast<unsigned>(attempts));
+      return true;
+    } else {
+      ESP_LOGW(TAG, "Comms attempt %u/%u: address 0x%02X ACKed but register probe failed", static_cast<unsigned>(attempt),
+               static_cast<unsigned>(attempts), this->address_);
+    }
+
+    if (attempt < attempts && retry_delay_ms > 0u) {
+      if (log_retry_delays) {
+        ESP_LOGW(TAG, "Retrying communications in %ums", static_cast<unsigned>(retry_delay_ms));
+      }
+      delay(retry_delay_ms);
+    }
+  }
+
+  return false;
+}
+
+void MCF8316DManualComponent::process_deferred_startup_() {
+  const uint32_t now = millis();
+  const bool should_scan = this->deferred_comms_last_scan_ms_ == 0u ||
+                           (now - this->deferred_comms_last_scan_ms_) >= DEFERRED_SCAN_INTERVAL_MS;
+  if (should_scan) {
+    this->scan_i2c_bus_();
+    this->deferred_comms_last_scan_ms_ = now;
+  }
+
+  if (this->deferred_comms_last_retry_ms_ != 0u &&
+      (now - this->deferred_comms_last_retry_ms_) < DEFERRED_COMMS_RETRY_INTERVAL_MS) {
+    return;
+  }
+  this->deferred_comms_last_retry_ms_ = now;
+
+  if (!this->establish_communications_(1u, 0u, false)) {
+    this->status_set_warning();
+    return;
+  }
+
+  ESP_LOGI(TAG, "I2C communications recovered; entering normal operation");
+  this->status_clear_warning();
+  this->normal_operation_ready_ = true;
+  this->apply_post_comms_setup_();
+}
+
+void MCF8316DManualComponent::apply_post_comms_setup_() {
+  uint32_t ctrl_fault = 0;
+
+  if (this->speed_number_ != nullptr) {
+    this->speed_number_->publish_state(0.0f);
+  }
+  if (!this->set_speed_percent(0.0f)) {
+    ESP_LOGW(TAG, "Failed to force speed to 0%% during setup");
+  }
+
+  if (this->brake_switch_ != nullptr) {
+    this->brake_switch_->publish_state(true);
+  }
+  if (!this->set_brake_override(true)) {
+    ESP_LOGW(TAG, "Failed to force brake ON during setup");
+  }
+
+  if (this->direction_select_ != nullptr) {
+    this->direction_select_->publish_state("hardware");
+  }
+  if (!this->set_direction_mode("hardware")) {
+    ESP_LOGW(TAG, "Failed to force direction to hardware during setup");
+  }
+
+  if (!this->ensure_buck_current_limit_for_manual_()) {
+    ESP_LOGW(TAG, "Failed to ensure buck current limit for manual validation");
+  }
+
+  if (!this->seed_closed_loop_params_if_zero_()) {
+    ESP_LOGW(TAG, "Failed to seed one or more zero CLOSED_LOOP motor parameters");
+  }
+
+  // Force manual mode by disabling any MPET command/config bits carried over at boot.
+  if (!this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, 0)) {
+    ESP_LOGW(TAG, "Failed to disable MPET control bits in ALGO_DEBUG2");
+  } else {
+    uint32_t algo_debug2 = 0;
+    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+      ESP_LOGI(TAG, "ALGO_DEBUG2 after MPET disable: 0x%08X", algo_debug2);
+    }
+  }
+
+  if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_fault) && ((ctrl_fault & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0)) {
+    ESP_LOGW(TAG, "MPET fault latched at startup (0x%08X), attempting clear", ctrl_fault);
+    this->pulse_clear_faults();
+  }
+
+  this->log_mpet_diagnostics_("setup");
 }
 
 bool MCF8316DManualComponent::read_reg32(uint16_t offset, uint32_t &value) { return this->perform_read_(offset, value); }
