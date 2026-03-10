@@ -67,6 +67,8 @@ binary_sensor:
       # true means fault asserted (nFAULT active/low)
     sys_enable:
       name: "MCF Sys Enable"
+      # ALGO_STATUS[2] SYS_ENABLE_FLAG: 1 means register control is active
+      # (for example GUI/manual writes can control the device), not "motor is spinning".
 
 sensor:
   - platform: mcf8316d_manual

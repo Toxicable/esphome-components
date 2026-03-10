@@ -195,7 +195,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = 0x0FFFu;
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_MASK = (0x7FFFu << 16);
   static constexpr uint32_t ALGO_STATUS_VOLT_MAG_SHIFT = 16;
-  static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 15);
+  static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 2);
   static constexpr uint32_t ALGO_STATUS_MPET_R_DONE_MASK = (1u << 31);
   static constexpr uint32_t ALGO_STATUS_MPET_L_DONE_MASK = (1u << 30);
   static constexpr uint32_t ALGO_STATUS_MPET_KE_DONE_MASK = (1u << 29);
