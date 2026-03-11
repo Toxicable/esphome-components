@@ -156,7 +156,6 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   void log_mpet_diagnostics_(const char *context);
   void log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2);
   void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
-  void log_motor_lock_diagnostics_(const char *context, uint32_t controller_fault_status);
   void log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw, uint16_t volt_mag_raw,
                                 bool fault_active);
   bool apply_startup_sweep_current_limits_(uint32_t current_limit_code);
@@ -278,13 +277,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT = 13;
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK = (0x7u << 16);
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT = 16;
-  static constexpr uint32_t FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK = (0x7u << 22);
-  static constexpr uint32_t FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT = 22;
-  static constexpr uint32_t FAULT_CONFIG2_LOCK_ABN_SPEED_MASK = (0x7u << 25);
-  static constexpr uint32_t FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT = 25;
-  static constexpr uint32_t FAULT_CONFIG2_LOCK3_EN_MASK = (1u << 28);
   static constexpr uint32_t FAULT_CONFIG2_LOCK2_EN_MASK = (1u << 29);
-  static constexpr uint32_t FAULT_CONFIG2_LOCK1_EN_MASK = (1u << 30);
 
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK = (0xFu << 17);
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT = 17;
@@ -325,8 +318,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
-  static constexpr uint32_t STARTUP_TUNE_LOCK2_EN = 0u;             // disable ABN_BEMF lock during manual bring-up
-  static constexpr uint32_t STARTUP_TUNE_ABNORMAL_BEMF_THR = 7u;    // 70% (least sensitive)
+  static constexpr uint32_t STARTUP_TUNE_LOCK2_EN = 0u;  // disable ABN_BEMF lock during manual bring-up
   static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 1u;  // Double-align startup
   static constexpr uint32_t STARTUP_TUNE_ALIGN_TIME = 2u;  // 100ms
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
@@ -464,14 +456,12 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool auto_tickle_watchdog_{false};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_lock_limit_diag_log_ms_{0};
-  uint32_t last_motor_lock_diag_log_ms_{0};
   uint32_t last_buck_diag_log_ms_{0};
   uint32_t last_mpet_diag_log_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   uint32_t last_run_state_diag_log_ms_{0};
   uint32_t last_control_diag_log_ms_{0};
   bool lock_limit_prev_active_{false};
-  bool motor_lock_prev_active_{false};
   bool fault_latched_{false};
   bool allow_retry_notice_active_{false};
   bool normal_operation_ready_{false};

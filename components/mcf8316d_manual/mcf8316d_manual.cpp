@@ -230,18 +230,6 @@ void MCF8316DManualComponent::update() {
   }
   this->lock_limit_prev_active_ = lock_limit_active;
 
-  const uint32_t motor_lock_fault_mask = FAULT_MTR_LCK | FAULT_ABN_SPEED | FAULT_ABN_BEMF | FAULT_NO_MTR;
-  const bool motor_lock_active = controller_ok && ((fault_status & motor_lock_fault_mask) != 0);
-  if (motor_lock_active &&
-      (!this->motor_lock_prev_active_ || (millis() - this->last_motor_lock_diag_log_ms_ >= 2000U))) {
-    this->log_motor_lock_diagnostics_("loop_motor_lock", fault_status);
-    this->last_motor_lock_diag_log_ms_ = millis();
-  }
-  if (!motor_lock_active) {
-    this->last_motor_lock_diag_log_ms_ = 0;
-  }
-  this->motor_lock_prev_active_ = motor_lock_active;
-
   const bool buck_fault_active = gate_ok && ((gate_fault_status & (GATE_FAULT_BUCK_OCP | GATE_FAULT_BUCK_UV)) != 0);
   if (buck_fault_active &&
       ((this->last_buck_diag_log_ms_ == 0U) || (millis() - this->last_buck_diag_log_ms_ >= 2000U))) {
@@ -660,12 +648,10 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
           (STARTUP_TUNE_MTR_LCK_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT));
   ok &= apply_masked_bits(
       "FAULT_CONFIG2 tuning", REG_FAULT_CONFIG2,
-      FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG2_LOCK2_EN_MASK |
-          FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK,
+      FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG2_LOCK2_EN_MASK,
       (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) |
           (STARTUP_TUNE_HW_LOCK_ILIMIT_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) |
-          (STARTUP_TUNE_LOCK2_EN ? FAULT_CONFIG2_LOCK2_EN_MASK : 0u) |
-          (STARTUP_TUNE_ABNORMAL_BEMF_THR << FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT));
+          (STARTUP_TUNE_LOCK2_EN ? FAULT_CONFIG2_LOCK2_EN_MASK : 0u));
   ok &= apply_masked_bits(
       "MOTOR_STARTUP1 tuning", REG_MOTOR_STARTUP1,
       MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_TIME_MASK | MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
@@ -1874,96 +1860,6 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
              context, YESNO(state_ok), YESNO(csa_fb_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(cl1_ok),
              YESNO(dev2_ok), YESNO(fault_cfg_ok), YESNO(fault_cfg2_ok), YESNO(gd1_ok), YESNO(startup1_ok),
              YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
-  }
-}
-
-void MCF8316DManualComponent::log_motor_lock_diagnostics_(const char *context, uint32_t controller_fault_status) {
-  uint16_t algorithm_state = 0;
-  uint32_t algo_status = 0;
-  uint32_t fault_config1 = 0;
-  uint32_t fault_config2 = 0;
-  uint32_t startup2 = 0;
-  uint32_t closed_loop4 = 0;
-
-  const bool state_ok = this->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
-  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
-  const bool fault_cfg1_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
-  const bool fault_cfg2_ok = this->read_reg32(REG_FAULT_CONFIG2, fault_config2);
-  const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
-  const bool cl4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
-
-  ESP_LOGW(TAG,
-           "[%s] MTR_LCK diag: ctrl=0x%08X state=0x%04X(%s) algo=0x%08X fcfg1=0x%08X fcfg2=0x%08X s2=0x%08X "
-           "cl4=0x%08X",
-           context, controller_fault_status, static_cast<unsigned>(algorithm_state),
-           this->algorithm_state_to_string_(algorithm_state), algo_status, fault_config1, fault_config2, startup2,
-           closed_loop4);
-
-  if (fault_cfg1_ok && fault_cfg2_ok && startup2_ok && cl4_ok) {
-    static const char *const kLockModeName[8] = {"latched_hiz",      "latched_ls_brake", "latched_hs_brake",
-                                                 "retry_hiz",         "retry_ls_brake",   "retry_hs_brake",
-                                                 "report_only",       "disabled"};
-    static const uint16_t kLckRetryMs[16] = {300,   500,   1000, 2000, 3000, 4000, 5000, 6000,
-                                             7000,  8000,  9000, 10000, 11000, 12000, 13000, 14000};
-    static const uint16_t kLockAbnSpeedPct[8] = {130, 140, 150, 160, 170, 180, 190, 200};
-    static const float kAbnormalBemfPct[8] = {40.0f, 45.0f, 50.0f, 55.0f, 60.0f, 65.0f, 67.5f, 70.0f};
-    static const float kSlowFirstCyclePct[16] = {0.1f, 0.3f, 0.5f, 0.7f, 1.0f, 1.5f, 2.0f, 2.5f,
-                                                 3.0f, 4.0f, 5.0f, 7.5f, 10.0f, 15.0f, 20.0f, 25.0f};
-
-    const bool mtr_lck = (controller_fault_status & FAULT_MTR_LCK) != 0;
-    const bool abn_speed = (controller_fault_status & FAULT_ABN_SPEED) != 0;
-    const bool abn_bemf = (controller_fault_status & FAULT_ABN_BEMF) != 0;
-    const bool no_mtr = (controller_fault_status & FAULT_NO_MTR) != 0;
-
-    const bool lock1_en = (fault_config2 & FAULT_CONFIG2_LOCK1_EN_MASK) != 0;
-    const bool lock2_en = (fault_config2 & FAULT_CONFIG2_LOCK2_EN_MASK) != 0;
-    const bool lock3_en = (fault_config2 & FAULT_CONFIG2_LOCK3_EN_MASK) != 0;
-    const uint32_t lock_abn_speed =
-        (fault_config2 & FAULT_CONFIG2_LOCK_ABN_SPEED_MASK) >> FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT;
-    const uint32_t abn_bemf_thr =
-        (fault_config2 & FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK) >> FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT;
-
-    const uint32_t mtr_lck_mode =
-        (fault_config1 & FAULT_CONFIG1_MTR_LCK_MODE_MASK) >> FAULT_CONFIG1_MTR_LCK_MODE_SHIFT;
-    const uint32_t lck_retry = (fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT;
-    const char *mtr_lck_mode_name = kLockModeName[mtr_lck_mode & 0x7u];
-    const float lck_retry_s = static_cast<float>(kLckRetryMs[lck_retry & 0xFu]) / 1000.0f;
-
-    const bool auto_handoff = (startup2 & MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK) != 0;
-    const uint32_t handoff_code =
-        (startup2 & MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK) >> MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT;
-    const uint32_t slow_first_code =
-        (startup2 & MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK) >> MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT;
-    const uint32_t max_speed = (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT;
-
-    float handoff_pct = 0.0f;
-    if (handoff_code <= 0x13u) {
-      handoff_pct = static_cast<float>(handoff_code + 1u);
-    } else {
-      handoff_pct = 22.5f + (static_cast<float>(handoff_code) - 20.0f) * 2.5f;
-    }
-    const float max_speed_hz = static_cast<float>(max_speed) / 6.0f;
-    const float handoff_hz = max_speed_hz * (handoff_pct / 100.0f);
-    const float slow_first_pct = kSlowFirstCyclePct[slow_first_code & 0xFu];
-    const float slow_first_hz = max_speed_hz * (slow_first_pct / 100.0f);
-
-    ESP_LOGI(TAG,
-             "[%s] MTR_LCK fields: mtr_lck=%s abn_speed=%s abn_bemf=%s no_mtr=%s lock_en[speed=%s bemf=%s no_mtr=%s] "
-             "MTR_LCK_MODE=%u(%s) LCK_RETRY=%u(%.1fs) LOCK_ABN_SPEED=%u(%u%%) ABN_BEMF_THR=%u(%.1f%%) "
-             "AUTO_HANDOFF=%s OPN_CL_HANDOFF_THR=%u(%.1f%%/%.1fHz) SLOW_FIRST_CYC_FREQ=%u(%.1f%%/%.1fHz) "
-             "MAX_SPEED=%u(%.1fHz)",
-             context, YESNO(mtr_lck), YESNO(abn_speed), YESNO(abn_bemf), YESNO(no_mtr), YESNO(lock1_en), YESNO(lock2_en),
-             YESNO(lock3_en), static_cast<unsigned>(mtr_lck_mode), mtr_lck_mode_name, static_cast<unsigned>(lck_retry),
-             lck_retry_s, static_cast<unsigned>(lock_abn_speed), static_cast<unsigned>(kLockAbnSpeedPct[lock_abn_speed & 0x7u]),
-             static_cast<unsigned>(abn_bemf_thr), kAbnormalBemfPct[abn_bemf_thr & 0x7u], YESNO(auto_handoff),
-             static_cast<unsigned>(handoff_code), handoff_pct, handoff_hz, static_cast<unsigned>(slow_first_code),
-             slow_first_pct, slow_first_hz, static_cast<unsigned>(max_speed), max_speed_hz);
-  }
-
-  if (!(state_ok && algo_ok && fault_cfg1_ok && fault_cfg2_ok && startup2_ok && cl4_ok)) {
-    ESP_LOGW(TAG, "[%s] MTR_LCK diag read warning: state=%s algo=%s fcfg1=%s fcfg2=%s s2=%s cl4=%s", context,
-             YESNO(state_ok), YESNO(algo_ok), YESNO(fault_cfg1_ok), YESNO(fault_cfg2_ok), YESNO(startup2_ok),
-             YESNO(cl4_ok));
   }
 }
 
