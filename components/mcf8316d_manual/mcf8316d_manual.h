@@ -18,6 +18,15 @@ namespace mcf8316d_manual {
 
 class MCF8316DManualComponent;
 
+enum class MotorTuneParameter : uint8_t {
+  MOTOR_RES,
+  MOTOR_IND,
+  MOTOR_BEMF_CONST,
+  SPEED_LOOP_KP,
+  SPEED_LOOP_KI,
+  MAX_SPEED,
+};
+
 class MCF8316DBrakeSwitch : public switch_::Switch {
  public:
   void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
@@ -36,13 +45,17 @@ class MCF8316DDirectionSelect : public select::Select {
   MCF8316DManualComponent *parent_{nullptr};
 };
 
-class MCF8316DSpeedNumber : public number::Number {
+class MCF8316DNumber : public number::Number {
  public:
   void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_is_speed_command(bool is_speed_command) { is_speed_command_ = is_speed_command; }
+  void set_tune_parameter(MotorTuneParameter parameter) { tune_parameter_ = parameter; }
 
  protected:
   void control(float value) override;
   MCF8316DManualComponent *parent_{nullptr};
+  bool is_speed_command_{true};
+  MotorTuneParameter tune_parameter_{MotorTuneParameter::MOTOR_RES};
 };
 
 class MCF8316DClearFaultsButton : public button::Button {
@@ -99,6 +112,15 @@ class MCF8316DRunScopeProbeTestButton : public button::Button {
   MCF8316DManualComponent *parent_{nullptr};
 };
 
+class MCF8316DCommitEepromButton : public button::Button {
+ public:
+  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8316DManualComponent *parent_{nullptr};
+};
+
 class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -119,13 +141,15 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   bool apply_hw_lock_report_only_profile();
   bool start_startup_current_sweep();
   bool start_scope_probe_test();
+  bool commit_shadow_registers_to_eeprom();
+  bool set_motor_tune_parameter(MotorTuneParameter parameter, uint32_t value);
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
 
   void set_brake_switch(MCF8316DBrakeSwitch *sw) { brake_switch_ = sw; }
   void set_direction_select(MCF8316DDirectionSelect *sel) { direction_select_ = sel; }
-  void set_speed_number(MCF8316DSpeedNumber *num) { speed_number_ = num; }
+  void set_speed_number(MCF8316DNumber *num) { speed_number_ = num; }
   void set_fault_active_binary_sensor(binary_sensor::BinarySensor *s) { fault_active_binary_sensor_ = s; }
   void set_sys_enable_binary_sensor(binary_sensor::BinarySensor *s) { sys_enable_binary_sensor_ = s; }
   void set_vm_voltage_sensor(sensor::Sensor *s) { vm_voltage_sensor_ = s; }
@@ -208,6 +232,8 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_CSA_GAIN_FEEDBACK = 0x046C;
   static constexpr uint16_t REG_VOLTAGE_GAIN_FEEDBACK = 0x0477;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x047C;
+  static constexpr uint32_t ALGO_CTRL1_EEPROM_WRITE_TRIGGER = 0x8A500000u;
+  static constexpr uint32_t ALGO_CTRL1_EEPROM_WRITE_BUSY_MASK = (1u << 31);
 
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 10);
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_BRAKE = (0x1u << 10);
@@ -494,7 +520,7 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
 
   MCF8316DBrakeSwitch *brake_switch_{nullptr};
   MCF8316DDirectionSelect *direction_select_{nullptr};
-  MCF8316DSpeedNumber *speed_number_{nullptr};
+  MCF8316DNumber *speed_number_{nullptr};
   binary_sensor::BinarySensor *fault_active_binary_sensor_{nullptr};
   binary_sensor::BinarySensor *sys_enable_binary_sensor_{nullptr};
   sensor::Sensor *vm_voltage_sensor_{nullptr};
