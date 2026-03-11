@@ -1,68 +1,25 @@
 ## Continuous learning
-- When you learn new project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
+- When you learn new **repo-wide** project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
+- When you learn new **component-specific** knowledge, update that component's `components/<name>/AGENTS_KNOWLEDGE.md` before finishing.
+
+## Component knowledge files (required)
+- Before working in `components/<name>/`, read `components/<name>/AGENTS_KNOWLEDGE.md` if it exists and follow it as component-scoped guidance.
+- Keep component-specific notes out of this root file when possible; store them in the component's own `AGENTS_KNOWLEDGE.md`.
 
 ## Repo tips
 - Source components live under `components/`; prefer scoped changes there unless asked otherwise.
 - Run `./check.bash` to perform `clangd --check` over C/C++ sources (or pass a file path for a single-file check).
 - Run `./check_py.bash` to syntax-check Python files via `py_compile` without creating `__pycache__` artifacts in the repo.
 
-## Learned project notes
-- `components/bq769x0` now uses an ultra-simple YAML config: required `cell_count` (fixed to 4) and `chemistry` (`liion_lipo`), with SOC defaults hardcoded in C++. 
+## Cross-component learned project notes
 - Component READMEs should present a single configuration example with optional items commented out instead of separate basic/full examples.
-- `components/bq769x0` auto-loads sensor/binary_sensor/select/button to keep optional header includes available, and ships a local crc8 helper header so external builds don't need shared helpers (shared crc8 helper removed).
-- `components/bq769x0` exposes `mode` as a select that writes CHG_ON/DSG_ON with options `standby`, `charge`, `discharge`, and `charge+discharge`.
-- `components/bq769x0` replaces `fault`/`device_ready` binary sensors with an `alerts` text sensor (`none`, `protection`, `device`, `protection+device`) and adds `power_path_state` for live CHG/DSG state; `power_path` select now uses `off`, `charge`, `discharge`, `bidirectional`.
-- For 4S BQ76920 wiring, the component maps cells to VC1/VC2/VC3/VC5 and expects VC4 shorted to VC3 per TI Table 9-2.
-- CRC-enabled BQ769x0 variants (e.g., BQ7692003) require CRC reads; auto-detection should try CRC first and fall back to non-CRC.
-- Quick CRC sanity check: if VCx_LO equals crc8([read_addr, VCx_HI]), you're reading CRC as data (CRC mode needed).
 - Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.
 - Validate any chip assumptions against the datasheet before implementing or documenting behavior.
 - `tools/pdf_to_text.py` extracts verbatim text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
 - Devcontainer installs `pypdf` alongside `esphome` for the PDF ingestion tool.
 - Devcontainer shells default to the ESP-IDF Python venv; Python deps needed at runtime should be installed into that env (Dockerfile sources `export.sh` before installing).
-- `components/fdc1004` is a `sensor` platform with optional `cin1`..`cin4` sensors; each channel supports optional `capdac` (0..31 steps at 3.125pF/step), `sample_rate` accepts 100/200/400 S/s, init retries if the device is unavailable at boot, optional `zero_now` button taring to current readings, and optional `cin*_offset` sensors for live tare offsets.
-- `components/bq25798` is a top-level polling component defaulting to address `0x6B`, `update_interval: 1s`, `disable_watchdog: true`; it can publish ADC sensors (`ibus_current`, `ibat_current`, `vbus_voltage`, `vbat_voltage`, `vsys_voltage`, `ts_percent`, `die_temperature`), text status sensors (`charge_status`, `vbus_status`, `status_flags`), split status binary sensors (`pg_good`, `vbus_present`, `vbat_present`, `watchdog_expired`, `iindpm_active`, `vindpm_active`, `thermal_regulation`, `vsys_regulation`, `ts_cold`, `ts_cool`, `ts_warm`, `ts_hot`), controls (`charge_enable`, `hiz_mode`, `otg_mode`, `watchdog` select), and buttons (`watchdog_reset`, `dump_registers`) while still logging status bytes `0x1B..0x1F` and ADC raws.
-- `components/bq25798` flag entities (`status_flags` text + split status binary sensors) should use `entity_category: diagnostic`.
 - ESPHome `i2c::I2CDevice::write_read()` returns `i2c::ErrorCode` (not bool); always compare to `i2c::ERROR_OK` or reads will be inverted.
 - ESPHome I2C `ErrorCode` value `2` maps to `ERROR_NOT_ACKNOWLEDGED` (target did not ACK address/data), useful when logs print numeric errors only.
 - Component READMEs should include an `external_components` snippet; add an explicit `i2c` block when the component depends on I2C.
 - README `external_components` examples should use `source: github://Toxicable/esphome-components@main` with `refresh: 0s`, and list the specific component in `components: [ ... ]`.
-- `components/mcf8316d_manual` adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), and fault-triggered speed shutdown that defers lock-family handling to the configured lock modes.
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
-- `components/mcf8316d_manual` should follow the repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
-- `components/mcf8316d_manual` VM voltage decode currently uses an 11-bit field from `REG_VM_VOLTAGE` (`bits 26:16`) with scaling `60/2048`, and the debug log prints both `adc8` and `adc_q11` to help validate against measured VM.
-- `components/mcf8316d_manual` `fault_active` should mirror asserted `nFAULT` behavior using gate + controller summary bits (`GATE_DRIVER_FAULT_STATUS[31]` OR `CONTROLLER_FAULT_STATUS[31]`), and controller detail bits are at their datasheet positions (for example `WATCHDOG_FAULT` is bit 3, not bit 1).
-- `components/mcf8316d_manual` `fault_summary` now combines decoded gate-driver + controller fault bits, and the component logs transitions as `Active faults: ...` / `Faults cleared` even without a configured text sensor.
-- `components/mcf8316d_manual` clear-fault flow now logs before/after gate+controller raw status and republishes `fault_summary` immediately; if only aggregate bits are set it uses fallback labels `DRV_FAULT_ACTIVE` / `CTRL_FAULT_ACTIVE` instead of `none`.
-- `components/mcf8316d_manual` MPET startup diagnostics now log `ALGORITHM_STATE`, `ALGO_DEBUG2` MPET control bits, `ALGO_STATUS_MPET` completion bits, and `MTR_PARAMS`; these logs emit once at setup and periodically while MPET faults are active.
-- `components/mcf8316d_manual` setup now force-clears `ALGO_DEBUG2` MPET bits (`MPET_CMD/R/L/KE/MECH/WRITE_SHADOW`) and triggers a startup fault clear if MPET fault bits are latched, to keep manual validation from auto-entering MPET.
-- `components/mcf8316d_manual` now emits `LOCK_LIMIT` diagnostics on event edges (and throttled while active), logging `ALGORITHM_STATE`, `ALGO_STATUS`, `ALGO_DEBUG1/2`, `FAULT_CONFIG1`, startup config (`ISD/REV/MOTOR_STARTUP1/2`), and decoded lock-threshold fields.
-- `components/mcf8316d_manual` host-side shutdown now checks `FAULT_CONFIG1/2` lock modes and avoids forcing `speed=0%` for lock-family faults (`LOCK_LIMIT`, `HW_LOCK_LIMIT`, `MTR_LCK`, `ABN_SPEED`, `ABN_BEMF`, `NO_MTR`) when the chip mode is `retry_*`, `report_only`, or `disabled`; gate-driver and other persistent controller faults still force shutdown.
-- `components/mcf8316d_manual` can still enter MPET on non-zero speed even with MPET bits cleared when `CLOSED_LOOP2/3/4` shadow fields are zero (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, or speed-loop `Kp/Ki`); diagnostics now log these trigger conditions.
-- `components/mcf8316d_manual` now seeds zero `CLOSED_LOOP2/3/4` fields (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, `SPD_LOOP_KP`, `SPD_LOOP_KI`) with minimal non-zero shadow defaults during setup to avoid forced MPET entry on blank configs (no EEPROM write).
-- `components/mcf8316d_manual` now logs BUCK fault diagnostics (`GD_CONFIG2` decode: `BUCK_DIS`, `BUCK_PS_DIS`, `BUCK_CL`, `BUCK_SEL`) when `DRV_BUCK_OCP`/`DRV_BUCK_UV` are active and after `clear_faults`; these faults are condition-active and may not clear with `CLR_FLT` until rail/load issues are fixed.
-- `components/mcf8316d_manual` setup now forces `GD_CONFIG2.BUCK_CL` to `600mA` (clears the `BUCK_CL` bit in shadow register) for manual validation to avoid immediate `DRV_BUCK_OCP/DRV_BUCK_UV` from the 150mA default on loaded buck rails.
-- `components/mcf8316d_manual/mcf8316d.pdf` is the local MCF8316D datasheet source; extracted Markdown is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).
-- MCF8316D datasheet `CLOSED_LOOP3` defines `CURR_LOOP_KP=0` and `CURR_LOOP_KI=0` as valid auto-calculation mode (not necessarily a misconfiguration by itself).
-- For `LOCK_LIMIT` startup debugging, decode `MOTOR_STARTUP1/2` alongside `FAULT_CONFIG1`: very small `LOCK_ILIMIT_DEG` (for example `0.2ms`) and low `ALIGN_OR_SLOW_CURRENT_ILIMIT`/`OL_ILIMIT` (for example `1.5A`) are common causes of immediate retry-loop faults on higher-inertia outrunners.
-- `components/mcf8316d_manual` now supports an optional `apply_startup_tune` button that forces `speed=0%`, `direction=cw`, `brake=off`, writes a RAM-only startup profile (`FAULT_CONFIG1`, `FAULT_CONFIG2`, `MOTOR_STARTUP1`, `MOTOR_STARTUP2`, `CLOSED_LOOP4`) including `MTR_STARTUP=double_align`, `ALIGN_ANGLE=90°`, `MAX_SPEED=0x2710`, `HW_LOCK_ILIMIT=8A`, `HW_LOCK_ILIMIT_DEG=7us`, then pulses `CLR_FLT`.
-- For slow-first-cycle startup, `SLOW_FIRST_CYC_FREQ` is a percentage of `MAX_SPEED`; when raising `MAX_SPEED`, reduce `SLOW_FIRST_CYC_FREQ` accordingly (for example to `0.3%`) to avoid excessive first-cycle electrical speed and immediate `HW_LOCK_LIMIT`.
-- `components/mcf8316d_manual` now also supports an optional `apply_hw_lock_report_only` debug button that sets lock protection modes to disabled (`FAULT_CONFIG2.HW_LOCK_ILIMIT_MODE`, `FAULT_CONFIG1.LOCK_ILIMIT_MODE`, `FAULT_CONFIG1.MTR_LCK_MODE`), forces `direction=cw` + `brake=off`, and forces `MTR_STARTUP=align` with short `ALIGN_TIME` for temporary no-load diagnostics, then pulses `CLR_FLT`.
-- `components/mcf8316d_manual` `apply_startup_tune` now explicitly restores normal lock protection modes to `retry_hiz` (`HW_LOCK_ILIMIT_MODE`, `LOCK_ILIMIT_MODE`, `MTR_LCK_MODE`), so running startup tune exits report-only debug mode.
-- `components/mcf8316d_manual` now supports optional `algorithm_state` text sensor and emits throttled `[loop_run_state]` logs (state+duty+volt_mag) whenever drive output is active without faults, to debug no-spin startup stalls.
-- `components/mcf8316d_manual` `sys_enable` binary sensor should decode `ALGO_STATUS[2]` (not bit 15); this flag indicates register control readiness, not literal motor spin/enable state.
-- `components/mcf8316d_manual` brake/direction setters now log register readback (`PIN_CONFIG`, `PERI_CONFIG1`), and active-command logs include `[loop_control] CTRL diag` with decoded `brake_sel` and `dir_sel` plus `ALGO_DEBUG1` override/speed command for direct control-path verification.
-- `components/mcf8316d_manual` `[loop_control] CTRL diag` now also decodes `ALGO_DEBUG1` bring-up flags (`CLOSED_LOOP_DIS`, `FORCE_ALIGN/SLOW_FIRST_CYCLE/IPD/ISD`, and align-angle source) so open-loop/forced-state debug settings are explicit in logs.
-- If logs stay in `MOTOR_BRAKE_ON_START` with `VOLT_MAG=0`, inspect `ISD_CONFIG`; long startup brake from `BRAKE_EN/BRK_TIME` can stall bring-up. `apply_startup_tune` now also clears `ISD_EN`, `BRAKE_EN`, and `RESYNC_EN` to bypass this path during manual debug.
-- `components/mcf8316d_manual` `Duty Cmd %` should decode `ALGO_STATUS` bits `[15:4]` (shift 4), not bits `[11:0]`.
-- `components/mcf8316d_manual` now supports an optional `run_startup_sweep` button that auto-tests four startup current-limit steps (`1.0A`, `1.5A`, `2.0A`, `2.5A`) at fixed speed and logs PASS/FAIL/TIMEOUT per step using `ALGORITHM_STATE` + fault status.
-- `components/mcf8316d_manual` startup sweep now enforces inter-step cooldown and waits for fault clear (with periodic `CLR_FLT` retry) before launching the next step, to avoid stale latched faults contaminating later sweep steps.
-- For cleaner field logs with `logger: level: INFO`, `mcf8316d_manual` now emits lock-limit retry notice at INFO only on edge transitions, and state/control diagnostic lines are emitted on state changes rather than periodic 1s spam.
-- `components/mcf8316d_manual` lock-limit diagnostics now include a `[loop_lock_limit] DRIVE cfg` line decoding `CLOSED_LOOP1.PWM_FREQ_OUT`, `DEVICE_CONFIG2` dynamic gain bits, `GD_CONFIG1.CSA_GAIN`, and `CSA_GAIN_FEEDBACK` for current-path troubleshooting.
-- `components/mcf8316d_manual` now also emits `[loop_motor_lock]` diagnostics at INFO/WARN for `MTR_LCK`/`ABN_SPEED`/`ABN_BEMF`/`NO_MTR` with decoded `FAULT_CONFIG1/2` lock enables, thresholds, lock mode/retry, and startup handoff fields (`AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`, `SLOW_FIRST_CYC_FREQ`, `MAX_SPEED`).
-- `components/mcf8316d_manual` `apply_startup_tune` now also sets `CLOSED_LOOP1.PWM_FREQ_OUT=60kHz`, enables `DEVICE_CONFIG2.DYNAMIC_CSA_GAIN_EN`, and sets `GD_CONFIG1.CSA_GAIN=0` (0.15V/A baseline) to improve low-inductance startup debug.
-- `components/mcf8316d_manual` `apply_startup_tune` now also forces `MOTOR_STARTUP1.ALIGN_TIME=100ms` so stale debug values (for example `ALIGN_TIME=1s`) do not persist across tuning runs.
-- `components/mcf8316d_manual` `apply_startup_tune` now explicitly clears `MOTOR_STARTUP2.AUTO_HANDOFF_EN` (`0`) so the configured `OPN_CL_HANDOFF_THR` is always honored during manual startup debugging.
-- `components/mcf8316d_manual` `apply_startup_tune` now disables ABN_BEMF lock (`FAULT_CONFIG2.LOCK2_EN=0`) and sets `ABNORMAL_BEMF_THR=70%` during manual bring-up to avoid immediate `MTR_LCK,ABN_BEMF` trip loops with untuned motor constants.
-- `components/mcf8316d_manual` now supports optional `run_scope_probe_test` button for a non-blocking low-speed probe sequence (`5%`, `8%`, `12%`) with per-stage hold, inter-stage cooldown, and fault-clear retry to simplify scope capture timing.
-- `components/mcf8316d_manual` startup gates normal operation on I2C preflight with scan range `0x00..0x7E`, but scan failures are warning-only (no `mark_failed()`); component stays in deferred retry mode until comms recover.
