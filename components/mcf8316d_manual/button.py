@@ -1,7 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import button
-from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG
+from esphome.const import ENTITY_CATEGORY_CONFIG
 
 from . import MCF8316DManualComponent, mcf8316d_manual_ns
 
@@ -22,6 +22,9 @@ MCF8316DRunStartupSweepButton = mcf8316d_manual_ns.class_(
 )
 MCF8316DRunScopeProbeTestButton = mcf8316d_manual_ns.class_(
     "MCF8316DRunScopeProbeTestButton", button.Button
+)
+MCF8316DCommitEepromButton = mcf8316d_manual_ns.class_(
+    "MCF8316DCommitEepromButton", button.Button
 )
 
 CONFIG_SCHEMA = cv.Schema(
@@ -49,6 +52,10 @@ CONFIG_SCHEMA = cv.Schema(
         ),
         cv.Optional("run_scope_probe_test"): button.button_schema(
             MCF8316DRunScopeProbeTestButton,
+            entity_category=ENTITY_CATEGORY_CONFIG,
+        ),
+        cv.Optional("commit_eeprom"): button.button_schema(
+            MCF8316DCommitEepromButton,
             entity_category=ENTITY_CATEGORY_CONFIG,
         ),
     }
@@ -80,3 +87,7 @@ async def to_code(config):
     if "run_scope_probe_test" in config:
         run_scope_probe_test = await button.new_button(config["run_scope_probe_test"])
         cg.add(run_scope_probe_test.set_parent(parent))
+
+    if "commit_eeprom" in config:
+        commit_eeprom = await button.new_button(config["commit_eeprom"])
+        cg.add(commit_eeprom.set_parent(parent))

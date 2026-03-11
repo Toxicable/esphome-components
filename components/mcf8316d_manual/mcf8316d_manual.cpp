@@ -34,12 +34,33 @@ void MCF8316DDirectionSelect::control(const std::string &value) {
   this->publish_state(value);
 }
 
-void MCF8316DSpeedNumber::control(float value) {
-  if (this->parent_ == nullptr || !this->parent_->set_speed_percent(value)) {
-    ESP_LOGW(TAG, "Failed to set speed command");
+void MCF8316DNumber::control(float value) {
+  if (this->parent_ == nullptr) {
+    ESP_LOGW(TAG, "Failed to set number value: no parent");
     return;
   }
-  this->publish_state(value);
+
+  bool ok = false;
+  if (this->is_speed_command_) {
+    ok = this->parent_->set_speed_percent(value);
+    if (!ok) {
+      ESP_LOGW(TAG, "Failed to set speed command");
+    }
+  } else {
+    if (std::isnan(value)) {
+      ESP_LOGW(TAG, "Failed to set motor tuning value: NaN");
+      return;
+    }
+    const uint32_t tune_value = static_cast<uint32_t>(lroundf(value));
+    ok = this->parent_->set_motor_tune_parameter(this->tune_parameter_, tune_value);
+    if (!ok) {
+      ESP_LOGW(TAG, "Failed to set motor tuning value");
+    }
+  }
+
+  if (ok) {
+    this->publish_state(value);
+  }
 }
 
 void MCF8316DClearFaultsButton::press_action() {
@@ -82,6 +103,14 @@ void MCF8316DRunScopeProbeTestButton::press_action() {
   if (this->parent_ != nullptr) {
     if (!this->parent_->start_scope_probe_test()) {
       ESP_LOGW(TAG, "Scope probe test could not start");
+    }
+  }
+}
+
+void MCF8316DCommitEepromButton::press_action() {
+  if (this->parent_ != nullptr) {
+    if (!this->parent_->commit_shadow_registers_to_eeprom()) {
+      ESP_LOGW(TAG, "EEPROM commit failed");
     }
   }
 }
@@ -519,6 +548,100 @@ bool MCF8316DManualComponent::set_direction_mode(const std::string &direction_mo
     ESP_LOGI(TAG, "Direction write: request=%s peri_cfg1=0x%08X dir_input=%u(%s)", direction_mode.c_str(), peri_config1,
              static_cast<unsigned>(direction_input_value), this->direction_input_to_string_(direction_input_value));
   }
+  return true;
+}
+
+bool MCF8316DManualComponent::set_motor_tune_parameter(MotorTuneParameter parameter, uint32_t value) {
+  uint16_t reg = REG_CLOSED_LOOP2;
+  uint32_t mask = 0;
+  uint32_t shifted_value = 0;
+  const char *label = "";
+
+  switch (parameter) {
+    case MotorTuneParameter::MOTOR_RES:
+      reg = REG_CLOSED_LOOP2;
+      mask = CLOSED_LOOP2_MOTOR_RES_MASK;
+      shifted_value = (value << CLOSED_LOOP2_MOTOR_RES_SHIFT);
+      label = "MOTOR_RES";
+      break;
+    case MotorTuneParameter::MOTOR_IND:
+      reg = REG_CLOSED_LOOP2;
+      mask = CLOSED_LOOP2_MOTOR_IND_MASK;
+      shifted_value = (value << CLOSED_LOOP2_MOTOR_IND_SHIFT);
+      label = "MOTOR_IND";
+      break;
+    case MotorTuneParameter::MOTOR_BEMF_CONST:
+      reg = REG_CLOSED_LOOP3;
+      mask = CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK;
+      shifted_value = (value << CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
+      label = "MOTOR_BEMF_CONST";
+      break;
+    case MotorTuneParameter::SPEED_LOOP_KP: {
+      const uint32_t kp = value & 0x3FFu;
+      uint32_t cl3 = 0;
+      uint32_t cl4 = 0;
+      if (!this->read_reg32(REG_CLOSED_LOOP3, cl3) || !this->read_reg32(REG_CLOSED_LOOP4, cl4)) {
+        ESP_LOGW(TAG, "Failed to read CLOSED_LOOP3/4 for SPEED_LOOP_KP");
+        return false;
+      }
+      const uint32_t cl3_next = (cl3 & ~CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) |
+                                ((kp >> 7) << CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT);
+      const uint32_t cl4_next = (cl4 & ~CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) |
+                                ((kp & 0x7Fu) << CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
+      if ((cl3_next != cl3 && !this->write_reg32(REG_CLOSED_LOOP3, cl3_next)) ||
+          (cl4_next != cl4 && !this->write_reg32(REG_CLOSED_LOOP4, cl4_next))) {
+        ESP_LOGW(TAG, "Failed writing SPEED_LOOP_KP shadow fields");
+        return false;
+      }
+      ESP_LOGI(TAG, "Updated SPEED_LOOP_KP to %u", static_cast<unsigned>(kp));
+      return true;
+    }
+    case MotorTuneParameter::SPEED_LOOP_KI:
+      reg = REG_CLOSED_LOOP4;
+      mask = CLOSED_LOOP4_SPD_LOOP_KI_MASK;
+      shifted_value = (value << CLOSED_LOOP4_SPD_LOOP_KI_SHIFT);
+      label = "SPEED_LOOP_KI";
+      break;
+    case MotorTuneParameter::MAX_SPEED:
+      reg = REG_CLOSED_LOOP4;
+      mask = CLOSED_LOOP4_MAX_SPEED_MASK;
+      shifted_value = (value << CLOSED_LOOP4_MAX_SPEED_SHIFT);
+      label = "MAX_SPEED";
+      break;
+  }
+
+  const uint32_t clipped = shifted_value & mask;
+  if (!this->update_bits32(reg, mask, clipped)) {
+    ESP_LOGW(TAG, "Failed to set %s", label);
+    return false;
+  }
+  ESP_LOGI(TAG, "Updated %s to %u", label, static_cast<unsigned>(value));
+  return true;
+}
+
+bool MCF8316DManualComponent::commit_shadow_registers_to_eeprom() {
+  ESP_LOGW(TAG, "Committing shadow/RAM motor parameters to EEPROM");
+  if (!this->set_speed_percent(0.0f)) {
+    ESP_LOGW(TAG, "Failed to force speed 0%% before EEPROM commit");
+    return false;
+  }
+
+  if (!this->write_reg32(REG_ALGO_CTRL1, ALGO_CTRL1_EEPROM_WRITE_TRIGGER)) {
+    ESP_LOGW(TAG, "Failed to trigger EEPROM write");
+    return false;
+  }
+
+  delay_microseconds_safe(750000);
+  uint32_t algo_ctrl1 = 0;
+  if (!this->read_reg32(REG_ALGO_CTRL1, algo_ctrl1)) {
+    ESP_LOGW(TAG, "Failed to read ALGO_CTRL1 after EEPROM write");
+    return false;
+  }
+  if ((algo_ctrl1 & ALGO_CTRL1_EEPROM_WRITE_BUSY_MASK) != 0u) {
+    ESP_LOGW(TAG, "EEPROM write still busy (ALGO_CTRL1=0x%08X)", algo_ctrl1);
+    return false;
+  }
+  ESP_LOGI(TAG, "EEPROM commit complete (ALGO_CTRL1=0x%08X)", algo_ctrl1);
   return true;
 }
 

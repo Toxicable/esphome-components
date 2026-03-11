@@ -66,3 +66,6 @@
 - `components/mcf8316d_manual` `apply_startup_tune` now disables ABN_BEMF lock (`FAULT_CONFIG2.LOCK2_EN=0`) and sets `ABNORMAL_BEMF_THR=70%` during manual bring-up to avoid immediate `MTR_LCK,ABN_BEMF` trip loops with untuned motor constants.
 - `components/mcf8316d_manual` now supports optional `run_scope_probe_test` button for a non-blocking low-speed probe sequence (`5%`, `8%`, `12%`) with per-stage hold, inter-stage cooldown, and fault-clear retry to simplify scope capture timing.
 - `components/mcf8316d_manual` startup gates normal operation on I2C preflight with scan range `0x00..0x7E`, but scan failures are warning-only (no `mark_failed()`); component stays in deferred retry mode until comms recover.
+
+- `components/mcf8316d_manual` now separates live operational controls from per-motor tuning: `number.speed` is the runtime command, optional tuning numbers (`motor_res`, `motor_ind`, `motor_bemf_const`, `speed_loop_kp`, `speed_loop_ki`, `max_speed`) update shadow registers live, and optional `commit_eeprom` button persists shadow config via `ALGO_CTRL1=0x8A500000` after forcing speed to 0%.
+- `components/mcf8316d_manual` Home Assistant grouping: keep `number.speed` as a normal control entity (no `entity_category`) and keep per-motor tuning numbers as `entity_category: config` so calibration fields appear under device settings/config sections.

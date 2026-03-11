@@ -13,6 +13,9 @@ Optional `apply_startup_tune` button writes a practical startup profile in RAM (
 Optional `apply_hw_lock_report_only` button is a temporary diagnostic mode that sets `HW_LOCK_ILIMIT_MODE`, `LOCK_ILIMIT_MODE`, and `MTR_LCK_MODE` to `disabled` (no protective lock shutdown action), forces `direction=cw` + `brake=off`, and forces `MTR_STARTUP=align` with `ALIGN_TIME=100ms`; use only for brief no-load debugging and then run `apply_startup_tune` to restore normal `retry_hiz` modes.
 Optional `run_startup_sweep` button runs an automated 4-step startup test (`1.0A`, `1.5A`, `2.0A`, `2.5A` align/open-loop current limits) at `21%` speed command, logging PASS/FAIL/TIMEOUT per step based on state transition (`OPEN_LOOP`/`CLOSED_LOOP`) and fault status. The sweep now inserts inter-step delay and waits for fault-clear before starting the next step so each step is independent.
 Optional `run_scope_probe_test` button runs a non-blocking scope-friendly sequence at low speeds (`5%`, `8%`, `12%`), with fixed hold time per stage and automatic cooldown/fault-clear between stages. This is useful for probing phase outputs and VM behavior without manual timing.
+New optional motor-tuning number entities expose per-motor shadow parameters (`motor_res`, `motor_ind`, `motor_bemf_const`, `speed_loop_kp`, `speed_loop_ki`, `max_speed`) so tuning can be adjusted live without touching operational controls.
+In Home Assistant, runtime `speed` is a normal control entity while these tuning numbers are `entity_category: config`, so they are grouped under device configuration/settings instead of primary runtime controls.
+New optional `commit_eeprom` button writes current shadow register configuration (`0x0080..0x00AE`) to EEPROM using the datasheet EEPROM write trigger (`ALGO_CTRL1=0x8A500000`) after forcing speed command to `0%`.
 When commanded duty/voltage magnitude are non-zero and no fault is active, the component logs `[loop_run_state]` with `ALGORITHM_STATE` so startup stalls (for example stuck in `MOTOR_ALIGN`) are visible even without lock-limit faults.
 Brake and direction writes now log immediate register readback (`PIN_CONFIG` / `PERI_CONFIG1`), and commanded-run diagnostics log `[loop_control] CTRL diag` with decoded `brake_sel`/`dir_sel`, key `ALGO_DEBUG1` bits (`CLOSED_LOOP_DIS` and force-state bits), and `ISD_CONFIG` fields so you can verify the chip is not being held in startup brake configuration. Lock-limit diagnostics now also include `[loop_lock_limit] DRIVE cfg` with `CLOSED_LOOP1.PWM_FREQ_OUT`, `DEVICE_CONFIG2` dynamic-gain bits, `GD_CONFIG1.CSA_GAIN`, and `CSA_GAIN_FEEDBACK`. Motor-lock events (`MTR_LCK`, `ABN_SPEED`, `ABN_BEMF`, `NO_MTR`) now emit `[loop_motor_lock]` diagnostics at `INFO/WARN` with `FAULT_CONFIG1/2` lock enables/modes/thresholds plus startup handoff settings (`AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`, `SLOW_FIRST_CYC_FREQ`, `MAX_SPEED`).
 `Duty Cmd %` decodes `ALGO_STATUS[15:4]` per datasheet.
@@ -56,7 +59,22 @@ select:
 number:
   - platform: mcf8316d_manual
     mcf8316d_manual_id: mcf
-    name: "MCF Speed %"
+    speed:
+      name: "MCF Speed %"
+
+    # Per-motor tuning (shadow/RAM only until commit_eeprom is pressed):
+    # motor_res:
+    #   name: "MCF Motor R Code"
+    # motor_ind:
+    #   name: "MCF Motor L Code"
+    # motor_bemf_const:
+    #   name: "MCF Motor BEMF Code"
+    # speed_loop_kp:
+    #   name: "MCF Speed Loop Kp"
+    # speed_loop_ki:
+    #   name: "MCF Speed Loop Ki"
+    # max_speed:
+    #   name: "MCF Max Speed Code"
 
 button:
   - platform: mcf8316d_manual
@@ -74,6 +92,8 @@ button:
     #   name: "MCF Startup Sweep"
     # run_scope_probe_test:
     #   name: "MCF Scope Probe Test"
+    # commit_eeprom:
+    #   name: "MCF Commit EEPROM"
 
 binary_sensor:
   - platform: mcf8316d_manual
