@@ -1,0 +1,42 @@
+# AGENTS_KNOWLEDGE: mcf8316d_manual
+
+Component-scoped notes for `components/mcf8316d_manual`.
+
+- Adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), and fault-triggered speed shutdown that defers lock-family handling to configured lock modes.
+- Should follow repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
+- VM voltage decode currently uses an 11-bit field from `REG_VM_VOLTAGE` (`bits 26:16`) with scaling `60/2048`, and debug log prints both `adc8` and `adc_q11`.
+- `fault_active` should mirror asserted `nFAULT` using gate + controller summary bits (`GATE_DRIVER_FAULT_STATUS[31]` OR `CONTROLLER_FAULT_STATUS[31]`); controller detail bits are at datasheet positions (e.g. `WATCHDOG_FAULT` is bit 3, not bit 1).
+- `fault_summary` combines decoded gate-driver + controller fault bits, and logs transitions as `Active faults: ...` / `Faults cleared` even without a configured text sensor.
+- Clear-fault flow logs before/after gate+controller raw status and republishes `fault_summary` immediately; if only aggregate bits are set it uses fallback labels `DRV_FAULT_ACTIVE` / `CTRL_FAULT_ACTIVE`.
+- MPET startup diagnostics log `ALGORITHM_STATE`, `ALGO_DEBUG2` MPET control bits, `ALGO_STATUS_MPET` completion bits, and `MTR_PARAMS`; logs emit once at setup and periodically while MPET faults are active.
+- Setup force-clears `ALGO_DEBUG2` MPET bits (`MPET_CMD/R/L/KE/MECH/WRITE_SHADOW`) and triggers startup fault clear if MPET fault bits are latched.
+- Emits `LOCK_LIMIT` diagnostics on event edges (and throttled while active), logging `ALGORITHM_STATE`, `ALGO_STATUS`, `ALGO_DEBUG1/2`, `FAULT_CONFIG1`, startup config (`ISD/REV/MOTOR_STARTUP1/2`), and decoded lock-threshold fields.
+- Host-side shutdown checks `FAULT_CONFIG1/2` lock modes and avoids forcing `speed=0%` for lock-family faults (`LOCK_LIMIT`, `HW_LOCK_LIMIT`, `MTR_LCK`, `ABN_SPEED`, `ABN_BEMF`, `NO_MTR`) when chip mode is `retry_*`, `report_only`, or `disabled`; persistent non-lock faults still force shutdown.
+- Can still enter MPET on non-zero speed even with MPET bits cleared when `CLOSED_LOOP2/3/4` shadow fields are zero (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, or speed-loop `Kp/Ki`); diagnostics log these trigger conditions.
+- Setup seeds zero `CLOSED_LOOP2/3/4` fields (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, `SPD_LOOP_KP`, `SPD_LOOP_KI`) with minimal non-zero shadow defaults to avoid forced MPET entry on blank configs (no EEPROM write).
+- Logs BUCK fault diagnostics (`GD_CONFIG2` decode: `BUCK_DIS`, `BUCK_PS_DIS`, `BUCK_CL`, `BUCK_SEL`) when `DRV_BUCK_OCP`/`DRV_BUCK_UV` are active and after `clear_faults`; these faults are condition-active and may not clear with `CLR_FLT` until rail/load issues are fixed.
+- Setup forces `GD_CONFIG2.BUCK_CL` to `600mA` (clears `BUCK_CL` bit in shadow register) for manual validation to avoid immediate `DRV_BUCK_OCP/DRV_BUCK_UV` from 150mA default on loaded buck rails.
+- Datasheet source is `components/mcf8316d_manual/mcf8316d.pdf`; extracted Markdown text is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).
+- Datasheet `CLOSED_LOOP3` defines `CURR_LOOP_KP=0` and `CURR_LOOP_KI=0` as valid auto-calculation mode (not necessarily a misconfiguration).
+- For `LOCK_LIMIT` startup debug, decode `MOTOR_STARTUP1/2` with `FAULT_CONFIG1`: very small `LOCK_ILIMIT_DEG` (e.g. `0.2ms`) and low `ALIGN_OR_SLOW_CURRENT_ILIMIT`/`OL_ILIMIT` (e.g. `1.5A`) commonly cause immediate retry-loop faults on higher-inertia outrunners.
+- Supports optional `apply_startup_tune` button that forces `speed=0%`, `direction=cw`, `brake=off`, writes RAM-only startup profile (`FAULT_CONFIG1`, `FAULT_CONFIG2`, `MOTOR_STARTUP1`, `MOTOR_STARTUP2`, `CLOSED_LOOP4`) including `MTR_STARTUP=double_align`, `ALIGN_ANGLE=90°`, `MAX_SPEED=0x2710`, `HW_LOCK_ILIMIT=8A`, `HW_LOCK_ILIMIT_DEG=7us`, then pulses `CLR_FLT`.
+- For slow-first-cycle startup, `SLOW_FIRST_CYC_FREQ` is a percentage of `MAX_SPEED`; when raising `MAX_SPEED`, reduce `SLOW_FIRST_CYC_FREQ` accordingly (e.g. `0.3%`) to avoid immediate `HW_LOCK_LIMIT`.
+- Supports optional `apply_hw_lock_report_only` debug button that sets lock protection modes to disabled (`FAULT_CONFIG2.HW_LOCK_ILIMIT_MODE`, `FAULT_CONFIG1.LOCK_ILIMIT_MODE`, `FAULT_CONFIG1.MTR_LCK_MODE`), forces `direction=cw` + `brake=off`, and forces `MTR_STARTUP=align` with short `ALIGN_TIME`, then pulses `CLR_FLT`.
+- `apply_startup_tune` explicitly restores normal lock protection modes to `retry_hiz` (`HW_LOCK_ILIMIT_MODE`, `LOCK_ILIMIT_MODE`, `MTR_LCK_MODE`) to exit report-only mode.
+- Supports optional `algorithm_state` text sensor and emits throttled `[loop_run_state]` logs (state+duty+volt_mag) when drive output is active without faults.
+- `sys_enable` binary sensor should decode `ALGO_STATUS[2]` (not bit 15); this indicates register-control readiness, not literal motor spin/enable state.
+- Brake/direction setters log register readback (`PIN_CONFIG`, `PERI_CONFIG1`), and active-command logs include `[loop_control] CTRL diag` with decoded `brake_sel` / `dir_sel` plus `ALGO_DEBUG1` override/speed command.
+- `[loop_control] CTRL diag` also decodes `ALGO_DEBUG1` bring-up flags (`CLOSED_LOOP_DIS`, `FORCE_ALIGN/SLOW_FIRST_CYCLE/IPD/ISD`, align-angle source).
+- If logs stay in `MOTOR_BRAKE_ON_START` with `VOLT_MAG=0`, inspect `ISD_CONFIG`; long startup brake from `BRAKE_EN/BRK_TIME` can stall bring-up. `apply_startup_tune` clears `ISD_EN`, `BRAKE_EN`, and `RESYNC_EN` to bypass this path.
+- `Duty Cmd %` should decode `ALGO_STATUS` bits `[15:4]` (shift 4), not bits `[11:0]`.
+- Supports optional `run_startup_sweep` button that auto-tests startup current-limit steps (`1.0A`, `1.5A`, `2.0A`, `2.5A`) at fixed speed and logs PASS/FAIL/TIMEOUT per step using `ALGORITHM_STATE` + fault status.
+- Startup sweep enforces inter-step cooldown and waits for fault clear (with periodic `CLR_FLT` retry) before each next step.
+- For cleaner `logger: level: INFO` output, emits lock-limit retry notice at INFO only on edge transitions; state/control diagnostics are emitted on state changes rather than periodic 1s spam.
+- Lock-limit diagnostics include `[loop_lock_limit] DRIVE cfg` decoding `CLOSED_LOOP1.PWM_FREQ_OUT`, `DEVICE_CONFIG2` dynamic gain bits, `GD_CONFIG1.CSA_GAIN`, and `CSA_GAIN_FEEDBACK`.
+- Emits `[loop_motor_lock]` diagnostics at INFO/WARN for `MTR_LCK`/`ABN_SPEED`/`ABN_BEMF`/`NO_MTR` with decoded `FAULT_CONFIG1/2` lock enables, thresholds, lock mode/retry, and startup handoff fields (`AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`, `SLOW_FIRST_CYC_FREQ`, `MAX_SPEED`).
+- `apply_startup_tune` also sets `CLOSED_LOOP1.PWM_FREQ_OUT=60kHz`, enables `DEVICE_CONFIG2.DYNAMIC_CSA_GAIN_EN`, and sets `GD_CONFIG1.CSA_GAIN=0` (0.15V/A baseline) for low-inductance startup debug.
+- `apply_startup_tune` also forces `MOTOR_STARTUP1.ALIGN_TIME=100ms` so stale values (e.g. `ALIGN_TIME=1s`) do not persist across tune runs.
+- `apply_startup_tune` explicitly clears `MOTOR_STARTUP2.AUTO_HANDOFF_EN` (`0`) so `OPN_CL_HANDOFF_THR` is honored.
+- `apply_startup_tune` disables ABN_BEMF lock (`FAULT_CONFIG2.LOCK2_EN=0`) and sets `ABNORMAL_BEMF_THR=70%` during manual bring-up to avoid immediate `MTR_LCK,ABN_BEMF` loops.
+- Supports optional `run_scope_probe_test` button for a non-blocking low-speed probe sequence (`5%`, `8%`, `12%`) with per-stage hold, inter-stage cooldown, and fault-clear retry.
+- Startup gates normal operation on I2C preflight scan `0x00..0x7E`, but scan failures are warning-only (no `mark_failed()`); component remains in deferred retry mode until comms recover.
