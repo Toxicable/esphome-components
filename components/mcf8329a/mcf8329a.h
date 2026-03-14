@@ -1,0 +1,274 @@
+#pragma once
+
+#include <cstdint>
+#include <string>
+
+#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/button/button.h"
+#include "esphome/components/i2c/i2c.h"
+#include "esphome/components/number/number.h"
+#include "esphome/components/select/select.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/switch/switch.h"
+#include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/core/component.h"
+
+namespace esphome {
+namespace mcf8329a {
+
+class MCF8329AComponent;
+
+class MCF8329ABrakeSwitch : public switch_::Switch {
+ public:
+  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+
+ protected:
+  void write_state(bool state) override;
+  MCF8329AComponent *parent_{nullptr};
+};
+
+class MCF8329ADirectionSelect : public select::Select {
+ public:
+  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+
+ protected:
+  void control(const std::string &value) override;
+  MCF8329AComponent *parent_{nullptr};
+};
+
+class MCF8329ASpeedNumber : public number::Number {
+ public:
+  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+
+ protected:
+  void control(float value) override;
+  MCF8329AComponent *parent_{nullptr};
+};
+
+class MCF8329AClearFaultsButton : public button::Button {
+ public:
+  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8329AComponent *parent_{nullptr};
+};
+
+class MCF8329AWatchdogTickleButton : public button::Button {
+ public:
+  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  MCF8329AComponent *parent_{nullptr};
+};
+
+class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
+ public:
+  void setup() override;
+  void update() override;
+  void dump_config() override;
+
+  bool read_reg32(uint16_t offset, uint32_t &value);
+  bool read_reg16(uint16_t offset, uint16_t &value);
+  bool write_reg32(uint16_t offset, uint32_t value);
+  bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value);
+
+  bool set_brake_override(bool brake_on);
+  bool set_direction_mode(const std::string &direction_mode);
+  bool set_speed_percent(float speed_percent);
+  void pulse_clear_faults();
+  void pulse_watchdog_tickle();
+
+  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
+  void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
+  void set_apply_startup_config(bool apply_startup_config) { apply_startup_config_ = apply_startup_config; }
+  void set_startup_brake_mode(uint8_t startup_brake_mode) {
+    startup_brake_mode_ = startup_brake_mode;
+    startup_brake_mode_set_ = true;
+  }
+  void set_startup_brake_time(uint8_t startup_brake_time) {
+    startup_brake_time_ = startup_brake_time;
+    startup_brake_time_set_ = true;
+  }
+  void set_startup_mode(uint8_t startup_mode) {
+    startup_mode_ = startup_mode;
+    startup_mode_set_ = true;
+  }
+  void set_startup_align_time(uint8_t startup_align_time) {
+    startup_align_time_ = startup_align_time;
+    startup_align_time_set_ = true;
+  }
+  void set_startup_direction_mode(const std::string &startup_direction_mode) {
+    startup_direction_mode_ = startup_direction_mode;
+    startup_direction_mode_set_ = true;
+  }
+
+  void set_brake_switch(MCF8329ABrakeSwitch *sw) { brake_switch_ = sw; }
+  void set_direction_select(MCF8329ADirectionSelect *sel) { direction_select_ = sel; }
+  void set_speed_number(MCF8329ASpeedNumber *num) { speed_number_ = num; }
+  void set_fault_active_binary_sensor(binary_sensor::BinarySensor *s) { fault_active_binary_sensor_ = s; }
+  void set_sys_enable_binary_sensor(binary_sensor::BinarySensor *s) { sys_enable_binary_sensor_ = s; }
+  void set_vm_voltage_sensor(sensor::Sensor *s) { vm_voltage_sensor_ = s; }
+  void set_duty_cmd_percent_sensor(sensor::Sensor *s) { duty_cmd_percent_sensor_ = s; }
+  void set_volt_mag_percent_sensor(sensor::Sensor *s) { volt_mag_percent_sensor_ = s; }
+  void set_algorithm_state_code_sensor(sensor::Sensor *s) { algorithm_state_code_sensor_ = s; }
+  void set_motor_bemf_constant_sensor(sensor::Sensor *s) { motor_bemf_constant_sensor_ = s; }
+  void set_fault_summary_text_sensor(text_sensor::TextSensor *s) { fault_summary_text_sensor_ = s; }
+  void set_algorithm_state_text_sensor(text_sensor::TextSensor *s) { algorithm_state_text_sensor_ = s; }
+  void set_gate_fault_status_text_sensor(text_sensor::TextSensor *s) { gate_fault_status_text_sensor_ = s; }
+  void set_controller_fault_status_text_sensor(text_sensor::TextSensor *s) { controller_fault_status_text_sensor_ = s; }
+  void set_algo_status_text_sensor(text_sensor::TextSensor *s) { algo_status_text_sensor_ = s; }
+  void set_startup_config_text_sensor(text_sensor::TextSensor *s) { startup_config_text_sensor_ = s; }
+
+ protected:
+  bool read_probe_and_publish_();
+  bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
+  bool probe_device_ack_(i2c::ErrorCode &error_code) const;
+  bool scan_i2c_bus_();
+  void process_deferred_startup_();
+  void apply_post_comms_setup_();
+  bool apply_startup_motor_config_();
+  void publish_raw_status_hex_(uint32_t gate_fault_status, bool gate_ok, uint32_t controller_fault_status, bool controller_ok,
+                               uint32_t algo_status, bool algo_ok);
+  const char *i2c_error_to_string_(i2c::ErrorCode error_code) const;
+  const char *startup_mode_to_string_(uint8_t mode) const;
+  const char *startup_align_time_to_string_(uint8_t code) const;
+  const char *startup_brake_mode_to_string_(uint8_t code) const;
+  const char *startup_brake_time_to_string_(uint8_t code) const;
+
+  bool perform_read_(uint16_t offset, uint32_t &value);
+  bool perform_read16_(uint16_t offset, uint16_t &value);
+  bool perform_write_(uint16_t offset, uint32_t value);
+  uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
+
+  void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
+                       bool controller_fault_valid);
+  void publish_algo_status_(uint32_t algo_status);
+  const char *algorithm_state_to_string_(uint16_t state) const;
+  const char *brake_input_to_string_(uint32_t brake_input_value) const;
+  const char *direction_input_to_string_(uint32_t direction_input_value) const;
+  void handle_fault_shutdown_(bool fault_active);
+
+  static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
+  static constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
+  static constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
+  static constexpr uint16_t REG_MTR_PARAMS = 0x00E6;
+  static constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
+  static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
+  static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
+  static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
+  static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
+  static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
+  static constexpr uint16_t REG_ALGORITHM_STATE = 0x0196;
+  static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
+
+  static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 2);
+  static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_BRAKE = (0x1u << 2);
+  static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_NO_BRAKE = (0x2u << 2);
+
+  static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_MASK = (0x3u << 19);
+  static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_HARDWARE = (0x0u << 19);
+  static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_CW = (0x1u << 19);
+  static constexpr uint32_t PERI_CONFIG1_DIR_INPUT_CCW = (0x2u << 19);
+
+  static constexpr uint32_t ALGO_DEBUG1_OVERRIDE_MASK = (1u << 31);
+  static constexpr uint32_t ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK = (0x7FFFu << 16);
+
+  static constexpr uint32_t ALGO_CTRL1_CLR_FLT_MASK = (1u << 29);
+  static constexpr uint32_t ALGO_CTRL1_WATCHDOG_TICKLE_MASK = (1u << 10);
+
+  static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = (0x0FFFu << 4);
+  static constexpr uint32_t ALGO_STATUS_DUTY_CMD_SHIFT = 4;
+  static constexpr uint32_t ALGO_STATUS_VOLT_MAG_MASK = (0xFFFFu << 16);
+  static constexpr uint32_t ALGO_STATUS_VOLT_MAG_SHIFT = 16;
+  static constexpr uint32_t ALGO_STATUS_SYS_ENABLE_FLAG_MASK = (1u << 2);
+  static constexpr uint32_t MTR_PARAMS_MOTOR_BEMF_CONST_MASK = (0xFFu << 16);
+  static constexpr uint32_t MTR_PARAMS_MOTOR_BEMF_CONST_SHIFT = 16;
+
+  static constexpr uint32_t MOTOR_STARTUP1_MTR_STARTUP_MASK = (0x3u << 29);
+  static constexpr uint32_t MOTOR_STARTUP1_MTR_STARTUP_SHIFT = 29;
+  static constexpr uint32_t MOTOR_STARTUP1_ALIGN_TIME_MASK = (0xFu << 21);
+  static constexpr uint32_t MOTOR_STARTUP1_ALIGN_TIME_SHIFT = 21;
+
+  static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_MASK = (0x7u << 28);
+  static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_SHIFT = 28;
+  static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK = (0xFu << 24);
+  static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT = 24;
+
+  static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
+  static constexpr uint32_t GATE_FAULT_OTS = (1u << 29);
+  static constexpr uint32_t GATE_FAULT_OCP_VDS = (1u << 28);
+  static constexpr uint32_t GATE_FAULT_OCP_SNS = (1u << 27);
+  static constexpr uint32_t GATE_FAULT_BST_UV = (1u << 26);
+  static constexpr uint32_t GATE_FAULT_GVDD_UV = (1u << 25);
+  static constexpr uint32_t GATE_FAULT_DRV_OFF = (1u << 24);
+
+  static constexpr uint32_t CONTROLLER_FAULT_ACTIVE_MASK = (1u << 31);
+  static constexpr uint32_t FAULT_IPD_FREQ = (1u << 29);
+  static constexpr uint32_t FAULT_IPD_T1 = (1u << 28);
+  static constexpr uint32_t FAULT_BUS_CURRENT_LIMIT = (1u << 26);
+  static constexpr uint32_t FAULT_MPET_BEMF = (1u << 24);
+  static constexpr uint32_t FAULT_ABN_SPEED = (1u << 23);
+  static constexpr uint32_t FAULT_ABN_BEMF = (1u << 22);
+  static constexpr uint32_t FAULT_NO_MTR = (1u << 21);
+  static constexpr uint32_t FAULT_MTR_LCK = (1u << 20);
+  static constexpr uint32_t FAULT_LOCK_LIMIT = (1u << 19);
+  static constexpr uint32_t FAULT_HW_LOCK_LIMIT = (1u << 18);
+  static constexpr uint32_t FAULT_DCBUS_UNDER_VOLTAGE = (1u << 17);
+  static constexpr uint32_t FAULT_DCBUS_OVER_VOLTAGE = (1u << 16);
+  static constexpr uint32_t FAULT_SPEED_LOOP_SATURATION = (1u << 15);
+  static constexpr uint32_t FAULT_CURRENT_LOOP_SATURATION = (1u << 14);
+  static constexpr uint32_t FAULT_WATCHDOG = (1u << 3);
+
+  static constexpr float VM_VOLTAGE_SCALE = 60.0f / 134217728.0f;  // 60 / 2^27
+
+  static constexpr uint8_t STARTUP_COMMS_ATTEMPTS = 20u;
+  static constexpr uint32_t STARTUP_COMMS_RETRY_DELAY_MS = 250u;
+  static constexpr uint32_t DEFERRED_COMMS_RETRY_INTERVAL_MS = 1000u;
+  static constexpr uint32_t DEFERRED_SCAN_INTERVAL_MS = 5000u;
+  static constexpr uint8_t I2C_SCAN_ADDRESS_MIN = 0x00u;
+  static constexpr uint8_t I2C_SCAN_ADDRESS_MAX = 0x7Eu;
+
+  uint32_t inter_byte_delay_us_{100};
+  bool auto_tickle_watchdog_{false};
+  bool apply_startup_config_{true};
+  bool startup_brake_mode_set_{false};
+  bool startup_brake_time_set_{false};
+  bool startup_mode_set_{false};
+  bool startup_align_time_set_{false};
+  bool startup_direction_mode_set_{false};
+  uint8_t startup_brake_mode_{0};
+  uint8_t startup_brake_time_{0};
+  uint8_t startup_mode_{0};
+  uint8_t startup_align_time_{0};
+  std::string startup_direction_mode_{"hardware"};
+  uint32_t last_watchdog_tickle_ms_{0};
+  uint32_t last_vm_diag_log_ms_{0};
+  bool fault_latched_{false};
+  bool normal_operation_ready_{false};
+  uint32_t deferred_comms_last_retry_ms_{0};
+  uint32_t deferred_comms_last_scan_ms_{0};
+  std::string last_fault_summary_{"none"};
+  std::string startup_config_summary_{"default"};
+
+  MCF8329ABrakeSwitch *brake_switch_{nullptr};
+  MCF8329ADirectionSelect *direction_select_{nullptr};
+  MCF8329ASpeedNumber *speed_number_{nullptr};
+  binary_sensor::BinarySensor *fault_active_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor *sys_enable_binary_sensor_{nullptr};
+  sensor::Sensor *vm_voltage_sensor_{nullptr};
+  sensor::Sensor *duty_cmd_percent_sensor_{nullptr};
+  sensor::Sensor *volt_mag_percent_sensor_{nullptr};
+  sensor::Sensor *algorithm_state_code_sensor_{nullptr};
+  sensor::Sensor *motor_bemf_constant_sensor_{nullptr};
+  text_sensor::TextSensor *fault_summary_text_sensor_{nullptr};
+  text_sensor::TextSensor *algorithm_state_text_sensor_{nullptr};
+  text_sensor::TextSensor *gate_fault_status_text_sensor_{nullptr};
+  text_sensor::TextSensor *controller_fault_status_text_sensor_{nullptr};
+  text_sensor::TextSensor *algo_status_text_sensor_{nullptr};
+  text_sensor::TextSensor *startup_config_text_sensor_{nullptr};
+};
+
+}  // namespace mcf8329a
+}  // namespace esphome

@@ -63,7 +63,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CH1_ID): cv.declare_id(DRV8243ChannelOutput),
             cv.Optional(CONF_CH2_ID): cv.declare_id(DRV8243ChannelOutput),
             cv.Required(CONF_NSLEEP_PIN): pins.gpio_output_pin_schema,
-            cv.Optional(CONF_NFAULT_PIN): pins.gpio_input_pin_schema,
+            cv.Required(CONF_NFAULT_PIN): pins.gpio_input_pin_schema,
             cv.Optional(CONF_OUT2_PIN): pins.gpio_output_pin_schema,
             cv.Optional(CONF_FLIP_POLARITY, default=False): cv.boolean,
             cv.Optional(CONF_MIN_LEVEL, default=0.014): cv.percentage,
@@ -123,9 +123,8 @@ async def to_code(config):
     nsleep = await cg.gpio_pin_expression(config[CONF_NSLEEP_PIN])
     cg.add(var.set_nsleep_pin(nsleep))
 
-    if CONF_NFAULT_PIN in config:
-        nfault = await cg.gpio_pin_expression(config[CONF_NFAULT_PIN])
-        cg.add(var.set_nfault_pin(nfault))
+    nfault = await cg.gpio_pin_expression(config[CONF_NFAULT_PIN])
+    cg.add(var.set_nfault_pin(nfault))
 
     if CONF_OUT2_PIN in config:
         out2 = await cg.gpio_pin_expression(config[CONF_OUT2_PIN])

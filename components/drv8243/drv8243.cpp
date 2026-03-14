@@ -81,7 +81,7 @@ void DRV8243Output::dump_config() {
 }
 
 void DRV8243Output::setup() {
-  if (!out1_output_ || !nsleep_pin_ || (!out2_pin_ && !out2_output_)) {
+  if (!out1_output_ || !nsleep_pin_ || !nfault_pin_ || (!out2_pin_ && !out2_output_)) {
     mark_failed();
     return;
   }
@@ -92,10 +92,8 @@ void DRV8243Output::setup() {
     nsleep_pin_->digital_write(true);
   }
 
-  if (nfault_pin_) {
-    nfault_pin_->setup();
-    nfault_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
-  }
+  nfault_pin_->setup();
+  nfault_pin_->pin_mode(gpio::FLAG_INPUT | gpio::FLAG_PULLUP);
 
   // out2 pin is only used in 1 ch mode
   if (out2_pin_) {
@@ -111,7 +109,7 @@ void DRV8243Output::setup() {
 }
 
 DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
-  if (!nsleep_pin_)
+  if (!nsleep_pin_ || !nfault_pin_)
     return DRV8243Output::HandshakeResult::FAILED;
 
   // Force sleep then wake
@@ -119,28 +117,21 @@ DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
   delay(SLEEP_FORCE_MS);
   nsleep_pin_->digital_write(true);
 
-  // Wait for nFAULT LOW if available (device-ready indication)
+  // Wait for nFAULT LOW (device-ready indication)
   bool saw_ready_low = false;
-  int checks = 0;
-  if (nfault_pin_) {
-    uint32_t start = micros();
-    while ((micros() - start) < READY_WAIT_TIMEOUT_US) {
-      ++checks;
-      if (!nfault_pin_->digital_read()) { // LOW
-        saw_ready_low = true;
-        break;
-      }
-      delayMicroseconds(POLL_STEP_US);
+  uint32_t ready_start = micros();
+  while ((micros() - ready_start) < READY_WAIT_TIMEOUT_US) {
+    if (!nfault_pin_->digital_read()) { // LOW
+      saw_ready_low = true;
+      break;
     }
+    delayMicroseconds(POLL_STEP_US);
   }
 
   // ACK pulse
   nsleep_pin_->digital_write(false);
   delayMicroseconds(ACK_PULSE_US);
   nsleep_pin_->digital_write(true);
-
-  if (!nfault_pin_)
-    return DRV8243Output::HandshakeResult::FAILED;
 
   if (!saw_ready_low)
     return DRV8243Output::HandshakeResult::FAILED;
