@@ -47,7 +47,7 @@ void MCF8329ADirectionSelect::control(const std::string &value) {
 }
 
 void MCF8329ASpeedNumber::control(float value) {
-  if (this->parent_ == nullptr || !this->parent_->set_speed_percent(value)) {
+  if (this->parent_ == nullptr || !this->parent_->set_speed_percent(value, "number_control")) {
     ESP_LOGW(TAG, "Failed to set speed command");
     return;
   }
@@ -74,6 +74,10 @@ void MCF8329AComponent::setup() {
   this->algorithm_state_valid_ = false;
   this->algorithm_state_read_error_latched_ = false;
   this->last_algorithm_state_ = 0xFFFFu;
+  this->target_speed_set_ = false;
+  this->target_speed_percent_ = 0.0f;
+  this->target_speed_raw_ = 0;
+  this->last_speed_hold_attempt_ms_ = 0u;
 
   if (!this->scan_i2c_bus_()) {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
@@ -131,6 +135,7 @@ void MCF8329AComponent::update() {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
     this->handle_fault_shutdown_(fault_active, controller_fault_status, controller_ok);
+    this->maintain_speed_command_(fault_active);
   } else {
     this->fault_latched_ = false;
   }
@@ -381,7 +386,7 @@ void MCF8329AComponent::apply_post_comms_setup_() {
   if (this->speed_number_ != nullptr) {
     this->speed_number_->publish_state(0.0f);
   }
-  if (!this->set_speed_percent(0.0f)) {
+  if (!this->set_speed_percent(0.0f, "startup_init")) {
     ESP_LOGW(TAG, "Failed to force speed to 0%% during setup");
   }
 
@@ -794,7 +799,7 @@ bool MCF8329AComponent::set_direction_mode(const std::string &direction_mode) {
   return true;
 }
 
-bool MCF8329AComponent::set_speed_percent(float speed_percent) {
+bool MCF8329AComponent::set_speed_percent(float speed_percent, const char *reason) {
   if (std::isnan(speed_percent)) {
     return false;
   }
@@ -829,10 +834,50 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent) {
     return false;
   }
 
+  this->target_speed_set_ = true;
+  this->target_speed_percent_ = clamped;
+  this->target_speed_raw_ = digital_speed_ctrl;
+  ESP_LOGI(TAG, "Speed command write [%s]: %.1f%% (raw=%u)", reason, clamped, static_cast<unsigned>(digital_speed_ctrl));
+
   if (this->speed_number_ != nullptr) {
     this->speed_number_->publish_state(clamped);
   }
   return true;
+}
+
+void MCF8329AComponent::maintain_speed_command_(bool fault_active) {
+  if (!this->target_speed_set_ || this->target_speed_raw_ == 0u || fault_active) {
+    return;
+  }
+
+  uint32_t algo_debug1 = 0;
+  if (!this->read_reg32(REG_ALGO_DEBUG1, algo_debug1)) {
+    return;
+  }
+
+  const bool override_enabled = (algo_debug1 & ALGO_DEBUG1_OVERRIDE_MASK) != 0u;
+  const uint16_t observed_speed_raw = static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
+  if (override_enabled && observed_speed_raw == this->target_speed_raw_) {
+    return;
+  }
+
+  const uint32_t now = millis();
+  if (this->last_speed_hold_attempt_ms_ != 0u && (now - this->last_speed_hold_attempt_ms_) < 1000u) {
+    return;
+  }
+  this->last_speed_hold_attempt_ms_ = now;
+
+  const uint32_t value =
+      ALGO_DEBUG1_OVERRIDE_MASK | ((static_cast<uint32_t>(this->target_speed_raw_) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK);
+  if (!this->update_bits32(REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value)) {
+    ESP_LOGW(TAG, "Speed command hold: failed to restore target %.1f%%", this->target_speed_percent_);
+    return;
+  }
+
+  ESP_LOGI(TAG,
+           "Speed command hold: restored target %.1f%% (observed override=%s raw=%u, target_raw=%u)",
+           this->target_speed_percent_, YESNO(override_enabled), static_cast<unsigned>(observed_speed_raw),
+           static_cast<unsigned>(this->target_speed_raw_));
 }
 
 void MCF8329AComponent::pulse_clear_faults() {
@@ -1486,7 +1531,7 @@ void MCF8329AComponent::handle_fault_shutdown_(bool fault_active, uint32_t contr
 
   this->fault_latched_ = true;
   ESP_LOGW(TAG, "Fault detected, forcing speed command to 0%%");
-  (void) this->set_speed_percent(0.0f);
+  (void) this->set_speed_percent(0.0f, "fault_shutdown");
 }
 
 }  // namespace mcf8329a

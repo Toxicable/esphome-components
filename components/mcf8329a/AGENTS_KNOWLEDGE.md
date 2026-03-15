@@ -36,6 +36,10 @@ Component-scoped notes for `components/mcf8329a`.
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
 - Runtime behavior:
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
+  - `set_speed_percent(...)` now logs `INFO` lines with caller reason (`number_control`, `startup_init`, `fault_shutdown`)
+    and raw speed code for command-traceability.
+  - If a non-zero target speed is active and no fault is active, component checks `ALGO_DEBUG1` in `update()` and
+    reasserts digital speed override/target (max once per second) if the device unexpectedly drops override or speed.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.

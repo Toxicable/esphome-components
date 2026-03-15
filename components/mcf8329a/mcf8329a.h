@@ -76,7 +76,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
 
   bool set_brake_override(bool brake_on);
   bool set_direction_mode(const std::string &direction_mode);
-  bool set_speed_percent(float speed_percent);
+  bool set_speed_percent(float speed_percent, const char *reason = "external");
   void pulse_clear_faults();
   void pulse_watchdog_tickle();
 
@@ -181,6 +181,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char *lock_mode_to_string_(uint8_t mode) const;
   const char *lock_retry_time_to_string_(uint8_t code) const;
   bool clear_mpet_bits_(const char *context);
+  void maintain_speed_command_(bool fault_active);
   void log_mpet_bemf_diagnostics_();
   void log_hw_lock_diagnostics_();
 
@@ -369,6 +370,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   std::string startup_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
+  uint32_t last_speed_hold_attempt_ms_{0};
   bool fault_latched_{false};
   bool normal_operation_ready_{false};
   uint32_t deferred_comms_last_retry_ms_{0};
@@ -380,6 +382,9 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool algorithm_state_valid_{false};
   bool algorithm_state_read_error_latched_{false};
   uint16_t last_algorithm_state_{0xFFFFu};
+  bool target_speed_set_{false};
+  float target_speed_percent_{0.0f};
+  uint16_t target_speed_raw_{0};
 
   MCF8329ABrakeSwitch *brake_switch_{nullptr};
   MCF8329ADirectionSelect *direction_select_{nullptr};
