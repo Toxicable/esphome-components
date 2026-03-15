@@ -40,6 +40,9 @@ Component-scoped notes for `components/mcf8329a`.
     and raw speed code for command-traceability.
   - If a non-zero target speed is active and no fault is active, component checks `ALGO_DEBUG1` in `update()` and
     reasserts digital speed override/target (max once per second) if the device unexpectedly drops override or speed.
+  - While a non-zero target speed is active and no fault is active, component logs a 1Hz `Run diag` INFO snapshot
+    (`ALGORITHM_STATE`, target/observed speed command, duty, volt_mag, `FG_SPEED_FDBK`, `SPEED_FDBK`) and emits a
+    one-shot warning if closed-loop stays in near-zero duty/volt_mag for >2s.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.

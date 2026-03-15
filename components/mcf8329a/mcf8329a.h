@@ -193,6 +193,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                        bool controller_fault_valid);
   void log_algorithm_state_transition_(uint32_t algo_status, const char *context);
+  void log_active_run_diagnostics_(uint32_t algo_status, bool algo_status_valid, bool fault_active);
   void publish_algo_status_(uint32_t algo_status);
   const char *brake_input_to_string_(uint32_t brake_input_value) const;
   const char *direction_input_to_string_(uint32_t direction_input_value) const;
@@ -202,6 +203,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
   static constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
   static constexpr uint16_t REG_ALGORITHM_STATE = 0x0196;
+  static constexpr uint16_t REG_FG_SPEED_FDBK = 0x019C;
+  static constexpr uint16_t REG_SPEED_FDBK = 0x076E;
   static constexpr uint16_t REG_MTR_PARAMS = 0x00E6;
   static constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
   static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
@@ -371,6 +374,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   uint32_t last_speed_hold_attempt_ms_{0};
+  uint32_t last_active_run_diag_log_ms_{0};
+  uint32_t low_torque_since_ms_{0};
   bool fault_latched_{false};
   bool normal_operation_ready_{false};
   uint32_t deferred_comms_last_retry_ms_{0};
@@ -381,6 +386,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool hw_lock_fault_latched_{false};
   bool algorithm_state_valid_{false};
   bool algorithm_state_read_error_latched_{false};
+  bool low_torque_warned_{false};
   uint16_t last_algorithm_state_{0xFFFFu};
   bool target_speed_set_{false};
   float target_speed_percent_{0.0f};

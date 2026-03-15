@@ -78,6 +78,9 @@ void MCF8329AComponent::setup() {
   this->target_speed_percent_ = 0.0f;
   this->target_speed_raw_ = 0;
   this->last_speed_hold_attempt_ms_ = 0u;
+  this->last_active_run_diag_log_ms_ = 0u;
+  this->low_torque_since_ms_ = 0u;
+  this->low_torque_warned_ = false;
 
   if (!this->scan_i2c_bus_()) {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
@@ -139,6 +142,7 @@ void MCF8329AComponent::update() {
   } else {
     this->fault_latched_ = false;
   }
+  this->log_active_run_diagnostics_(algo_status, algo_ok, fault_active);
 
   if (this->motor_bemf_constant_sensor_ != nullptr) {
     uint32_t mtr_params = 0;
@@ -878,6 +882,74 @@ void MCF8329AComponent::maintain_speed_command_(bool fault_active) {
            "Speed command hold: restored target %.1f%% (observed override=%s raw=%u, target_raw=%u)",
            this->target_speed_percent_, YESNO(override_enabled), static_cast<unsigned>(observed_speed_raw),
            static_cast<unsigned>(this->target_speed_raw_));
+}
+
+void MCF8329AComponent::log_active_run_diagnostics_(uint32_t algo_status, bool algo_status_valid, bool fault_active) {
+  if (!algo_status_valid || fault_active || !this->target_speed_set_ || this->target_speed_percent_ <= 0.0f) {
+    this->low_torque_since_ms_ = 0u;
+    this->low_torque_warned_ = false;
+    return;
+  }
+
+  const uint32_t now = millis();
+  if (this->last_active_run_diag_log_ms_ != 0u && (now - this->last_active_run_diag_log_ms_) < 1000u) {
+    return;
+  }
+  this->last_active_run_diag_log_ms_ = now;
+
+  uint16_t algo_state = 0xFFFFu;
+  bool algo_state_ok = this->read_reg16(REG_ALGORITHM_STATE, algo_state);
+
+  uint16_t duty_raw = static_cast<uint16_t>((algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT);
+  uint16_t volt_mag_raw = static_cast<uint16_t>((algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT);
+  const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
+  const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
+
+  float observed_speed_cmd_percent = -1.0f;
+  uint16_t observed_speed_raw = 0;
+  uint32_t algo_debug1 = 0;
+  if (this->read_reg32(REG_ALGO_DEBUG1, algo_debug1)) {
+    observed_speed_raw = static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
+    observed_speed_cmd_percent = (static_cast<float>(observed_speed_raw) * 100.0f) / 32767.0f;
+  }
+
+  uint32_t fg_speed_fdbk = 0;
+  bool fg_speed_ok = this->read_reg32(REG_FG_SPEED_FDBK, fg_speed_fdbk);
+  uint32_t speed_fdbk = 0;
+  bool speed_fdbk_ok = this->read_reg32(REG_SPEED_FDBK, speed_fdbk);
+
+  if (algo_state_ok) {
+    ESP_LOGI(TAG,
+             "Run diag: state=0x%04X(%s) target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% fg_speed=%s0x%08X speed_fdbk=%s0x%08X",
+             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), this->target_speed_percent_,
+             observed_speed_cmd_percent, duty_percent, volt_mag_percent, fg_speed_ok ? "" : "read_fail:",
+             static_cast<unsigned>(fg_speed_fdbk), speed_fdbk_ok ? "" : "read_fail:", static_cast<unsigned>(speed_fdbk));
+  } else {
+    ESP_LOGI(TAG,
+             "Run diag: state=read_fail target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% fg_speed=%s0x%08X speed_fdbk=%s0x%08X",
+             this->target_speed_percent_, observed_speed_cmd_percent, duty_percent, volt_mag_percent, fg_speed_ok ? "" : "read_fail:",
+             static_cast<unsigned>(fg_speed_fdbk), speed_fdbk_ok ? "" : "read_fail:", static_cast<unsigned>(speed_fdbk));
+  }
+
+  const bool closed_loop_state =
+      algo_state_ok && (algo_state == 0x0008u || algo_state == 0x0009u || algo_state == 0x000Au);
+  const bool low_torque = closed_loop_state && this->target_speed_percent_ >= 5.0f && duty_percent < 1.0f && volt_mag_percent < 1.0f;
+  if (!low_torque) {
+    this->low_torque_since_ms_ = 0u;
+    this->low_torque_warned_ = false;
+    return;
+  }
+  if (this->low_torque_since_ms_ == 0u) {
+    this->low_torque_since_ms_ = now;
+    return;
+  }
+  if (!this->low_torque_warned_ && (now - this->low_torque_since_ms_) >= 2000u) {
+    ESP_LOGW(TAG,
+             "Low-torque condition: closed-loop active but duty/volt_mag are near zero for >2s (target=%.1f%%). "
+             "This suggests control decoupling, not fault shutdown.",
+             this->target_speed_percent_);
+    this->low_torque_warned_ = true;
+  }
 }
 
 void MCF8329AComponent::pulse_clear_faults() {
