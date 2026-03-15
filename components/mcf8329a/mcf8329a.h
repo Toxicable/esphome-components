@@ -84,6 +84,10 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
   void set_clear_mpet_on_startup(bool clear_mpet_on_startup) { clear_mpet_on_startup_ = clear_mpet_on_startup; }
   void set_apply_startup_config(bool apply_startup_config) { apply_startup_config_ = apply_startup_config; }
+  void set_startup_motor_bemf_const(uint8_t startup_motor_bemf_const) {
+    startup_motor_bemf_const_ = startup_motor_bemf_const;
+    startup_motor_bemf_const_set_ = true;
+  }
   void set_startup_brake_mode(uint8_t startup_brake_mode) {
     startup_brake_mode_ = startup_brake_mode;
     startup_brake_mode_set_ = true;
@@ -153,6 +157,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
+  static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
 
@@ -195,6 +200,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_SHIFT = 28;
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK = (0xFu << 24);
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT = 24;
+  static constexpr uint32_t CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK = (0xFFu << 23);
+  static constexpr uint32_t CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT = 23;
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OTS = (1u << 29);
@@ -234,11 +241,13 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool auto_tickle_watchdog_{false};
   bool clear_mpet_on_startup_{true};
   bool apply_startup_config_{true};
+  bool startup_motor_bemf_const_set_{false};
   bool startup_brake_mode_set_{false};
   bool startup_brake_time_set_{false};
   bool startup_mode_set_{false};
   bool startup_align_time_set_{false};
   bool startup_direction_mode_set_{false};
+  uint8_t startup_motor_bemf_const_{0};
   uint8_t startup_brake_mode_{0};
   uint8_t startup_brake_time_{0};
   uint8_t startup_mode_{0};

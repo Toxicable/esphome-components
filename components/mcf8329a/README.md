@@ -33,6 +33,7 @@ mcf8329a:
   clear_mpet_on_startup: true
   # Optional startup motor config (applied after comms are established):
   # apply_startup_config: true
+  # startup_motor_bemf_const: 0x57
   # startup_brake_mode: recirculation
   # startup_brake_time: 100ms
   # startup_mode: double_align

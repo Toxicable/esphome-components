@@ -12,6 +12,7 @@ Component-scoped notes for `components/mcf8329a`.
   - `ALGO_CTRL1.CLR_FLT` is bit `29`, `WATCHDOG_TICKLE` is bit `10`.
 - `VM_VOLTAGE` is decoded as full 32-bit Q27 (`volts = raw * 60 / 2^27`) instead of an 11-bit field.
 - Startup motor config can be set from YAML and is applied at setup:
+  - `startup_motor_bemf_const` -> `CLOSED_LOOP3.MOTOR_BEMF_CONST[30:23]`
   - `startup_brake_mode` -> `CLOSED_LOOP2.MTR_STOP[30:28]`
   - `startup_brake_time` -> `CLOSED_LOOP2.MTR_STOP_BRK_TIME[27:24]`
   - `startup_mode` -> `MOTOR_STARTUP1.MTR_STARTUP[30:29]`
@@ -27,4 +28,5 @@ Component-scoped notes for `components/mcf8329a`.
 - Startup MPET mitigation:
   - `clear_mpet_on_startup` (default `true`) clears `ALGO_DEBUG2` MPET command bits (`MPET_CMD`, `MPET_KE`, `MPET_MECH`,
     `MPET_WRITE_SHADOW`) during post-comms setup.
+  - With `clear_mpet_on_startup: true`, non-zero speed commands also defensively clear MPET bits first.
   - If `MPET_BEMF_FAULT` is still present immediately after startup setup, component pulses `CLR_FLT` once automatically.

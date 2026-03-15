@@ -153,6 +153,11 @@ void MCF8329AComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
   ESP_LOGCONFIG(TAG, "  Clear MPET bits on startup: %s", YESNO(this->clear_mpet_on_startup_));
   ESP_LOGCONFIG(TAG, "  Apply startup config: %s", YESNO(this->apply_startup_config_));
+  if (this->startup_motor_bemf_const_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup motor BEMF const: 0x%02X", this->startup_motor_bemf_const_);
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup motor BEMF const: (unchanged)");
+  }
   ESP_LOGCONFIG(TAG, "  Startup brake mode: %s",
                 this->startup_brake_mode_set_ ? this->startup_brake_mode_to_string_(this->startup_brake_mode_)
                                               : "(unchanged)");
@@ -364,7 +369,8 @@ void MCF8329AComponent::apply_post_comms_setup_() {
 
 bool MCF8329AComponent::apply_startup_motor_config_() {
   const bool has_startup_settings =
-      this->startup_brake_mode_set_ || this->startup_brake_time_set_ || this->startup_mode_set_ || this->startup_align_time_set_;
+      this->startup_motor_bemf_const_set_ || this->startup_brake_mode_set_ || this->startup_brake_time_set_ ||
+      this->startup_mode_set_ || this->startup_align_time_set_;
   const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
       (this->apply_startup_config_ && this->startup_direction_mode_set_) ? this->startup_direction_mode_ : "hardware";
@@ -415,6 +421,23 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     ESP_LOGI(TAG, "MOTOR_STARTUP1 startup cfg: 0x%08X -> 0x%08X", motor_startup1, motor_startup1_next);
   }
 
+  uint32_t closed_loop3 = 0;
+  if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3)) {
+    ESP_LOGW(TAG, "Failed to read CLOSED_LOOP3 for startup config");
+    this->startup_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t closed_loop3_next = closed_loop3;
+  if (apply_custom_settings && this->startup_motor_bemf_const_set_) {
+    closed_loop3_next = (closed_loop3_next & ~CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) |
+                        ((static_cast<uint32_t>(this->startup_motor_bemf_const_) << CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT) &
+                         CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK);
+  }
+  if (apply_custom_settings && closed_loop3_next != closed_loop3) {
+    ok &= this->write_reg32(REG_CLOSED_LOOP3, closed_loop3_next);
+    ESP_LOGI(TAG, "CLOSED_LOOP3 startup cfg: 0x%08X -> 0x%08X", closed_loop3, closed_loop3_next);
+  }
+
   if (!this->apply_startup_config_) {
     ESP_LOGI(TAG, "Startup motor config application disabled");
   }
@@ -427,6 +450,10 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   if (!this->read_reg32(REG_MOTOR_STARTUP1, motor_startup1_effective)) {
     ESP_LOGW(TAG, "Failed to read back MOTOR_STARTUP1 after startup config apply");
   }
+  uint32_t closed_loop3_effective = closed_loop3_next;
+  if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3_effective)) {
+    ESP_LOGW(TAG, "Failed to read back CLOSED_LOOP3 after startup config apply");
+  }
 
   const uint8_t effective_brake_mode =
       static_cast<uint8_t>((closed_loop2_effective & CLOSED_LOOP2_MTR_STOP_MASK) >> CLOSED_LOOP2_MTR_STOP_SHIFT);
@@ -436,12 +463,15 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_MTR_STARTUP_MASK) >> MOTOR_STARTUP1_MTR_STARTUP_SHIFT);
   const uint8_t effective_align_time =
       static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_ALIGN_TIME_MASK) >> MOTOR_STARTUP1_ALIGN_TIME_SHIFT);
+  const uint8_t effective_motor_bemf_const = static_cast<uint8_t>(
+      (closed_loop3_effective & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
   const char *apply_state = this->apply_startup_config_ ? "on" : "off";
   const char *profile_state = apply_custom_settings ? "custom" : "current";
   char summary[192];
   std::snprintf(summary, sizeof(summary),
-                "apply=%s profile=%s dir=%s startup=%s align=%s stop=%s stop_brake=%s", apply_state, profile_state,
-                effective_direction.c_str(), this->startup_mode_to_string_(effective_startup_mode),
+                "apply=%s profile=%s dir=%s bemf=0x%02X startup=%s align=%s stop=%s stop_brake=%s", apply_state,
+                profile_state, effective_direction.c_str(), static_cast<unsigned>(effective_motor_bemf_const),
+                this->startup_mode_to_string_(effective_startup_mode),
                 this->startup_align_time_to_string_(effective_align_time),
                 this->startup_brake_mode_to_string_(effective_brake_mode),
                 this->startup_brake_time_to_string_(effective_brake_time));
@@ -517,6 +547,23 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent) {
   }
 
   const uint16_t digital_speed_ctrl = static_cast<uint16_t>(lroundf((clamped / 100.0f) * 32767.0f));
+
+  if (clamped > 0.0f && this->clear_mpet_on_startup_) {
+    uint32_t algo_debug2 = 0;
+    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+      const uint32_t mpet_bits = algo_debug2 & ALGO_DEBUG2_MPET_ALL_MASK;
+      if (mpet_bits != 0u) {
+        const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
+        if (this->write_reg32(REG_ALGO_DEBUG2, next)) {
+          ESP_LOGW(TAG, "Cleared MPET bits before speed command: 0x%08X -> 0x%08X", algo_debug2, next);
+        } else {
+          ESP_LOGW(TAG, "Failed to clear MPET bits before speed command");
+        }
+      }
+    } else {
+      ESP_LOGW(TAG, "Failed to read ALGO_DEBUG2 before speed command");
+    }
+  }
 
   uint32_t value = ALGO_DEBUG1_OVERRIDE_MASK;
   value |= (static_cast<uint32_t>(digital_speed_ctrl) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK;
