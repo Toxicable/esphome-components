@@ -128,6 +128,30 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_lock_retry_time_ = startup_lock_retry_time;
     startup_lock_retry_time_set_ = true;
   }
+  void set_startup_abn_speed_lock_enable(bool startup_abn_speed_lock_enable) {
+    startup_abn_speed_lock_enable_ = startup_abn_speed_lock_enable;
+    startup_abn_speed_lock_enable_set_ = true;
+  }
+  void set_startup_abn_bemf_lock_enable(bool startup_abn_bemf_lock_enable) {
+    startup_abn_bemf_lock_enable_ = startup_abn_bemf_lock_enable;
+    startup_abn_bemf_lock_enable_set_ = true;
+  }
+  void set_startup_no_motor_lock_enable(bool startup_no_motor_lock_enable) {
+    startup_no_motor_lock_enable_ = startup_no_motor_lock_enable;
+    startup_no_motor_lock_enable_set_ = true;
+  }
+  void set_startup_lock_abn_speed_threshold(uint8_t startup_lock_abn_speed_threshold) {
+    startup_lock_abn_speed_threshold_ = startup_lock_abn_speed_threshold;
+    startup_lock_abn_speed_threshold_set_ = true;
+  }
+  void set_startup_abnormal_bemf_threshold(uint8_t startup_abnormal_bemf_threshold) {
+    startup_abnormal_bemf_threshold_ = startup_abnormal_bemf_threshold;
+    startup_abnormal_bemf_threshold_set_ = true;
+  }
+  void set_startup_no_motor_threshold(uint8_t startup_no_motor_threshold) {
+    startup_no_motor_threshold_ = startup_no_motor_threshold;
+    startup_no_motor_threshold_set_ = true;
+  }
 
   void set_brake_switch(MCF8329ABrakeSwitch *sw) { brake_switch_ = sw; }
   void set_direction_select(MCF8329ADirectionSelect *sel) { direction_select_ = sel; }
@@ -256,6 +280,15 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_MASK = (0xFu << 3);
   static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_SHIFT = 3;
 
+  static constexpr uint32_t FAULT_CONFIG2_LOCK1_EN_MASK = (1u << 30);
+  static constexpr uint32_t FAULT_CONFIG2_LOCK2_EN_MASK = (1u << 29);
+  static constexpr uint32_t FAULT_CONFIG2_LOCK3_EN_MASK = (1u << 28);
+  static constexpr uint32_t FAULT_CONFIG2_LOCK_ABN_SPEED_MASK = (0x7u << 25);
+  static constexpr uint32_t FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT = 25;
+  static constexpr uint32_t FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK = (0x7u << 22);
+  static constexpr uint32_t FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT = 22;
+  static constexpr uint32_t FAULT_CONFIG2_NO_MTR_THR_MASK = (0x7u << 19);
+  static constexpr uint32_t FAULT_CONFIG2_NO_MTR_THR_SHIFT = 19;
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK = (0xFu << 15);
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT = 15;
 
@@ -308,6 +341,12 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool startup_lock_ilimit_set_{false};
   bool startup_hw_lock_ilimit_set_{false};
   bool startup_lock_retry_time_set_{false};
+  bool startup_abn_speed_lock_enable_set_{false};
+  bool startup_abn_bemf_lock_enable_set_{false};
+  bool startup_no_motor_lock_enable_set_{false};
+  bool startup_lock_abn_speed_threshold_set_{false};
+  bool startup_abnormal_bemf_threshold_set_{false};
+  bool startup_no_motor_threshold_set_{false};
   uint8_t startup_motor_bemf_const_{0};
   uint8_t startup_brake_mode_{0};
   uint8_t startup_brake_time_{0};
@@ -318,6 +357,12 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint8_t startup_lock_ilimit_{0};
   uint8_t startup_hw_lock_ilimit_{0};
   uint8_t startup_lock_retry_time_{0};
+  bool startup_abn_speed_lock_enable_{false};
+  bool startup_abn_bemf_lock_enable_{false};
+  bool startup_no_motor_lock_enable_{false};
+  uint8_t startup_lock_abn_speed_threshold_{0};
+  uint8_t startup_abnormal_bemf_threshold_{0};
+  uint8_t startup_no_motor_threshold_{0};
   std::string startup_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};

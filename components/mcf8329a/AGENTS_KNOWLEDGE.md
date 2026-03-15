@@ -26,6 +26,11 @@ Component-scoped notes for `components/mcf8329a`.
   - `startup_lock_ilimit_percent` -> `FAULT_CONFIG1.LOCK_ILIMIT[22:19]`
   - `startup_hw_lock_ilimit_percent` -> `FAULT_CONFIG1.HW_LOCK_ILIMIT[26:23]`
   - `startup_lock_retry_time` -> `FAULT_CONFIG1.LCK_RETRY[10:7]`
+  - `startup_abn_speed_lock_enable`/`startup_abn_bemf_lock_enable`/`startup_no_motor_lock_enable` ->
+    `FAULT_CONFIG2.LOCK1_EN[30]`/`LOCK2_EN[29]`/`LOCK3_EN[28]`
+  - `startup_lock_abn_speed_threshold_percent` -> `FAULT_CONFIG2.LOCK_ABN_SPEED[27:25]`
+  - `startup_abnormal_bemf_threshold_percent` -> `FAULT_CONFIG2.ABNORMAL_BEMF_THR[24:22]`
+  - `startup_no_motor_threshold_percent` -> `FAULT_CONFIG2.NO_MTR_THR[21:19]`
 - Added key-info telemetry fields:
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
@@ -37,7 +42,7 @@ Component-scoped notes for `components/mcf8329a`.
 - On `MPET_BEMF_FAULT`, component logs one-shot diagnostics (speed command, brake input decode, MPET bits, motor BEMF const)
   plus a startup hint to command >10% then ramp down.
 - On `HW_LOCK_LIMIT`, component logs one-shot diagnostics including effective `ILIMIT`, lock current limits, lock modes,
-  and lock retry time.
+  retry, lock enable bits, and ABN/no-motor thresholds.
 - Startup MPET mitigation:
   - `clear_mpet_on_startup` (default `true`) clears `ALGO_DEBUG2` MPET command bits (`MPET_CMD`, `MPET_KE`, `MPET_MECH`,
     `MPET_WRITE_SHADOW`) during post-comms setup.

@@ -24,6 +24,12 @@ CONF_STARTUP_LOCK_MODE = "startup_lock_mode"
 CONF_STARTUP_LOCK_ILIMIT_PERCENT = "startup_lock_ilimit_percent"
 CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT = "startup_hw_lock_ilimit_percent"
 CONF_STARTUP_LOCK_RETRY_TIME = "startup_lock_retry_time"
+CONF_STARTUP_ABN_SPEED_LOCK_ENABLE = "startup_abn_speed_lock_enable"
+CONF_STARTUP_ABN_BEMF_LOCK_ENABLE = "startup_abn_bemf_lock_enable"
+CONF_STARTUP_NO_MOTOR_LOCK_ENABLE = "startup_no_motor_lock_enable"
+CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT = "startup_lock_abn_speed_threshold_percent"
+CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT = "startup_abnormal_bemf_threshold_percent"
+CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT = "startup_no_motor_threshold_percent"
 
 STARTUP_BRAKE_MODE_OPTIONS = {
     "hiz": 0,
@@ -124,6 +130,39 @@ LOCK_ILIMIT_PERCENT_TO_CODE = {
     95: 15,
 }
 
+LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE = {
+    130: 0,
+    140: 1,
+    150: 2,
+    160: 3,
+    170: 4,
+    180: 5,
+    190: 6,
+    200: 7,
+}
+
+ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE = {
+    40.0: 0,
+    45.0: 1,
+    50.0: 2,
+    55.0: 3,
+    60.0: 4,
+    65.0: 5,
+    67.5: 6,
+    70.0: 7,
+}
+
+NO_MOTOR_THRESHOLD_PERCENT_TO_CODE = {
+    1.0: 0,
+    2.0: 1,
+    3.0: 2,
+    4.0: 3,
+    5.0: 4,
+    7.5: 5,
+    10.0: 6,
+    20.0: 7,
+}
+
 
 def validate_lock_ilimit_percent(value):
     value = cv.int_(value)
@@ -133,6 +172,38 @@ def validate_lock_ilimit_percent(value):
             + ", ".join(str(v) for v in LOCK_ILIMIT_PERCENT_TO_CODE)
         )
     return value
+
+
+def validate_lock_abn_speed_threshold_percent(value):
+    value = cv.int_(value)
+    if value not in LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE:
+        raise cv.Invalid(
+            "abnormal speed threshold percent must be one of: "
+            + ", ".join(str(v) for v in LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE)
+        )
+    return value
+
+
+def validate_abnormal_bemf_threshold_percent(value):
+    value = cv.float_(value)
+    for allowed in ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "abnormal BEMF threshold percent must be one of: "
+        + ", ".join(str(v) for v in ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE)
+    )
+
+
+def validate_no_motor_threshold_percent(value):
+    value = cv.float_(value)
+    for allowed in NO_MOTOR_THRESHOLD_PERCENT_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "no-motor threshold percent must be one of: "
+        + ", ".join(str(v) for v in NO_MOTOR_THRESHOLD_PERCENT_TO_CODE)
+    )
 
 
 CONFIG_SCHEMA = (
@@ -154,6 +225,12 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_LOCK_RETRY_TIME): cv.enum(STARTUP_LOCK_RETRY_TIME_OPTIONS, lower=True),
+            cv.Optional(CONF_STARTUP_ABN_SPEED_LOCK_ENABLE): cv.boolean,
+            cv.Optional(CONF_STARTUP_ABN_BEMF_LOCK_ENABLE): cv.boolean,
+            cv.Optional(CONF_STARTUP_NO_MOTOR_LOCK_ENABLE): cv.boolean,
+            cv.Optional(CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT): validate_lock_abn_speed_threshold_percent,
+            cv.Optional(CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
+            cv.Optional(CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
         }
     )
     .extend(cv.polling_component_schema("250ms"))
@@ -193,3 +270,27 @@ async def to_code(config):
         cg.add(var.set_startup_hw_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT]]))
     if CONF_STARTUP_LOCK_RETRY_TIME in config:
         cg.add(var.set_startup_lock_retry_time(config[CONF_STARTUP_LOCK_RETRY_TIME]))
+    if CONF_STARTUP_ABN_SPEED_LOCK_ENABLE in config:
+        cg.add(var.set_startup_abn_speed_lock_enable(config[CONF_STARTUP_ABN_SPEED_LOCK_ENABLE]))
+    if CONF_STARTUP_ABN_BEMF_LOCK_ENABLE in config:
+        cg.add(var.set_startup_abn_bemf_lock_enable(config[CONF_STARTUP_ABN_BEMF_LOCK_ENABLE]))
+    if CONF_STARTUP_NO_MOTOR_LOCK_ENABLE in config:
+        cg.add(var.set_startup_no_motor_lock_enable(config[CONF_STARTUP_NO_MOTOR_LOCK_ENABLE]))
+    if CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT in config:
+        cg.add(
+            var.set_startup_lock_abn_speed_threshold(
+                LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT]]
+            )
+        )
+    if CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT in config:
+        cg.add(
+            var.set_startup_abnormal_bemf_threshold(
+                ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT]]
+            )
+        )
+    if CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT in config:
+        cg.add(
+            var.set_startup_no_motor_threshold(
+                NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT]]
+            )
+        )

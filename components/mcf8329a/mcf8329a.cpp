@@ -15,6 +15,15 @@ static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
     5,  10, 15, 20, 25, 30, 40, 50,
     60, 65, 70, 75, 80, 85, 90, 95,
 };
+static const char *const LOCK_ABN_SPEED_THRESHOLD_LABELS[8] = {
+    "130%", "140%", "150%", "160%", "170%", "180%", "190%", "200%",
+};
+static const char *const ABNORMAL_BEMF_THRESHOLD_LABELS[8] = {
+    "40%", "45%", "50%", "55%", "60%", "65%", "67.5%", "70%",
+};
+static const char *const NO_MOTOR_THRESHOLD_LABELS[8] = {
+    "1%", "2%", "3%", "4%", "5%", "7.5%", "10%", "20%",
+};
 
 void MCF8329ABrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -205,6 +214,24 @@ void MCF8329AComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  Startup lock retry: %s",
                 this->startup_lock_retry_time_set_ ? this->lock_retry_time_to_string_(this->startup_lock_retry_time_)
                                                    : "(unchanged)");
+  ESP_LOGCONFIG(TAG, "  Startup ABN speed lock enable: %s",
+                this->startup_abn_speed_lock_enable_set_ ? YESNO(this->startup_abn_speed_lock_enable_) : "(unchanged)");
+  ESP_LOGCONFIG(TAG, "  Startup ABN BEMF lock enable: %s",
+                this->startup_abn_bemf_lock_enable_set_ ? YESNO(this->startup_abn_bemf_lock_enable_) : "(unchanged)");
+  ESP_LOGCONFIG(TAG, "  Startup no-motor lock enable: %s",
+                this->startup_no_motor_lock_enable_set_ ? YESNO(this->startup_no_motor_lock_enable_) : "(unchanged)");
+  ESP_LOGCONFIG(TAG, "  Startup ABN speed threshold: %s",
+                this->startup_lock_abn_speed_threshold_set_
+                    ? LOCK_ABN_SPEED_THRESHOLD_LABELS[this->startup_lock_abn_speed_threshold_ & 0x7u]
+                    : "(unchanged)");
+  ESP_LOGCONFIG(TAG, "  Startup ABN BEMF threshold: %s",
+                this->startup_abnormal_bemf_threshold_set_
+                    ? ABNORMAL_BEMF_THRESHOLD_LABELS[this->startup_abnormal_bemf_threshold_ & 0x7u]
+                    : "(unchanged)");
+  ESP_LOGCONFIG(TAG, "  Startup no-motor threshold: %s",
+                this->startup_no_motor_threshold_set_
+                    ? NO_MOTOR_THRESHOLD_LABELS[this->startup_no_motor_threshold_ & 0x7u]
+                    : "(unchanged)");
   ESP_LOGCONFIG(TAG, "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
                 static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
                 static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS), static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
@@ -392,7 +419,10 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   const bool has_startup_settings =
       this->startup_motor_bemf_const_set_ || this->startup_brake_mode_set_ || this->startup_brake_time_set_ ||
       this->startup_mode_set_ || this->startup_align_time_set_ || this->startup_ilimit_set_ || this->startup_lock_mode_set_ ||
-      this->startup_lock_ilimit_set_ || this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_;
+      this->startup_lock_ilimit_set_ || this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_ ||
+      this->startup_abn_speed_lock_enable_set_ || this->startup_abn_bemf_lock_enable_set_ ||
+      this->startup_no_motor_lock_enable_set_ || this->startup_lock_abn_speed_threshold_set_ ||
+      this->startup_abnormal_bemf_threshold_set_ || this->startup_no_motor_threshold_set_;
   const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
       (this->apply_startup_config_ && this->startup_direction_mode_set_) ? this->startup_direction_mode_ : "hardware";
@@ -445,6 +475,44 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t fault_config2_next = fault_config2;
+  if (apply_custom_settings && this->startup_abn_speed_lock_enable_set_) {
+    if (this->startup_abn_speed_lock_enable_) {
+      fault_config2_next |= FAULT_CONFIG2_LOCK1_EN_MASK;
+    } else {
+      fault_config2_next &= ~FAULT_CONFIG2_LOCK1_EN_MASK;
+    }
+  }
+  if (apply_custom_settings && this->startup_abn_bemf_lock_enable_set_) {
+    if (this->startup_abn_bemf_lock_enable_) {
+      fault_config2_next |= FAULT_CONFIG2_LOCK2_EN_MASK;
+    } else {
+      fault_config2_next &= ~FAULT_CONFIG2_LOCK2_EN_MASK;
+    }
+  }
+  if (apply_custom_settings && this->startup_no_motor_lock_enable_set_) {
+    if (this->startup_no_motor_lock_enable_) {
+      fault_config2_next |= FAULT_CONFIG2_LOCK3_EN_MASK;
+    } else {
+      fault_config2_next &= ~FAULT_CONFIG2_LOCK3_EN_MASK;
+    }
+  }
+  if (apply_custom_settings && this->startup_lock_abn_speed_threshold_set_) {
+    fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_LOCK_ABN_SPEED_MASK) |
+                         ((static_cast<uint32_t>(this->startup_lock_abn_speed_threshold_)
+                           << FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT) &
+                          FAULT_CONFIG2_LOCK_ABN_SPEED_MASK);
+  }
+  if (apply_custom_settings && this->startup_abnormal_bemf_threshold_set_) {
+    fault_config2_next =
+        (fault_config2_next & ~FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK) |
+        ((static_cast<uint32_t>(this->startup_abnormal_bemf_threshold_) << FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT) &
+         FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK);
+  }
+  if (apply_custom_settings && this->startup_no_motor_threshold_set_) {
+    fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_NO_MTR_THR_MASK) |
+                         ((static_cast<uint32_t>(this->startup_no_motor_threshold_) << FAULT_CONFIG2_NO_MTR_THR_SHIFT) &
+                          FAULT_CONFIG2_NO_MTR_THR_MASK);
+  }
   if (apply_custom_settings && this->startup_lock_mode_set_) {
     fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) |
                          ((static_cast<uint32_t>(this->startup_lock_mode_) << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) &
@@ -629,13 +697,23 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       static_cast<uint8_t>((fault_config1_effective & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT);
   const uint8_t effective_hw_lock_mode = static_cast<uint8_t>(
       (fault_config2_effective & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
+  const bool effective_lock1_en = (fault_config2_effective & FAULT_CONFIG2_LOCK1_EN_MASK) != 0u;
+  const bool effective_lock2_en = (fault_config2_effective & FAULT_CONFIG2_LOCK2_EN_MASK) != 0u;
+  const bool effective_lock3_en = (fault_config2_effective & FAULT_CONFIG2_LOCK3_EN_MASK) != 0u;
+  const uint8_t effective_lock_abn_speed = static_cast<uint8_t>(
+      (fault_config2_effective & FAULT_CONFIG2_LOCK_ABN_SPEED_MASK) >> FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT);
+  const uint8_t effective_abnormal_bemf_threshold = static_cast<uint8_t>(
+      (fault_config2_effective & FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK) >> FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT);
+  const uint8_t effective_no_motor_threshold = static_cast<uint8_t>(
+      (fault_config2_effective & FAULT_CONFIG2_NO_MTR_THR_MASK) >> FAULT_CONFIG2_NO_MTR_THR_SHIFT);
   const char *apply_state = this->apply_startup_config_ ? "on" : "off";
   const char *profile_state = apply_custom_settings ? "custom" : "current";
-  char summary[400];
+  char summary[640];
   std::snprintf(summary, sizeof(summary),
                 "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u startup=%s align=%s "
                 "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
-                "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s",
+                "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s "
+                "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
                 apply_state, profile_state, effective_direction.c_str(), static_cast<unsigned>(effective_motor_bemf_const),
                 static_cast<unsigned>(effective_motor_res), static_cast<unsigned>(effective_motor_ind),
                 static_cast<unsigned>(effective_spd_loop_kp), static_cast<unsigned>(effective_spd_loop_ki),
@@ -648,7 +726,11 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
                 static_cast<unsigned>(effective_hw_lock_ilimit),
                 static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_hw_lock_ilimit & 0x0Fu]),
                 this->lock_mode_to_string_(effective_lock_mode), this->lock_mode_to_string_(effective_mtr_lock_mode),
-                this->lock_mode_to_string_(effective_hw_lock_mode), this->lock_retry_time_to_string_(effective_lck_retry));
+                this->lock_mode_to_string_(effective_hw_lock_mode), this->lock_retry_time_to_string_(effective_lck_retry),
+                YESNO(effective_lock1_en), YESNO(effective_lock2_en), YESNO(effective_lock3_en),
+                LOCK_ABN_SPEED_THRESHOLD_LABELS[effective_lock_abn_speed & 0x7u],
+                ABNORMAL_BEMF_THRESHOLD_LABELS[effective_abnormal_bemf_threshold & 0x7u],
+                NO_MOTOR_THRESHOLD_LABELS[effective_no_motor_threshold & 0x7u]);
   this->startup_config_summary_ = summary;
   ESP_LOGI(TAG, "Startup motor config: %s", this->startup_config_summary_.c_str());
   return ok;
@@ -1131,10 +1213,20 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
         (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
     const uint8_t lck_retry =
         static_cast<uint8_t>((fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT);
+    const bool lock1_en = (fault_config2 & FAULT_CONFIG2_LOCK1_EN_MASK) != 0u;
+    const bool lock2_en = (fault_config2 & FAULT_CONFIG2_LOCK2_EN_MASK) != 0u;
+    const bool lock3_en = (fault_config2 & FAULT_CONFIG2_LOCK3_EN_MASK) != 0u;
+    const uint8_t lock_abn_speed = static_cast<uint8_t>(
+        (fault_config2 & FAULT_CONFIG2_LOCK_ABN_SPEED_MASK) >> FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT);
+    const uint8_t abnormal_bemf_threshold = static_cast<uint8_t>(
+        (fault_config2 & FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK) >> FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT);
+    const uint8_t no_motor_threshold =
+        static_cast<uint8_t>((fault_config2 & FAULT_CONFIG2_NO_MTR_THR_MASK) >> FAULT_CONFIG2_NO_MTR_THR_SHIFT);
 
     ESP_LOGW(TAG,
              "HW_LOCK_LIMIT diag: speed_cmd=%.1f%% ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
-             "lock_mode=%u(%s) mtr_lock_mode=%u(%s) hw_lock_mode=%u(%s) lck_retry=%u(%s)",
+             "lock_mode=%u(%s) mtr_lock_mode=%u(%s) hw_lock_mode=%u(%s) lck_retry=%u(%s) "
+             "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
              speed_cmd_percent, static_cast<unsigned>(ilimit), static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[ilimit & 0x0Fu]),
              static_cast<unsigned>(lock_ilimit),
              static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[lock_ilimit & 0x0Fu]), static_cast<unsigned>(hw_lock_ilimit),
@@ -1142,7 +1234,10 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
              this->lock_mode_to_string_(lock_mode), static_cast<unsigned>(mtr_lock_mode),
              this->lock_mode_to_string_(mtr_lock_mode), static_cast<unsigned>(hw_lock_mode),
              this->lock_mode_to_string_(hw_lock_mode), static_cast<unsigned>(lck_retry),
-             this->lock_retry_time_to_string_(lck_retry));
+             this->lock_retry_time_to_string_(lck_retry), YESNO(lock1_en), YESNO(lock2_en), YESNO(lock3_en),
+             LOCK_ABN_SPEED_THRESHOLD_LABELS[lock_abn_speed & 0x7u],
+             ABNORMAL_BEMF_THRESHOLD_LABELS[abnormal_bemf_threshold & 0x7u],
+             NO_MOTOR_THRESHOLD_LABELS[no_motor_threshold & 0x7u]);
   } else {
     ESP_LOGW(TAG, "HW_LOCK_LIMIT diag: read failure ad1=%s fault_cfg1=%s fault_cfg2=%s", YESNO(algo_debug1_ok),
              YESNO(fault_config1_ok), YESNO(fault_config2_ok));

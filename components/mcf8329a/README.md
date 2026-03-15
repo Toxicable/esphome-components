@@ -45,6 +45,12 @@ mcf8329a:
   # startup_lock_ilimit_percent: 40
   # startup_hw_lock_ilimit_percent: 40
   # startup_lock_retry_time: 2s
+  # startup_abn_speed_lock_enable: true
+  # startup_abn_bemf_lock_enable: true
+  # startup_no_motor_lock_enable: true
+  # startup_lock_abn_speed_threshold_percent: 200
+  # startup_abnormal_bemf_threshold_percent: 40
+  # startup_no_motor_threshold_percent: 20
 
 switch:
   - platform: mcf8329a
