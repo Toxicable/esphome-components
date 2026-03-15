@@ -74,3 +74,6 @@ Component-scoped notes for `components/mcf8329a`.
     verify `CLOSED_LOOP4.MAX_SPEED`; too-low max speed for a high-kV motor can make the speed loop back off voltage and coast.
   - If startup overshoots hard right after `MOTOR_OPEN_LOOP -> MOTOR_CLOSED_LOOP_ALIGNED`, tune `MOTOR_STARTUP2`
     (`OL_ACC_A1`, `OL_ILIMIT`, `AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`) before changing steady-state loop gains.
+  - For the 270kV 5065 test motor at ~27V, `startup_max_speed_hz: 900` produced correct steady-state scaling
+    (e.g. 15% command settling around ~135 Hz electrical), but overshoot still originated at open-loop handoff; this
+    separates steady-state scaling (`MAX_SPEED`) from transient handoff tuning (`MOTOR_STARTUP2`).
