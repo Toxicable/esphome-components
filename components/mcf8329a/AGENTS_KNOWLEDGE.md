@@ -12,6 +12,7 @@ Component-scoped notes for `components/mcf8329a`.
   - `ALGO_CTRL1.CLR_FLT` is bit `29`, `WATCHDOG_TICKLE` is bit `10`.
 - `VM_VOLTAGE` is decoded as full 32-bit Q27 (`volts = raw * 60 / 2^27`) instead of an 11-bit field.
 - Startup motor config can be set from YAML and is applied at setup:
+  - `startup_mode` and `startup_brake_mode` are required in YAML (explicit startup and stop strategy selection).
   - `startup_motor_bemf_const` -> `CLOSED_LOOP3.MOTOR_BEMF_CONST[30:23]`
   - `startup_brake_mode` -> `CLOSED_LOOP2.MTR_STOP[30:28]`
   - `startup_brake_time` -> `CLOSED_LOOP2.MTR_STOP_BRK_TIME[27:24]`
@@ -39,15 +40,16 @@ Component-scoped notes for `components/mcf8329a`.
 - Added key-info telemetry fields:
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
+- README YAML layout preference:
+  - Keep one example, but group optional startup knobs by purpose (direction/alignment, scaling, handoff, lock handling).
+  - Omit default-valued keys from the example unless they materially aid bring-up.
+  - Do not include `apply_startup_config`; startup config is always applied.
 - Runtime behavior:
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
   - `set_speed_percent(...)` now logs `INFO` lines with caller reason (`number_control`, `startup_init`, `fault_shutdown`)
     and raw speed code for command-traceability.
-  - If a non-zero target speed is active and no fault is active, component checks `ALGO_DEBUG1` in `update()` and
-    reasserts digital speed override/target (max once per second) if the device unexpectedly drops override or speed.
-  - While a non-zero target speed is active and no fault is active, component logs a 1Hz `Run diag` INFO snapshot
-    (`ALGORITHM_STATE`, target/observed speed command, duty, volt_mag, `MAX_SPEED`, `FG_SPEED_FDBK`, `SPEED_FDBK`)
-    and emits a one-shot warning if closed-loop stays in near-zero duty/volt_mag for >2s.
+  - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
+    algorithm-state transition logs and fault diagnostics for runtime visibility.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.
@@ -74,6 +76,9 @@ Component-scoped notes for `components/mcf8329a`.
     verify `CLOSED_LOOP4.MAX_SPEED`; too-low max speed for a high-kV motor can make the speed loop back off voltage and coast.
   - If startup overshoots hard right after `MOTOR_OPEN_LOOP -> MOTOR_CLOSED_LOOP_ALIGNED`, tune `MOTOR_STARTUP2`
     (`OL_ACC_A1`, `OL_ILIMIT`, `AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`) before changing steady-state loop gains.
+  - Back-voltage/regen stress is most sensitive to stop and current/accel settings: aggressive `startup_brake_mode`
+    (especially `active_spin_down`), long `startup_brake_time`, high `startup_ilimit_percent`/`startup_open_loop_ilimit_percent`,
+    and aggressive open-loop handoff tuning can all raise VM transients.
   - For the 270kV 5065 test motor at ~27V, `startup_max_speed_hz: 900` produced correct steady-state scaling
     (e.g. 15% command settling around ~135 Hz electrical), but overshoot still originated at open-loop handoff; this
     separates steady-state scaling (`MAX_SPEED`) from transient handoff tuning (`MOTOR_STARTUP2`).

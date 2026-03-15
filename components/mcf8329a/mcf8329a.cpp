@@ -132,13 +132,6 @@ void MCF8329AComponent::setup() {
   this->algorithm_state_valid_ = false;
   this->algorithm_state_read_error_latched_ = false;
   this->last_algorithm_state_ = 0xFFFFu;
-  this->target_speed_set_ = false;
-  this->target_speed_percent_ = 0.0f;
-  this->target_speed_raw_ = 0;
-  this->last_speed_hold_attempt_ms_ = 0u;
-  this->last_active_run_diag_log_ms_ = 0u;
-  this->low_torque_since_ms_ = 0u;
-  this->low_torque_warned_ = false;
 
   if (!this->scan_i2c_bus_()) {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
@@ -202,11 +195,9 @@ void MCF8329AComponent::update() {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
     this->handle_fault_shutdown_(fault_active, controller_fault_status, controller_ok);
-    this->maintain_speed_command_(fault_active);
   } else {
     this->fault_latched_ = false;
   }
-  this->log_active_run_diagnostics_(algo_status, algo_ok, fault_active);
 
   if (this->motor_bemf_constant_sensor_ != nullptr) {
     uint32_t mtr_params = 0;
@@ -248,7 +239,6 @@ void MCF8329AComponent::dump_config() {
   }
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
   ESP_LOGCONFIG(TAG, "  Clear MPET bits on startup: %s", YESNO(this->clear_mpet_on_startup_));
-  ESP_LOGCONFIG(TAG, "  Apply startup config: %s", YESNO(this->apply_startup_config_));
   if (this->startup_motor_bemf_const_set_) {
     ESP_LOGCONFIG(TAG, "  Startup motor BEMF const: 0x%02X", this->startup_motor_bemf_const_);
   } else {
@@ -603,9 +593,7 @@ void MCF8329AComponent::apply_post_comms_setup_() {
   }
 
   const std::string direction_mode =
-    (this->apply_startup_config_ && this->startup_direction_mode_set_)
-      ? this->startup_direction_mode_
-      : "hardware";
+    this->startup_direction_mode_set_ ? this->startup_direction_mode_ : "hardware";
   if (this->direction_select_ != nullptr) {
     this->direction_select_->publish_state(direction_mode);
   }
@@ -631,22 +619,8 @@ void MCF8329AComponent::apply_post_comms_setup_() {
 }
 
 bool MCF8329AComponent::apply_startup_motor_config_() {
-  const bool has_startup_settings =
-    this->startup_motor_bemf_const_set_ || this->startup_brake_mode_set_ ||
-    this->startup_brake_time_set_ || this->startup_mode_set_ || this->startup_align_time_set_ ||
-    this->startup_ilimit_set_ || this->startup_lock_mode_set_ || this->startup_lock_ilimit_set_ ||
-    this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_ ||
-    this->startup_abn_speed_lock_enable_set_ || this->startup_abn_bemf_lock_enable_set_ ||
-    this->startup_no_motor_lock_enable_set_ || this->startup_lock_abn_speed_threshold_set_ ||
-    this->startup_abnormal_bemf_threshold_set_ || this->startup_no_motor_threshold_set_ ||
-    this->startup_max_speed_set_ || this->startup_open_loop_ilimit_set_ ||
-    this->startup_open_loop_accel_set_ || this->startup_auto_handoff_enable_set_ ||
-    this->startup_open_to_closed_handoff_threshold_set_;
-  const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
-    (this->apply_startup_config_ && this->startup_direction_mode_set_)
-      ? this->startup_direction_mode_
-      : "hardware";
+    this->startup_direction_mode_set_ ? this->startup_direction_mode_ : "hardware";
 
   bool ok = true;
 
@@ -657,25 +631,25 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t fault_config1_next = fault_config1;
-  if (apply_custom_settings && this->startup_ilimit_set_) {
+  if (this->startup_ilimit_set_) {
     fault_config1_next =
       (fault_config1_next & ~FAULT_CONFIG1_ILIMIT_MASK) |
       ((static_cast<uint32_t>(this->startup_ilimit_) << FAULT_CONFIG1_ILIMIT_SHIFT) &
        FAULT_CONFIG1_ILIMIT_MASK);
   }
-  if (apply_custom_settings && this->startup_hw_lock_ilimit_set_) {
+  if (this->startup_hw_lock_ilimit_set_) {
     fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) |
                          ((static_cast<uint32_t>(this->startup_hw_lock_ilimit_)
                            << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) &
                           FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK);
   }
-  if (apply_custom_settings && this->startup_lock_ilimit_set_) {
+  if (this->startup_lock_ilimit_set_) {
     fault_config1_next =
       (fault_config1_next & ~FAULT_CONFIG1_LOCK_ILIMIT_MASK) |
       ((static_cast<uint32_t>(this->startup_lock_ilimit_) << FAULT_CONFIG1_LOCK_ILIMIT_SHIFT) &
        FAULT_CONFIG1_LOCK_ILIMIT_MASK);
   }
-  if (apply_custom_settings && this->startup_lock_mode_set_) {
+  if (this->startup_lock_mode_set_) {
     const uint32_t mode = static_cast<uint32_t>(this->startup_lock_mode_);
     fault_config1_next =
       (fault_config1_next & ~FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) |
@@ -684,13 +658,13 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       (fault_config1_next & ~FAULT_CONFIG1_MTR_LCK_MODE_MASK) |
       ((mode << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT) & FAULT_CONFIG1_MTR_LCK_MODE_MASK);
   }
-  if (apply_custom_settings && this->startup_lock_retry_time_set_) {
+  if (this->startup_lock_retry_time_set_) {
     fault_config1_next =
       (fault_config1_next & ~FAULT_CONFIG1_LCK_RETRY_MASK) |
       ((static_cast<uint32_t>(this->startup_lock_retry_time_) << FAULT_CONFIG1_LCK_RETRY_SHIFT) &
        FAULT_CONFIG1_LCK_RETRY_MASK);
   }
-  if (apply_custom_settings && fault_config1_next != fault_config1) {
+  if (fault_config1_next != fault_config1) {
     ok &= this->write_reg32(REG_FAULT_CONFIG1, fault_config1_next);
     ESP_LOGI(TAG, "FAULT_CONFIG1 startup cfg: 0x%08X -> 0x%08X", fault_config1, fault_config1_next);
   }
@@ -702,52 +676,52 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t fault_config2_next = fault_config2;
-  if (apply_custom_settings && this->startup_abn_speed_lock_enable_set_) {
+  if (this->startup_abn_speed_lock_enable_set_) {
     if (this->startup_abn_speed_lock_enable_) {
       fault_config2_next |= FAULT_CONFIG2_LOCK1_EN_MASK;
     } else {
       fault_config2_next &= ~FAULT_CONFIG2_LOCK1_EN_MASK;
     }
   }
-  if (apply_custom_settings && this->startup_abn_bemf_lock_enable_set_) {
+  if (this->startup_abn_bemf_lock_enable_set_) {
     if (this->startup_abn_bemf_lock_enable_) {
       fault_config2_next |= FAULT_CONFIG2_LOCK2_EN_MASK;
     } else {
       fault_config2_next &= ~FAULT_CONFIG2_LOCK2_EN_MASK;
     }
   }
-  if (apply_custom_settings && this->startup_no_motor_lock_enable_set_) {
+  if (this->startup_no_motor_lock_enable_set_) {
     if (this->startup_no_motor_lock_enable_) {
       fault_config2_next |= FAULT_CONFIG2_LOCK3_EN_MASK;
     } else {
       fault_config2_next &= ~FAULT_CONFIG2_LOCK3_EN_MASK;
     }
   }
-  if (apply_custom_settings && this->startup_lock_abn_speed_threshold_set_) {
+  if (this->startup_lock_abn_speed_threshold_set_) {
     fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_LOCK_ABN_SPEED_MASK) |
                          ((static_cast<uint32_t>(this->startup_lock_abn_speed_threshold_)
                            << FAULT_CONFIG2_LOCK_ABN_SPEED_SHIFT) &
                           FAULT_CONFIG2_LOCK_ABN_SPEED_MASK);
   }
-  if (apply_custom_settings && this->startup_abnormal_bemf_threshold_set_) {
+  if (this->startup_abnormal_bemf_threshold_set_) {
     fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK) |
                          ((static_cast<uint32_t>(this->startup_abnormal_bemf_threshold_)
                            << FAULT_CONFIG2_ABNORMAL_BEMF_THR_SHIFT) &
                           FAULT_CONFIG2_ABNORMAL_BEMF_THR_MASK);
   }
-  if (apply_custom_settings && this->startup_no_motor_threshold_set_) {
+  if (this->startup_no_motor_threshold_set_) {
     fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_NO_MTR_THR_MASK) |
                          ((static_cast<uint32_t>(this->startup_no_motor_threshold_)
                            << FAULT_CONFIG2_NO_MTR_THR_SHIFT) &
                           FAULT_CONFIG2_NO_MTR_THR_MASK);
   }
-  if (apply_custom_settings && this->startup_lock_mode_set_) {
+  if (this->startup_lock_mode_set_) {
     fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) |
                          ((static_cast<uint32_t>(this->startup_lock_mode_)
                            << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) &
                           FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK);
   }
-  if (apply_custom_settings && fault_config2_next != fault_config2) {
+  if (fault_config2_next != fault_config2) {
     ok &= this->write_reg32(REG_FAULT_CONFIG2, fault_config2_next);
     ESP_LOGI(TAG, "FAULT_CONFIG2 startup cfg: 0x%08X -> 0x%08X", fault_config2, fault_config2_next);
   }
@@ -759,19 +733,19 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t closed_loop2_next = closed_loop2;
-  if (apply_custom_settings && this->startup_brake_mode_set_) {
+  if (this->startup_brake_mode_set_) {
     closed_loop2_next =
       (closed_loop2_next & ~CLOSED_LOOP2_MTR_STOP_MASK) |
       ((static_cast<uint32_t>(this->startup_brake_mode_) << CLOSED_LOOP2_MTR_STOP_SHIFT) &
        CLOSED_LOOP2_MTR_STOP_MASK);
   }
-  if (apply_custom_settings && this->startup_brake_time_set_) {
+  if (this->startup_brake_time_set_) {
     closed_loop2_next =
       (closed_loop2_next & ~CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK) |
       ((static_cast<uint32_t>(this->startup_brake_time_) << CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT) &
        CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK);
   }
-  if (apply_custom_settings && this->startup_motor_bemf_const_set_) {
+  if (this->startup_motor_bemf_const_set_) {
     const uint32_t motor_res =
       (closed_loop2_next & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT;
     const uint32_t motor_ind =
@@ -795,7 +769,7 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       );
     }
   }
-  if (apply_custom_settings && closed_loop2_next != closed_loop2) {
+  if (closed_loop2_next != closed_loop2) {
     ok &= this->write_reg32(REG_CLOSED_LOOP2, closed_loop2_next);
     ESP_LOGI(TAG, "CLOSED_LOOP2 startup cfg: 0x%08X -> 0x%08X", closed_loop2, closed_loop2_next);
   }
@@ -807,19 +781,19 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t motor_startup1_next = motor_startup1;
-  if (apply_custom_settings && this->startup_mode_set_) {
+  if (this->startup_mode_set_) {
     motor_startup1_next =
       (motor_startup1_next & ~MOTOR_STARTUP1_MTR_STARTUP_MASK) |
       ((static_cast<uint32_t>(this->startup_mode_) << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) &
        MOTOR_STARTUP1_MTR_STARTUP_MASK);
   }
-  if (apply_custom_settings && this->startup_align_time_set_) {
+  if (this->startup_align_time_set_) {
     motor_startup1_next =
       (motor_startup1_next & ~MOTOR_STARTUP1_ALIGN_TIME_MASK) |
       ((static_cast<uint32_t>(this->startup_align_time_) << MOTOR_STARTUP1_ALIGN_TIME_SHIFT) &
        MOTOR_STARTUP1_ALIGN_TIME_MASK);
   }
-  if (apply_custom_settings && motor_startup1_next != motor_startup1) {
+  if (motor_startup1_next != motor_startup1) {
     ok &= this->write_reg32(REG_MOTOR_STARTUP1, motor_startup1_next);
     ESP_LOGI(
       TAG, "MOTOR_STARTUP1 startup cfg: 0x%08X -> 0x%08X", motor_startup1, motor_startup1_next
@@ -833,32 +807,32 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t motor_startup2_next = motor_startup2;
-  if (apply_custom_settings && this->startup_open_loop_ilimit_set_) {
+  if (this->startup_open_loop_ilimit_set_) {
     motor_startup2_next =
       (motor_startup2_next & ~MOTOR_STARTUP2_OL_ILIMIT_MASK) |
       ((static_cast<uint32_t>(this->startup_open_loop_ilimit_) << MOTOR_STARTUP2_OL_ILIMIT_SHIFT) &
        MOTOR_STARTUP2_OL_ILIMIT_MASK);
   }
-  if (apply_custom_settings && this->startup_open_loop_accel_set_) {
+  if (this->startup_open_loop_accel_set_) {
     motor_startup2_next =
       (motor_startup2_next & ~MOTOR_STARTUP2_OL_ACC_A1_MASK) |
       ((static_cast<uint32_t>(this->startup_open_loop_accel_) << MOTOR_STARTUP2_OL_ACC_A1_SHIFT) &
        MOTOR_STARTUP2_OL_ACC_A1_MASK);
   }
-  if (apply_custom_settings && this->startup_auto_handoff_enable_set_) {
+  if (this->startup_auto_handoff_enable_set_) {
     if (this->startup_auto_handoff_enable_) {
       motor_startup2_next |= MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
     } else {
       motor_startup2_next &= ~MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
     }
   }
-  if (apply_custom_settings && this->startup_open_to_closed_handoff_threshold_set_) {
+  if (this->startup_open_to_closed_handoff_threshold_set_) {
     motor_startup2_next = (motor_startup2_next & ~MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK) |
                           ((static_cast<uint32_t>(this->startup_open_to_closed_handoff_threshold_)
                             << MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) &
                            MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK);
   }
-  if (apply_custom_settings && motor_startup2_next != motor_startup2) {
+  if (motor_startup2_next != motor_startup2) {
     ok &= this->write_reg32(REG_MOTOR_STARTUP2, motor_startup2_next);
     ESP_LOGI(
       TAG, "MOTOR_STARTUP2 startup cfg: 0x%08X -> 0x%08X", motor_startup2, motor_startup2_next
@@ -879,13 +853,13 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t closed_loop4_next = closed_loop4;
-  if (apply_custom_settings && this->startup_max_speed_set_) {
+  if (this->startup_max_speed_set_) {
     closed_loop4_next =
       (closed_loop4_next & ~CLOSED_LOOP4_MAX_SPEED_MASK) |
       ((static_cast<uint32_t>(this->startup_max_speed_code_) << CLOSED_LOOP4_MAX_SPEED_SHIFT) &
        CLOSED_LOOP4_MAX_SPEED_MASK);
   }
-  if (apply_custom_settings && this->startup_motor_bemf_const_set_) {
+  if (this->startup_motor_bemf_const_set_) {
     closed_loop3_next = (closed_loop3_next & ~CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) |
                         ((static_cast<uint32_t>(this->startup_motor_bemf_const_)
                           << CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT) &
@@ -914,17 +888,13 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       ESP_LOGW(TAG, "Seeding SPD_LOOP_KI from 0 to 1 while applying startup_motor_bemf_const");
     }
   }
-  if (apply_custom_settings && closed_loop3_next != closed_loop3) {
+  if (closed_loop3_next != closed_loop3) {
     ok &= this->write_reg32(REG_CLOSED_LOOP3, closed_loop3_next);
     ESP_LOGI(TAG, "CLOSED_LOOP3 startup cfg: 0x%08X -> 0x%08X", closed_loop3, closed_loop3_next);
   }
-  if (apply_custom_settings && closed_loop4_next != closed_loop4) {
+  if (closed_loop4_next != closed_loop4) {
     ok &= this->write_reg32(REG_CLOSED_LOOP4, closed_loop4_next);
     ESP_LOGI(TAG, "CLOSED_LOOP4 startup cfg: 0x%08X -> 0x%08X", closed_loop4, closed_loop4_next);
-  }
-
-  if (!this->apply_startup_config_) {
-    ESP_LOGI(TAG, "Startup motor config application disabled");
   }
 
   uint32_t fault_config1_effective = fault_config1_next;
@@ -1040,20 +1010,16 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   const uint8_t effective_no_motor_threshold = static_cast<uint8_t>(
     (fault_config2_effective & FAULT_CONFIG2_NO_MTR_THR_MASK) >> FAULT_CONFIG2_NO_MTR_THR_SHIFT
   );
-  const char* apply_state = this->apply_startup_config_ ? "on" : "off";
-  const char* profile_state = apply_custom_settings ? "custom" : "current";
   char summary[640];
   std::snprintf(
     summary,
     sizeof(summary),
-    "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u "
+    "profile=custom dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u "
     "max_speed=%.1fHz(code=%u) "
     "startup=%s align=%s ol_ilimit=%u(%u%%) ol_acc=%.2fHz/s auto_handoff=%s handoff=%.1f%% "
     "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
     "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s "
     "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
-    apply_state,
-    profile_state,
     effective_direction.c_str(),
     static_cast<unsigned>(effective_motor_bemf_const),
     static_cast<unsigned>(effective_motor_res),
@@ -1202,9 +1168,6 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent, const char* reaso
     return false;
   }
 
-  this->target_speed_set_ = true;
-  this->target_speed_percent_ = clamped;
-  this->target_speed_raw_ = digital_speed_ctrl;
   ESP_LOGI(
     TAG,
     "Speed command write [%s]: %.1f%% (raw=%u)",
@@ -1217,174 +1180,6 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent, const char* reaso
     this->speed_number_->publish_state(clamped);
   }
   return true;
-}
-
-void MCF8329AComponent::maintain_speed_command_(bool fault_active) {
-  if (!this->target_speed_set_ || this->target_speed_raw_ == 0u || fault_active) {
-    return;
-  }
-
-  uint32_t algo_debug1 = 0;
-  if (!this->read_reg32(REG_ALGO_DEBUG1, algo_debug1)) {
-    return;
-  }
-
-  const bool override_enabled = (algo_debug1 & ALGO_DEBUG1_OVERRIDE_MASK) != 0u;
-  const uint16_t observed_speed_raw =
-    static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
-  if (override_enabled && observed_speed_raw == this->target_speed_raw_) {
-    return;
-  }
-
-  const uint32_t now = millis();
-  if (this->last_speed_hold_attempt_ms_ != 0u && (now - this->last_speed_hold_attempt_ms_) < 1000u) {
-    return;
-  }
-  this->last_speed_hold_attempt_ms_ = now;
-
-  const uint32_t value =
-    ALGO_DEBUG1_OVERRIDE_MASK |
-    ((static_cast<uint32_t>(this->target_speed_raw_) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK);
-  if (!this->update_bits32(
-        REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
-      )) {
-    ESP_LOGW(
-      TAG, "Speed command hold: failed to restore target %.1f%%", this->target_speed_percent_
-    );
-    return;
-  }
-
-  ESP_LOGI(
-    TAG,
-    "Speed command hold: restored target %.1f%% (observed override=%s raw=%u, target_raw=%u)",
-    this->target_speed_percent_,
-    YESNO(override_enabled),
-    static_cast<unsigned>(observed_speed_raw),
-    static_cast<unsigned>(this->target_speed_raw_)
-  );
-}
-
-void MCF8329AComponent::log_active_run_diagnostics_(
-  uint32_t algo_status, bool algo_status_valid, bool fault_active
-) {
-  if (!algo_status_valid || fault_active || !this->target_speed_set_ || this->target_speed_percent_ <= 0.0f) {
-    this->low_torque_since_ms_ = 0u;
-    this->low_torque_warned_ = false;
-    return;
-  }
-
-  const uint32_t now = millis();
-  if (this->last_active_run_diag_log_ms_ != 0u && (now - this->last_active_run_diag_log_ms_) < 1000u) {
-    return;
-  }
-  this->last_active_run_diag_log_ms_ = now;
-
-  uint16_t algo_state = 0xFFFFu;
-  bool algo_state_ok = this->read_reg16(REG_ALGORITHM_STATE, algo_state);
-
-  uint16_t duty_raw =
-    static_cast<uint16_t>((algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT);
-  uint16_t volt_mag_raw =
-    static_cast<uint16_t>((algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT);
-  const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
-  const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
-
-  float observed_speed_cmd_percent = -1.0f;
-  uint16_t observed_speed_raw = 0;
-  uint32_t algo_debug1 = 0;
-  if (this->read_reg32(REG_ALGO_DEBUG1, algo_debug1)) {
-    observed_speed_raw =
-      static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
-    observed_speed_cmd_percent = (static_cast<float>(observed_speed_raw) * 100.0f) / 32767.0f;
-  }
-
-  uint32_t fg_speed_fdbk = 0;
-  bool fg_speed_ok = this->read_reg32(REG_FG_SPEED_FDBK, fg_speed_fdbk);
-  uint32_t speed_fdbk = 0;
-  bool speed_fdbk_ok = this->read_reg32(REG_SPEED_FDBK, speed_fdbk);
-  uint32_t closed_loop4 = 0;
-  const bool closed_loop4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
-  const uint16_t max_speed_code =
-    closed_loop4_ok ? static_cast<uint16_t>(
-                        (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
-                      )
-                    : 0u;
-  const float max_speed_hz = closed_loop4_ok ? this->max_speed_code_to_hz_(max_speed_code) : 0.0f;
-  const float speed_feedback_scale = 1.0f / 134217728.0f;  // 1 / 2^27
-  const float fg_speed_hz =
-    (fg_speed_ok && closed_loop4_ok)
-      ? (static_cast<float>(fg_speed_fdbk) * speed_feedback_scale * max_speed_hz)
-      : 0.0f;
-  const float speed_fdbk_hz =
-    (speed_fdbk_ok && closed_loop4_ok)
-      ? (static_cast<float>(static_cast<int32_t>(speed_fdbk)) * speed_feedback_scale * max_speed_hz)
-      : 0.0f;
-
-  if (algo_state_ok) {
-    ESP_LOGI(
-      TAG,
-      "Run diag: state=0x%04X(%s) target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% "
-      "max_speed=%s%.1fHz(code=%u) fg_speed=%s%.1fHz(raw=0x%08X) speed_fdbk=%s%.1fHz(raw=0x%08X)",
-      static_cast<unsigned>(algo_state),
-      this->algorithm_state_to_string_(algo_state),
-      this->target_speed_percent_,
-      observed_speed_cmd_percent,
-      duty_percent,
-      volt_mag_percent,
-      closed_loop4_ok ? "" : "read_fail:",
-      max_speed_hz,
-      static_cast<unsigned>(max_speed_code),
-      fg_speed_ok ? "" : "read_fail:",
-      fg_speed_hz,
-      static_cast<unsigned>(fg_speed_fdbk),
-      speed_fdbk_ok ? "" : "read_fail:",
-      speed_fdbk_hz,
-      static_cast<unsigned>(speed_fdbk)
-    );
-  } else {
-    ESP_LOGI(
-      TAG,
-      "Run diag: state=read_fail target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% "
-      "max_speed=%s%.1fHz(code=%u) fg_speed=%s%.1fHz(raw=0x%08X) speed_fdbk=%s%.1fHz(raw=0x%08X)",
-      this->target_speed_percent_,
-      observed_speed_cmd_percent,
-      duty_percent,
-      volt_mag_percent,
-      closed_loop4_ok ? "" : "read_fail:",
-      max_speed_hz,
-      static_cast<unsigned>(max_speed_code),
-      fg_speed_ok ? "" : "read_fail:",
-      fg_speed_hz,
-      static_cast<unsigned>(fg_speed_fdbk),
-      speed_fdbk_ok ? "" : "read_fail:",
-      speed_fdbk_hz,
-      static_cast<unsigned>(speed_fdbk)
-    );
-  }
-
-  const bool closed_loop_state =
-    algo_state_ok && (algo_state == 0x0008u || algo_state == 0x0009u || algo_state == 0x000Au);
-  const bool low_torque = closed_loop_state && this->target_speed_percent_ >= 5.0f &&
-                          duty_percent < 1.0f && volt_mag_percent < 1.0f;
-  if (!low_torque) {
-    this->low_torque_since_ms_ = 0u;
-    this->low_torque_warned_ = false;
-    return;
-  }
-  if (this->low_torque_since_ms_ == 0u) {
-    this->low_torque_since_ms_ = now;
-    return;
-  }
-  if (!this->low_torque_warned_ && (now - this->low_torque_since_ms_) >= 2000u) {
-    ESP_LOGW(
-      TAG,
-      "Low-torque condition: closed-loop active but duty/volt_mag are near zero for >2s "
-      "(target=%.1f%%). "
-      "This suggests control decoupling, not fault shutdown.",
-      this->target_speed_percent_
-    );
-    this->low_torque_warned_ = true;
-  }
 }
 
 void MCF8329AComponent::pulse_clear_faults() {

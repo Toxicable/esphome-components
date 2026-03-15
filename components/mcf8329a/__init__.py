@@ -12,7 +12,6 @@ MCF8329AComponent = mcf8329a_ns.class_("MCF8329AComponent", cg.PollingComponent,
 CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
 CONF_CLEAR_MPET_ON_STARTUP = "clear_mpet_on_startup"
-CONF_APPLY_STARTUP_CONFIG = "apply_startup_config"
 CONF_STARTUP_MOTOR_BEMF_CONST = "startup_motor_bemf_const"
 CONF_STARTUP_BRAKE_MODE = "startup_brake_mode"
 CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
@@ -317,11 +316,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_INTER_BYTE_DELAY_US, default=100): cv.positive_int,
             cv.Optional(CONF_AUTO_TICKLE_WATCHDOG, default=False): cv.boolean,
             cv.Optional(CONF_CLEAR_MPET_ON_STARTUP, default=True): cv.boolean,
-            cv.Optional(CONF_APPLY_STARTUP_CONFIG, default=True): cv.boolean,
             cv.Optional(CONF_STARTUP_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
-            cv.Optional(CONF_STARTUP_BRAKE_MODE): cv.enum(STARTUP_BRAKE_MODE_OPTIONS, lower=True),
+            cv.Required(CONF_STARTUP_BRAKE_MODE): cv.enum(STARTUP_BRAKE_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_BRAKE_TIME): cv.enum(STARTUP_BRAKE_TIME_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
+            cv.Required(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_ALIGN_TIME): cv.enum(STARTUP_ALIGN_TIME_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_DIRECTION_MODE): cv.enum(STARTUP_DIRECTION_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
@@ -355,16 +353,13 @@ async def to_code(config):
     cg.add(var.set_inter_byte_delay_us(config[CONF_INTER_BYTE_DELAY_US]))
     cg.add(var.set_auto_tickle_watchdog(config[CONF_AUTO_TICKLE_WATCHDOG]))
     cg.add(var.set_clear_mpet_on_startup(config[CONF_CLEAR_MPET_ON_STARTUP]))
-    cg.add(var.set_apply_startup_config(config[CONF_APPLY_STARTUP_CONFIG]))
 
     if CONF_STARTUP_MOTOR_BEMF_CONST in config:
         cg.add(var.set_startup_motor_bemf_const(config[CONF_STARTUP_MOTOR_BEMF_CONST]))
-    if CONF_STARTUP_BRAKE_MODE in config:
-        cg.add(var.set_startup_brake_mode(config[CONF_STARTUP_BRAKE_MODE]))
+    cg.add(var.set_startup_brake_mode(config[CONF_STARTUP_BRAKE_MODE]))
     if CONF_STARTUP_BRAKE_TIME in config:
         cg.add(var.set_startup_brake_time(config[CONF_STARTUP_BRAKE_TIME]))
-    if CONF_STARTUP_MODE in config:
-        cg.add(var.set_startup_mode(config[CONF_STARTUP_MODE]))
+    cg.add(var.set_startup_mode(config[CONF_STARTUP_MODE]))
     if CONF_STARTUP_ALIGN_TIME in config:
         cg.add(var.set_startup_align_time(config[CONF_STARTUP_ALIGN_TIME]))
     if CONF_STARTUP_DIRECTION_MODE in config:

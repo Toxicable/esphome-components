@@ -10,7 +10,9 @@ This component provides manual runtime control and telemetry:
 - startup motor settings applied during setup (optional): braking strategy, stop brake time, startup mode, align time, and startup direction
 - fault summary text state plus core runtime telemetry
 
-`inter_byte_delay_us` is informational only with current ESPHome I2C transactions.
+`startup_mode` and `startup_brake_mode` are required; other `mcf8329a:` options are optional and intended for startup tuning. Start with the minimal block and enable extra knobs only when a specific fault/behavior needs tuning.
+
+`inter_byte_delay_us` is informational only with current ESPHome I2C transactions, so it is omitted below.
 
 ```yaml
 external_components:
@@ -22,40 +24,50 @@ i2c:
   sda: GPIO21
   scl: GPIO22
   scan: true
-  frequency: 50kHz
+  frequency: 100kHz
 
 mcf8329a:
   id: mcf
   address: 0x01
   update_interval: 250ms
-  inter_byte_delay_us: 100
-  auto_tickle_watchdog: false
-  clear_mpet_on_startup: true
-  # Optional startup motor config (applied after comms are established):
-  # apply_startup_config: true
-  # startup_motor_bemf_const: 0x57
-  # startup_brake_mode: recirculation
-  # startup_brake_time: 100ms
-  # startup_mode: double_align
-  # startup_align_time: 100ms
+  startup_mode: double_align
+  startup_brake_mode: recirculation
+
+  # Optional bring-up helpers:
+  # clear_mpet_on_startup: true
+  # auto_tickle_watchdog: false
+
+  # Startup direction/alignment:
   # startup_direction_mode: cw
-  # startup_ilimit_percent: 80
+  # startup_align_time: 100ms
+
+  # Motor/speed scaling:
+  # startup_motor_bemf_const: 0x57
   # startup_max_speed_hz: 900
+
+  # Startup current + open-loop handoff shaping:
+  # startup_ilimit_percent: 80
   # startup_open_loop_ilimit_percent: 50
   # startup_open_loop_accel_hz_per_s: 25
   # startup_auto_handoff_enable: false
   # startup_open_to_closed_handoff_percent: 10
-  # Optional startup lock/fault tuning (FAULT_CONFIG1/2):
+
+  # Lock/fault handling:
   # startup_lock_mode: retry
   # startup_lock_ilimit_percent: 40
   # startup_hw_lock_ilimit_percent: 40
   # startup_lock_retry_time: 2s
+
+  # Advanced lock detector thresholds (usually leave at defaults):
   # startup_abn_speed_lock_enable: true
   # startup_abn_bemf_lock_enable: true
   # startup_no_motor_lock_enable: true
   # startup_lock_abn_speed_threshold_percent: 200
   # startup_abnormal_bemf_threshold_percent: 40
   # startup_no_motor_threshold_percent: 20
+
+  # Optional stop/brake timing:
+  # startup_brake_time: 100ms
 
 switch:
   - platform: mcf8329a
@@ -111,3 +123,9 @@ sensor:
     #   # Measured/estimated BEMF (MTR_PARAMS), not the configured CLOSED_LOOP3 value.
 
 ```
+
+Back-voltage/regen risk knobs:
+- `startup_brake_mode`: `active_spin_down` is most aggressive and can push energy back to VM quickly.
+- `startup_brake_time`: longer brake windows increase energy returned/recirculated during stop events.
+- `startup_ilimit_percent` and `startup_open_loop_ilimit_percent`: high values increase transient current and bus stress.
+- `startup_open_loop_accel_hz_per_s` and low `startup_open_to_closed_handoff_percent`: aggressive handoff can overshoot and ring the bus.
