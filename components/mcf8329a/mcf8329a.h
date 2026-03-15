@@ -133,6 +133,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char *startup_align_time_to_string_(uint8_t code) const;
   const char *startup_brake_mode_to_string_(uint8_t code) const;
   const char *startup_brake_time_to_string_(uint8_t code) const;
+  bool clear_mpet_bits_(const char *context);
   void log_mpet_bemf_diagnostics_();
 
   bool perform_read_(uint16_t offset, uint32_t &value);

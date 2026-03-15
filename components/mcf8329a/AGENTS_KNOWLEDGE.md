@@ -29,4 +29,5 @@ Component-scoped notes for `components/mcf8329a`.
   - `clear_mpet_on_startup` (default `true`) clears `ALGO_DEBUG2` MPET command bits (`MPET_CMD`, `MPET_KE`, `MPET_MECH`,
     `MPET_WRITE_SHADOW`) during post-comms setup.
   - With `clear_mpet_on_startup: true`, non-zero speed commands also defensively clear MPET bits first.
+  - `clear_faults` button path also clears MPET bits before pulsing `CLR_FLT`, preventing immediate MPET_BEMF relatch.
   - If `MPET_BEMF_FAULT` is still present immediately after startup setup, component pulses `CLR_FLT` once automatically.

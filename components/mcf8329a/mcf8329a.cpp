@@ -337,20 +337,7 @@ void MCF8329AComponent::apply_post_comms_setup_() {
   }
 
   if (this->clear_mpet_on_startup_) {
-    uint32_t algo_debug2 = 0;
-    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
-      const uint32_t mpet_bits = algo_debug2 & ALGO_DEBUG2_MPET_ALL_MASK;
-      if (mpet_bits != 0u) {
-        const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
-        if (this->write_reg32(REG_ALGO_DEBUG2, next)) {
-          ESP_LOGI(TAG, "Cleared MPET command bits in ALGO_DEBUG2: 0x%08X -> 0x%08X", algo_debug2, next);
-        } else {
-          ESP_LOGW(TAG, "Failed to clear MPET command bits in ALGO_DEBUG2");
-        }
-      }
-    } else {
-      ESP_LOGW(TAG, "Failed to read ALGO_DEBUG2 for MPET startup clear");
-    }
+    (void) this->clear_mpet_bits_("startup");
   }
 
   if (!this->apply_startup_motor_config_()) {
@@ -549,20 +536,7 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent) {
   const uint16_t digital_speed_ctrl = static_cast<uint16_t>(lroundf((clamped / 100.0f) * 32767.0f));
 
   if (clamped > 0.0f && this->clear_mpet_on_startup_) {
-    uint32_t algo_debug2 = 0;
-    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
-      const uint32_t mpet_bits = algo_debug2 & ALGO_DEBUG2_MPET_ALL_MASK;
-      if (mpet_bits != 0u) {
-        const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
-        if (this->write_reg32(REG_ALGO_DEBUG2, next)) {
-          ESP_LOGW(TAG, "Cleared MPET bits before speed command: 0x%08X -> 0x%08X", algo_debug2, next);
-        } else {
-          ESP_LOGW(TAG, "Failed to clear MPET bits before speed command");
-        }
-      }
-    } else {
-      ESP_LOGW(TAG, "Failed to read ALGO_DEBUG2 before speed command");
-    }
+    (void) this->clear_mpet_bits_("speed_cmd");
   }
 
   uint32_t value = ALGO_DEBUG1_OVERRIDE_MASK;
@@ -587,6 +561,9 @@ void MCF8329AComponent::pulse_clear_faults() {
   uint32_t ctrl_after = 0;
   const bool gate_before_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_before);
   const bool ctrl_before_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_before);
+
+  // MPET_BEMF fault condition can remain true while MPET bits are set.
+  (void) this->clear_mpet_bits_("clear_faults");
 
   if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
     ESP_LOGW(TAG, "Failed to assert CLR_FLT");
@@ -665,6 +642,28 @@ bool MCF8329AComponent::read_probe_and_publish_() {
   }
 
   return ok;
+}
+
+bool MCF8329AComponent::clear_mpet_bits_(const char *context) {
+  uint32_t algo_debug2 = 0;
+  if (!this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+    ESP_LOGW(TAG, "[%s] Failed to read ALGO_DEBUG2 for MPET clear", context);
+    return false;
+  }
+
+  const uint32_t mpet_bits = algo_debug2 & ALGO_DEBUG2_MPET_ALL_MASK;
+  if (mpet_bits == 0u) {
+    return true;
+  }
+
+  const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
+  if (!this->write_reg32(REG_ALGO_DEBUG2, next)) {
+    ESP_LOGW(TAG, "[%s] Failed to clear MPET bits in ALGO_DEBUG2", context);
+    return false;
+  }
+
+  ESP_LOGI(TAG, "[%s] Cleared MPET bits in ALGO_DEBUG2: 0x%08X -> 0x%08X", context, algo_debug2, next);
+  return true;
 }
 
 bool MCF8329AComponent::perform_read_(uint16_t offset, uint32_t &value) {
