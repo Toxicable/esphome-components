@@ -129,8 +129,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void process_deferred_startup_();
   void apply_post_comms_setup_();
   bool apply_startup_motor_config_();
-  void publish_raw_status_hex_(uint32_t gate_fault_status, bool gate_ok, uint32_t controller_fault_status, bool controller_ok,
-                               uint32_t algo_status, bool algo_ok);
+  void publish_status_texts_(uint32_t gate_fault_status, bool gate_ok, uint32_t controller_fault_status, bool controller_ok,
+                             uint32_t algo_status, bool algo_ok);
   const char *i2c_error_to_string_(i2c::ErrorCode error_code) const;
   const char *startup_mode_to_string_(uint8_t mode) const;
   const char *startup_align_time_to_string_(uint8_t code) const;

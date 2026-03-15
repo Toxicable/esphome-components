@@ -20,5 +20,6 @@ Component-scoped notes for `components/mcf8329a`.
 - Added key-info telemetry fields:
   - `sensor.algorithm_state_code` (raw numeric algorithm state)
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
-  - `text_sensor.gate_fault_status`, `controller_fault_status`, `algo_status` (hex raw registers)
+  - `text_sensor.gate_fault_status`, `controller_fault_status` (decoded labels, not raw hex)
+  - `text_sensor.algo_status` (`sys=... duty=... volt_mag=...`)
   - `text_sensor.startup_config` (applied startup config summary)

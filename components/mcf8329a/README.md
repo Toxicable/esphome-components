@@ -90,15 +90,18 @@ text_sensor:
     mcf8329a_id: mcf
     fault_summary:
       name: "MCF Fault Summary"
-    gate_fault_status:
-      name: "MCF Gate Fault Status"
-    controller_fault_status:
-      name: "MCF Controller Fault Status"
-    algo_status:
-      name: "MCF Algo Status"
-    startup_config:
-      name: "MCF Startup Config"
     # Optional:
+    # gate_fault_status:
+    #   name: "MCF Gate Fault Status"
+    #   # Decoded gate-driver fault labels (or "none"/"read_error")
+    # controller_fault_status:
+    #   name: "MCF Controller Fault Status"
+    #   # Decoded controller fault labels (or "none"/"read_error")
+    # algo_status:
+    #   name: "MCF Algo Status"
+    #   # "sys=on/off duty=x% volt_mag=y%"
+    # startup_config:
+    #   name: "MCF Startup Config"
     # algorithm_state:
     #   name: "MCF Algorithm State"
 ```
