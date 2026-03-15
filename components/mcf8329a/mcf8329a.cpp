@@ -1378,16 +1378,24 @@ void MCF8329AComponent::log_algorithm_state_transition_(uint32_t algo_status, co
   const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
   const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
   const bool sys_enable = (algo_status & ALGO_STATUS_SYS_ENABLE_FLAG_MASK) != 0u;
+  float speed_cmd_percent = -1.0f;
+  uint32_t algo_debug1 = 0;
+  if (this->read_reg32(REG_ALGO_DEBUG1, algo_debug1)) {
+    const uint16_t digital_speed_ctrl = static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
+    speed_cmd_percent = (static_cast<float>(digital_speed_ctrl) * 100.0f) / 32767.0f;
+  }
 
   if (!this->algorithm_state_valid_) {
-    ESP_LOGI(TAG, "Algorithm state [%s]: init -> 0x%04X(%s) duty=%.1f%% volt_mag=%.1f%% sys_enable=%s", context,
-             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), duty_percent, volt_mag_percent,
-             YESNO(sys_enable));
+    ESP_LOGI(TAG, "Algorithm state [%s]: init -> 0x%04X(%s) speed_cmd=%.1f%% duty=%.1f%% volt_mag=%.1f%% sys_enable=%s", context,
+             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), speed_cmd_percent, duty_percent,
+             volt_mag_percent, YESNO(sys_enable));
   } else {
-    ESP_LOGI(TAG, "Algorithm state [%s]: 0x%04X(%s) -> 0x%04X(%s) duty=%.1f%% volt_mag=%.1f%% sys_enable=%s", context,
+    ESP_LOGI(TAG,
+             "Algorithm state [%s]: 0x%04X(%s) -> 0x%04X(%s) speed_cmd=%.1f%% duty=%.1f%% volt_mag=%.1f%% sys_enable=%s",
+             context,
              static_cast<unsigned>(this->last_algorithm_state_), this->algorithm_state_to_string_(this->last_algorithm_state_),
-             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), duty_percent, volt_mag_percent,
-             YESNO(sys_enable));
+             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), speed_cmd_percent, duty_percent,
+             volt_mag_percent, YESNO(sys_enable));
   }
 
   this->last_algorithm_state_ = algo_state;
