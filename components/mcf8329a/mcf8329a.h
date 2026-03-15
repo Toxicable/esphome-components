@@ -159,6 +159,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
   static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
+  static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
 
@@ -203,6 +204,12 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT = 24;
   static constexpr uint32_t CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK = (0xFFu << 23);
   static constexpr uint32_t CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT = 23;
+  static constexpr uint32_t CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK = 0x7u;
+  static constexpr uint32_t CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT = 0;
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK = (0x7Fu << 24);
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT = 24;
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_MASK = (0x3FFu << 14);
+  static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_SHIFT = 14;
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OTS = (1u << 29);
