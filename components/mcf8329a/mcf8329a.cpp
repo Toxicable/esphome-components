@@ -175,6 +175,13 @@ void MCF8329AComponent::dump_config() {
                                               : "(unchanged)");
   ESP_LOGCONFIG(TAG, "  Startup direction: %s",
                 this->startup_direction_mode_set_ ? this->startup_direction_mode_.c_str() : "(hardware default)");
+  if (this->startup_ilimit_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup ILIMIT (phase peak): %u%% BASE_CURRENT (code=%u)",
+                  static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->startup_ilimit_ & 0x0Fu]),
+                  static_cast<unsigned>(this->startup_ilimit_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup ILIMIT (phase peak): (unchanged)");
+  }
   if (this->startup_lock_mode_set_) {
     ESP_LOGCONFIG(TAG, "  Startup lock mode: %s (code=%u)", this->lock_mode_to_string_(this->startup_lock_mode_),
                   static_cast<unsigned>(this->startup_lock_mode_));
@@ -384,7 +391,7 @@ void MCF8329AComponent::apply_post_comms_setup_() {
 bool MCF8329AComponent::apply_startup_motor_config_() {
   const bool has_startup_settings =
       this->startup_motor_bemf_const_set_ || this->startup_brake_mode_set_ || this->startup_brake_time_set_ ||
-      this->startup_mode_set_ || this->startup_align_time_set_ || this->startup_lock_mode_set_ ||
+      this->startup_mode_set_ || this->startup_align_time_set_ || this->startup_ilimit_set_ || this->startup_lock_mode_set_ ||
       this->startup_lock_ilimit_set_ || this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_;
   const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
@@ -399,6 +406,11 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t fault_config1_next = fault_config1;
+  if (apply_custom_settings && this->startup_ilimit_set_) {
+    fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_ILIMIT_MASK) |
+                         ((static_cast<uint32_t>(this->startup_ilimit_) << FAULT_CONFIG1_ILIMIT_SHIFT) &
+                          FAULT_CONFIG1_ILIMIT_MASK);
+  }
   if (apply_custom_settings && this->startup_hw_lock_ilimit_set_) {
     fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) |
                          ((static_cast<uint32_t>(this->startup_hw_lock_ilimit_) << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) &
@@ -603,6 +615,8 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       ((closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
   const uint32_t effective_spd_loop_ki =
       (closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT;
+  const uint8_t effective_ilimit =
+      static_cast<uint8_t>((fault_config1_effective & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT);
   const uint8_t effective_hw_lock_ilimit = static_cast<uint8_t>(
       (fault_config1_effective & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT);
   const uint8_t effective_lock_ilimit =
@@ -620,15 +634,16 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   char summary[400];
   std::snprintf(summary, sizeof(summary),
                 "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u startup=%s align=%s "
-                "stop=%s stop_brake=%s lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) lock_mode=%s mtr_lock_mode=%s "
-                "hw_lock_mode=%s lck_retry=%s",
+                "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
+                "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s",
                 apply_state, profile_state, effective_direction.c_str(), static_cast<unsigned>(effective_motor_bemf_const),
                 static_cast<unsigned>(effective_motor_res), static_cast<unsigned>(effective_motor_ind),
                 static_cast<unsigned>(effective_spd_loop_kp), static_cast<unsigned>(effective_spd_loop_ki),
                 this->startup_mode_to_string_(effective_startup_mode),
                 this->startup_align_time_to_string_(effective_align_time),
-                this->startup_brake_mode_to_string_(effective_brake_mode),
-                this->startup_brake_time_to_string_(effective_brake_time), static_cast<unsigned>(effective_lock_ilimit),
+                this->startup_brake_mode_to_string_(effective_brake_mode), this->startup_brake_time_to_string_(effective_brake_time),
+                static_cast<unsigned>(effective_ilimit), static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ilimit & 0x0Fu]),
+                static_cast<unsigned>(effective_lock_ilimit),
                 static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_lock_ilimit & 0x0Fu]),
                 static_cast<unsigned>(effective_hw_lock_ilimit),
                 static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_hw_lock_ilimit & 0x0Fu]),
@@ -1103,6 +1118,7 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
   }
 
   if (algo_debug1_ok && fault_config1_ok && fault_config2_ok) {
+    const uint8_t ilimit = static_cast<uint8_t>((fault_config1 & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT);
     const uint8_t hw_lock_ilimit = static_cast<uint8_t>(
         (fault_config1 & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT);
     const uint8_t lock_ilimit =
@@ -1117,9 +1133,10 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
         static_cast<uint8_t>((fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT);
 
     ESP_LOGW(TAG,
-             "HW_LOCK_LIMIT diag: speed_cmd=%.1f%% lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
+             "HW_LOCK_LIMIT diag: speed_cmd=%.1f%% ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
              "lock_mode=%u(%s) mtr_lock_mode=%u(%s) hw_lock_mode=%u(%s) lck_retry=%u(%s)",
-             speed_cmd_percent, static_cast<unsigned>(lock_ilimit),
+             speed_cmd_percent, static_cast<unsigned>(ilimit), static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[ilimit & 0x0Fu]),
+             static_cast<unsigned>(lock_ilimit),
              static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[lock_ilimit & 0x0Fu]), static_cast<unsigned>(hw_lock_ilimit),
              static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[hw_lock_ilimit & 0x0Fu]), static_cast<unsigned>(lock_mode),
              this->lock_mode_to_string_(lock_mode), static_cast<unsigned>(mtr_lock_mode),

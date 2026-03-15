@@ -108,6 +108,10 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_direction_mode_ = startup_direction_mode;
     startup_direction_mode_set_ = true;
   }
+  void set_startup_ilimit(uint8_t startup_ilimit) {
+    startup_ilimit_ = startup_ilimit;
+    startup_ilimit_set_ = true;
+  }
   void set_startup_lock_mode(uint8_t startup_lock_mode) {
     startup_lock_mode_ = startup_lock_mode;
     startup_lock_mode_set_ = true;
@@ -239,6 +243,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_RES = 0x01u;
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_IND = 0x01u;
 
+  static constexpr uint32_t FAULT_CONFIG1_ILIMIT_MASK = (0xFu << 27);
+  static constexpr uint32_t FAULT_CONFIG1_ILIMIT_SHIFT = 27;
   static constexpr uint32_t FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK = (0xFu << 23);
   static constexpr uint32_t FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT = 23;
   static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MASK = (0xFu << 19);
@@ -297,6 +303,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool startup_mode_set_{false};
   bool startup_align_time_set_{false};
   bool startup_direction_mode_set_{false};
+  bool startup_ilimit_set_{false};
   bool startup_lock_mode_set_{false};
   bool startup_lock_ilimit_set_{false};
   bool startup_hw_lock_ilimit_set_{false};
@@ -306,6 +313,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint8_t startup_brake_time_{0};
   uint8_t startup_mode_{0};
   uint8_t startup_align_time_{0};
+  uint8_t startup_ilimit_{0};
   uint8_t startup_lock_mode_{0};
   uint8_t startup_lock_ilimit_{0};
   uint8_t startup_hw_lock_ilimit_{0};

@@ -19,6 +19,7 @@ CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
 CONF_STARTUP_MODE = "startup_mode"
 CONF_STARTUP_ALIGN_TIME = "startup_align_time"
 CONF_STARTUP_DIRECTION_MODE = "startup_direction_mode"
+CONF_STARTUP_ILIMIT_PERCENT = "startup_ilimit_percent"
 CONF_STARTUP_LOCK_MODE = "startup_lock_mode"
 CONF_STARTUP_LOCK_ILIMIT_PERCENT = "startup_lock_ilimit_percent"
 CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT = "startup_hw_lock_ilimit_percent"
@@ -147,6 +148,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_ALIGN_TIME): cv.enum(STARTUP_ALIGN_TIME_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_DIRECTION_MODE): cv.enum(STARTUP_DIRECTION_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_STARTUP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_LOCK_MODE): cv.enum(STARTUP_LOCK_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
@@ -180,6 +182,8 @@ async def to_code(config):
         cg.add(var.set_startup_align_time(config[CONF_STARTUP_ALIGN_TIME]))
     if CONF_STARTUP_DIRECTION_MODE in config:
         cg.add(var.set_startup_direction_mode(config[CONF_STARTUP_DIRECTION_MODE]))
+    if CONF_STARTUP_ILIMIT_PERCENT in config:
+        cg.add(var.set_startup_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_ILIMIT_PERCENT]]))
     if CONF_STARTUP_LOCK_MODE in config:
         cg.add(var.set_startup_lock_mode(config[CONF_STARTUP_LOCK_MODE]))
     if CONF_STARTUP_LOCK_ILIMIT_PERCENT in config:
