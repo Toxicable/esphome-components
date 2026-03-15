@@ -22,6 +22,8 @@ Component-scoped notes for `components/mcf8329a`.
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
 - `binary_sensor` now only exposes aggregate signals (`fault_active`, `sys_enable`); per-fault bit entities were removed.
+- On `MPET_BEMF_FAULT`, component logs one-shot diagnostics (speed command, brake input decode, MPET bits, motor BEMF const)
+  plus a startup hint to command >10% then ramp down.
 - Startup MPET mitigation:
   - `clear_mpet_on_startup` (default `true`) clears `ALGO_DEBUG2` MPET command bits (`MPET_CMD`, `MPET_KE`, `MPET_MECH`,
     `MPET_WRITE_SHADOW`) during post-comms setup.

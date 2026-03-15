@@ -129,6 +129,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char *startup_align_time_to_string_(uint8_t code) const;
   const char *startup_brake_mode_to_string_(uint8_t code) const;
   const char *startup_brake_time_to_string_(uint8_t code) const;
+  void log_mpet_bemf_diagnostics_();
 
   bool perform_read_(uint16_t offset, uint32_t &value);
   bool perform_read16_(uint16_t offset, uint16_t &value);
@@ -251,6 +252,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t deferred_comms_last_scan_ms_{0};
   std::string last_fault_summary_{"none"};
   std::string startup_config_summary_{"default"};
+  bool mpet_bemf_fault_latched_{false};
 
   MCF8329ABrakeSwitch *brake_switch_{nullptr};
   MCF8329ADirectionSelect *direction_select_{nullptr};

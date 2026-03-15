@@ -694,6 +694,7 @@ void MCF8329AComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
   std::vector<std::string> faults;
   bool gate_detail_found = false;
   bool controller_detail_found = false;
+  const bool mpet_bemf_active = controller_fault_valid && ((controller_fault_status & FAULT_MPET_BEMF) != 0u);
 
   if (gate_fault_valid) {
     if (gate_fault_status & GATE_FAULT_OTS)
@@ -764,6 +765,15 @@ void MCF8329AComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
     this->current_fault_text_sensor_->publish_state(summary);
   }
 
+  if (mpet_bemf_active) {
+    if (!this->mpet_bemf_fault_latched_) {
+      this->mpet_bemf_fault_latched_ = true;
+      this->log_mpet_bemf_diagnostics_();
+    }
+  } else {
+    this->mpet_bemf_fault_latched_ = false;
+  }
+
   if (summary != this->last_fault_summary_) {
     if (summary == "none") {
       ESP_LOGI(TAG, "Faults cleared");
@@ -772,6 +782,42 @@ void MCF8329AComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
     }
     this->last_fault_summary_ = summary;
   }
+}
+
+void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
+  uint32_t algo_debug1 = 0;
+  uint32_t algo_debug2 = 0;
+  uint32_t pin_config = 0;
+  uint32_t mtr_params = 0;
+
+  const bool algo_debug1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
+  const bool algo_debug2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
+  const bool pin_config_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
+  const bool mtr_params_ok = this->read_reg32(REG_MTR_PARAMS, mtr_params);
+
+  float speed_cmd_percent = -1.0f;
+  if (algo_debug1_ok) {
+    const uint16_t digital_speed_ctrl = static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
+    speed_cmd_percent = (static_cast<float>(digital_speed_ctrl) * 100.0f) / 32767.0f;
+  }
+
+  const uint32_t brake_input = pin_config_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 2) : 0u;
+  const uint32_t motor_bemf_const =
+      mtr_params_ok ? ((mtr_params & MTR_PARAMS_MOTOR_BEMF_CONST_MASK) >> MTR_PARAMS_MOTOR_BEMF_CONST_SHIFT) : 0u;
+
+  if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && mtr_params_ok) {
+    ESP_LOGW(TAG,
+             "MPET_BEMF diag: speed_cmd=%.1f%% brake=%s mpet(cmd=%s ke=%s mech=%s write_shadow=%s) bemf_const=%u",
+             speed_cmd_percent, this->brake_input_to_string_(brake_input), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0u),
+             YESNO((algo_debug2 & ALGO_DEBUG2_MPET_KE_MASK) != 0u), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_MECH_MASK) != 0u),
+             YESNO((algo_debug2 & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) != 0u), static_cast<unsigned>(motor_bemf_const));
+  } else {
+    ESP_LOGW(TAG, "MPET_BEMF diag: read failure ad1=%s ad2=%s pin_cfg=%s mtr_params=%s", YESNO(algo_debug1_ok),
+             YESNO(algo_debug2_ok), YESNO(pin_config_ok), YESNO(mtr_params_ok));
+  }
+
+  ESP_LOGW(TAG,
+           "MPET_BEMF hint: ensure brake is OFF before commanding speed; if starting from low duty, try >10%% then ramp down.");
 }
 
 const char *MCF8329AComponent::startup_mode_to_string_(uint8_t mode) const {
