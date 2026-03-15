@@ -539,6 +539,16 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent) {
     (void) this->clear_mpet_bits_("speed_cmd");
   }
 
+  if (clamped > 0.0f) {
+    if (!this->set_brake_override(false)) {
+      ESP_LOGW(TAG, "Failed to release brake before speed command");
+      return false;
+    }
+    if (this->brake_switch_ != nullptr) {
+      this->brake_switch_->publish_state(false);
+    }
+  }
+
   uint32_t value = ALGO_DEBUG1_OVERRIDE_MASK;
   value |= (static_cast<uint32_t>(digital_speed_ctrl) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK;
 
@@ -835,11 +845,13 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   uint32_t algo_debug2 = 0;
   uint32_t pin_config = 0;
   uint32_t mtr_params = 0;
+  uint32_t closed_loop3 = 0;
 
   const bool algo_debug1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
   const bool algo_debug2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
   const bool pin_config_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
   const bool mtr_params_ok = this->read_reg32(REG_MTR_PARAMS, mtr_params);
+  const bool closed_loop3_ok = this->read_reg32(REG_CLOSED_LOOP3, closed_loop3);
 
   float speed_cmd_percent = -1.0f;
   if (algo_debug1_ok) {
@@ -850,16 +862,22 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   const uint32_t brake_input = pin_config_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 2) : 0u;
   const uint32_t motor_bemf_const =
       mtr_params_ok ? ((mtr_params & MTR_PARAMS_MOTOR_BEMF_CONST_MASK) >> MTR_PARAMS_MOTOR_BEMF_CONST_SHIFT) : 0u;
+  const uint32_t configured_bemf_const = closed_loop3_ok
+                                             ? ((closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >>
+                                                CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT)
+                                             : 0u;
 
-  if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && mtr_params_ok) {
+  if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && mtr_params_ok && closed_loop3_ok) {
     ESP_LOGW(TAG,
-             "MPET_BEMF diag: speed_cmd=%.1f%% brake=%s mpet(cmd=%s ke=%s mech=%s write_shadow=%s) bemf_const=%u",
+             "MPET_BEMF diag: speed_cmd=%.1f%% brake=%s mpet(cmd=%s ke=%s mech=%s write_shadow=%s) "
+             "measured_bemf=%u configured_bemf=0x%02X",
              speed_cmd_percent, this->brake_input_to_string_(brake_input), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0u),
              YESNO((algo_debug2 & ALGO_DEBUG2_MPET_KE_MASK) != 0u), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_MECH_MASK) != 0u),
-             YESNO((algo_debug2 & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) != 0u), static_cast<unsigned>(motor_bemf_const));
+             YESNO((algo_debug2 & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) != 0u), static_cast<unsigned>(motor_bemf_const),
+             static_cast<unsigned>(configured_bemf_const));
   } else {
-    ESP_LOGW(TAG, "MPET_BEMF diag: read failure ad1=%s ad2=%s pin_cfg=%s mtr_params=%s", YESNO(algo_debug1_ok),
-             YESNO(algo_debug2_ok), YESNO(pin_config_ok), YESNO(mtr_params_ok));
+    ESP_LOGW(TAG, "MPET_BEMF diag: read failure ad1=%s ad2=%s pin_cfg=%s mtr_params=%s closed_loop3=%s", YESNO(algo_debug1_ok),
+             YESNO(algo_debug2_ok), YESNO(pin_config_ok), YESNO(mtr_params_ok), YESNO(closed_loop3_ok));
   }
 
   ESP_LOGW(TAG,

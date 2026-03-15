@@ -44,6 +44,7 @@ switch:
   - platform: mcf8329a
     mcf8329a_id: mcf
     name: "MCF Brake"
+    # Note: any non-zero speed command auto-releases brake in firmware.
 
 select:
   - platform: mcf8329a
@@ -90,5 +91,6 @@ sensor:
     # Optional:
     # motor_bemf_constant:
     #   name: "MCF Motor BEMF Const"
+    #   # Measured/estimated BEMF (MTR_PARAMS), not the configured CLOSED_LOOP3 value.
 
 ```
