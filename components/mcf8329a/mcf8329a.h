@@ -152,6 +152,10 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_no_motor_threshold_ = startup_no_motor_threshold;
     startup_no_motor_threshold_set_ = true;
   }
+  void set_startup_max_speed_code(uint16_t startup_max_speed_code) {
+    startup_max_speed_code_ = startup_max_speed_code & 0x3FFFu;
+    startup_max_speed_set_ = true;
+  }
 
   void set_brake_switch(MCF8329ABrakeSwitch *sw) { brake_switch_ = sw; }
   void set_direction_select(MCF8329ADirectionSelect *sel) { direction_select_ = sel; }
@@ -177,6 +181,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char *startup_align_time_to_string_(uint8_t code) const;
   const char *startup_brake_mode_to_string_(uint8_t code) const;
   const char *startup_brake_time_to_string_(uint8_t code) const;
+  float max_speed_code_to_hz_(uint16_t code) const;
   const char *algorithm_state_to_string_(uint16_t state) const;
   const char *lock_mode_to_string_(uint8_t mode) const;
   const char *lock_retry_time_to_string_(uint8_t code) const;
@@ -270,6 +275,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT = 24;
   static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_MASK = (0x3FFu << 14);
   static constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_SHIFT = 14;
+  static constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_MASK = 0x3FFFu;
+  static constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_SHIFT = 0;
 
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_RES = 0x01u;
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_IND = 0x01u;
@@ -354,6 +361,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool startup_lock_abn_speed_threshold_set_{false};
   bool startup_abnormal_bemf_threshold_set_{false};
   bool startup_no_motor_threshold_set_{false};
+  bool startup_max_speed_set_{false};
   uint8_t startup_motor_bemf_const_{0};
   uint8_t startup_brake_mode_{0};
   uint8_t startup_brake_time_{0};
@@ -370,6 +378,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint8_t startup_lock_abn_speed_threshold_{0};
   uint8_t startup_abnormal_bemf_threshold_{0};
   uint8_t startup_no_motor_threshold_{0};
+  uint16_t startup_max_speed_code_{0};
   std::string startup_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};

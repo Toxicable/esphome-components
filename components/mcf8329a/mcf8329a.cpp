@@ -245,6 +245,13 @@ void MCF8329AComponent::dump_config() {
                 this->startup_no_motor_threshold_set_
                     ? NO_MOTOR_THRESHOLD_LABELS[this->startup_no_motor_threshold_ & 0x7u]
                     : "(unchanged)");
+  if (this->startup_max_speed_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup max speed: %.1f Hz electrical (code=%u)",
+                  this->max_speed_code_to_hz_(this->startup_max_speed_code_),
+                  static_cast<unsigned>(this->startup_max_speed_code_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup max speed: (unchanged)");
+  }
   ESP_LOGCONFIG(TAG, "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
                 static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
                 static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS), static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
@@ -435,7 +442,7 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       this->startup_lock_ilimit_set_ || this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_ ||
       this->startup_abn_speed_lock_enable_set_ || this->startup_abn_bemf_lock_enable_set_ ||
       this->startup_no_motor_lock_enable_set_ || this->startup_lock_abn_speed_threshold_set_ ||
-      this->startup_abnormal_bemf_threshold_set_ || this->startup_no_motor_threshold_set_;
+      this->startup_abnormal_bemf_threshold_set_ || this->startup_no_motor_threshold_set_ || this->startup_max_speed_set_;
   const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
       (this->apply_startup_config_ && this->startup_direction_mode_set_) ? this->startup_direction_mode_ : "hardware";
@@ -612,6 +619,11 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     return false;
   }
   uint32_t closed_loop4_next = closed_loop4;
+  if (apply_custom_settings && this->startup_max_speed_set_) {
+    closed_loop4_next = (closed_loop4_next & ~CLOSED_LOOP4_MAX_SPEED_MASK) |
+                        ((static_cast<uint32_t>(this->startup_max_speed_code_) << CLOSED_LOOP4_MAX_SPEED_SHIFT) &
+                         CLOSED_LOOP4_MAX_SPEED_MASK);
+  }
   if (apply_custom_settings && this->startup_motor_bemf_const_set_) {
     closed_loop3_next = (closed_loop3_next & ~CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) |
                         ((static_cast<uint32_t>(this->startup_motor_bemf_const_) << CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT) &
@@ -696,6 +708,9 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       ((closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
   const uint32_t effective_spd_loop_ki =
       (closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT;
+  const uint16_t effective_max_speed_code = static_cast<uint16_t>(
+      (closed_loop4_effective & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT);
+  const float effective_max_speed_hz = this->max_speed_code_to_hz_(effective_max_speed_code);
   const uint8_t effective_ilimit =
       static_cast<uint8_t>((fault_config1_effective & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT);
   const uint8_t effective_hw_lock_ilimit = static_cast<uint8_t>(
@@ -723,13 +738,14 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   const char *profile_state = apply_custom_settings ? "custom" : "current";
   char summary[640];
   std::snprintf(summary, sizeof(summary),
-                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u startup=%s align=%s "
+                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u max_speed=%.1fHz(code=%u) startup=%s align=%s "
                 "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
                 "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s "
                 "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
                 apply_state, profile_state, effective_direction.c_str(), static_cast<unsigned>(effective_motor_bemf_const),
                 static_cast<unsigned>(effective_motor_res), static_cast<unsigned>(effective_motor_ind),
                 static_cast<unsigned>(effective_spd_loop_kp), static_cast<unsigned>(effective_spd_loop_ki),
+                effective_max_speed_hz, static_cast<unsigned>(effective_max_speed_code),
                 this->startup_mode_to_string_(effective_startup_mode),
                 this->startup_align_time_to_string_(effective_align_time),
                 this->startup_brake_mode_to_string_(effective_brake_mode), this->startup_brake_time_to_string_(effective_brake_time),
@@ -917,18 +933,38 @@ void MCF8329AComponent::log_active_run_diagnostics_(uint32_t algo_status, bool a
   bool fg_speed_ok = this->read_reg32(REG_FG_SPEED_FDBK, fg_speed_fdbk);
   uint32_t speed_fdbk = 0;
   bool speed_fdbk_ok = this->read_reg32(REG_SPEED_FDBK, speed_fdbk);
+  uint32_t closed_loop4 = 0;
+  const bool closed_loop4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
+  const uint16_t max_speed_code = closed_loop4_ok
+                                      ? static_cast<uint16_t>((closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >>
+                                                              CLOSED_LOOP4_MAX_SPEED_SHIFT)
+                                      : 0u;
+  const float max_speed_hz = closed_loop4_ok ? this->max_speed_code_to_hz_(max_speed_code) : 0.0f;
+  const float speed_feedback_scale = 1.0f / 134217728.0f;  // 1 / 2^27
+  const float fg_speed_hz =
+      (fg_speed_ok && closed_loop4_ok) ? (static_cast<float>(fg_speed_fdbk) * speed_feedback_scale * max_speed_hz) : 0.0f;
+  const float speed_fdbk_hz =
+      (speed_fdbk_ok && closed_loop4_ok)
+          ? (static_cast<float>(static_cast<int32_t>(speed_fdbk)) * speed_feedback_scale * max_speed_hz)
+          : 0.0f;
 
   if (algo_state_ok) {
     ESP_LOGI(TAG,
-             "Run diag: state=0x%04X(%s) target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% fg_speed=%s0x%08X speed_fdbk=%s0x%08X",
+             "Run diag: state=0x%04X(%s) target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% "
+             "max_speed=%s%.1fHz(code=%u) fg_speed=%s%.1fHz(raw=0x%08X) speed_fdbk=%s%.1fHz(raw=0x%08X)",
              static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), this->target_speed_percent_,
-             observed_speed_cmd_percent, duty_percent, volt_mag_percent, fg_speed_ok ? "" : "read_fail:",
-             static_cast<unsigned>(fg_speed_fdbk), speed_fdbk_ok ? "" : "read_fail:", static_cast<unsigned>(speed_fdbk));
+             observed_speed_cmd_percent, duty_percent, volt_mag_percent, closed_loop4_ok ? "" : "read_fail:", max_speed_hz,
+             static_cast<unsigned>(max_speed_code), fg_speed_ok ? "" : "read_fail:", fg_speed_hz,
+             static_cast<unsigned>(fg_speed_fdbk), speed_fdbk_ok ? "" : "read_fail:", speed_fdbk_hz,
+             static_cast<unsigned>(speed_fdbk));
   } else {
     ESP_LOGI(TAG,
-             "Run diag: state=read_fail target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% fg_speed=%s0x%08X speed_fdbk=%s0x%08X",
-             this->target_speed_percent_, observed_speed_cmd_percent, duty_percent, volt_mag_percent, fg_speed_ok ? "" : "read_fail:",
-             static_cast<unsigned>(fg_speed_fdbk), speed_fdbk_ok ? "" : "read_fail:", static_cast<unsigned>(speed_fdbk));
+             "Run diag: state=read_fail target=%.1f%% observed=%.1f%% duty=%.1f%% volt_mag=%.1f%% "
+             "max_speed=%s%.1fHz(code=%u) fg_speed=%s%.1fHz(raw=0x%08X) speed_fdbk=%s%.1fHz(raw=0x%08X)",
+             this->target_speed_percent_, observed_speed_cmd_percent, duty_percent, volt_mag_percent,
+             closed_loop4_ok ? "" : "read_fail:", max_speed_hz, static_cast<unsigned>(max_speed_code),
+             fg_speed_ok ? "" : "read_fail:", fg_speed_hz, static_cast<unsigned>(fg_speed_fdbk),
+             speed_fdbk_ok ? "" : "read_fail:", speed_fdbk_hz, static_cast<unsigned>(speed_fdbk));
   }
 
   const bool closed_loop_state =
@@ -1282,19 +1318,23 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
           : 0u;
   const uint32_t configured_spd_loop_ki =
       closed_loop4_ok ? ((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT) : 0u;
+  const uint16_t configured_max_speed_code =
+      closed_loop4_ok ? static_cast<uint16_t>((closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT) : 0u;
+  const float configured_max_speed_hz = this->max_speed_code_to_hz_(configured_max_speed_code);
 
   if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && closed_loop2_ok && mtr_params_ok && closed_loop3_ok &&
       closed_loop4_ok) {
     ESP_LOGW(TAG,
              "MPET_BEMF diag: speed_cmd=%.1f%% brake=%s mpet(cmd=%s ke=%s mech=%s write_shadow=%s) "
              "measured_bemf=%u configured_bemf=0x%02X configured_mres=%u configured_mind=%u "
-             "configured_spd_kp=%u configured_spd_ki=%u",
+             "configured_spd_kp=%u configured_spd_ki=%u configured_max_speed=%.1fHz(code=%u)",
              speed_cmd_percent, this->brake_input_to_string_(brake_input), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0u),
              YESNO((algo_debug2 & ALGO_DEBUG2_MPET_KE_MASK) != 0u), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_MECH_MASK) != 0u),
              YESNO((algo_debug2 & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) != 0u), static_cast<unsigned>(motor_bemf_const),
              static_cast<unsigned>(configured_bemf_const), static_cast<unsigned>(configured_motor_res),
              static_cast<unsigned>(configured_motor_ind), static_cast<unsigned>(configured_spd_loop_kp),
-             static_cast<unsigned>(configured_spd_loop_ki));
+             static_cast<unsigned>(configured_spd_loop_ki), configured_max_speed_hz,
+             static_cast<unsigned>(configured_max_speed_code));
   } else {
     ESP_LOGW(TAG,
              "MPET_BEMF diag: read failure ad1=%s ad2=%s pin_cfg=%s cl2=%s mtr_params=%s closed_loop3=%s closed_loop4=%s",
@@ -1416,6 +1456,14 @@ const char *MCF8329AComponent::startup_brake_time_to_string_(uint8_t code) const
       "100ms", "250ms",  "500ms",  "1000ms", "2500ms", "5000ms", "10000ms", "15000ms",
   };
   return kBrakeTimeLabels[code & 0x0Fu];
+}
+
+float MCF8329AComponent::max_speed_code_to_hz_(uint16_t code) const {
+  const uint16_t clamped = code & 0x3FFFu;
+  if (clamped <= 9600u) {
+    return static_cast<float>(clamped) / 6.0f;
+  }
+  return (static_cast<float>(clamped) / 4.0f) - 800.0f;
 }
 
 const char *MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const {

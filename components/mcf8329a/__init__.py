@@ -30,6 +30,7 @@ CONF_STARTUP_NO_MOTOR_LOCK_ENABLE = "startup_no_motor_lock_enable"
 CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT = "startup_lock_abn_speed_threshold_percent"
 CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT = "startup_abnormal_bemf_threshold_percent"
 CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT = "startup_no_motor_threshold_percent"
+CONF_STARTUP_MAX_SPEED_HZ = "startup_max_speed_hz"
 
 STARTUP_BRAKE_MODE_OPTIONS = {
     "hiz": 0,
@@ -206,6 +207,29 @@ def validate_no_motor_threshold_percent(value):
     )
 
 
+def validate_startup_max_speed_hz(value):
+    value = cv.int_(value)
+    if value < 1 or value > 3295:
+        raise cv.Invalid("startup max speed must be in range 1..3295 Hz")
+    return value
+
+
+def encode_max_speed_hz(value_hz):
+    if value_hz <= 1600:
+        code = int(round(value_hz * 6.0))
+        if code < 1:
+            code = 1
+        if code > 9600:
+            code = 9600
+        return code
+    code = int(round((value_hz + 800.0) * 4.0))
+    if code < 9601:
+        code = 9601
+    if code > 16383:
+        code = 16383
+    return code
+
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -231,6 +255,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT): validate_lock_abn_speed_threshold_percent,
             cv.Optional(CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
             cv.Optional(CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
+            cv.Optional(CONF_STARTUP_MAX_SPEED_HZ): validate_startup_max_speed_hz,
         }
     )
     .extend(cv.polling_component_schema("250ms"))
@@ -294,3 +319,5 @@ async def to_code(config):
                 NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT]]
             )
         )
+    if CONF_STARTUP_MAX_SPEED_HZ in config:
+        cg.add(var.set_startup_max_speed_code(encode_max_speed_hz(config[CONF_STARTUP_MAX_SPEED_HZ])))

@@ -40,6 +40,7 @@ mcf8329a:
   # startup_align_time: 100ms
   # startup_direction_mode: cw
   # startup_ilimit_percent: 80
+  # startup_max_speed_hz: 900
   # Optional startup lock/fault tuning (FAULT_CONFIG1/2):
   # startup_lock_mode: retry
   # startup_lock_ilimit_percent: 40

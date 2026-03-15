@@ -31,6 +31,7 @@ Component-scoped notes for `components/mcf8329a`.
   - `startup_lock_abn_speed_threshold_percent` -> `FAULT_CONFIG2.LOCK_ABN_SPEED[27:25]`
   - `startup_abnormal_bemf_threshold_percent` -> `FAULT_CONFIG2.ABNORMAL_BEMF_THR[24:22]`
   - `startup_no_motor_threshold_percent` -> `FAULT_CONFIG2.NO_MTR_THR[21:19]`
+  - `startup_max_speed_hz` -> `CLOSED_LOOP4.MAX_SPEED[13:0]` (encoded per datasheet piecewise mapping)
 - Added key-info telemetry fields:
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
@@ -41,8 +42,8 @@ Component-scoped notes for `components/mcf8329a`.
   - If a non-zero target speed is active and no fault is active, component checks `ALGO_DEBUG1` in `update()` and
     reasserts digital speed override/target (max once per second) if the device unexpectedly drops override or speed.
   - While a non-zero target speed is active and no fault is active, component logs a 1Hz `Run diag` INFO snapshot
-    (`ALGORITHM_STATE`, target/observed speed command, duty, volt_mag, `FG_SPEED_FDBK`, `SPEED_FDBK`) and emits a
-    one-shot warning if closed-loop stays in near-zero duty/volt_mag for >2s.
+    (`ALGORITHM_STATE`, target/observed speed command, duty, volt_mag, `MAX_SPEED`, `FG_SPEED_FDBK`, `SPEED_FDBK`)
+    and emits a one-shot warning if closed-loop stays in near-zero duty/volt_mag for >2s.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.
@@ -65,3 +66,5 @@ Component-scoped notes for `components/mcf8329a`.
   - Sweeping only `startup_motor_bemf_const` (for example `0x52` down to `0x38`) may not change startup behavior when
     faults are `ABN_SPEED`/`MTR_LCK` or `HW_LOCK_LIMIT`; in that case prioritize lock detector tuning (`LOCK1/2/3`
     enables and thresholds), startup mode/direction, and current limit tuning over further BEMF-constant sweeps.
+  - If closed-loop stays active with constant non-zero `speed_cmd`/`duty` but `volt_mag` decays and speed feedback is unstable,
+    verify `CLOSED_LOOP4.MAX_SPEED`; too-low max speed for a high-kV motor can make the speed loop back off voltage and coast.
