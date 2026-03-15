@@ -24,6 +24,18 @@ static const char *const ABNORMAL_BEMF_THRESHOLD_LABELS[8] = {
 static const char *const NO_MOTOR_THRESHOLD_LABELS[8] = {
     "1%", "2%", "3%", "4%", "5%", "7.5%", "10%", "20%",
 };
+static constexpr float OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[16] = {
+    0.01f,  0.05f, 1.0f,   2.5f,
+    5.0f,   10.0f, 25.0f,  50.0f,
+    75.0f,  100.0f, 250.0f, 500.0f,
+    750.0f, 1000.0f, 5000.0f, 10000.0f,
+};
+static constexpr float OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[32] = {
+    1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,
+    9.0f,  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f,
+    17.0f, 18.0f, 19.0f, 20.0f, 22.5f, 25.0f, 27.5f, 30.0f,
+    32.5f, 35.0f, 37.5f, 40.0f, 42.5f, 45.0f, 47.5f, 50.0f,
+};
 
 void MCF8329ABrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -252,6 +264,29 @@ void MCF8329AComponent::dump_config() {
   } else {
     ESP_LOGCONFIG(TAG, "  Startup max speed: (unchanged)");
   }
+  if (this->startup_open_loop_ilimit_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup open-loop current limit: %u%% BASE_CURRENT (code=%u)",
+                  static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->startup_open_loop_ilimit_ & 0x0Fu]),
+                  static_cast<unsigned>(this->startup_open_loop_ilimit_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup open-loop current limit: (unchanged)");
+  }
+  if (this->startup_open_loop_accel_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup open-loop accel A1: %.2f Hz/s (code=%u)",
+                  this->open_loop_accel_code_to_hz_per_s_(this->startup_open_loop_accel_),
+                  static_cast<unsigned>(this->startup_open_loop_accel_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup open-loop accel A1: (unchanged)");
+  }
+  ESP_LOGCONFIG(TAG, "  Startup auto handoff: %s",
+                this->startup_auto_handoff_enable_set_ ? YESNO(this->startup_auto_handoff_enable_) : "(unchanged)");
+  if (this->startup_open_to_closed_handoff_threshold_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup open->closed handoff threshold: %.1f%% MAX_SPEED (code=%u)",
+                  this->open_to_closed_handoff_code_to_percent_(this->startup_open_to_closed_handoff_threshold_),
+                  static_cast<unsigned>(this->startup_open_to_closed_handoff_threshold_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup open->closed handoff threshold: (unchanged)");
+  }
   ESP_LOGCONFIG(TAG, "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
                 static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
                 static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS), static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
@@ -442,7 +477,9 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       this->startup_lock_ilimit_set_ || this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_ ||
       this->startup_abn_speed_lock_enable_set_ || this->startup_abn_bemf_lock_enable_set_ ||
       this->startup_no_motor_lock_enable_set_ || this->startup_lock_abn_speed_threshold_set_ ||
-      this->startup_abnormal_bemf_threshold_set_ || this->startup_no_motor_threshold_set_ || this->startup_max_speed_set_;
+      this->startup_abnormal_bemf_threshold_set_ || this->startup_no_motor_threshold_set_ || this->startup_max_speed_set_ ||
+      this->startup_open_loop_ilimit_set_ || this->startup_open_loop_accel_set_ ||
+      this->startup_auto_handoff_enable_set_ || this->startup_open_to_closed_handoff_threshold_set_;
   const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
       (this->apply_startup_config_ && this->startup_direction_mode_set_) ? this->startup_direction_mode_ : "hardware";
@@ -605,6 +642,41 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     ESP_LOGI(TAG, "MOTOR_STARTUP1 startup cfg: 0x%08X -> 0x%08X", motor_startup1, motor_startup1_next);
   }
 
+  uint32_t motor_startup2 = 0;
+  if (!this->read_reg32(REG_MOTOR_STARTUP2, motor_startup2)) {
+    ESP_LOGW(TAG, "Failed to read MOTOR_STARTUP2 for startup config");
+    this->startup_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t motor_startup2_next = motor_startup2;
+  if (apply_custom_settings && this->startup_open_loop_ilimit_set_) {
+    motor_startup2_next = (motor_startup2_next & ~MOTOR_STARTUP2_OL_ILIMIT_MASK) |
+                          ((static_cast<uint32_t>(this->startup_open_loop_ilimit_) << MOTOR_STARTUP2_OL_ILIMIT_SHIFT) &
+                           MOTOR_STARTUP2_OL_ILIMIT_MASK);
+  }
+  if (apply_custom_settings && this->startup_open_loop_accel_set_) {
+    motor_startup2_next = (motor_startup2_next & ~MOTOR_STARTUP2_OL_ACC_A1_MASK) |
+                          ((static_cast<uint32_t>(this->startup_open_loop_accel_) << MOTOR_STARTUP2_OL_ACC_A1_SHIFT) &
+                           MOTOR_STARTUP2_OL_ACC_A1_MASK);
+  }
+  if (apply_custom_settings && this->startup_auto_handoff_enable_set_) {
+    if (this->startup_auto_handoff_enable_) {
+      motor_startup2_next |= MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
+    } else {
+      motor_startup2_next &= ~MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
+    }
+  }
+  if (apply_custom_settings && this->startup_open_to_closed_handoff_threshold_set_) {
+    motor_startup2_next = (motor_startup2_next & ~MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK) |
+                          ((static_cast<uint32_t>(this->startup_open_to_closed_handoff_threshold_)
+                            << MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) &
+                           MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK);
+  }
+  if (apply_custom_settings && motor_startup2_next != motor_startup2) {
+    ok &= this->write_reg32(REG_MOTOR_STARTUP2, motor_startup2_next);
+    ESP_LOGI(TAG, "MOTOR_STARTUP2 startup cfg: 0x%08X -> 0x%08X", motor_startup2, motor_startup2_next);
+  }
+
   uint32_t closed_loop3 = 0;
   if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3)) {
     ESP_LOGW(TAG, "Failed to read CLOSED_LOOP3 for startup config");
@@ -674,11 +746,15 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
 
   uint32_t closed_loop2_effective = closed_loop2_next;
   uint32_t motor_startup1_effective = motor_startup1_next;
+  uint32_t motor_startup2_effective = motor_startup2_next;
   if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2_effective)) {
     ESP_LOGW(TAG, "Failed to read back CLOSED_LOOP2 after startup config apply");
   }
   if (!this->read_reg32(REG_MOTOR_STARTUP1, motor_startup1_effective)) {
     ESP_LOGW(TAG, "Failed to read back MOTOR_STARTUP1 after startup config apply");
+  }
+  if (!this->read_reg32(REG_MOTOR_STARTUP2, motor_startup2_effective)) {
+    ESP_LOGW(TAG, "Failed to read back MOTOR_STARTUP2 after startup config apply");
   }
   uint32_t closed_loop3_effective = closed_loop3_next;
   if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3_effective)) {
@@ -697,6 +773,13 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_MTR_STARTUP_MASK) >> MOTOR_STARTUP1_MTR_STARTUP_SHIFT);
   const uint8_t effective_align_time =
       static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_ALIGN_TIME_MASK) >> MOTOR_STARTUP1_ALIGN_TIME_SHIFT);
+  const uint8_t effective_ol_ilimit =
+      static_cast<uint8_t>((motor_startup2_effective & MOTOR_STARTUP2_OL_ILIMIT_MASK) >> MOTOR_STARTUP2_OL_ILIMIT_SHIFT);
+  const uint8_t effective_ol_accel =
+      static_cast<uint8_t>((motor_startup2_effective & MOTOR_STARTUP2_OL_ACC_A1_MASK) >> MOTOR_STARTUP2_OL_ACC_A1_SHIFT);
+  const bool effective_auto_handoff = (motor_startup2_effective & MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK) != 0u;
+  const uint8_t effective_handoff_threshold = static_cast<uint8_t>(
+      (motor_startup2_effective & MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK) >> MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT);
   const uint8_t effective_motor_bemf_const = static_cast<uint8_t>(
       (closed_loop3_effective & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
   const uint32_t effective_motor_res =
@@ -738,7 +821,8 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   const char *profile_state = apply_custom_settings ? "custom" : "current";
   char summary[640];
   std::snprintf(summary, sizeof(summary),
-                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u max_speed=%.1fHz(code=%u) startup=%s align=%s "
+                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u max_speed=%.1fHz(code=%u) "
+                "startup=%s align=%s ol_ilimit=%u(%u%%) ol_acc=%.2fHz/s auto_handoff=%s handoff=%.1f%% "
                 "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
                 "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s "
                 "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
@@ -747,7 +831,10 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
                 static_cast<unsigned>(effective_spd_loop_kp), static_cast<unsigned>(effective_spd_loop_ki),
                 effective_max_speed_hz, static_cast<unsigned>(effective_max_speed_code),
                 this->startup_mode_to_string_(effective_startup_mode),
-                this->startup_align_time_to_string_(effective_align_time),
+                this->startup_align_time_to_string_(effective_align_time), static_cast<unsigned>(effective_ol_ilimit),
+                static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ol_ilimit & 0x0Fu]),
+                this->open_loop_accel_code_to_hz_per_s_(effective_ol_accel), YESNO(effective_auto_handoff),
+                this->open_to_closed_handoff_code_to_percent_(effective_handoff_threshold),
                 this->startup_brake_mode_to_string_(effective_brake_mode), this->startup_brake_time_to_string_(effective_brake_time),
                 static_cast<unsigned>(effective_ilimit), static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ilimit & 0x0Fu]),
                 static_cast<unsigned>(effective_lock_ilimit),
@@ -1464,6 +1551,14 @@ float MCF8329AComponent::max_speed_code_to_hz_(uint16_t code) const {
     return static_cast<float>(clamped) / 6.0f;
   }
   return (static_cast<float>(clamped) / 4.0f) - 800.0f;
+}
+
+float MCF8329AComponent::open_loop_accel_code_to_hz_per_s_(uint8_t code) const {
+  return OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[code & 0x0Fu];
+}
+
+float MCF8329AComponent::open_to_closed_handoff_code_to_percent_(uint8_t code) const {
+  return OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[code & 0x1Fu];
 }
 
 const char *MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const {

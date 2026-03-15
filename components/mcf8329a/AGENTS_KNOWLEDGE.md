@@ -32,6 +32,10 @@ Component-scoped notes for `components/mcf8329a`.
   - `startup_abnormal_bemf_threshold_percent` -> `FAULT_CONFIG2.ABNORMAL_BEMF_THR[24:22]`
   - `startup_no_motor_threshold_percent` -> `FAULT_CONFIG2.NO_MTR_THR[21:19]`
   - `startup_max_speed_hz` -> `CLOSED_LOOP4.MAX_SPEED[13:0]` (encoded per datasheet piecewise mapping)
+  - `startup_open_loop_ilimit_percent` -> `MOTOR_STARTUP2.OL_ILIMIT[30:27]`
+  - `startup_open_loop_accel_hz_per_s` -> `MOTOR_STARTUP2.OL_ACC_A1[26:23]`
+  - `startup_auto_handoff_enable` -> `MOTOR_STARTUP2.AUTO_HANDOFF_EN[18]`
+  - `startup_open_to_closed_handoff_percent` -> `MOTOR_STARTUP2.OPN_CL_HANDOFF_THR[17:13]`
 - Added key-info telemetry fields:
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
@@ -68,3 +72,5 @@ Component-scoped notes for `components/mcf8329a`.
     enables and thresholds), startup mode/direction, and current limit tuning over further BEMF-constant sweeps.
   - If closed-loop stays active with constant non-zero `speed_cmd`/`duty` but `volt_mag` decays and speed feedback is unstable,
     verify `CLOSED_LOOP4.MAX_SPEED`; too-low max speed for a high-kV motor can make the speed loop back off voltage and coast.
+  - If startup overshoots hard right after `MOTOR_OPEN_LOOP -> MOTOR_CLOSED_LOOP_ALIGNED`, tune `MOTOR_STARTUP2`
+    (`OL_ACC_A1`, `OL_ILIMIT`, `AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`) before changing steady-state loop gains.

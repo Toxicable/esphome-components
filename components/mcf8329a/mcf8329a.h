@@ -156,6 +156,22 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_max_speed_code_ = startup_max_speed_code & 0x3FFFu;
     startup_max_speed_set_ = true;
   }
+  void set_startup_open_loop_ilimit(uint8_t startup_open_loop_ilimit) {
+    startup_open_loop_ilimit_ = startup_open_loop_ilimit;
+    startup_open_loop_ilimit_set_ = true;
+  }
+  void set_startup_open_loop_accel(uint8_t startup_open_loop_accel) {
+    startup_open_loop_accel_ = startup_open_loop_accel;
+    startup_open_loop_accel_set_ = true;
+  }
+  void set_startup_auto_handoff_enable(bool startup_auto_handoff_enable) {
+    startup_auto_handoff_enable_ = startup_auto_handoff_enable;
+    startup_auto_handoff_enable_set_ = true;
+  }
+  void set_startup_open_to_closed_handoff_threshold(uint8_t startup_open_to_closed_handoff_threshold) {
+    startup_open_to_closed_handoff_threshold_ = startup_open_to_closed_handoff_threshold & 0x1Fu;
+    startup_open_to_closed_handoff_threshold_set_ = true;
+  }
 
   void set_brake_switch(MCF8329ABrakeSwitch *sw) { brake_switch_ = sw; }
   void set_direction_select(MCF8329ADirectionSelect *sel) { direction_select_ = sel; }
@@ -182,6 +198,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char *startup_brake_mode_to_string_(uint8_t code) const;
   const char *startup_brake_time_to_string_(uint8_t code) const;
   float max_speed_code_to_hz_(uint16_t code) const;
+  float open_loop_accel_code_to_hz_per_s_(uint8_t code) const;
+  float open_to_closed_handoff_code_to_percent_(uint8_t code) const;
   const char *algorithm_state_to_string_(uint16_t state) const;
   const char *lock_mode_to_string_(uint8_t mode) const;
   const char *lock_retry_time_to_string_(uint8_t code) const;
@@ -217,6 +235,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
+  static constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
   static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
   static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
@@ -258,6 +277,13 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t MOTOR_STARTUP1_MTR_STARTUP_SHIFT = 29;
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_TIME_MASK = (0xFu << 21);
   static constexpr uint32_t MOTOR_STARTUP1_ALIGN_TIME_SHIFT = 21;
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_MASK = (0xFu << 27);
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ACC_A1_MASK = (0xFu << 23);
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ACC_A1_SHIFT = 23;
+  static constexpr uint32_t MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK = (1u << 18);
+  static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK = (0x1Fu << 13);
+  static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT = 13;
 
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_MASK = (0x7u << 28);
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_SHIFT = 28;
@@ -362,6 +388,10 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool startup_abnormal_bemf_threshold_set_{false};
   bool startup_no_motor_threshold_set_{false};
   bool startup_max_speed_set_{false};
+  bool startup_open_loop_ilimit_set_{false};
+  bool startup_open_loop_accel_set_{false};
+  bool startup_auto_handoff_enable_set_{false};
+  bool startup_open_to_closed_handoff_threshold_set_{false};
   uint8_t startup_motor_bemf_const_{0};
   uint8_t startup_brake_mode_{0};
   uint8_t startup_brake_time_{0};
@@ -379,6 +409,10 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint8_t startup_abnormal_bemf_threshold_{0};
   uint8_t startup_no_motor_threshold_{0};
   uint16_t startup_max_speed_code_{0};
+  uint8_t startup_open_loop_ilimit_{0};
+  uint8_t startup_open_loop_accel_{0};
+  bool startup_auto_handoff_enable_{false};
+  uint8_t startup_open_to_closed_handoff_threshold_{0};
   std::string startup_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};

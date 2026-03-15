@@ -41,6 +41,10 @@ mcf8329a:
   # startup_direction_mode: cw
   # startup_ilimit_percent: 80
   # startup_max_speed_hz: 900
+  # startup_open_loop_ilimit_percent: 50
+  # startup_open_loop_accel_hz_per_s: 25
+  # startup_auto_handoff_enable: false
+  # startup_open_to_closed_handoff_percent: 10
   # Optional startup lock/fault tuning (FAULT_CONFIG1/2):
   # startup_lock_mode: retry
   # startup_lock_ilimit_percent: 40

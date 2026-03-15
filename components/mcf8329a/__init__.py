@@ -31,6 +31,10 @@ CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT = "startup_lock_abn_speed_threshol
 CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT = "startup_abnormal_bemf_threshold_percent"
 CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT = "startup_no_motor_threshold_percent"
 CONF_STARTUP_MAX_SPEED_HZ = "startup_max_speed_hz"
+CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT = "startup_open_loop_ilimit_percent"
+CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S = "startup_open_loop_accel_hz_per_s"
+CONF_STARTUP_AUTO_HANDOFF_ENABLE = "startup_auto_handoff_enable"
+CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT = "startup_open_to_closed_handoff_percent"
 
 STARTUP_BRAKE_MODE_OPTIONS = {
     "hiz": 0,
@@ -164,6 +168,60 @@ NO_MOTOR_THRESHOLD_PERCENT_TO_CODE = {
     20.0: 7,
 }
 
+OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE = {
+    0.01: 0,
+    0.05: 1,
+    1.0: 2,
+    2.5: 3,
+    5.0: 4,
+    10.0: 5,
+    25.0: 6,
+    50.0: 7,
+    75.0: 8,
+    100.0: 9,
+    250.0: 10,
+    500.0: 11,
+    750.0: 12,
+    1000.0: 13,
+    5000.0: 14,
+    10000.0: 15,
+}
+
+OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE = {
+    1.0: 0,
+    2.0: 1,
+    3.0: 2,
+    4.0: 3,
+    5.0: 4,
+    6.0: 5,
+    7.0: 6,
+    8.0: 7,
+    9.0: 8,
+    10.0: 9,
+    11.0: 10,
+    12.0: 11,
+    13.0: 12,
+    14.0: 13,
+    15.0: 14,
+    16.0: 15,
+    17.0: 16,
+    18.0: 17,
+    19.0: 18,
+    20.0: 19,
+    22.5: 20,
+    25.0: 21,
+    27.5: 22,
+    30.0: 23,
+    32.5: 24,
+    35.0: 25,
+    37.5: 26,
+    40.0: 27,
+    42.5: 28,
+    45.0: 29,
+    47.5: 30,
+    50.0: 31,
+}
+
 
 def validate_lock_ilimit_percent(value):
     value = cv.int_(value)
@@ -214,6 +272,28 @@ def validate_startup_max_speed_hz(value):
     return value
 
 
+def validate_open_loop_accel_hz_per_s(value):
+    value = cv.float_(value)
+    for allowed in OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "open-loop accel must be one of: "
+        + ", ".join(str(v) for v in OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE)
+    )
+
+
+def validate_open_to_closed_handoff_percent(value):
+    value = cv.float_(value)
+    for allowed in OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "open-to-closed handoff percent must be one of: "
+        + ", ".join(str(v) for v in OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE)
+    )
+
+
 def encode_max_speed_hz(value_hz):
     if value_hz <= 1600:
         code = int(round(value_hz * 6.0))
@@ -256,6 +336,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
             cv.Optional(CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
             cv.Optional(CONF_STARTUP_MAX_SPEED_HZ): validate_startup_max_speed_hz,
+            cv.Optional(CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S): validate_open_loop_accel_hz_per_s,
+            cv.Optional(CONF_STARTUP_AUTO_HANDOFF_ENABLE): cv.boolean,
+            cv.Optional(CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT): validate_open_to_closed_handoff_percent,
         }
     )
     .extend(cv.polling_component_schema("250ms"))
@@ -321,3 +405,15 @@ async def to_code(config):
         )
     if CONF_STARTUP_MAX_SPEED_HZ in config:
         cg.add(var.set_startup_max_speed_code(encode_max_speed_hz(config[CONF_STARTUP_MAX_SPEED_HZ])))
+    if CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT in config:
+        cg.add(var.set_startup_open_loop_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT]]))
+    if CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S in config:
+        cg.add(var.set_startup_open_loop_accel(OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S]]))
+    if CONF_STARTUP_AUTO_HANDOFF_ENABLE in config:
+        cg.add(var.set_startup_auto_handoff_enable(config[CONF_STARTUP_AUTO_HANDOFF_ENABLE]))
+    if CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT in config:
+        cg.add(
+            var.set_startup_open_to_closed_handoff_threshold(
+                OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT]]
+            )
+        )

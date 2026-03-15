@@ -23,3 +23,4 @@
 - Component READMEs should include an `external_components` snippet; add an explicit `i2c` block when the component depends on I2C.
 - README `external_components` examples should use `source: github://Toxicable/esphome-components@main` with `refresh: 0s`, and list the specific component in `components: [ ... ]`.
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
+- `.clang-format` should keep a JS-like feel for C++ formatting (2-space indents, attached braces, and tighter wrapping).

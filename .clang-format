@@ -1,21 +1,36 @@
-BasedOnStyle: LLVM
+---
+Language: Cpp
+BasedOnStyle: Google
 
-# Braces on the same line for control statements.
-BreakBeforeBraces: Attach
-
-# Indentation and wrapping.
+# JS-like defaults for C++: 2-space indentation, attached braces, tighter wrapping.
 IndentWidth: 2
 TabWidth: 2
 UseTab: Never
-ContinuationIndentWidth: 4
-ColumnLimit: 120
+ContinuationIndentWidth: 2
+ColumnLimit: 100
 
-# Readability tweaks.
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
-AllowShortBlocksOnASingleLine: Never
-AllowShortFunctionsOnASingleLine: Inline
+BreakBeforeBraces: Attach
 SpaceBeforeParens: ControlStatements
+SpaceBeforeCpp11BracedList: false
+
+# Keep argument lists vertically split, similar to common prettier output.
+AlignAfterOpenBracket: BlockIndent
 BinPackArguments: false
 BinPackParameters: false
+
+# Keep namespaces/cases compact and consistent with existing component layout.
+NamespaceIndentation: None
+IndentCaseLabels: true
+
+# Reduce C++-specific alignment noise.
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: Empty
+
+IncludeBlocks: Preserve
 SortIncludes: true
