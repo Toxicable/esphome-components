@@ -71,6 +71,9 @@ void MCF8329AComponent::setup() {
   this->normal_operation_ready_ = false;
   this->deferred_comms_last_retry_ms_ = 0u;
   this->deferred_comms_last_scan_ms_ = 0u;
+  this->algorithm_state_valid_ = false;
+  this->algorithm_state_read_error_latched_ = false;
+  this->last_algorithm_state_ = 0xFFFFu;
 
   if (!this->scan_i2c_bus_()) {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
@@ -104,6 +107,7 @@ void MCF8329AComponent::update() {
   const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
   if (algo_ok) {
     this->publish_algo_status_(algo_status);
+    this->log_algorithm_state_transition_(algo_status, "update");
   }
 
   const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
@@ -912,6 +916,7 @@ bool MCF8329AComponent::read_probe_and_publish_() {
 
   if (algo_ok) {
     this->publish_algo_status_(algo_status);
+    this->log_algorithm_state_transition_(algo_status, "probe");
   }
   if (gate_ok || controller_ok) {
     this->publish_faults_(gate_fault_status, gate_ok, controller_fault_status, controller_ok);
@@ -1294,6 +1299,99 @@ const char *MCF8329AComponent::startup_brake_time_to_string_(uint8_t code) const
       "100ms", "250ms",  "500ms",  "1000ms", "2500ms", "5000ms", "10000ms", "15000ms",
   };
   return kBrakeTimeLabels[code & 0x0Fu];
+}
+
+const char *MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const {
+  switch (state) {
+    case 0x0000:
+      return "MOTOR_IDLE";
+    case 0x0001:
+      return "MOTOR_ISD";
+    case 0x0002:
+      return "MOTOR_TRISTATE";
+    case 0x0003:
+      return "MOTOR_BRAKE_ON_START";
+    case 0x0004:
+      return "MOTOR_IPD";
+    case 0x0005:
+      return "MOTOR_SLOW_FIRST_CYCLE";
+    case 0x0006:
+      return "MOTOR_ALIGN";
+    case 0x0007:
+      return "MOTOR_OPEN_LOOP";
+    case 0x0008:
+      return "MOTOR_CLOSED_LOOP_UNALIGNED";
+    case 0x0009:
+      return "MOTOR_CLOSED_LOOP_ALIGNED";
+    case 0x000A:
+      return "MOTOR_CLOSED_LOOP_ACTIVE_BRAKING";
+    case 0x000B:
+      return "MOTOR_SOFT_STOP";
+    case 0x000C:
+      return "MOTOR_RECIRCULATE_STOP";
+    case 0x000D:
+      return "MOTOR_BRAKE_ON_STOP";
+    case 0x000E:
+      return "MOTOR_FAULT";
+    case 0x000F:
+      return "MOTOR_MPET_MOTOR_STOP_CHECK";
+    case 0x0010:
+      return "MOTOR_MPET_MOTOR_STOP_WAIT";
+    case 0x0011:
+      return "MOTOR_MPET_MOTOR_BRAKE";
+    case 0x0012:
+      return "MOTOR_MPET_ALGORITHM_PARAMETERS_INIT";
+    case 0x0013:
+      return "MOTOR_MPET_RL_MEASURE";
+    case 0x0014:
+      return "MOTOR_MPET_KE_MEASURE";
+    case 0x0015:
+      return "MOTOR_MPET_STALL_CURRENT_MEASURE";
+    case 0x0016:
+      return "MOTOR_MPET_TORQUE_MODE";
+    case 0x0017:
+      return "MOTOR_MPET_DONE";
+    case 0x0018:
+      return "MOTOR_MPET_FAULT";
+    default:
+      return "MOTOR_STATE_UNKNOWN";
+  }
+}
+
+void MCF8329AComponent::log_algorithm_state_transition_(uint32_t algo_status, const char *context) {
+  uint16_t algo_state = 0;
+  if (!this->read_reg16(REG_ALGORITHM_STATE, algo_state)) {
+    if (!this->algorithm_state_read_error_latched_) {
+      ESP_LOGW(TAG, "Unable to read ALGORITHM_STATE for %s logging", context);
+      this->algorithm_state_read_error_latched_ = true;
+    }
+    return;
+  }
+  this->algorithm_state_read_error_latched_ = false;
+
+  if (this->algorithm_state_valid_ && algo_state == this->last_algorithm_state_) {
+    return;
+  }
+
+  const uint16_t duty_raw = static_cast<uint16_t>((algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT);
+  const uint16_t volt_mag_raw = static_cast<uint16_t>((algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT);
+  const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
+  const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
+  const bool sys_enable = (algo_status & ALGO_STATUS_SYS_ENABLE_FLAG_MASK) != 0u;
+
+  if (!this->algorithm_state_valid_) {
+    ESP_LOGI(TAG, "Algorithm state [%s]: init -> 0x%04X(%s) duty=%.1f%% volt_mag=%.1f%% sys_enable=%s", context,
+             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), duty_percent, volt_mag_percent,
+             YESNO(sys_enable));
+  } else {
+    ESP_LOGI(TAG, "Algorithm state [%s]: 0x%04X(%s) -> 0x%04X(%s) duty=%.1f%% volt_mag=%.1f%% sys_enable=%s", context,
+             static_cast<unsigned>(this->last_algorithm_state_), this->algorithm_state_to_string_(this->last_algorithm_state_),
+             static_cast<unsigned>(algo_state), this->algorithm_state_to_string_(algo_state), duty_percent, volt_mag_percent,
+             YESNO(sys_enable));
+  }
+
+  this->last_algorithm_state_ = algo_state;
+  this->algorithm_state_valid_ = true;
 }
 
 const char *MCF8329AComponent::lock_mode_to_string_(uint8_t mode) const {

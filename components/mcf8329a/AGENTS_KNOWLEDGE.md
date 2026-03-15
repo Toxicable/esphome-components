@@ -37,6 +37,8 @@ Component-scoped notes for `components/mcf8329a`.
 - Runtime behavior:
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
+  - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
+    (init + changes) with duty/volt_mag/sys_enable context to keep bring-up logs readable.
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
 - `binary_sensor` now only exposes aggregate signals (`fault_active`, `sys_enable`); per-fault bit entities were removed.
 - On `MPET_BEMF_FAULT`, component logs one-shot diagnostics (speed command, brake input decode, MPET bits, motor BEMF const)
@@ -52,3 +54,7 @@ Component-scoped notes for `components/mcf8329a`.
     `SPD_LOOP_KI=1` to avoid forced MPET coasting faults on first non-zero speed command.
   - `clear_faults` button path also clears MPET bits before pulsing `CLR_FLT`, preventing immediate MPET_BEMF relatch.
   - If `MPET_BEMF_FAULT` is still present immediately after startup setup, component pulses `CLR_FLT` once automatically.
+- Bring-up troubleshooting insight from field logs:
+  - Sweeping only `startup_motor_bemf_const` (for example `0x52` down to `0x38`) may not change startup behavior when
+    faults are `ABN_SPEED`/`MTR_LCK` or `HW_LOCK_LIMIT`; in that case prioritize lock detector tuning (`LOCK1/2/3`
+    enables and thresholds), startup mode/direction, and current limit tuning over further BEMF-constant sweeps.
