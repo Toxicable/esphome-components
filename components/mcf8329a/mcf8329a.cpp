@@ -11,6 +11,10 @@ namespace esphome {
 namespace mcf8329a {
 
 static const char *const TAG = "mcf8329a";
+static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
+    5,  10, 15, 20, 25, 30, 40, 50,
+    60, 65, 70, 75, 80, 85, 90, 95,
+};
 
 void MCF8329ABrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -171,6 +175,29 @@ void MCF8329AComponent::dump_config() {
                                               : "(unchanged)");
   ESP_LOGCONFIG(TAG, "  Startup direction: %s",
                 this->startup_direction_mode_set_ ? this->startup_direction_mode_.c_str() : "(hardware default)");
+  if (this->startup_lock_mode_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup lock mode: %s (code=%u)", this->lock_mode_to_string_(this->startup_lock_mode_),
+                  static_cast<unsigned>(this->startup_lock_mode_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup lock mode: (unchanged)");
+  }
+  if (this->startup_lock_ilimit_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup lock current limit: %u%% BASE_CURRENT (code=%u)",
+                  static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->startup_lock_ilimit_ & 0x0Fu]),
+                  static_cast<unsigned>(this->startup_lock_ilimit_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup lock current limit: (unchanged)");
+  }
+  if (this->startup_hw_lock_ilimit_set_) {
+    ESP_LOGCONFIG(TAG, "  Startup HW lock current limit: %u%% BASE_CURRENT (code=%u)",
+                  static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->startup_hw_lock_ilimit_ & 0x0Fu]),
+                  static_cast<unsigned>(this->startup_hw_lock_ilimit_));
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup HW lock current limit: (unchanged)");
+  }
+  ESP_LOGCONFIG(TAG, "  Startup lock retry: %s",
+                this->startup_lock_retry_time_set_ ? this->lock_retry_time_to_string_(this->startup_lock_retry_time_)
+                                                   : "(unchanged)");
   ESP_LOGCONFIG(TAG, "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
                 static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
                 static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS), static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
@@ -357,12 +384,64 @@ void MCF8329AComponent::apply_post_comms_setup_() {
 bool MCF8329AComponent::apply_startup_motor_config_() {
   const bool has_startup_settings =
       this->startup_motor_bemf_const_set_ || this->startup_brake_mode_set_ || this->startup_brake_time_set_ ||
-      this->startup_mode_set_ || this->startup_align_time_set_;
+      this->startup_mode_set_ || this->startup_align_time_set_ || this->startup_lock_mode_set_ ||
+      this->startup_lock_ilimit_set_ || this->startup_hw_lock_ilimit_set_ || this->startup_lock_retry_time_set_;
   const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
   const std::string effective_direction =
       (this->apply_startup_config_ && this->startup_direction_mode_set_) ? this->startup_direction_mode_ : "hardware";
 
   bool ok = true;
+
+  uint32_t fault_config1 = 0;
+  if (!this->read_reg32(REG_FAULT_CONFIG1, fault_config1)) {
+    ESP_LOGW(TAG, "Failed to read FAULT_CONFIG1 for startup config");
+    this->startup_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t fault_config1_next = fault_config1;
+  if (apply_custom_settings && this->startup_hw_lock_ilimit_set_) {
+    fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) |
+                         ((static_cast<uint32_t>(this->startup_hw_lock_ilimit_) << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) &
+                          FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK);
+  }
+  if (apply_custom_settings && this->startup_lock_ilimit_set_) {
+    fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_LOCK_ILIMIT_MASK) |
+                         ((static_cast<uint32_t>(this->startup_lock_ilimit_) << FAULT_CONFIG1_LOCK_ILIMIT_SHIFT) &
+                          FAULT_CONFIG1_LOCK_ILIMIT_MASK);
+  }
+  if (apply_custom_settings && this->startup_lock_mode_set_) {
+    const uint32_t mode = static_cast<uint32_t>(this->startup_lock_mode_);
+    fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) |
+                         ((mode << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK);
+    fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_MTR_LCK_MODE_MASK) |
+                         ((mode << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT) & FAULT_CONFIG1_MTR_LCK_MODE_MASK);
+  }
+  if (apply_custom_settings && this->startup_lock_retry_time_set_) {
+    fault_config1_next = (fault_config1_next & ~FAULT_CONFIG1_LCK_RETRY_MASK) |
+                         ((static_cast<uint32_t>(this->startup_lock_retry_time_) << FAULT_CONFIG1_LCK_RETRY_SHIFT) &
+                          FAULT_CONFIG1_LCK_RETRY_MASK);
+  }
+  if (apply_custom_settings && fault_config1_next != fault_config1) {
+    ok &= this->write_reg32(REG_FAULT_CONFIG1, fault_config1_next);
+    ESP_LOGI(TAG, "FAULT_CONFIG1 startup cfg: 0x%08X -> 0x%08X", fault_config1, fault_config1_next);
+  }
+
+  uint32_t fault_config2 = 0;
+  if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2)) {
+    ESP_LOGW(TAG, "Failed to read FAULT_CONFIG2 for startup config");
+    this->startup_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t fault_config2_next = fault_config2;
+  if (apply_custom_settings && this->startup_lock_mode_set_) {
+    fault_config2_next = (fault_config2_next & ~FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) |
+                         ((static_cast<uint32_t>(this->startup_lock_mode_) << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) &
+                          FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK);
+  }
+  if (apply_custom_settings && fault_config2_next != fault_config2) {
+    ok &= this->write_reg32(REG_FAULT_CONFIG2, fault_config2_next);
+    ESP_LOGI(TAG, "FAULT_CONFIG2 startup cfg: 0x%08X -> 0x%08X", fault_config2, fault_config2_next);
+  }
 
   uint32_t closed_loop2 = 0;
   if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2)) {
@@ -479,6 +558,15 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     ESP_LOGI(TAG, "Startup motor config application disabled");
   }
 
+  uint32_t fault_config1_effective = fault_config1_next;
+  uint32_t fault_config2_effective = fault_config2_next;
+  if (!this->read_reg32(REG_FAULT_CONFIG1, fault_config1_effective)) {
+    ESP_LOGW(TAG, "Failed to read back FAULT_CONFIG1 after startup config apply");
+  }
+  if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2_effective)) {
+    ESP_LOGW(TAG, "Failed to read back FAULT_CONFIG2 after startup config apply");
+  }
+
   uint32_t closed_loop2_effective = closed_loop2_next;
   uint32_t motor_startup1_effective = motor_startup1_next;
   if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2_effective)) {
@@ -515,18 +603,37 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       ((closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
   const uint32_t effective_spd_loop_ki =
       (closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT;
+  const uint8_t effective_hw_lock_ilimit = static_cast<uint8_t>(
+      (fault_config1_effective & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT);
+  const uint8_t effective_lock_ilimit =
+      static_cast<uint8_t>((fault_config1_effective & FAULT_CONFIG1_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_SHIFT);
+  const uint8_t effective_lock_mode = static_cast<uint8_t>(
+      (fault_config1_effective & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT);
+  const uint8_t effective_mtr_lock_mode =
+      static_cast<uint8_t>((fault_config1_effective & FAULT_CONFIG1_MTR_LCK_MODE_MASK) >> FAULT_CONFIG1_MTR_LCK_MODE_SHIFT);
+  const uint8_t effective_lck_retry =
+      static_cast<uint8_t>((fault_config1_effective & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT);
+  const uint8_t effective_hw_lock_mode = static_cast<uint8_t>(
+      (fault_config2_effective & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
   const char *apply_state = this->apply_startup_config_ ? "on" : "off";
   const char *profile_state = apply_custom_settings ? "custom" : "current";
-  char summary[240];
+  char summary[400];
   std::snprintf(summary, sizeof(summary),
-                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u startup=%s align=%s stop=%s stop_brake=%s",
+                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u startup=%s align=%s "
+                "stop=%s stop_brake=%s lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) lock_mode=%s mtr_lock_mode=%s "
+                "hw_lock_mode=%s lck_retry=%s",
                 apply_state, profile_state, effective_direction.c_str(), static_cast<unsigned>(effective_motor_bemf_const),
                 static_cast<unsigned>(effective_motor_res), static_cast<unsigned>(effective_motor_ind),
                 static_cast<unsigned>(effective_spd_loop_kp), static_cast<unsigned>(effective_spd_loop_ki),
                 this->startup_mode_to_string_(effective_startup_mode),
                 this->startup_align_time_to_string_(effective_align_time),
                 this->startup_brake_mode_to_string_(effective_brake_mode),
-                this->startup_brake_time_to_string_(effective_brake_time));
+                this->startup_brake_time_to_string_(effective_brake_time), static_cast<unsigned>(effective_lock_ilimit),
+                static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_lock_ilimit & 0x0Fu]),
+                static_cast<unsigned>(effective_hw_lock_ilimit),
+                static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_hw_lock_ilimit & 0x0Fu]),
+                this->lock_mode_to_string_(effective_lock_mode), this->lock_mode_to_string_(effective_mtr_lock_mode),
+                this->lock_mode_to_string_(effective_hw_lock_mode), this->lock_retry_time_to_string_(effective_lck_retry));
   this->startup_config_summary_ = summary;
   ESP_LOGI(TAG, "Startup motor config: %s", this->startup_config_summary_.c_str());
   return ok;
@@ -816,6 +923,7 @@ void MCF8329AComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
   bool gate_detail_found = false;
   bool controller_detail_found = false;
   const bool mpet_bemf_active = controller_fault_valid && ((controller_fault_status & FAULT_MPET_BEMF) != 0u);
+  const bool hw_lock_active = controller_fault_valid && ((controller_fault_status & FAULT_HW_LOCK_LIMIT) != 0u);
 
   if (gate_fault_valid) {
     if (gate_fault_status & GATE_FAULT_OTS)
@@ -895,6 +1003,15 @@ void MCF8329AComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
     this->mpet_bemf_fault_latched_ = false;
   }
 
+  if (hw_lock_active) {
+    if (!this->hw_lock_fault_latched_) {
+      this->hw_lock_fault_latched_ = true;
+      this->log_hw_lock_diagnostics_();
+    }
+  } else {
+    this->hw_lock_fault_latched_ = false;
+  }
+
   if (summary != this->last_fault_summary_) {
     if (summary == "none") {
       ESP_LOGI(TAG, "Faults cleared");
@@ -970,6 +1087,55 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
            "MPET_BEMF hint: ensure brake is OFF before commanding speed; if starting from low duty, try >10%% then ramp down.");
 }
 
+void MCF8329AComponent::log_hw_lock_diagnostics_() {
+  uint32_t algo_debug1 = 0;
+  uint32_t fault_config1 = 0;
+  uint32_t fault_config2 = 0;
+
+  const bool algo_debug1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
+  const bool fault_config1_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
+  const bool fault_config2_ok = this->read_reg32(REG_FAULT_CONFIG2, fault_config2);
+
+  float speed_cmd_percent = -1.0f;
+  if (algo_debug1_ok) {
+    const uint16_t digital_speed_ctrl = static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
+    speed_cmd_percent = (static_cast<float>(digital_speed_ctrl) * 100.0f) / 32767.0f;
+  }
+
+  if (algo_debug1_ok && fault_config1_ok && fault_config2_ok) {
+    const uint8_t hw_lock_ilimit = static_cast<uint8_t>(
+        (fault_config1 & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT);
+    const uint8_t lock_ilimit =
+        static_cast<uint8_t>((fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_SHIFT);
+    const uint8_t lock_mode = static_cast<uint8_t>(
+        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT);
+    const uint8_t mtr_lock_mode =
+        static_cast<uint8_t>((fault_config1 & FAULT_CONFIG1_MTR_LCK_MODE_MASK) >> FAULT_CONFIG1_MTR_LCK_MODE_SHIFT);
+    const uint8_t hw_lock_mode = static_cast<uint8_t>(
+        (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
+    const uint8_t lck_retry =
+        static_cast<uint8_t>((fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT);
+
+    ESP_LOGW(TAG,
+             "HW_LOCK_LIMIT diag: speed_cmd=%.1f%% lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
+             "lock_mode=%u(%s) mtr_lock_mode=%u(%s) hw_lock_mode=%u(%s) lck_retry=%u(%s)",
+             speed_cmd_percent, static_cast<unsigned>(lock_ilimit),
+             static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[lock_ilimit & 0x0Fu]), static_cast<unsigned>(hw_lock_ilimit),
+             static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[hw_lock_ilimit & 0x0Fu]), static_cast<unsigned>(lock_mode),
+             this->lock_mode_to_string_(lock_mode), static_cast<unsigned>(mtr_lock_mode),
+             this->lock_mode_to_string_(mtr_lock_mode), static_cast<unsigned>(hw_lock_mode),
+             this->lock_mode_to_string_(hw_lock_mode), static_cast<unsigned>(lck_retry),
+             this->lock_retry_time_to_string_(lck_retry));
+  } else {
+    ESP_LOGW(TAG, "HW_LOCK_LIMIT diag: read failure ad1=%s fault_cfg1=%s fault_cfg2=%s", YESNO(algo_debug1_ok),
+             YESNO(fault_config1_ok), YESNO(fault_config2_ok));
+  }
+
+  ESP_LOGW(TAG,
+           "HW_LOCK_LIMIT hint: lock limits default to 5%%. For bring-up, try startup_lock_mode=retry and raise "
+           "startup_lock_ilimit_percent/startup_hw_lock_ilimit_percent.");
+}
+
 const char *MCF8329AComponent::startup_mode_to_string_(uint8_t mode) const {
   switch (mode) {
     case 0:
@@ -1016,6 +1182,35 @@ const char *MCF8329AComponent::startup_brake_time_to_string_(uint8_t code) const
       "100ms", "250ms",  "500ms",  "1000ms", "2500ms", "5000ms", "10000ms", "15000ms",
   };
   return kBrakeTimeLabels[code & 0x0Fu];
+}
+
+const char *MCF8329AComponent::lock_mode_to_string_(uint8_t mode) const {
+  switch (mode & 0x0Fu) {
+    case 0:
+    case 1:
+      return "latched_tristate";
+    case 2:
+    case 3:
+      return "latched_low_side_brake";
+    case 4:
+    case 5:
+      return "retry_tristate";
+    case 6:
+    case 7:
+      return "retry_low_side_brake";
+    case 8:
+      return "report_only";
+    default:
+      return "disabled";
+  }
+}
+
+const char *MCF8329AComponent::lock_retry_time_to_string_(uint8_t code) const {
+  static const char *const kLockRetryLabels[16] = {
+      "300ms", "500ms", "1s",  "2s",  "3s",  "4s",  "5s",  "6s",
+      "7s",    "8s",    "9s",  "10s", "11s", "12s", "13s", "14s",
+  };
+  return kLockRetryLabels[code & 0x0Fu];
 }
 
 const char *MCF8329AComponent::brake_input_to_string_(uint32_t brake_input_value) const {

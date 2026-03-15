@@ -19,6 +19,10 @@ CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
 CONF_STARTUP_MODE = "startup_mode"
 CONF_STARTUP_ALIGN_TIME = "startup_align_time"
 CONF_STARTUP_DIRECTION_MODE = "startup_direction_mode"
+CONF_STARTUP_LOCK_MODE = "startup_lock_mode"
+CONF_STARTUP_LOCK_ILIMIT_PERCENT = "startup_lock_ilimit_percent"
+CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT = "startup_hw_lock_ilimit_percent"
+CONF_STARTUP_LOCK_RETRY_TIME = "startup_lock_retry_time"
 
 STARTUP_BRAKE_MODE_OPTIONS = {
     "hiz": 0,
@@ -74,6 +78,61 @@ STARTUP_DIRECTION_MODE_OPTIONS = {
     "ccw": "ccw",
 }
 
+STARTUP_LOCK_MODE_OPTIONS = {
+    "latched": 0,
+    "retry": 4,
+    "report_only": 8,
+    "disabled": 9,
+}
+
+STARTUP_LOCK_RETRY_TIME_OPTIONS = {
+    "300ms": 0,
+    "500ms": 1,
+    "1s": 2,
+    "2s": 3,
+    "3s": 4,
+    "4s": 5,
+    "5s": 6,
+    "6s": 7,
+    "7s": 8,
+    "8s": 9,
+    "9s": 10,
+    "10s": 11,
+    "11s": 12,
+    "12s": 13,
+    "13s": 14,
+    "14s": 15,
+}
+
+LOCK_ILIMIT_PERCENT_TO_CODE = {
+    5: 0,
+    10: 1,
+    15: 2,
+    20: 3,
+    25: 4,
+    30: 5,
+    40: 6,
+    50: 7,
+    60: 8,
+    65: 9,
+    70: 10,
+    75: 11,
+    80: 12,
+    85: 13,
+    90: 14,
+    95: 15,
+}
+
+
+def validate_lock_ilimit_percent(value):
+    value = cv.int_(value)
+    if value not in LOCK_ILIMIT_PERCENT_TO_CODE:
+        raise cv.Invalid(
+            "lock current-limit percent must be one of: "
+            + ", ".join(str(v) for v in LOCK_ILIMIT_PERCENT_TO_CODE)
+        )
+    return value
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -88,6 +147,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_ALIGN_TIME): cv.enum(STARTUP_ALIGN_TIME_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_DIRECTION_MODE): cv.enum(STARTUP_DIRECTION_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_STARTUP_LOCK_MODE): cv.enum(STARTUP_LOCK_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_STARTUP_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_STARTUP_LOCK_RETRY_TIME): cv.enum(STARTUP_LOCK_RETRY_TIME_OPTIONS, lower=True),
         }
     )
     .extend(cv.polling_component_schema("250ms"))
@@ -117,3 +180,11 @@ async def to_code(config):
         cg.add(var.set_startup_align_time(config[CONF_STARTUP_ALIGN_TIME]))
     if CONF_STARTUP_DIRECTION_MODE in config:
         cg.add(var.set_startup_direction_mode(config[CONF_STARTUP_DIRECTION_MODE]))
+    if CONF_STARTUP_LOCK_MODE in config:
+        cg.add(var.set_startup_lock_mode(config[CONF_STARTUP_LOCK_MODE]))
+    if CONF_STARTUP_LOCK_ILIMIT_PERCENT in config:
+        cg.add(var.set_startup_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_LOCK_ILIMIT_PERCENT]]))
+    if CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT in config:
+        cg.add(var.set_startup_hw_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT]]))
+    if CONF_STARTUP_LOCK_RETRY_TIME in config:
+        cg.add(var.set_startup_lock_retry_time(config[CONF_STARTUP_LOCK_RETRY_TIME]))

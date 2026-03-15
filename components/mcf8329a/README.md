@@ -39,6 +39,11 @@ mcf8329a:
   # startup_mode: double_align
   # startup_align_time: 100ms
   # startup_direction_mode: cw
+  # Optional startup lock/fault tuning (FAULT_CONFIG1/2):
+  # startup_lock_mode: retry
+  # startup_lock_ilimit_percent: 40
+  # startup_hw_lock_ilimit_percent: 40
+  # startup_lock_retry_time: 2s
 
 switch:
   - platform: mcf8329a

@@ -108,6 +108,22 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_direction_mode_ = startup_direction_mode;
     startup_direction_mode_set_ = true;
   }
+  void set_startup_lock_mode(uint8_t startup_lock_mode) {
+    startup_lock_mode_ = startup_lock_mode;
+    startup_lock_mode_set_ = true;
+  }
+  void set_startup_lock_ilimit(uint8_t startup_lock_ilimit) {
+    startup_lock_ilimit_ = startup_lock_ilimit;
+    startup_lock_ilimit_set_ = true;
+  }
+  void set_startup_hw_lock_ilimit(uint8_t startup_hw_lock_ilimit) {
+    startup_hw_lock_ilimit_ = startup_hw_lock_ilimit;
+    startup_hw_lock_ilimit_set_ = true;
+  }
+  void set_startup_lock_retry_time(uint8_t startup_lock_retry_time) {
+    startup_lock_retry_time_ = startup_lock_retry_time;
+    startup_lock_retry_time_set_ = true;
+  }
 
   void set_brake_switch(MCF8329ABrakeSwitch *sw) { brake_switch_ = sw; }
   void set_direction_select(MCF8329ADirectionSelect *sel) { direction_select_ = sel; }
@@ -133,8 +149,11 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char *startup_align_time_to_string_(uint8_t code) const;
   const char *startup_brake_mode_to_string_(uint8_t code) const;
   const char *startup_brake_time_to_string_(uint8_t code) const;
+  const char *lock_mode_to_string_(uint8_t mode) const;
+  const char *lock_retry_time_to_string_(uint8_t code) const;
   bool clear_mpet_bits_(const char *context);
   void log_mpet_bemf_diagnostics_();
+  void log_hw_lock_diagnostics_();
 
   bool perform_read_(uint16_t offset, uint32_t &value);
   bool perform_read16_(uint16_t offset, uint16_t &value);
@@ -161,6 +180,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
   static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
+  static constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
+  static constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
 
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 2);
@@ -218,6 +239,20 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_RES = 0x01u;
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_IND = 0x01u;
 
+  static constexpr uint32_t FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK = (0xFu << 23);
+  static constexpr uint32_t FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT = 23;
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MASK = (0xFu << 19);
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_SHIFT = 19;
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK = (0xFu << 15);
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT = 15;
+  static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_MASK = (0xFu << 7);
+  static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_SHIFT = 7;
+  static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_MASK = (0xFu << 3);
+  static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_SHIFT = 3;
+
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK = (0xFu << 15);
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT = 15;
+
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OTS = (1u << 29);
   static constexpr uint32_t GATE_FAULT_OCP_VDS = (1u << 28);
@@ -262,11 +297,19 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool startup_mode_set_{false};
   bool startup_align_time_set_{false};
   bool startup_direction_mode_set_{false};
+  bool startup_lock_mode_set_{false};
+  bool startup_lock_ilimit_set_{false};
+  bool startup_hw_lock_ilimit_set_{false};
+  bool startup_lock_retry_time_set_{false};
   uint8_t startup_motor_bemf_const_{0};
   uint8_t startup_brake_mode_{0};
   uint8_t startup_brake_time_{0};
   uint8_t startup_mode_{0};
   uint8_t startup_align_time_{0};
+  uint8_t startup_lock_mode_{0};
+  uint8_t startup_lock_ilimit_{0};
+  uint8_t startup_hw_lock_ilimit_{0};
+  uint8_t startup_lock_retry_time_{0};
   std::string startup_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
@@ -277,6 +320,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   std::string last_fault_summary_{"none"};
   std::string startup_config_summary_{"default"};
   bool mpet_bemf_fault_latched_{false};
+  bool hw_lock_fault_latched_{false};
 
   MCF8329ABrakeSwitch *brake_switch_{nullptr};
   MCF8329ADirectionSelect *direction_select_{nullptr};
