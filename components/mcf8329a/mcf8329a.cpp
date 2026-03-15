@@ -117,7 +117,7 @@ void MCF8329AComponent::update() {
     if (this->fault_active_binary_sensor_ != nullptr) {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
-    this->handle_fault_shutdown_(fault_active);
+    this->handle_fault_shutdown_(fault_active, controller_fault_status, controller_ok);
   } else {
     this->fault_latched_ = false;
   }
@@ -777,7 +777,7 @@ void MCF8329AComponent::pulse_clear_faults() {
     if (this->fault_active_binary_sensor_ != nullptr) {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
-    this->handle_fault_shutdown_(fault_active);
+    this->handle_fault_shutdown_(fault_active, ctrl_after, ctrl_after_ok);
   }
 }
 
@@ -1254,12 +1254,30 @@ void MCF8329AComponent::publish_algo_status_(uint32_t algo_status) {
   }
 }
 
-void MCF8329AComponent::handle_fault_shutdown_(bool fault_active) {
+void MCF8329AComponent::handle_fault_shutdown_(bool fault_active, uint32_t controller_fault_status,
+                                               bool controller_fault_valid) {
   if (!fault_active) {
     this->fault_latched_ = false;
     return;
   }
   if (this->fault_latched_) {
+    return;
+  }
+
+  const uint32_t lock_fault_mask = FAULT_MTR_LCK | FAULT_LOCK_LIMIT | FAULT_HW_LOCK_LIMIT;
+  const uint32_t non_lock_controller_fault_mask =
+      FAULT_IPD_FREQ | FAULT_IPD_T1 | FAULT_BUS_CURRENT_LIMIT | FAULT_MPET_BEMF | FAULT_ABN_SPEED | FAULT_ABN_BEMF |
+      FAULT_NO_MTR | FAULT_DCBUS_UNDER_VOLTAGE | FAULT_DCBUS_OVER_VOLTAGE | FAULT_SPEED_LOOP_SATURATION |
+      FAULT_CURRENT_LOOP_SATURATION | FAULT_WATCHDOG;
+  const bool has_lock_fault = controller_fault_valid && ((controller_fault_status & lock_fault_mask) != 0u);
+  const bool has_non_lock_fault =
+      controller_fault_valid && ((controller_fault_status & non_lock_controller_fault_mask) != 0u);
+  const bool lock_mode_allows_retry = this->startup_lock_mode_set_ && this->startup_lock_mode_ >= 4u;
+
+  if (lock_mode_allows_retry && has_lock_fault && !has_non_lock_fault) {
+    this->fault_latched_ = true;
+    ESP_LOGW(TAG,
+             "Lock fault detected with retry/report startup_lock_mode; keeping speed command for hardware auto-retry");
     return;
   }
 

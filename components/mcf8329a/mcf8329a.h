@@ -165,7 +165,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_algo_status_(uint32_t algo_status);
   const char *brake_input_to_string_(uint32_t brake_input_value) const;
   const char *direction_input_to_string_(uint32_t direction_input_value) const;
-  void handle_fault_shutdown_(bool fault_active);
+  void handle_fault_shutdown_(bool fault_active, uint32_t controller_fault_status, bool controller_fault_valid);
 
   static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
   static constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;

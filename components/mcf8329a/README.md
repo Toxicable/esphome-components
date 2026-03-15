@@ -44,6 +44,8 @@ mcf8329a:
   # startup_lock_ilimit_percent: 40
   # startup_hw_lock_ilimit_percent: 40
   # startup_lock_retry_time: 2s
+  # Note: with startup_lock_mode set to retry/report_only/disabled, lock-only faults
+  # (HW_LOCK_LIMIT/LOCK_LIMIT/MTR_LCK) no longer force speed to 0% in firmware.
 
 switch:
   - platform: mcf8329a
