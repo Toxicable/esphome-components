@@ -10,7 +10,7 @@ namespace esphome {
 namespace bq25798 {
 
 namespace {
-static const char *const TAG = "bq25798";
+static const char* const TAG = "bq25798";
 
 constexpr uint8_t REG0F_CHARGER_CONTROL_0 = 0x0F;
 constexpr uint8_t REG10_CHARGER_CONTROL_1 = 0x10;
@@ -28,30 +28,36 @@ constexpr uint8_t REG41_TDIE_ADC = 0x41;
 
 constexpr uint8_t REG0F_EN_CHG_MASK = 0x20;
 constexpr uint8_t REG0F_EN_HIZ_MASK = 0x04;
-constexpr uint8_t REG10_WATCHDOG_MASK = 0x07; // WATCHDOG_2:0
+constexpr uint8_t REG10_WATCHDOG_MASK = 0x07;  // WATCHDOG_2:0
 constexpr uint8_t REG10_WD_RST_MASK = 0x08;
 constexpr uint8_t REG12_EN_OTG_MASK = 0x40;
 
 constexpr uint8_t REG2E_ADC_EN_MASK = 0x80;
-constexpr uint8_t REG2E_ADC_RATE_MASK = 0x40; // 0 = continuous
+constexpr uint8_t REG2E_ADC_RATE_MASK = 0x40;  // 0 = continuous
 
 // Bits to clear in REG2F to enable IBUS/IBAT/VBUS/VBAT/VSYS/TS/TDIE ADC channels.
 constexpr uint8_t REG2F_ENABLE_REQUIRED_ADC_MASK = 0xFE;
 
 constexpr float TS_PERCENT_LSB = 0.09765625f;
 constexpr float TDIE_C_LSB = 0.5f;
-} // namespace
+}  // namespace
 
 bool BQ25798Component::set_charge_enabled(bool enabled) {
-  return this->update_register_bits_(REG0F_CHARGER_CONTROL_0, REG0F_EN_CHG_MASK, enabled ? REG0F_EN_CHG_MASK : 0x00);
+  return this->update_register_bits_(
+    REG0F_CHARGER_CONTROL_0, REG0F_EN_CHG_MASK, enabled ? REG0F_EN_CHG_MASK : 0x00
+  );
 }
 
 bool BQ25798Component::set_hiz_mode(bool enabled) {
-  return this->update_register_bits_(REG0F_CHARGER_CONTROL_0, REG0F_EN_HIZ_MASK, enabled ? REG0F_EN_HIZ_MASK : 0x00);
+  return this->update_register_bits_(
+    REG0F_CHARGER_CONTROL_0, REG0F_EN_HIZ_MASK, enabled ? REG0F_EN_HIZ_MASK : 0x00
+  );
 }
 
 bool BQ25798Component::set_otg_mode(bool enabled) {
-  return this->update_register_bits_(REG12_CHARGER_CONTROL_3, REG12_EN_OTG_MASK, enabled ? REG12_EN_OTG_MASK : 0x00);
+  return this->update_register_bits_(
+    REG12_CHARGER_CONTROL_3, REG12_EN_OTG_MASK, enabled ? REG12_EN_OTG_MASK : 0x00
+  );
 }
 
 bool BQ25798Component::set_watchdog_code(uint8_t code) {
@@ -164,47 +170,51 @@ void BQ25798Component::update() {
   const float ts_percent = static_cast<float>(ts.raw_be) * TS_PERCENT_LSB;
   const float tdie_c = static_cast<float>(static_cast<int16_t>(tdie.raw_be)) * TDIE_C_LSB;
 
-  ESP_LOGI(TAG,
-           "STATUS[1B..1F]=%02X %02X %02X %02X %02X",
-           status[0],
-           status[1],
-           status[2],
-           status[3],
-           status[4]);
+  ESP_LOGI(
+    TAG,
+    "STATUS[1B..1F]=%02X %02X %02X %02X %02X",
+    status[0],
+    status[1],
+    status[2],
+    status[3],
+    status[4]
+  );
 
-  ESP_LOGI(TAG,
-           "IBUS=%d mA (0x%04X [%02X %02X]), IBAT=%d mA (0x%04X [%02X %02X]), "
-           "VBUS=%u mV (0x%04X [%02X %02X]), VBAT=%u mV (0x%04X [%02X %02X]), "
-           "VSYS=%u mV (0x%04X [%02X %02X]), TS=%.3f%% (0x%04X [%02X %02X]), "
-           "TDIE=%.1fC (0x%04X [%02X %02X])",
-           ibus_ma,
-           ibus.raw_be,
-           ibus.msb,
-           ibus.lsb,
-           ibat_ma,
-           ibat.raw_be,
-           ibat.msb,
-           ibat.lsb,
-           vbus_mv,
-           vbus.raw_be,
-           vbus.msb,
-           vbus.lsb,
-           vbat_mv,
-           vbat.raw_be,
-           vbat.msb,
-           vbat.lsb,
-           vsys_mv,
-           vsys.raw_be,
-           vsys.msb,
-           vsys.lsb,
-           ts_percent,
-           ts.raw_be,
-           ts.msb,
-           ts.lsb,
-           tdie_c,
-           tdie.raw_be,
-           tdie.msb,
-           tdie.lsb);
+  ESP_LOGI(
+    TAG,
+    "IBUS=%d mA (0x%04X [%02X %02X]), IBAT=%d mA (0x%04X [%02X %02X]), "
+    "VBUS=%u mV (0x%04X [%02X %02X]), VBAT=%u mV (0x%04X [%02X %02X]), "
+    "VSYS=%u mV (0x%04X [%02X %02X]), TS=%.3f%% (0x%04X [%02X %02X]), "
+    "TDIE=%.1fC (0x%04X [%02X %02X])",
+    ibus_ma,
+    ibus.raw_be,
+    ibus.msb,
+    ibus.lsb,
+    ibat_ma,
+    ibat.raw_be,
+    ibat.msb,
+    ibat.lsb,
+    vbus_mv,
+    vbus.raw_be,
+    vbus.msb,
+    vbus.lsb,
+    vbat_mv,
+    vbat.raw_be,
+    vbat.msb,
+    vbat.lsb,
+    vsys_mv,
+    vsys.raw_be,
+    vsys.msb,
+    vsys.lsb,
+    ts_percent,
+    ts.raw_be,
+    ts.msb,
+    ts.lsb,
+    tdie_c,
+    tdie.raw_be,
+    tdie.msb,
+    tdie.lsb
+  );
 
   if (this->ibus_current_sensor_ != nullptr) {
     this->ibus_current_sensor_->publish_state(ibus_ma);
@@ -285,7 +295,8 @@ bool BQ25798Component::dump_registers_0x00_0x48() {
       if (n <= 0 || static_cast<size_t>(n) >= sizeof(line)) {
         break;
       }
-      const int written = std::snprintf(line + n, sizeof(line) - static_cast<size_t>(n), " %02X", regs[offset + i]);
+      const int written =
+        std::snprintf(line + n, sizeof(line) - static_cast<size_t>(n), " %02X", regs[offset + i]);
       if (written <= 0) {
         break;
       }
@@ -296,11 +307,11 @@ bool BQ25798Component::dump_registers_0x00_0x48() {
   return true;
 }
 
-bool BQ25798Component::read_byte_(uint8_t reg, uint8_t &value) {
+bool BQ25798Component::read_byte_(uint8_t reg, uint8_t& value) {
   return this->read_bytes_(reg, &value, 1);
 }
 
-bool BQ25798Component::read_bytes_(uint8_t reg, uint8_t *data, size_t len) {
+bool BQ25798Component::read_bytes_(uint8_t reg, uint8_t* data, size_t len) {
   if (len == 0) {
     return true;
   }
@@ -320,14 +331,14 @@ bool BQ25798Component::write_byte_(uint8_t reg, uint8_t value) {
   return this->write_bytes_(reg, &value, 1);
 }
 
-bool BQ25798Component::write_bytes_(uint8_t reg, const uint8_t *data, size_t len) {
+bool BQ25798Component::write_bytes_(uint8_t reg, const uint8_t* data, size_t len) {
   if (len == 0) {
     return true;
   }
   return this->write_bytes(reg, data, len);
 }
 
-bool BQ25798Component::read_u16_be_(uint8_t reg, Reg16Value &value) {
+bool BQ25798Component::read_u16_be_(uint8_t reg, Reg16Value& value) {
   uint8_t raw[2] = {0, 0};
   if (!this->read_bytes_(reg, raw, sizeof(raw))) {
     return false;
@@ -350,7 +361,9 @@ bool BQ25798Component::update_register_bits_(uint8_t reg, uint8_t mask, uint8_t 
   return this->write_byte_(reg, updated);
 }
 
-bool BQ25798Component::read_control_states_(bool &charge_enabled, bool &hiz_mode, bool &otg_mode, uint8_t &watchdog_code) {
+bool BQ25798Component::read_control_states_(
+  bool& charge_enabled, bool& hiz_mode, bool& otg_mode, uint8_t& watchdog_code
+) {
   uint8_t reg0f = 0;
   uint8_t reg10 = 0;
   uint8_t reg12 = 0;
@@ -366,7 +379,7 @@ bool BQ25798Component::read_control_states_(bool &charge_enabled, bool &hiz_mode
   return true;
 }
 
-void BQ25798Component::publish_status_texts_(const std::array<uint8_t, 5> &status) {
+void BQ25798Component::publish_status_texts_(const std::array<uint8_t, 5>& status) {
   const bool pg_good = ((status[0] >> 3) & 0x01) != 0;
   const bool vbus_present = (status[0] & 0x01) != 0;
   const bool vbat_present = (status[2] & 0x01) != 0;
@@ -430,7 +443,7 @@ void BQ25798Component::publish_status_texts_(const std::array<uint8_t, 5> &statu
   if (this->status_flags_text_sensor_ != nullptr) {
     char flags[160];
     size_t n = 0;
-    auto append_flag = [&](const char *name, bool active) {
+    auto append_flag = [&](const char* name, bool active) {
       if (!active || n >= sizeof(flags)) {
         return;
       }
@@ -478,8 +491,7 @@ void BQ25798Component::publish_status_texts_(const std::array<uint8_t, 5> &statu
 }
 
 void BQ25798Component::publish_control_states_() {
-  if (this->charge_enable_switch_ == nullptr && this->hiz_mode_switch_ == nullptr && this->otg_mode_switch_ == nullptr &&
-      this->watchdog_select_ == nullptr) {
+  if (this->charge_enable_switch_ == nullptr && this->hiz_mode_switch_ == nullptr && this->otg_mode_switch_ == nullptr && this->watchdog_select_ == nullptr) {
     return;
   }
 
@@ -506,7 +518,7 @@ void BQ25798Component::publish_control_states_() {
   }
 }
 
-const char *BQ25798Component::charge_status_to_string_(uint8_t charge_status) const {
+const char* BQ25798Component::charge_status_to_string_(uint8_t charge_status) const {
   switch (charge_status) {
     case 0:
       return "not_charging";
@@ -529,7 +541,7 @@ const char *BQ25798Component::charge_status_to_string_(uint8_t charge_status) co
   }
 }
 
-const char *BQ25798Component::vbus_status_to_string_(uint8_t vbus_status) const {
+const char* BQ25798Component::vbus_status_to_string_(uint8_t vbus_status) const {
   switch (vbus_status) {
     case 0x0:
       return "no_input_or_bhot_bcold";
@@ -575,7 +587,8 @@ bool BQ25798Component::ensure_adc_enabled_() {
     return false;
   }
 
-  const uint8_t reg2e_new = static_cast<uint8_t>((reg2e | REG2E_ADC_EN_MASK) & ~REG2E_ADC_RATE_MASK);
+  const uint8_t reg2e_new =
+    static_cast<uint8_t>((reg2e | REG2E_ADC_EN_MASK) & ~REG2E_ADC_RATE_MASK);
   if (reg2e_new != reg2e) {
     if (!this->write_byte_(REG2E_ADC_CONTROL, reg2e_new)) {
       ESP_LOGW(TAG, "Failed to write REG2E (0x%02X -> 0x%02X)", reg2e, reg2e_new);
@@ -597,7 +610,14 @@ bool BQ25798Component::ensure_adc_enabled_() {
     }
   }
 
-  ESP_LOGD(TAG, "ADC config REG2E: 0x%02X -> 0x%02X, REG2F: 0x%02X -> 0x%02X", reg2e, reg2e_new, reg2f, reg2f_new);
+  ESP_LOGD(
+    TAG,
+    "ADC config REG2E: 0x%02X -> 0x%02X, REG2F: 0x%02X -> 0x%02X",
+    reg2e,
+    reg2e_new,
+    reg2f,
+    reg2f_new
+  );
   return true;
 }
 
@@ -651,5 +671,5 @@ void BQ25798DumpRegistersButton::press_action() {
   ESP_LOGW(TAG, "Failed register dump request");
 }
 
-} // namespace bq25798
-} // namespace esphome
+}  // namespace bq25798
+}  // namespace esphome

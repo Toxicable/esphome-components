@@ -9,7 +9,7 @@
 namespace esphome {
 namespace drv8243 {
 
-static const char *const TAG = "drv8243";
+static const char* const TAG = "drv8243";
 
 // Handshake timings
 static constexpr uint32_t SLEEP_FORCE_MS = 2;
@@ -19,16 +19,16 @@ static constexpr uint32_t POLL_STEP_US = 10;
 // ACK pulse: keep close to lower edge to reduce risk of stretching above ~40us
 static constexpr uint32_t ACK_PULSE_US = 22;
 
-const char *DRV8243Output::handshake_result_str_(DRV8243Output::HandshakeResult r) const {
+const char* DRV8243Output::handshake_result_str_(DRV8243Output::HandshakeResult r) const {
   switch (r) {
-  case DRV8243Output::HandshakeResult::NOT_RUN:
-    return "not_run";
-  case DRV8243Output::HandshakeResult::SUCCESS:
-    return "success";
-  case DRV8243Output::HandshakeResult::FAILED:
-    return "failed";
-  default:
-    return "unknown";
+    case DRV8243Output::HandshakeResult::NOT_RUN:
+      return "not_run";
+    case DRV8243Output::HandshakeResult::SUCCESS:
+      return "success";
+    case DRV8243Output::HandshakeResult::FAILED:
+      return "failed";
+    default:
+      return "unknown";
   }
 }
 
@@ -70,7 +70,9 @@ void DRV8243Output::dump_config() {
 
   if (out2_pin_ != nullptr) {
     out2_pin_->dump_summary(pin_summary, sizeof(pin_summary));
-    ESP_LOGCONFIG(TAG, "  Polarity pin: %s (direction=%s)", pin_summary, flip_polarity_ ? "HIGH" : "LOW");
+    ESP_LOGCONFIG(
+      TAG, "  Polarity pin: %s (direction=%s)", pin_summary, flip_polarity_ ? "HIGH" : "LOW"
+    );
   } else if (two_channel) {
     ESP_LOGCONFIG(TAG, "  Polarity pin: not used (ch2 configured)");
   } else {
@@ -121,7 +123,7 @@ DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
   bool saw_ready_low = false;
   uint32_t ready_start = micros();
   while ((micros() - ready_start) < READY_WAIT_TIMEOUT_US) {
-    if (!nfault_pin_->digital_read()) { // LOW
+    if (!nfault_pin_->digital_read()) {  // LOW
       saw_ready_low = true;
       break;
     }
@@ -139,7 +141,7 @@ DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
   // Confirm nFAULT HIGH after ACK
   uint32_t start = micros();
   while ((micros() - start) < ACK_WAIT_TIMEOUT_US) {
-    if (nfault_pin_->digital_read()) // HIGH
+    if (nfault_pin_->digital_read())  // HIGH
       return DRV8243Output::HandshakeResult::SUCCESS;
     delayMicroseconds(POLL_STEP_US);
   }
@@ -163,7 +165,7 @@ void DRV8243Output::write_channel(uint8_t channel, float state) {
   this->write_to_output_(out1_output_, state);
 }
 
-void DRV8243Output::write_to_output_(output::FloatOutput *out, float state) {
+void DRV8243Output::write_to_output_(output::FloatOutput* out, float state) {
   if (this->is_failed() || out == nullptr)
     return;
 
@@ -205,5 +207,5 @@ void DRV8243ChannelOutput::write_state(float state) {
   parent_->write_channel(channel_, state);
 }
 
-} // namespace drv8243
-} // namespace esphome
+}  // namespace drv8243
+}  // namespace esphome

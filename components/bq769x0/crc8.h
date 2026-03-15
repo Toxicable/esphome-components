@@ -6,7 +6,7 @@
 namespace esphome {
 namespace helpers {
 
-inline uint8_t crc8(const uint8_t *data, size_t len) {
+inline uint8_t crc8(const uint8_t* data, size_t len) {
   uint8_t crc = 0;
   for (size_t i = 0; i < len; i++) {
     crc ^= data[i];
@@ -21,5 +21,5 @@ inline uint8_t crc8(const uint8_t *data, size_t len) {
   return crc;
 }
 
-} // namespace helpers
-} // namespace esphome
+}  // namespace helpers
+}  // namespace esphome

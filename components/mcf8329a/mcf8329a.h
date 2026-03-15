@@ -20,47 +20,57 @@ class MCF8329AComponent;
 
 class MCF8329ABrakeSwitch : public switch_::Switch {
  public:
-  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void write_state(bool state) override;
-  MCF8329AComponent *parent_{nullptr};
+  MCF8329AComponent* parent_{nullptr};
 };
 
 class MCF8329ADirectionSelect : public select::Select {
  public:
-  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
-  void control(const std::string &value) override;
-  MCF8329AComponent *parent_{nullptr};
+  void control(const std::string& value) override;
+  MCF8329AComponent* parent_{nullptr};
 };
 
 class MCF8329ASpeedNumber : public number::Number {
  public:
-  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void control(float value) override;
-  MCF8329AComponent *parent_{nullptr};
+  MCF8329AComponent* parent_{nullptr};
 };
 
 class MCF8329AClearFaultsButton : public button::Button {
  public:
-  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8329AComponent *parent_{nullptr};
+  MCF8329AComponent* parent_{nullptr};
 };
 
 class MCF8329AWatchdogTickleButton : public button::Button {
  public:
-  void set_parent(MCF8329AComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8329AComponent *parent_{nullptr};
+  MCF8329AComponent* parent_{nullptr};
 };
 
 class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
@@ -69,21 +79,29 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void update() override;
   void dump_config() override;
 
-  bool read_reg32(uint16_t offset, uint32_t &value);
-  bool read_reg16(uint16_t offset, uint16_t &value);
+  bool read_reg32(uint16_t offset, uint32_t& value);
+  bool read_reg16(uint16_t offset, uint16_t& value);
   bool write_reg32(uint16_t offset, uint32_t value);
   bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value);
 
   bool set_brake_override(bool brake_on);
-  bool set_direction_mode(const std::string &direction_mode);
-  bool set_speed_percent(float speed_percent, const char *reason = "external");
+  bool set_direction_mode(const std::string& direction_mode);
+  bool set_speed_percent(float speed_percent, const char* reason = "external");
   void pulse_clear_faults();
   void pulse_watchdog_tickle();
 
-  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
-  void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
-  void set_clear_mpet_on_startup(bool clear_mpet_on_startup) { clear_mpet_on_startup_ = clear_mpet_on_startup; }
-  void set_apply_startup_config(bool apply_startup_config) { apply_startup_config_ = apply_startup_config; }
+  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) {
+    inter_byte_delay_us_ = inter_byte_delay_us;
+  }
+  void set_auto_tickle_watchdog(bool auto_tickle_watchdog) {
+    auto_tickle_watchdog_ = auto_tickle_watchdog;
+  }
+  void set_clear_mpet_on_startup(bool clear_mpet_on_startup) {
+    clear_mpet_on_startup_ = clear_mpet_on_startup;
+  }
+  void set_apply_startup_config(bool apply_startup_config) {
+    apply_startup_config_ = apply_startup_config;
+  }
   void set_startup_motor_bemf_const(uint8_t startup_motor_bemf_const) {
     startup_motor_bemf_const_ = startup_motor_bemf_const;
     startup_motor_bemf_const_set_ = true;
@@ -104,7 +122,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_align_time_ = startup_align_time;
     startup_align_time_set_ = true;
   }
-  void set_startup_direction_mode(const std::string &startup_direction_mode) {
+  void set_startup_direction_mode(const std::string& startup_direction_mode) {
     startup_direction_mode_ = startup_direction_mode;
     startup_direction_mode_set_ = true;
   }
@@ -168,59 +186,86 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
     startup_auto_handoff_enable_ = startup_auto_handoff_enable;
     startup_auto_handoff_enable_set_ = true;
   }
-  void set_startup_open_to_closed_handoff_threshold(uint8_t startup_open_to_closed_handoff_threshold) {
+  void set_startup_open_to_closed_handoff_threshold(uint8_t startup_open_to_closed_handoff_threshold
+  ) {
     startup_open_to_closed_handoff_threshold_ = startup_open_to_closed_handoff_threshold & 0x1Fu;
     startup_open_to_closed_handoff_threshold_set_ = true;
   }
 
-  void set_brake_switch(MCF8329ABrakeSwitch *sw) { brake_switch_ = sw; }
-  void set_direction_select(MCF8329ADirectionSelect *sel) { direction_select_ = sel; }
-  void set_speed_number(MCF8329ASpeedNumber *num) { speed_number_ = num; }
-  void set_fault_active_binary_sensor(binary_sensor::BinarySensor *s) { fault_active_binary_sensor_ = s; }
-  void set_sys_enable_binary_sensor(binary_sensor::BinarySensor *s) { sys_enable_binary_sensor_ = s; }
-  void set_vm_voltage_sensor(sensor::Sensor *s) { vm_voltage_sensor_ = s; }
-  void set_duty_cmd_percent_sensor(sensor::Sensor *s) { duty_cmd_percent_sensor_ = s; }
-  void set_volt_mag_percent_sensor(sensor::Sensor *s) { volt_mag_percent_sensor_ = s; }
-  void set_motor_bemf_constant_sensor(sensor::Sensor *s) { motor_bemf_constant_sensor_ = s; }
-  void set_current_fault_text_sensor(text_sensor::TextSensor *s) { current_fault_text_sensor_ = s; }
+  void set_brake_switch(MCF8329ABrakeSwitch* sw) {
+    brake_switch_ = sw;
+  }
+  void set_direction_select(MCF8329ADirectionSelect* sel) {
+    direction_select_ = sel;
+  }
+  void set_speed_number(MCF8329ASpeedNumber* num) {
+    speed_number_ = num;
+  }
+  void set_fault_active_binary_sensor(binary_sensor::BinarySensor* s) {
+    fault_active_binary_sensor_ = s;
+  }
+  void set_sys_enable_binary_sensor(binary_sensor::BinarySensor* s) {
+    sys_enable_binary_sensor_ = s;
+  }
+  void set_vm_voltage_sensor(sensor::Sensor* s) {
+    vm_voltage_sensor_ = s;
+  }
+  void set_duty_cmd_percent_sensor(sensor::Sensor* s) {
+    duty_cmd_percent_sensor_ = s;
+  }
+  void set_volt_mag_percent_sensor(sensor::Sensor* s) {
+    volt_mag_percent_sensor_ = s;
+  }
+  void set_motor_bemf_constant_sensor(sensor::Sensor* s) {
+    motor_bemf_constant_sensor_ = s;
+  }
+  void set_current_fault_text_sensor(text_sensor::TextSensor* s) {
+    current_fault_text_sensor_ = s;
+  }
 
  protected:
   bool read_probe_and_publish_();
   bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
-  bool probe_device_ack_(i2c::ErrorCode &error_code) const;
+  bool probe_device_ack_(i2c::ErrorCode& error_code) const;
   bool scan_i2c_bus_();
   void process_deferred_startup_();
   void apply_post_comms_setup_();
   bool apply_startup_motor_config_();
-  const char *i2c_error_to_string_(i2c::ErrorCode error_code) const;
-  const char *startup_mode_to_string_(uint8_t mode) const;
-  const char *startup_align_time_to_string_(uint8_t code) const;
-  const char *startup_brake_mode_to_string_(uint8_t code) const;
-  const char *startup_brake_time_to_string_(uint8_t code) const;
+  const char* i2c_error_to_string_(i2c::ErrorCode error_code) const;
+  const char* startup_mode_to_string_(uint8_t mode) const;
+  const char* startup_align_time_to_string_(uint8_t code) const;
+  const char* startup_brake_mode_to_string_(uint8_t code) const;
+  const char* startup_brake_time_to_string_(uint8_t code) const;
   float max_speed_code_to_hz_(uint16_t code) const;
   float open_loop_accel_code_to_hz_per_s_(uint8_t code) const;
   float open_to_closed_handoff_code_to_percent_(uint8_t code) const;
-  const char *algorithm_state_to_string_(uint16_t state) const;
-  const char *lock_mode_to_string_(uint8_t mode) const;
-  const char *lock_retry_time_to_string_(uint8_t code) const;
-  bool clear_mpet_bits_(const char *context);
+  const char* algorithm_state_to_string_(uint16_t state) const;
+  const char* lock_mode_to_string_(uint8_t mode) const;
+  const char* lock_retry_time_to_string_(uint8_t code) const;
+  bool clear_mpet_bits_(const char* context);
   void maintain_speed_command_(bool fault_active);
   void log_mpet_bemf_diagnostics_();
   void log_hw_lock_diagnostics_();
 
-  bool perform_read_(uint16_t offset, uint32_t &value);
-  bool perform_read16_(uint16_t offset, uint16_t &value);
+  bool perform_read_(uint16_t offset, uint32_t& value);
+  bool perform_read16_(uint16_t offset, uint16_t& value);
   bool perform_write_(uint16_t offset, uint32_t value);
   uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
 
-  void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
-                       bool controller_fault_valid);
-  void log_algorithm_state_transition_(uint32_t algo_status, const char *context);
+  void publish_faults_(
+    uint32_t gate_fault_status,
+    bool gate_fault_valid,
+    uint32_t controller_fault_status,
+    bool controller_fault_valid
+  );
+  void log_algorithm_state_transition_(uint32_t algo_status, const char* context);
   void log_active_run_diagnostics_(uint32_t algo_status, bool algo_status_valid, bool fault_active);
   void publish_algo_status_(uint32_t algo_status);
-  const char *brake_input_to_string_(uint32_t brake_input_value) const;
-  const char *direction_input_to_string_(uint32_t direction_input_value) const;
-  void handle_fault_shutdown_(bool fault_active, uint32_t controller_fault_status, bool controller_fault_valid);
+  const char* brake_input_to_string_(uint32_t brake_input_value) const;
+  const char* direction_input_to_string_(uint32_t direction_input_value) const;
+  void handle_fault_shutdown_(
+    bool fault_active, uint32_t controller_fault_status, bool controller_fault_valid
+  );
 
   static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
   static constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
@@ -262,8 +307,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_DEBUG2_MPET_MECH_MASK = (1u << 1);
   static constexpr uint32_t ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK = (1u << 0);
   static constexpr uint32_t ALGO_DEBUG2_MPET_ALL_MASK =
-      ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_KE_MASK | ALGO_DEBUG2_MPET_MECH_MASK |
-      ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
+    ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_KE_MASK | ALGO_DEBUG2_MPET_MECH_MASK |
+    ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
 
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = (0x0FFFu << 4);
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_SHIFT = 4;
@@ -435,16 +480,16 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   float target_speed_percent_{0.0f};
   uint16_t target_speed_raw_{0};
 
-  MCF8329ABrakeSwitch *brake_switch_{nullptr};
-  MCF8329ADirectionSelect *direction_select_{nullptr};
-  MCF8329ASpeedNumber *speed_number_{nullptr};
-  binary_sensor::BinarySensor *fault_active_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *sys_enable_binary_sensor_{nullptr};
-  sensor::Sensor *vm_voltage_sensor_{nullptr};
-  sensor::Sensor *duty_cmd_percent_sensor_{nullptr};
-  sensor::Sensor *volt_mag_percent_sensor_{nullptr};
-  sensor::Sensor *motor_bemf_constant_sensor_{nullptr};
-  text_sensor::TextSensor *current_fault_text_sensor_{nullptr};
+  MCF8329ABrakeSwitch* brake_switch_{nullptr};
+  MCF8329ADirectionSelect* direction_select_{nullptr};
+  MCF8329ASpeedNumber* speed_number_{nullptr};
+  binary_sensor::BinarySensor* fault_active_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor* sys_enable_binary_sensor_{nullptr};
+  sensor::Sensor* vm_voltage_sensor_{nullptr};
+  sensor::Sensor* duty_cmd_percent_sensor_{nullptr};
+  sensor::Sensor* volt_mag_percent_sensor_{nullptr};
+  sensor::Sensor* motor_bemf_constant_sensor_{nullptr};
+  text_sensor::TextSensor* current_fault_text_sensor_{nullptr};
 };
 
 }  // namespace mcf8329a

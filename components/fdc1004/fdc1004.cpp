@@ -6,7 +6,7 @@
 namespace esphome {
 namespace fdc1004 {
 
-static const char *const TAG = "fdc1004";
+static const char* const TAG = "fdc1004";
 
 static constexpr uint8_t REG_MEAS1_MSB = 0x00;
 static constexpr uint8_t REG_CONF_MEAS1 = 0x08;
@@ -18,9 +18,9 @@ static constexpr uint16_t EXPECTED_MANUFACTURER_ID = 0x5449;
 static constexpr uint16_t EXPECTED_DEVICE_ID = 0x1004;
 
 static constexpr float CAPDAC_STEP_PF = 3.125f;
-static constexpr float MEAS_LSB_PF = 1.0f / 524288.0f; // 2^19
+static constexpr float MEAS_LSB_PF = 1.0f / 524288.0f;  // 2^19
 
-void FDC1004Component::set_channel_sensor(uint8_t index, sensor::Sensor *sensor) {
+void FDC1004Component::set_channel_sensor(uint8_t index, sensor::Sensor* sensor) {
   if (index >= this->channel_sensors_.size()) {
     return;
   }
@@ -39,7 +39,7 @@ void FDC1004Component::set_channel_capdac(uint8_t index, uint8_t capdac_steps) {
   this->capdac_steps_[index] = capdac_steps > 31 ? 31 : capdac_steps;
 }
 
-void FDC1004Component::set_offset_sensor(uint8_t index, sensor::Sensor *sensor) {
+void FDC1004Component::set_offset_sensor(uint8_t index, sensor::Sensor* sensor) {
   if (index >= this->offset_sensors_.size()) {
     return;
   }
@@ -255,7 +255,12 @@ bool FDC1004Component::initialize_() {
   }
 
   if (manufacturer_id != EXPECTED_MANUFACTURER_ID || device_id != EXPECTED_DEVICE_ID) {
-    ESP_LOGW(TAG, "Init probe IDs mismatch: manufacturer=0x%04X device_id=0x%04X", manufacturer_id, device_id);
+    ESP_LOGW(
+      TAG,
+      "Init probe IDs mismatch: manufacturer=0x%04X device_id=0x%04X",
+      manufacturer_id,
+      device_id
+    );
     return false;
   }
 
@@ -275,11 +280,13 @@ bool FDC1004Component::initialize_() {
   }
 
   this->initialized_ = true;
-  ESP_LOGI(TAG, "FDC1004 initialized (%u S/s, mask=0x%X)", this->sample_rate_sps_, this->enabled_mask_);
+  ESP_LOGI(
+    TAG, "FDC1004 initialized (%u S/s, mask=0x%X)", this->sample_rate_sps_, this->enabled_mask_
+  );
   return true;
 }
 
-bool FDC1004Component::read_register16_(uint8_t reg, uint16_t &value) {
+bool FDC1004Component::read_register16_(uint8_t reg, uint16_t& value) {
   uint8_t data[2] = {0, 0};
   if (!this->read_bytes(reg, data, sizeof(data))) {
     return false;
@@ -290,8 +297,8 @@ bool FDC1004Component::read_register16_(uint8_t reg, uint16_t &value) {
 
 bool FDC1004Component::write_register16_(uint8_t reg, uint16_t value) {
   uint8_t data[2] = {
-      static_cast<uint8_t>(value >> 8),
-      static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>(value >> 8),
+    static_cast<uint8_t>(value & 0xFF),
   };
   return this->write_bytes(reg, data, sizeof(data));
 }
@@ -322,7 +329,7 @@ bool FDC1004Component::write_fdc_conf_() {
   return this->write_register16_(REG_FDC_CONF, fdc_conf);
 }
 
-bool FDC1004Component::read_measurement_pf_(uint8_t measurement_index, float &capacitance_pf) {
+bool FDC1004Component::read_measurement_pf_(uint8_t measurement_index, float& capacitance_pf) {
   if (measurement_index >= 4) {
     return false;
   }
@@ -362,5 +369,5 @@ void FDC1004ZeroButton::press_action() {
   }
 }
 
-} // namespace fdc1004
-} // namespace esphome
+}  // namespace fdc1004
+}  // namespace esphome

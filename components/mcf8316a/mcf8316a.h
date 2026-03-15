@@ -11,10 +11,10 @@
 #endif
 
 // ESP32-C3 uses ESP-IDF; I2C driver is available
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 namespace esphome {
 namespace mcf8316a {
@@ -25,14 +25,16 @@ class MCF8316AComponent : public PollingComponent
                           public api::CustomAPIDevice
 #endif
 {
-public:
-  MCF8316AComponent(gpio_num_t sda_pin,
-                    gpio_num_t scl_pin,
-                    uint32_t i2c_freq_hz = 50000,
-                    uint8_t i2c_addr_7bit = 0x01,
-                    uint32_t poll_ms = 1000,
-                    bool crc_enable = false,
-                    uint16_t pole_pairs = 0);
+ public:
+  MCF8316AComponent(
+    gpio_num_t sda_pin,
+    gpio_num_t scl_pin,
+    uint32_t i2c_freq_hz = 50000,
+    uint8_t i2c_addr_7bit = 0x01,
+    uint32_t poll_ms = 1000,
+    bool crc_enable = false,
+    uint16_t pole_pairs = 0
+  );
 
   void setup() override;
   void dump_config() override;
@@ -51,16 +53,16 @@ public:
     return last_speed_fdbk_raw_;
   }
 
-private:
+ private:
 #ifdef USE_API
   void api_set_speed_percent_(float percent);
   void api_stop_();
 #endif
 
-  uint8_t crc8_ccitt_(const uint8_t *data, size_t len);
+  uint8_t crc8_ccitt_(const uint8_t* data, size_t len);
   void build_cw32_(bool is_read, uint32_t addr22, uint8_t cw[3]);
   bool write_u32_(uint32_t addr22, uint32_t value);
-  bool read_u32_(uint32_t addr22, uint32_t *out);
+  bool read_u32_(uint32_t addr22, uint32_t* out);
 
   // ESP32-C3: assume I2C_NUM_0 only
   static constexpr i2c_port_t port_ = I2C_NUM_0;
@@ -80,5 +82,5 @@ private:
   float last_mech_rpm_{std::numeric_limits<float>::quiet_NaN()};
 };
 
-} // namespace mcf8316a
-} // namespace esphome
+}  // namespace mcf8316a
+}  // namespace esphome

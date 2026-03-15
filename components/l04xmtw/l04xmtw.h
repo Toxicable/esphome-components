@@ -8,16 +8,18 @@ namespace esphome {
 namespace l04xmtw {
 
 class L04XMTWComponent : public PollingComponent, public uart::UARTDevice {
-public:
-  void set_distance_sensor(sensor::Sensor *distance_sensor) { distance_sensor_ = distance_sensor; }
+ public:
+  void set_distance_sensor(sensor::Sensor* distance_sensor) {
+    distance_sensor_ = distance_sensor;
+  }
 
   void setup() override;
   void update() override;
   void loop() override;
   void dump_config() override;
 
-protected:
-  sensor::Sensor *distance_sensor_{nullptr};
+ protected:
+  sensor::Sensor* distance_sensor_{nullptr};
   uint8_t buffer_[4]{};
   uint8_t buffer_index_{0};
   uint32_t last_byte_time_{0};
@@ -31,5 +33,5 @@ protected:
   static constexpr uint32_t INTERBYTE_TIMEOUT_MS = 30;
 };
 
-} // namespace l04xmtw
-} // namespace esphome
+}  // namespace l04xmtw
+}  // namespace esphome

@@ -62,8 +62,8 @@ struct SocOutputs {
 };
 
 class BQ769X0SocEstimator {
-public:
-  void configure(const SocConfig &cfg);
+ public:
+  void configure(const SocConfig& cfg);
   void reset();
   void force_full_anchor();
   void force_empty_anchor();
@@ -73,11 +73,13 @@ public:
   void set_soc_percent(float soc_percent);
   void set_q_remaining_mah(float q_remaining_mah);
 
-  const SocOutputs &update(const SocInputs &in);
+  const SocOutputs& update(const SocInputs& in);
 
-  const SocOutputs &outputs() const { return outputs_; }
+  const SocOutputs& outputs() const {
+    return outputs_;
+  }
 
-protected:
+ protected:
   float ocv_soc_from_mv_(float vrest_mv) const;
 
   SocConfig cfg_{};
@@ -92,5 +94,5 @@ protected:
   float empty_hold_seconds_{0.0f};
 };
 
-} // namespace bq769x0
-} // namespace esphome
+}  // namespace bq769x0
+}  // namespace esphome

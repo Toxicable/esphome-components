@@ -11,7 +11,7 @@ namespace esphome {
 namespace bq769x0 {
 
 namespace {
-constexpr const char *TAG = "bq769x0";
+constexpr const char* TAG = "bq769x0";
 
 constexpr uint8_t SYS_STAT_DEVICE_XREADY = 0x20;
 constexpr uint8_t SYS_STAT_UV = 0x08;
@@ -47,21 +47,21 @@ constexpr float SOC_LEARN_ALPHA = 0.2f;
 constexpr float SOC_CHARGE_GATE_DV_MV = 2.0f;
 
 static const OcvPoint LIION_LIPO_OCV_TABLE[] = {
-    {3300, 0.0f},
-    {3500, 10.0f},
-    {3600, 20.0f},
-    {3700, 40.0f},
-    {3800, 60.0f},
-    {3900, 75.0f},
-    {4000, 85.0f},
-    {4100, 95.0f},
-    {4200, 100.0f},
+  {3300, 0.0f},
+  {3500, 10.0f},
+  {3600, 20.0f},
+  {3700, 40.0f},
+  {3800, 60.0f},
+  {3900, 75.0f},
+  {4000, 85.0f},
+  {4100, 95.0f},
+  {4200, 100.0f},
 };
-} // namespace
+}  // namespace
 
 BQ769X0Component::BQ769X0Component() : driver_(this) {}
 
-void BQ769X0Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor *sensor) {
+void BQ769X0Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
   if (index >= 1 && index <= cell_sensors_.size()) {
     cell_sensors_[index - 1] = sensor;
   }
@@ -81,11 +81,15 @@ void BQ769X0Component::setup() {
       crc_enabled_ = false;
       cal_valid_ = true;
     } else {
-      ESP_LOGE(TAG, "Failed to read ADC calibration (error=%d)", static_cast<int>(driver_.last_error()));
+      ESP_LOGE(
+        TAG, "Failed to read ADC calibration (error=%d)", static_cast<int>(driver_.last_error())
+      );
     }
   }
   if (cal_valid_) {
-    ESP_LOGI(TAG, "ADC calibration: gain=%d uV/LSB, offset=%d mV", cal_.gain_uV_per_lsb, cal_.offset_mV);
+    ESP_LOGI(
+      TAG, "ADC calibration: gain=%d uV/LSB, offset=%d mV", cal_.gain_uV_per_lsb, cal_.offset_mV
+    );
   }
 
   if (!driver_.write_cc_cfg_0x19()) {
@@ -124,14 +128,14 @@ void BQ769X0Component::setup() {
   soc_cfg_.ocv_table.clear();
   switch (chemistry_) {
     case Chemistry::LIION_LIPO:
-      for (const auto &pt : LIION_LIPO_OCV_TABLE) {
+      for (const auto& pt : LIION_LIPO_OCV_TABLE) {
         soc_cfg_.ocv_table.push_back(pt);
       }
       break;
   }
 
   soc_estimator_.configure(soc_cfg_);
-  constexpr uint32_t BQ769X0_PREF_NAMESPACE = 0xB7690000u; // "B769" tag for bq769x0 preferences.
+  constexpr uint32_t BQ769X0_PREF_NAMESPACE = 0xB7690000u;  // "B769" tag for bq769x0 preferences.
   const uint32_t pref_key = BQ769X0_PREF_NAMESPACE | static_cast<uint32_t>(this->address_);
   pref_ = global_preferences->make_preference<PersistedState>(pref_key);
   load_preferences_();
@@ -148,7 +152,7 @@ void BQ769X0Component::update() {
   const bool fault = (sys_stat & (SYS_STAT_UV | SYS_STAT_OV | SYS_STAT_SCD | SYS_STAT_OCD)) != 0;
   const bool device_fault = (sys_stat & SYS_STAT_DEVICE_XREADY) != 0;
   if (alerts_sensor_ != nullptr) {
-    const char *status = "none";
+    const char* status = "none";
     if (fault && device_fault) {
       status = "protection+device";
     } else if (fault) {
@@ -161,7 +165,7 @@ void BQ769X0Component::update() {
 
   size_t read_cells = cell_count_;
   if (cell_count_ == 4) {
-    read_cells = 5; // VC1..VC5 needed; VC4 is shorted for 4S per datasheet.
+    read_cells = 5;  // VC1..VC5 needed; VC4 is shorted for 4S per datasheet.
   }
   std::array<uint8_t, 10> cell_buffer{};
   if (!check_i2c_(read_cell_block_(cell_buffer, read_cells), "read cell block"))
@@ -269,7 +273,7 @@ void BQ769X0Component::update() {
       return;
     const bool chg_on = (sys_ctrl2 & SYS_CTRL2_CHG_ON) != 0;
     const bool dsg_on = (sys_ctrl2 & SYS_CTRL2_DSG_ON) != 0;
-    const char *fet_state = "off";
+    const char* fet_state = "off";
     if (chg_on && dsg_on) {
       fet_state = "bidirectional";
     } else if (chg_on) {
@@ -294,7 +298,7 @@ void BQ769X0Component::update() {
 void BQ769X0Component::dump_config() {
   ESP_LOGCONFIG(TAG, "BQ769X0:");
   ESP_LOGCONFIG(TAG, "  Cell count: %u", cell_count_);
-  const char *chemistry = chemistry_ == Chemistry::LIION_LIPO ? "liion_lipo" : "unknown";
+  const char* chemistry = chemistry_ == Chemistry::LIION_LIPO ? "liion_lipo" : "unknown";
   ESP_LOGCONFIG(TAG, "  Chemistry: %s", chemistry);
   ESP_LOGCONFIG(TAG, "  CRC enabled (auto): %s", crc_enabled_ ? "true" : "false");
   ESP_LOGCONFIG(TAG, "  Rsense (mOhm): %d", rsense_milliohm_);
@@ -304,12 +308,12 @@ void BQ769X0Component::dump_config() {
   }
 }
 
-void BQ769X0Component::update_soc_(const SocInputs &inputs) {
-  const auto &outputs = soc_estimator_.update(inputs);
+void BQ769X0Component::update_soc_(const SocInputs& inputs) {
+  const auto& outputs = soc_estimator_.update(inputs);
   publish_soc_outputs_(outputs);
 }
 
-void BQ769X0Component::publish_soc_outputs_(const SocOutputs &outputs) {
+void BQ769X0Component::publish_soc_outputs_(const SocOutputs& outputs) {
   if (soc_percent_sensor_ != nullptr && !std::isnan(outputs.soc_percent)) {
     soc_percent_sensor_->publish_state(outputs.soc_percent);
   }
@@ -327,7 +331,7 @@ void BQ769X0Component::load_preferences_() {
 }
 
 void BQ769X0Component::save_preferences_() {
-  const auto &outputs = soc_estimator_.outputs();
+  const auto& outputs = soc_estimator_.outputs();
   PersistedState state{};
   state.soc_percent = outputs.soc_percent;
   state.capacity_mah = outputs.capacity_mah;
@@ -347,7 +351,9 @@ void BQ769X0Component::clear_faults() {
     return;
   }
   if (!driver_.clear_sys_stat_bits(mask)) {
-    ESP_LOGE(TAG, "Failed to clear SYS_STAT bits (error=%d)", static_cast<int>(driver_.last_error()));
+    ESP_LOGE(
+      TAG, "Failed to clear SYS_STAT bits (error=%d)", static_cast<int>(driver_.last_error())
+    );
   }
 }
 
@@ -386,11 +392,15 @@ bool BQ769X0Component::set_fet_state(bool chg_on, bool dsg_on) {
   return true;
 }
 
-bool BQ769X0Component::read_sys_ctrl2_(uint8_t &value) { return driver_.read_register8(Register::SYS_CTRL2, &value); }
+bool BQ769X0Component::read_sys_ctrl2_(uint8_t& value) {
+  return driver_.read_register8(Register::SYS_CTRL2, &value);
+}
 
-bool BQ769X0Component::write_sys_ctrl2_(uint8_t value) { return driver_.write_register8(Register::SYS_CTRL2, value); }
+bool BQ769X0Component::write_sys_ctrl2_(uint8_t value) {
+  return driver_.write_register8(Register::SYS_CTRL2, value);
+}
 
-bool BQ769X0Component::read_cell_block_(std::array<uint8_t, 10> &buffer, size_t count) {
+bool BQ769X0Component::read_cell_block_(std::array<uint8_t, 10>& buffer, size_t count) {
   if (count == 0 || count > 5) {
     return false;
   }
@@ -398,7 +408,7 @@ bool BQ769X0Component::read_cell_block_(std::array<uint8_t, 10> &buffer, size_t 
   return driver_.read_register_block(Register::VC1_HI, buffer.data(), len);
 }
 
-bool BQ769X0Component::check_i2c_(bool ok, const char *operation) {
+bool BQ769X0Component::check_i2c_(bool ok, const char* operation) {
   if (ok) {
     return true;
   }
@@ -413,7 +423,7 @@ void BQ769X0ClearFaultsButton::press_action() {
 }
 
 void BQ769X0PowerPathSelect::control(size_t index) {
-  const char *option = this->option_at(index);
+  const char* option = this->option_at(index);
   if (option == nullptr) {
     return;
   }
@@ -434,5 +444,5 @@ void BQ769X0PowerPathSelect::control(size_t index) {
   }
 }
 
-} // namespace bq769x0
-} // namespace esphome
+}  // namespace bq769x0
+}  // namespace esphome

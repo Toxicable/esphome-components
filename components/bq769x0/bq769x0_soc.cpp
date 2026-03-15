@@ -6,7 +6,9 @@
 namespace esphome {
 namespace bq769x0 {
 
-void BQ769X0SocEstimator::configure(const SocConfig &cfg) { this->cfg_ = cfg; }
+void BQ769X0SocEstimator::configure(const SocConfig& cfg) {
+  this->cfg_ = cfg;
+}
 
 void BQ769X0SocEstimator::reset() {
   outputs_ = SocOutputs{};
@@ -41,14 +43,18 @@ void BQ769X0SocEstimator::clear_capacity() {
   outputs_.soc_valid = false;
 }
 
-void BQ769X0SocEstimator::set_capacity_mah(float capacity_mah) { outputs_.capacity_mah = capacity_mah; }
+void BQ769X0SocEstimator::set_capacity_mah(float capacity_mah) {
+  outputs_.capacity_mah = capacity_mah;
+}
 
 void BQ769X0SocEstimator::set_soc_percent(float soc_percent) {
   outputs_.soc_percent = soc_percent;
   outputs_.soc_valid = !std::isnan(soc_percent);
 }
 
-void BQ769X0SocEstimator::set_q_remaining_mah(float q_remaining_mah) { outputs_.q_remaining_mah = q_remaining_mah; }
+void BQ769X0SocEstimator::set_q_remaining_mah(float q_remaining_mah) {
+  outputs_.q_remaining_mah = q_remaining_mah;
+}
 
 float BQ769X0SocEstimator::ocv_soc_from_mv_(float vrest_mv) const {
   if (cfg_.ocv_table.empty()) {
@@ -61,8 +67,8 @@ float BQ769X0SocEstimator::ocv_soc_from_mv_(float vrest_mv) const {
     return cfg_.ocv_table.back().soc;
   }
   for (size_t i = 1; i < cfg_.ocv_table.size(); i++) {
-    const auto &low = cfg_.ocv_table[i - 1];
-    const auto &high = cfg_.ocv_table[i];
+    const auto& low = cfg_.ocv_table[i - 1];
+    const auto& high = cfg_.ocv_table[i];
     if (vrest_mv <= high.mv) {
       float t = (vrest_mv - low.mv) / static_cast<float>(high.mv - low.mv);
       return low.soc + t * (high.soc - low.soc);
@@ -71,7 +77,7 @@ float BQ769X0SocEstimator::ocv_soc_from_mv_(float vrest_mv) const {
   return cfg_.ocv_table.back().soc;
 }
 
-const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
+const SocOutputs& BQ769X0SocEstimator::update(const SocInputs& in) {
   float vrest_mv = cfg_.use_min_cell ? in.vmin_cell_mv : in.vavg_cell_mv;
   float dvdt = 0.0f;
   if (!std::isnan(prev_vrest_mv_) && in.dt_s > 0.0f) {
@@ -91,7 +97,9 @@ const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
 
   float soc_confidence = 0.0f;
   if (rest_qualified && cfg_.rest_full_weight_seconds > 0.0f) {
-    soc_confidence = std::clamp((rest_seconds_ - cfg_.rest_min_seconds) / cfg_.rest_full_weight_seconds, 0.0f, 1.0f);
+    soc_confidence = std::clamp(
+      (rest_seconds_ - cfg_.rest_min_seconds) / cfg_.rest_full_weight_seconds, 0.0f, 1.0f
+    );
   }
   outputs_.soc_confidence = soc_confidence;
 
@@ -101,7 +109,8 @@ const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
       outputs_.soc_percent = ocv_soc;
       outputs_.soc_valid = true;
     } else {
-      outputs_.soc_percent = (1.0f - soc_confidence) * outputs_.soc_percent + soc_confidence * ocv_soc;
+      outputs_.soc_percent =
+        (1.0f - soc_confidence) * outputs_.soc_percent + soc_confidence * ocv_soc;
     }
   }
 
@@ -119,7 +128,8 @@ const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
     }
 
     if (cfg_.balance.enabled && cfg_.balance.balance_current_ma_per_cell > 0.0f && cfg_.balance.balance_duty > 0.0f) {
-      float balance_ma = in.balancing_cells * cfg_.balance.balance_current_ma_per_cell * cfg_.balance.balance_duty;
+      float balance_ma =
+        in.balancing_cells * cfg_.balance.balance_current_ma_per_cell * cfg_.balance.balance_duty;
       current_eff += balance_ma;
     }
 
@@ -145,7 +155,8 @@ const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
     }
   }
 
-  bool empty_anchor = in.current_ma >= cfg_.empty_discharge_current_ma && vrest_mv <= cfg_.empty_cell_mv;
+  bool empty_anchor =
+    in.current_ma >= cfg_.empty_discharge_current_ma && vrest_mv <= cfg_.empty_cell_mv;
   if (empty_anchor) {
     empty_hold_seconds_ += in.dt_s;
   } else {
@@ -164,7 +175,8 @@ const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
     if (std::isnan(outputs_.capacity_mah)) {
       outputs_.capacity_mah = measured_capacity;
     } else {
-      outputs_.capacity_mah = (1.0f - cfg_.learn_alpha) * outputs_.capacity_mah + cfg_.learn_alpha * measured_capacity;
+      outputs_.capacity_mah =
+        (1.0f - cfg_.learn_alpha) * outputs_.capacity_mah + cfg_.learn_alpha * measured_capacity;
     }
     outputs_.q_remaining_mah = 0.0f;
     outputs_.soc_percent = 0.0f;
@@ -187,5 +199,5 @@ const SocOutputs &BQ769X0SocEstimator::update(const SocInputs &in) {
   return outputs_;
 }
 
-} // namespace bq769x0
-} // namespace esphome
+}  // namespace bq769x0
+}  // namespace esphome

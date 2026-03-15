@@ -12,10 +12,10 @@ namespace esphome {
 namespace fdc1004 {
 
 class FDC1004Component : public PollingComponent, public i2c::I2CDevice {
-public:
-  void set_channel_sensor(uint8_t index, sensor::Sensor *sensor);
+ public:
+  void set_channel_sensor(uint8_t index, sensor::Sensor* sensor);
   void set_channel_capdac(uint8_t index, uint8_t capdac_steps);
-  void set_offset_sensor(uint8_t index, sensor::Sensor *sensor);
+  void set_offset_sensor(uint8_t index, sensor::Sensor* sensor);
   void set_sample_rate(uint16_t sample_rate_sps);
   void tare_to_current();
 
@@ -23,17 +23,17 @@ public:
   void update() override;
   void dump_config() override;
 
-protected:
+ protected:
   bool initialize_();
-  bool read_register16_(uint8_t reg, uint16_t &value);
+  bool read_register16_(uint8_t reg, uint16_t& value);
   bool write_register16_(uint8_t reg, uint16_t value);
   bool configure_measurement_(uint8_t measurement_index);
   bool write_fdc_conf_();
-  bool read_measurement_pf_(uint8_t measurement_index, float &capacitance_pf);
+  bool read_measurement_pf_(uint8_t measurement_index, float& capacitance_pf);
   float capdac_pf_(uint8_t measurement_index) const;
 
-  std::array<sensor::Sensor *, 4> channel_sensors_{{nullptr, nullptr, nullptr, nullptr}};
-  std::array<sensor::Sensor *, 4> offset_sensors_{{nullptr, nullptr, nullptr, nullptr}};
+  std::array<sensor::Sensor*, 4> channel_sensors_{{nullptr, nullptr, nullptr, nullptr}};
+  std::array<sensor::Sensor*, 4> offset_sensors_{{nullptr, nullptr, nullptr, nullptr}};
   std::array<uint8_t, 4> capdac_steps_{{0, 0, 0, 0}};
   std::array<float, 4> tare_offsets_pf_{{0.0f, 0.0f, 0.0f, 0.0f}};
   uint8_t enabled_mask_{0};
@@ -45,13 +45,15 @@ protected:
 };
 
 class FDC1004ZeroButton : public button::Button {
-public:
-  void set_parent(FDC1004Component *parent) { parent_ = parent; }
+ public:
+  void set_parent(FDC1004Component* parent) {
+    parent_ = parent;
+  }
 
-protected:
+ protected:
   void press_action() override;
-  FDC1004Component *parent_{nullptr};
+  FDC1004Component* parent_{nullptr};
 };
 
-} // namespace fdc1004
-} // namespace esphome
+}  // namespace fdc1004
+}  // namespace esphome

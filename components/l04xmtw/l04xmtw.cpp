@@ -7,7 +7,7 @@
 namespace esphome {
 namespace l04xmtw {
 
-static const char *const TAG = "l04xmtw";
+static const char* const TAG = "l04xmtw";
 
 static constexpr uint8_t COMMAND_TRIGGER = 0x55;
 static constexpr uint8_t RESPONSE_HEADER = 0xFF;
@@ -82,8 +82,15 @@ void L04XMTWComponent::loop() {
     }
 
     const uint8_t checksum = this->buffer_[0] + this->buffer_[1] + this->buffer_[2];
-    ESP_LOGD(TAG, "Received frame: 0x%02X 0x%02X 0x%02X 0x%02X (checksum 0x%02X)",
-             this->buffer_[0], this->buffer_[1], this->buffer_[2], this->buffer_[3], checksum);
+    ESP_LOGD(
+      TAG,
+      "Received frame: 0x%02X 0x%02X 0x%02X 0x%02X (checksum 0x%02X)",
+      this->buffer_[0],
+      this->buffer_[1],
+      this->buffer_[2],
+      this->buffer_[3],
+      checksum
+    );
     if (checksum != this->buffer_[3]) {
       if (!this->warned_this_cycle_) {
         ESP_LOGW(TAG, "Checksum mismatch: 0x%02X != 0x%02X", checksum, this->buffer_[3]);
@@ -124,5 +131,5 @@ void L04XMTWComponent::dump_config() {
   LOG_UPDATE_INTERVAL(this);
 }
 
-} // namespace l04xmtw
-} // namespace esphome
+}  // namespace l04xmtw
+}  // namespace esphome

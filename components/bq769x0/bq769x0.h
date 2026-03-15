@@ -46,47 +46,53 @@ struct Cal {
 };
 
 class BQ769X0Driver {
-public:
-  explicit BQ769X0Driver(esphome::i2c::I2CDevice *dev) : dev_(dev) {}
+ public:
+  explicit BQ769X0Driver(esphome::i2c::I2CDevice* dev) : dev_(dev) {}
 
-  void set_crc_enabled(bool enabled) { this->crc_enabled_ = enabled; }
-  void set_i2c_address(uint8_t address) { this->address_ = address; }
+  void set_crc_enabled(bool enabled) {
+    this->crc_enabled_ = enabled;
+  }
+  void set_i2c_address(uint8_t address) {
+    this->address_ = address;
+  }
 
-  bool read_calibration(Cal *out);
+  bool read_calibration(Cal* out);
   bool write_cc_cfg_0x19();
   bool set_adc_enabled(bool on);
   bool set_temp_sel(bool thermistor);
 
-  bool read_sys_stat(uint8_t *sys_stat);
+  bool read_sys_stat(uint8_t* sys_stat);
   bool clear_sys_stat_bits(uint8_t mask);
-  bool read_cell_adc14(uint8_t cell_index_1based, uint16_t *adc14);
-  bool read_bat16(uint16_t *bat);
-  bool read_ts1_adc14(uint16_t *adc14);
-  bool read_cc16(int16_t *cc);
+  bool read_cell_adc14(uint8_t cell_index_1based, uint16_t* adc14);
+  bool read_bat16(uint16_t* bat);
+  bool read_ts1_adc14(uint16_t* adc14);
+  bool read_cc16(int16_t* cc);
 
-  int cell_mV_from_adc(uint16_t adc14, const Cal &cal);
-  int bat_mV_from_bat16(uint16_t bat16, int cell_count, const Cal &cal);
+  int cell_mV_from_adc(uint16_t adc14, const Cal& cal);
+  int bat_mV_from_bat16(uint16_t bat16, int cell_count, const Cal& cal);
   float ts_voltage_V_from_adc(uint16_t adc14);
   float ts_resistance_ohm_from_voltage(float vts_V);
   float die_temp_C_from_adc(uint16_t adc14);
   float sense_uV_from_cc(int16_t cc);
 
-  i2c::ErrorCode last_error() const { return this->last_error_; }
+  i2c::ErrorCode last_error() const {
+    return this->last_error_;
+  }
 
-  bool read_register_block(uint8_t reg, uint8_t *data, size_t len);
-  bool write_register_block(uint8_t reg, const uint8_t *data, size_t len);
-  bool read_register8(uint8_t reg, uint8_t *value);
+  bool read_register_block(uint8_t reg, uint8_t* data, size_t len);
+  bool write_register_block(uint8_t reg, const uint8_t* data, size_t len);
+  bool read_register8(uint8_t reg, uint8_t* value);
   bool write_register8(uint8_t reg, uint8_t value);
 
-protected:
-  bool read_register_block_crc_(uint8_t reg, uint8_t *data, size_t len);
-  bool write_register_block_crc_(uint8_t reg, const uint8_t *data, size_t len);
+ protected:
+  bool read_register_block_crc_(uint8_t reg, uint8_t* data, size_t len);
+  bool write_register_block_crc_(uint8_t reg, const uint8_t* data, size_t len);
 
-  esphome::i2c::I2CDevice *dev_{nullptr};
+  esphome::i2c::I2CDevice* dev_{nullptr};
   bool crc_enabled_{false};
   uint8_t address_{0x08};
   i2c::ErrorCode last_error_{i2c::ERROR_OK};
 };
 
-} // namespace bq769x0
-} // namespace esphome
+}  // namespace bq769x0
+}  // namespace esphome

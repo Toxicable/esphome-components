@@ -20,83 +20,101 @@ class MCF8316DComponent;
 
 class MCF8316DBrakeSwitch : public switch_::Switch {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void write_state(bool state) override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DDirectionSelect : public select::Select {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
-  void control(const std::string &value) override;
-  MCF8316DComponent *parent_{nullptr};
+  void control(const std::string& value) override;
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DSpeedNumber : public number::Number {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void control(float value) override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DClearFaultsButton : public button::Button {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DWatchdogTickleButton : public button::Button {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DApplyStartupTuneButton : public button::Button {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DApplyHwLockReportOnlyButton : public button::Button {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DRunStartupSweepButton : public button::Button {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DRunScopeProbeTestButton : public button::Button {
  public:
-  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent* parent) {
+    parent_ = parent;
+  }
 
  protected:
   void press_action() override;
-  MCF8316DComponent *parent_{nullptr};
+  MCF8316DComponent* parent_{nullptr};
 };
 
 class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
@@ -105,13 +123,13 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   void update() override;
   void dump_config() override;
 
-  bool read_reg32(uint16_t offset, uint32_t &value);
-  bool read_reg16(uint16_t offset, uint16_t &value);
+  bool read_reg32(uint16_t offset, uint32_t& value);
+  bool read_reg16(uint16_t offset, uint16_t& value);
   bool write_reg32(uint16_t offset, uint32_t value);
   bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value);
 
   bool set_brake_override(bool brake_on);
-  bool set_direction_mode(const std::string &direction_mode);
+  bool set_direction_mode(const std::string& direction_mode);
   bool set_speed_percent(float speed_percent);
   void pulse_clear_faults();
   void pulse_watchdog_tickle();
@@ -120,63 +138,112 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   bool start_startup_current_sweep();
   bool start_scope_probe_test();
 
-  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
-  void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
+  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) {
+    inter_byte_delay_us_ = inter_byte_delay_us;
+  }
+  void set_auto_tickle_watchdog(bool auto_tickle_watchdog) {
+    auto_tickle_watchdog_ = auto_tickle_watchdog;
+  }
 
-  void set_brake_switch(MCF8316DBrakeSwitch *sw) { brake_switch_ = sw; }
-  void set_direction_select(MCF8316DDirectionSelect *sel) { direction_select_ = sel; }
-  void set_speed_number(MCF8316DSpeedNumber *num) { speed_number_ = num; }
-  void set_fault_active_binary_sensor(binary_sensor::BinarySensor *s) { fault_active_binary_sensor_ = s; }
-  void set_sys_enable_binary_sensor(binary_sensor::BinarySensor *s) { sys_enable_binary_sensor_ = s; }
-  void set_vm_voltage_sensor(sensor::Sensor *s) { vm_voltage_sensor_ = s; }
-  void set_duty_cmd_percent_sensor(sensor::Sensor *s) { duty_cmd_percent_sensor_ = s; }
-  void set_volt_mag_percent_sensor(sensor::Sensor *s) { volt_mag_percent_sensor_ = s; }
-  void set_fault_summary_text_sensor(text_sensor::TextSensor *s) { fault_summary_text_sensor_ = s; }
-  void set_algorithm_state_text_sensor(text_sensor::TextSensor *s) { algorithm_state_text_sensor_ = s; }
+  void set_brake_switch(MCF8316DBrakeSwitch* sw) {
+    brake_switch_ = sw;
+  }
+  void set_direction_select(MCF8316DDirectionSelect* sel) {
+    direction_select_ = sel;
+  }
+  void set_speed_number(MCF8316DSpeedNumber* num) {
+    speed_number_ = num;
+  }
+  void set_fault_active_binary_sensor(binary_sensor::BinarySensor* s) {
+    fault_active_binary_sensor_ = s;
+  }
+  void set_sys_enable_binary_sensor(binary_sensor::BinarySensor* s) {
+    sys_enable_binary_sensor_ = s;
+  }
+  void set_vm_voltage_sensor(sensor::Sensor* s) {
+    vm_voltage_sensor_ = s;
+  }
+  void set_duty_cmd_percent_sensor(sensor::Sensor* s) {
+    duty_cmd_percent_sensor_ = s;
+  }
+  void set_volt_mag_percent_sensor(sensor::Sensor* s) {
+    volt_mag_percent_sensor_ = s;
+  }
+  void set_fault_summary_text_sensor(text_sensor::TextSensor* s) {
+    fault_summary_text_sensor_ = s;
+  }
+  void set_algorithm_state_text_sensor(text_sensor::TextSensor* s) {
+    algorithm_state_text_sensor_ = s;
+  }
 
  protected:
   bool read_probe_and_publish_();
   bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
-  bool probe_device_ack_(i2c::ErrorCode &error_code) const;
+  bool probe_device_ack_(i2c::ErrorCode& error_code) const;
   bool scan_i2c_bus_();
   void process_deferred_startup_();
   void apply_post_comms_setup_();
-  const char *i2c_error_to_string_(i2c::ErrorCode error_code) const;
-  bool perform_read16_(uint16_t offset, uint16_t &value);
-  bool perform_read_(uint16_t offset, uint32_t &value);
+  const char* i2c_error_to_string_(i2c::ErrorCode error_code) const;
+  bool perform_read16_(uint16_t offset, uint16_t& value);
+  bool perform_read_(uint16_t offset, uint32_t& value);
   bool perform_write_(uint16_t offset, uint32_t value);
   uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
   void delay_between_bytes_() const;
-  void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
-                       bool controller_fault_valid);
+  void publish_faults_(
+    uint32_t gate_fault_status,
+    bool gate_fault_valid,
+    uint32_t controller_fault_status,
+    bool controller_fault_valid
+  );
   void publish_algo_status_(uint32_t algo_status);
   bool ensure_buck_current_limit_for_manual_();
   bool seed_closed_loop_params_if_zero_();
-  void log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status);
-  void log_mpet_diagnostics_(const char *context);
-  void log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2);
-  void log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status);
-  void log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw, uint16_t volt_mag_raw,
-                                bool fault_active);
+  void log_buck_fault_diagnostics_(const char* context, uint32_t gate_fault_status);
+  void log_mpet_diagnostics_(const char* context);
+  void log_mpet_entry_conditions_(const char* context, uint32_t algo_debug2);
+  void log_lock_limit_diagnostics_(const char* context, uint32_t controller_fault_status);
+  void log_control_diagnostics_(
+    const char* context,
+    uint16_t algorithm_state,
+    uint16_t duty_raw,
+    uint16_t volt_mag_raw,
+    bool fault_active
+  );
   bool apply_startup_sweep_current_limits_(uint32_t current_limit_code);
   bool begin_startup_sweep_step_();
   void schedule_startup_sweep_step_(uint32_t delay_ms);
-  void process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
-                              bool fault_state_valid, bool controller_valid, uint32_t controller_fault_status,
-                              uint16_t volt_mag_raw);
+  void process_startup_sweep_(
+    bool algorithm_state_valid,
+    uint16_t algorithm_state,
+    bool fault_active,
+    bool fault_state_valid,
+    bool controller_valid,
+    uint32_t controller_fault_status,
+    uint16_t volt_mag_raw
+  );
   bool begin_scope_probe_stage_();
-  void process_scope_probe_test_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
-                                 bool fault_state_valid, bool controller_valid, uint32_t controller_fault_status,
-                                 uint16_t volt_mag_raw);
+  void process_scope_probe_test_(
+    bool algorithm_state_valid,
+    uint16_t algorithm_state,
+    bool fault_active,
+    bool fault_state_valid,
+    bool controller_valid,
+    uint32_t controller_fault_status,
+    uint16_t volt_mag_raw
+  );
   float scope_probe_stage_speed_percent_(uint8_t stage_index) const;
   uint32_t scope_probe_stage_hold_ms_(uint8_t stage_index) const;
   uint32_t startup_sweep_current_code_(uint8_t step_index) const;
   float current_limit_code_to_amps_(uint32_t current_limit_code) const;
-  bool should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
-                                    bool controller_fault_valid);
-  const char *algorithm_state_to_string_(uint16_t state) const;
-  const char *brake_input_to_string_(uint32_t brake_input_value) const;
-  const char *direction_input_to_string_(uint32_t direction_input_value) const;
+  bool should_force_speed_shutdown_(
+    uint32_t gate_fault_status,
+    bool gate_fault_valid,
+    uint32_t controller_fault_status,
+    bool controller_fault_valid
+  );
+  const char* algorithm_state_to_string_(uint16_t state) const;
+  const char* brake_input_to_string_(uint32_t brake_input_value) const;
+  const char* direction_input_to_string_(uint32_t direction_input_value) const;
   void handle_fault_shutdown_(bool fault_active);
 
   static constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
@@ -243,8 +310,8 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t ALGO_DEBUG2_MPET_MECH_MASK = (1u << 1);
   static constexpr uint32_t ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK = (1u << 0);
   static constexpr uint32_t ALGO_DEBUG2_MPET_ALL_MASK =
-      ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_R_MASK | ALGO_DEBUG2_MPET_L_MASK | ALGO_DEBUG2_MPET_KE_MASK |
-      ALGO_DEBUG2_MPET_MECH_MASK | ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
+    ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_R_MASK | ALGO_DEBUG2_MPET_L_MASK |
+    ALGO_DEBUG2_MPET_KE_MASK | ALGO_DEBUG2_MPET_MECH_MASK | ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
 
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = (0x0FFFu << 4);
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_SHIFT = 4;
@@ -318,9 +385,10 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT = 15u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_DEG = 7u;
   static constexpr uint32_t STARTUP_TUNE_HW_LOCK_ILIMIT_MODE = 3u;  // retry_hiz
-  static constexpr uint32_t STARTUP_TUNE_LOCK2_EN = 0u;  // disable ABN_BEMF lock during manual bring-up
+  static constexpr uint32_t STARTUP_TUNE_LOCK2_EN =
+    0u;  // disable ABN_BEMF lock during manual bring-up
   static constexpr uint32_t STARTUP_TUNE_MTR_STARTUP = 1u;  // Double-align startup
-  static constexpr uint32_t STARTUP_TUNE_ALIGN_TIME = 2u;  // 100ms
+  static constexpr uint32_t STARTUP_TUNE_ALIGN_TIME = 2u;   // 100ms
   static constexpr uint32_t STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_OL_ILIMIT = 6u;
   static constexpr uint32_t STARTUP_TUNE_AUTO_HANDOFF_EN = 0u;  // force manual handoff threshold
@@ -328,13 +396,13 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_TUNE_ALIGN_ANGLE = 0x08u;  // 90 deg
   static constexpr uint32_t STARTUP_TUNE_SLOW_FIRST_CYC_FREQ = 1u;
   static constexpr uint32_t STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL = 1u;
-  static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;  // 10000 -> 1666 Hz electrical
+  static constexpr uint32_t STARTUP_TUNE_MAX_SPEED = 0x2710u;   // 10000 -> 1666 Hz electrical
   static constexpr uint32_t STARTUP_TUNE_PWM_FREQ_OUT = 0x0Au;  // 60kHz
   static constexpr uint32_t STARTUP_TUNE_DYNAMIC_CSA_GAIN_EN = 1u;
-  static constexpr uint32_t STARTUP_TUNE_CSA_GAIN = 0u;  // 0.15V/A
-  static constexpr uint32_t STARTUP_TUNE_ISD_EN = 0u;      // disable ISD for manual startup
-  static constexpr uint32_t STARTUP_TUNE_BRAKE_EN = 0u;    // disable ISD startup brake state
-  static constexpr uint32_t STARTUP_TUNE_RESYNC_EN = 0u;   // disable re-sync path for static startup
+  static constexpr uint32_t STARTUP_TUNE_CSA_GAIN = 0u;   // 0.15V/A
+  static constexpr uint32_t STARTUP_TUNE_ISD_EN = 0u;     // disable ISD for manual startup
+  static constexpr uint32_t STARTUP_TUNE_BRAKE_EN = 0u;   // disable ISD startup brake state
+  static constexpr uint32_t STARTUP_TUNE_RESYNC_EN = 0u;  // disable re-sync path for static startup
   static constexpr uint32_t STARTUP_TUNE_BRK_CONFIG = 0u;  // time-only brake exit if ever enabled
   static constexpr uint32_t STARTUP_TUNE_BRK_TIME = 1u;    // 50ms
   static constexpr uint32_t LOCK_MODE_AUTO_RECOVERY_MIN = 3u;
@@ -381,7 +449,6 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t GD_CONFIG2_BUCK_SEL_MASK = (0x3u << 21);
   static constexpr uint32_t GD_CONFIG2_BUCK_SEL_SHIFT = 21;
   static constexpr uint32_t GD_CONFIG2_BUCK_DIS_MASK = (1u << 20);
-
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OCP = (1u << 28);
@@ -482,16 +549,16 @@ class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t scope_probe_next_stage_due_ms_{0};
   std::string last_fault_summary_{"none"};
 
-  MCF8316DBrakeSwitch *brake_switch_{nullptr};
-  MCF8316DDirectionSelect *direction_select_{nullptr};
-  MCF8316DSpeedNumber *speed_number_{nullptr};
-  binary_sensor::BinarySensor *fault_active_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *sys_enable_binary_sensor_{nullptr};
-  sensor::Sensor *vm_voltage_sensor_{nullptr};
-  sensor::Sensor *duty_cmd_percent_sensor_{nullptr};
-  sensor::Sensor *volt_mag_percent_sensor_{nullptr};
-  text_sensor::TextSensor *fault_summary_text_sensor_{nullptr};
-  text_sensor::TextSensor *algorithm_state_text_sensor_{nullptr};
+  MCF8316DBrakeSwitch* brake_switch_{nullptr};
+  MCF8316DDirectionSelect* direction_select_{nullptr};
+  MCF8316DSpeedNumber* speed_number_{nullptr};
+  binary_sensor::BinarySensor* fault_active_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor* sys_enable_binary_sensor_{nullptr};
+  sensor::Sensor* vm_voltage_sensor_{nullptr};
+  sensor::Sensor* duty_cmd_percent_sensor_{nullptr};
+  sensor::Sensor* volt_mag_percent_sensor_{nullptr};
+  text_sensor::TextSensor* fault_summary_text_sensor_{nullptr};
+  text_sensor::TextSensor* algorithm_state_text_sensor_{nullptr};
 };
 
 }  // namespace mcf8316d

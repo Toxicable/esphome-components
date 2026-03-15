@@ -16,9 +16,9 @@ constexpr float TS_LSB_V = 382e-6f;
 constexpr float DIE_TEMP_V25 = 1.200f;
 constexpr float DIE_TEMP_SLOPE = 0.0042f;
 constexpr float CC_LSB_UV = 8.44f;
-} // namespace
+}  // namespace
 
-bool BQ769X0Driver::read_calibration(Cal *out) {
+bool BQ769X0Driver::read_calibration(Cal* out) {
   uint8_t gain1 = 0;
   uint8_t gain2 = 0;
   uint8_t offset_raw = 0;
@@ -66,11 +66,15 @@ bool BQ769X0Driver::set_temp_sel(bool thermistor) {
   return this->write_register8(Register::SYS_CTRL1, reg);
 }
 
-bool BQ769X0Driver::read_sys_stat(uint8_t *sys_stat) { return this->read_register8(Register::SYS_STAT, sys_stat); }
+bool BQ769X0Driver::read_sys_stat(uint8_t* sys_stat) {
+  return this->read_register8(Register::SYS_STAT, sys_stat);
+}
 
-bool BQ769X0Driver::clear_sys_stat_bits(uint8_t mask) { return this->write_register8(Register::SYS_STAT, mask); }
+bool BQ769X0Driver::clear_sys_stat_bits(uint8_t mask) {
+  return this->write_register8(Register::SYS_STAT, mask);
+}
 
-bool BQ769X0Driver::read_cell_adc14(uint8_t cell_index_1based, uint16_t *adc14) {
+bool BQ769X0Driver::read_cell_adc14(uint8_t cell_index_1based, uint16_t* adc14) {
   if (cell_index_1based < 1 || cell_index_1based > 5) {
     return false;
   }
@@ -82,7 +86,7 @@ bool BQ769X0Driver::read_cell_adc14(uint8_t cell_index_1based, uint16_t *adc14) 
   return true;
 }
 
-bool BQ769X0Driver::read_bat16(uint16_t *bat) {
+bool BQ769X0Driver::read_bat16(uint16_t* bat) {
   uint8_t data[2] = {0, 0};
   if (!this->read_register_block(Register::BAT_HI, data, sizeof(data)))
     return false;
@@ -90,7 +94,7 @@ bool BQ769X0Driver::read_bat16(uint16_t *bat) {
   return true;
 }
 
-bool BQ769X0Driver::read_ts1_adc14(uint16_t *adc14) {
+bool BQ769X0Driver::read_ts1_adc14(uint16_t* adc14) {
   uint8_t data[2] = {0, 0};
   if (!this->read_register_block(Register::TS1_HI, data, sizeof(data)))
     return false;
@@ -98,7 +102,7 @@ bool BQ769X0Driver::read_ts1_adc14(uint16_t *adc14) {
   return true;
 }
 
-bool BQ769X0Driver::read_cc16(int16_t *cc) {
+bool BQ769X0Driver::read_cc16(int16_t* cc) {
   uint8_t data[2] = {0, 0};
   if (!this->read_register_block(Register::CC_HI, data, sizeof(data)))
     return false;
@@ -106,16 +110,18 @@ bool BQ769X0Driver::read_cc16(int16_t *cc) {
   return true;
 }
 
-int BQ769X0Driver::cell_mV_from_adc(uint16_t adc14, const Cal &cal) {
+int BQ769X0Driver::cell_mV_from_adc(uint16_t adc14, const Cal& cal) {
   return static_cast<int>((cal.gain_uV_per_lsb * static_cast<int>(adc14)) / 1000) + cal.offset_mV;
 }
 
-int BQ769X0Driver::bat_mV_from_bat16(uint16_t bat16, int cell_count, const Cal &cal) {
+int BQ769X0Driver::bat_mV_from_bat16(uint16_t bat16, int cell_count, const Cal& cal) {
   return static_cast<int>((4 * cal.gain_uV_per_lsb * static_cast<int>(bat16)) / 1000) +
          (cell_count * cal.offset_mV);
 }
 
-float BQ769X0Driver::ts_voltage_V_from_adc(uint16_t adc14) { return static_cast<float>(adc14) * TS_LSB_V; }
+float BQ769X0Driver::ts_voltage_V_from_adc(uint16_t adc14) {
+  return static_cast<float>(adc14) * TS_LSB_V;
+}
 
 float BQ769X0Driver::ts_resistance_ohm_from_voltage(float vts_V) {
   const float pullup_ohm = 10000.0f;
@@ -131,9 +137,11 @@ float BQ769X0Driver::die_temp_C_from_adc(uint16_t adc14) {
   return 25.0f - ((vts - DIE_TEMP_V25) / DIE_TEMP_SLOPE);
 }
 
-float BQ769X0Driver::sense_uV_from_cc(int16_t cc) { return static_cast<float>(cc) * CC_LSB_UV; }
+float BQ769X0Driver::sense_uV_from_cc(int16_t cc) {
+  return static_cast<float>(cc) * CC_LSB_UV;
+}
 
-bool BQ769X0Driver::read_register_block(uint8_t reg, uint8_t *data, size_t len) {
+bool BQ769X0Driver::read_register_block(uint8_t reg, uint8_t* data, size_t len) {
   if (!this->crc_enabled_) {
     auto error = this->dev_->read_register(reg, data, len);
     this->last_error_ = error;
@@ -142,7 +150,7 @@ bool BQ769X0Driver::read_register_block(uint8_t reg, uint8_t *data, size_t len) 
   return this->read_register_block_crc_(reg, data, len);
 }
 
-bool BQ769X0Driver::write_register_block(uint8_t reg, const uint8_t *data, size_t len) {
+bool BQ769X0Driver::write_register_block(uint8_t reg, const uint8_t* data, size_t len) {
   if (!this->crc_enabled_) {
     bool ok = this->dev_->write_bytes(reg, data, len);
     this->last_error_ = ok ? i2c::ERROR_OK : i2c::ERROR_UNKNOWN;
@@ -151,11 +159,15 @@ bool BQ769X0Driver::write_register_block(uint8_t reg, const uint8_t *data, size_
   return this->write_register_block_crc_(reg, data, len);
 }
 
-bool BQ769X0Driver::read_register8(uint8_t reg, uint8_t *value) { return this->read_register_block(reg, value, 1); }
+bool BQ769X0Driver::read_register8(uint8_t reg, uint8_t* value) {
+  return this->read_register_block(reg, value, 1);
+}
 
-bool BQ769X0Driver::write_register8(uint8_t reg, uint8_t value) { return this->write_register_block(reg, &value, 1); }
+bool BQ769X0Driver::write_register8(uint8_t reg, uint8_t value) {
+  return this->write_register_block(reg, &value, 1);
+}
 
-bool BQ769X0Driver::read_register_block_crc_(uint8_t reg, uint8_t *data, size_t len) {
+bool BQ769X0Driver::read_register_block_crc_(uint8_t reg, uint8_t* data, size_t len) {
   auto error = this->dev_->write(&reg, 1);
   if (error != i2c::ERROR_OK) {
     this->last_error_ = error;
@@ -191,7 +203,7 @@ bool BQ769X0Driver::read_register_block_crc_(uint8_t reg, uint8_t *data, size_t 
   return true;
 }
 
-bool BQ769X0Driver::write_register_block_crc_(uint8_t reg, const uint8_t *data, size_t len) {
+bool BQ769X0Driver::write_register_block_crc_(uint8_t reg, const uint8_t* data, size_t len) {
   if (len == 0) {
     return true;
   }
@@ -218,5 +230,5 @@ bool BQ769X0Driver::write_register_block_crc_(uint8_t reg, const uint8_t *data, 
   return error == i2c::ERROR_OK;
 }
 
-} // namespace bq769x0
-} // namespace esphome
+}  // namespace bq769x0
+}  // namespace esphome

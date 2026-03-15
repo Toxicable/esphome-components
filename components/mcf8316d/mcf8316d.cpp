@@ -10,7 +10,7 @@
 namespace esphome {
 namespace mcf8316d {
 
-static const char *const TAG = "mcf8316d";
+static const char* const TAG = "mcf8316d";
 
 void MCF8316DBrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -25,8 +25,7 @@ void MCF8316DBrakeSwitch::write_state(bool state) {
   this->publish_state(state);
 }
 
-
-void MCF8316DDirectionSelect::control(const std::string &value) {
+void MCF8316DDirectionSelect::control(const std::string& value) {
   if (this->parent_ == nullptr || !this->parent_->set_direction_mode(value)) {
     ESP_LOGW(TAG, "Failed to set direction mode to %s", value.c_str());
     return;
@@ -96,9 +95,15 @@ void MCF8316DComponent::setup() {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
     this->status_set_warning();
   }
-  if (!this->establish_communications_(STARTUP_COMMS_ATTEMPTS, STARTUP_COMMS_RETRY_DELAY_MS, true)) {
-    ESP_LOGW(TAG, "Unable to establish communications with I2C device 0x%02X during setup; deferring normal operation",
-             this->address_);
+  if (!this->establish_communications_(
+        STARTUP_COMMS_ATTEMPTS, STARTUP_COMMS_RETRY_DELAY_MS, true
+      )) {
+    ESP_LOGW(
+      TAG,
+      "Unable to establish communications with I2C device 0x%02X during setup; deferring normal "
+      "operation",
+      this->address_
+    );
     this->status_set_warning();
     return;
   }
@@ -143,7 +148,7 @@ void MCF8316DComponent::update() {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
     const bool force_shutdown =
-        this->should_force_speed_shutdown_(gate_fault_status, gate_ok, fault_status, controller_ok);
+      this->should_force_speed_shutdown_(gate_fault_status, gate_ok, fault_status, controller_ok);
     if (fault_active && !force_shutdown) {
       if (!this->allow_retry_notice_active_) {
         ESP_LOGI(TAG, "Fault active but allowing retry (configured lock mode)");
@@ -158,18 +163,20 @@ void MCF8316DComponent::update() {
   }
 
   const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
-  const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
-  const bool run_state_diag_active = algo_ok && duty_raw > 0u && volt_mag_raw > 0u && (!fault_state_valid || !fault_active);
+  const uint16_t volt_mag_raw =
+    (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
+  const bool run_state_diag_active =
+    algo_ok && duty_raw > 0u && volt_mag_raw > 0u && (!fault_state_valid || !fault_active);
   const bool control_diag_active = algo_ok && duty_raw > 8u;
   uint16_t algorithm_state = 0;
   bool algorithm_state_valid = false;
-  const bool need_algorithm_state =
-      this->algorithm_state_text_sensor_ != nullptr || run_state_diag_active || control_diag_active ||
-      this->startup_sweep_active_ || this->scope_probe_test_active_;
+  const bool need_algorithm_state = this->algorithm_state_text_sensor_ != nullptr ||
+                                    run_state_diag_active || control_diag_active ||
+                                    this->startup_sweep_active_ || this->scope_probe_test_active_;
   if (need_algorithm_state) {
     if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
       algorithm_state_valid = true;
-      const char *const state_name = this->algorithm_state_to_string_(algorithm_state);
+      const char* const state_name = this->algorithm_state_to_string_(algorithm_state);
       if (this->algorithm_state_text_sensor_ != nullptr) {
         this->algorithm_state_text_sensor_->publish_state(state_name);
       }
@@ -180,18 +187,26 @@ void MCF8316DComponent::update() {
         if (should_log) {
           const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
           const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
-          ESP_LOGI(TAG, "[loop_run_state] state=0x%04X(%s) duty=%.1f%% volt_mag=%.1f%%", algorithm_state, state_name,
-                   duty_percent, volt_mag_percent);
+          ESP_LOGI(
+            TAG,
+            "[loop_run_state] state=0x%04X(%s) duty=%.1f%% volt_mag=%.1f%%",
+            algorithm_state,
+            state_name,
+            duty_percent,
+            volt_mag_percent
+          );
           this->last_run_state_diag_log_ms_ = now;
           this->last_run_state_diag_value_ = algorithm_state;
         }
       }
       if (control_diag_active) {
         const uint32_t now = millis();
-        const bool should_log =
-            (this->last_control_diag_log_ms_ == 0u) || (algorithm_state != this->last_control_diag_state_);
+        const bool should_log = (this->last_control_diag_log_ms_ == 0u) ||
+                                (algorithm_state != this->last_control_diag_state_);
         if (should_log) {
-          this->log_control_diagnostics_("loop_control", algorithm_state, duty_raw, volt_mag_raw, fault_active);
+          this->log_control_diagnostics_(
+            "loop_control", algorithm_state, duty_raw, volt_mag_raw, fault_active
+          );
           this->last_control_diag_log_ms_ = now;
           this->last_control_diag_state_ = algorithm_state;
         }
@@ -206,12 +221,27 @@ void MCF8316DComponent::update() {
     this->last_control_diag_log_ms_ = 0u;
     this->last_control_diag_state_ = 0xFFFFu;
   }
-  this->process_startup_sweep_(algorithm_state_valid, algorithm_state, fault_active, fault_state_valid, controller_ok,
-                               fault_status, volt_mag_raw);
-  this->process_scope_probe_test_(algorithm_state_valid, algorithm_state, fault_active, fault_state_valid, controller_ok,
-                                  fault_status, volt_mag_raw);
+  this->process_startup_sweep_(
+    algorithm_state_valid,
+    algorithm_state,
+    fault_active,
+    fault_state_valid,
+    controller_ok,
+    fault_status,
+    volt_mag_raw
+  );
+  this->process_scope_probe_test_(
+    algorithm_state_valid,
+    algorithm_state,
+    fault_active,
+    fault_state_valid,
+    controller_ok,
+    fault_status,
+    volt_mag_raw
+  );
 
-  const bool mpet_fault_active = controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
+  const bool mpet_fault_active =
+    controller_ok && ((fault_status & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0);
   if (mpet_fault_active && ((this->last_mpet_diag_log_ms_ == 0U) || (millis() - this->last_mpet_diag_log_ms_ >= 2000U))) {
     this->log_mpet_diagnostics_("loop_mpet_fault");
     this->last_mpet_diag_log_ms_ = millis();
@@ -220,7 +250,8 @@ void MCF8316DComponent::update() {
     this->last_mpet_diag_log_ms_ = 0;
   }
 
-  const bool lock_limit_active = controller_ok && ((fault_status & (FAULT_LOCK_LIMIT | FAULT_HW_LOCK_LIMIT)) != 0);
+  const bool lock_limit_active =
+    controller_ok && ((fault_status & (FAULT_LOCK_LIMIT | FAULT_HW_LOCK_LIMIT)) != 0);
   if (lock_limit_active && (!this->lock_limit_prev_active_ || (millis() - this->last_lock_limit_diag_log_ms_ >= 2000U))) {
     this->log_lock_limit_diagnostics_("loop_lock_limit", fault_status);
     this->last_lock_limit_diag_log_ms_ = millis();
@@ -230,9 +261,9 @@ void MCF8316DComponent::update() {
   }
   this->lock_limit_prev_active_ = lock_limit_active;
 
-  const bool buck_fault_active = gate_ok && ((gate_fault_status & (GATE_FAULT_BUCK_OCP | GATE_FAULT_BUCK_UV)) != 0);
-  if (buck_fault_active &&
-      ((this->last_buck_diag_log_ms_ == 0U) || (millis() - this->last_buck_diag_log_ms_ >= 2000U))) {
+  const bool buck_fault_active =
+    gate_ok && ((gate_fault_status & (GATE_FAULT_BUCK_OCP | GATE_FAULT_BUCK_UV)) != 0);
+  if (buck_fault_active && ((this->last_buck_diag_log_ms_ == 0U) || (millis() - this->last_buck_diag_log_ms_ >= 2000U))) {
     this->log_buck_fault_diagnostics_("loop_buck_fault", gate_fault_status);
     this->last_buck_diag_log_ms_ = millis();
   }
@@ -246,8 +277,14 @@ void MCF8316DComponent::update() {
     const float vm_v = static_cast<float>(vm_adc_code_q11) * (60.0f / 2048.0f);
     this->vm_voltage_sensor_->publish_state(vm_v);
     if ((millis() - this->last_vm_diag_log_ms_) >= 5000U) {
-      ESP_LOGD(TAG, "VM decode: raw=0x%08X adc8=%u adc_q11=%u -> %.2fV", vm_voltage_raw,
-               static_cast<unsigned>(vm_adc_code_8), static_cast<unsigned>(vm_adc_code_q11), vm_v);
+      ESP_LOGD(
+        TAG,
+        "VM decode: raw=0x%08X adc8=%u adc_q11=%u -> %.2fV",
+        vm_voltage_raw,
+        static_cast<unsigned>(vm_adc_code_8),
+        static_cast<unsigned>(vm_adc_code_q11),
+        vm_v
+      );
       this->last_vm_diag_log_ms_ = millis();
     }
   }
@@ -261,18 +298,27 @@ void MCF8316DComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "MCF8316D Manual Validation Component:");
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
-  ESP_LOGCONFIG(TAG, "  Inter-byte delay: %u us", static_cast<unsigned>(this->inter_byte_delay_us_));
+  ESP_LOGCONFIG(
+    TAG, "  Inter-byte delay: %u us", static_cast<unsigned>(this->inter_byte_delay_us_)
+  );
   if (this->inter_byte_delay_us_ > 0) {
-    ESP_LOGCONFIG(TAG, "  Note: inter-byte delay is currently not applied with ESPHome I2C transactions");
+    ESP_LOGCONFIG(
+      TAG, "  Note: inter-byte delay is currently not applied with ESPHome I2C transactions"
+    );
   }
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
-  ESP_LOGCONFIG(TAG, "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
-                static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
-                static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS), static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
-                static_cast<unsigned>(DEFERRED_COMMS_RETRY_INTERVAL_MS));
+  ESP_LOGCONFIG(
+    TAG,
+    "  Startup comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
+    static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN),
+    static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
+    static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS),
+    static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
+    static_cast<unsigned>(DEFERRED_COMMS_RETRY_INTERVAL_MS)
+  );
 }
 
-const char *MCF8316DComponent::i2c_error_to_string_(i2c::ErrorCode error_code) const {
+const char* MCF8316DComponent::i2c_error_to_string_(i2c::ErrorCode error_code) const {
   switch (error_code) {
     case i2c::ERROR_OK:
       return "ok";
@@ -295,7 +341,7 @@ const char *MCF8316DComponent::i2c_error_to_string_(i2c::ErrorCode error_code) c
   }
 }
 
-bool MCF8316DComponent::probe_device_ack_(i2c::ErrorCode &error_code) const {
+bool MCF8316DComponent::probe_device_ack_(i2c::ErrorCode& error_code) const {
   if (this->bus_ == nullptr) {
     error_code = i2c::ERROR_NOT_INITIALIZED;
     return false;
@@ -332,10 +378,19 @@ bool MCF8316DComponent::scan_i2c_bus_() {
   }
 
   if (device_count == 0u) {
-    ESP_LOGW(TAG, "I2C scan found no ACKing devices in range 0x%02X..0x%02X",
-             static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN), static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX));
+    ESP_LOGW(
+      TAG,
+      "I2C scan found no ACKing devices in range 0x%02X..0x%02X",
+      static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN),
+      static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX)
+    );
   } else {
-    ESP_LOGI(TAG, "I2C scan found %u device(s): %s", static_cast<unsigned>(device_count), discovered.c_str());
+    ESP_LOGI(
+      TAG,
+      "I2C scan found %u device(s): %s",
+      static_cast<unsigned>(device_count),
+      discovered.c_str()
+    );
   }
 
   if (target_found) {
@@ -347,7 +402,9 @@ bool MCF8316DComponent::scan_i2c_bus_() {
   return device_count > 0u;
 }
 
-bool MCF8316DComponent::establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays) {
+bool MCF8316DComponent::establish_communications_(
+  uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays
+) {
   if (attempts == 0u) {
     return false;
   }
@@ -355,16 +412,32 @@ bool MCF8316DComponent::establish_communications_(uint8_t attempts, uint32_t ret
   for (uint8_t attempt = 1u; attempt <= attempts; attempt++) {
     i2c::ErrorCode ack_error = i2c::ERROR_UNKNOWN;
     if (!this->probe_device_ack_(ack_error)) {
-      ESP_LOGW(TAG, "Comms attempt %u/%u: address 0x%02X probe failed: %s (%d)", static_cast<unsigned>(attempt),
-               static_cast<unsigned>(attempts), this->address_, this->i2c_error_to_string_(ack_error),
-               static_cast<int>(ack_error));
+      ESP_LOGW(
+        TAG,
+        "Comms attempt %u/%u: address 0x%02X probe failed: %s (%d)",
+        static_cast<unsigned>(attempt),
+        static_cast<unsigned>(attempts),
+        this->address_,
+        this->i2c_error_to_string_(ack_error),
+        static_cast<int>(ack_error)
+      );
     } else if (this->read_probe_and_publish_()) {
-      ESP_LOGI(TAG, "I2C communications established with 0x%02X (attempt %u/%u)", this->address_,
-               static_cast<unsigned>(attempt), static_cast<unsigned>(attempts));
+      ESP_LOGI(
+        TAG,
+        "I2C communications established with 0x%02X (attempt %u/%u)",
+        this->address_,
+        static_cast<unsigned>(attempt),
+        static_cast<unsigned>(attempts)
+      );
       return true;
     } else {
-      ESP_LOGW(TAG, "Comms attempt %u/%u: address 0x%02X ACKed but register probe failed", static_cast<unsigned>(attempt),
-               static_cast<unsigned>(attempts), this->address_);
+      ESP_LOGW(
+        TAG,
+        "Comms attempt %u/%u: address 0x%02X ACKed but register probe failed",
+        static_cast<unsigned>(attempt),
+        static_cast<unsigned>(attempts),
+        this->address_
+      );
     }
 
     if (attempt < attempts && retry_delay_ms > 0u) {
@@ -390,8 +463,7 @@ void MCF8316DComponent::process_deferred_startup_() {
     this->deferred_comms_last_scan_ms_ = now;
   }
 
-  if (this->deferred_comms_last_retry_ms_ != 0u &&
-      (now - this->deferred_comms_last_retry_ms_) < DEFERRED_COMMS_RETRY_INTERVAL_MS) {
+  if (this->deferred_comms_last_retry_ms_ != 0u && (now - this->deferred_comms_last_retry_ms_) < DEFERRED_COMMS_RETRY_INTERVAL_MS) {
     return;
   }
   this->deferred_comms_last_retry_ms_ = now;
@@ -457,11 +529,17 @@ void MCF8316DComponent::apply_post_comms_setup_() {
   this->log_mpet_diagnostics_("setup");
 }
 
-bool MCF8316DComponent::read_reg32(uint16_t offset, uint32_t &value) { return this->perform_read_(offset, value); }
+bool MCF8316DComponent::read_reg32(uint16_t offset, uint32_t& value) {
+  return this->perform_read_(offset, value);
+}
 
-bool MCF8316DComponent::read_reg16(uint16_t offset, uint16_t &value) { return this->perform_read16_(offset, value); }
+bool MCF8316DComponent::read_reg16(uint16_t offset, uint16_t& value) {
+  return this->perform_read16_(offset, value);
+}
 
-bool MCF8316DComponent::write_reg32(uint16_t offset, uint32_t value) { return this->perform_write_(offset, value); }
+bool MCF8316DComponent::write_reg32(uint16_t offset, uint32_t value) {
+  return this->perform_write_(offset, value);
+}
 
 bool MCF8316DComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
   uint32_t current = 0;
@@ -484,13 +562,19 @@ bool MCF8316DComponent::set_brake_override(bool brake_on) {
   uint32_t pin_config = 0;
   if (this->read_reg32(REG_PIN_CONFIG, pin_config)) {
     const uint32_t brake_input_value = (pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10;
-    ESP_LOGI(TAG, "Brake override write: request=%s pin_cfg=0x%08X brake_input=%u(%s)", brake_on ? "ON" : "OFF",
-             pin_config, static_cast<unsigned>(brake_input_value), this->brake_input_to_string_(brake_input_value));
+    ESP_LOGI(
+      TAG,
+      "Brake override write: request=%s pin_cfg=0x%08X brake_input=%u(%s)",
+      brake_on ? "ON" : "OFF",
+      pin_config,
+      static_cast<unsigned>(brake_input_value),
+      this->brake_input_to_string_(brake_input_value)
+    );
   }
   return true;
 }
 
-bool MCF8316DComponent::set_direction_mode(const std::string &direction_mode) {
+bool MCF8316DComponent::set_direction_mode(const std::string& direction_mode) {
   uint32_t value = PERI_CONFIG1_DIR_INPUT_HARDWARE;
   if (direction_mode == "cw") {
     value = PERI_CONFIG1_DIR_INPUT_CW;
@@ -504,8 +588,14 @@ bool MCF8316DComponent::set_direction_mode(const std::string &direction_mode) {
   uint32_t peri_config1 = 0;
   if (this->read_reg32(REG_PERI_CONFIG1, peri_config1)) {
     const uint32_t direction_input_value = (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK);
-    ESP_LOGI(TAG, "Direction write: request=%s peri_cfg1=0x%08X dir_input=%u(%s)", direction_mode.c_str(), peri_config1,
-             static_cast<unsigned>(direction_input_value), this->direction_input_to_string_(direction_input_value));
+    ESP_LOGI(
+      TAG,
+      "Direction write: request=%s peri_cfg1=0x%08X dir_input=%u(%s)",
+      direction_mode.c_str(),
+      peri_config1,
+      static_cast<unsigned>(direction_input_value),
+      this->direction_input_to_string_(direction_input_value)
+    );
   }
   return true;
 }
@@ -521,7 +611,9 @@ bool MCF8316DComponent::set_speed_percent(float speed_percent) {
   uint32_t value = ALGO_DEBUG1_OVERRIDE_MASK;
   value |= (static_cast<uint32_t>(digital_speed_ctrl) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK;
 
-  if (!this->update_bits32(REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value)) {
+  if (!this->update_bits32(
+        REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
+      )) {
     return false;
   }
 
@@ -554,8 +646,14 @@ void MCF8316DComponent::pulse_clear_faults() {
   const bool ctrl_after_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_after);
 
   if (gate_before_ok || ctrl_before_ok || gate_after_ok || ctrl_after_ok) {
-    ESP_LOGI(TAG, "CLR_FLT status: gate 0x%08X -> 0x%08X, ctrl 0x%08X -> 0x%08X", gate_before, gate_after, ctrl_before,
-             ctrl_after);
+    ESP_LOGI(
+      TAG,
+      "CLR_FLT status: gate 0x%08X -> 0x%08X, ctrl 0x%08X -> 0x%08X",
+      gate_before,
+      gate_after,
+      ctrl_before,
+      ctrl_after
+    );
   }
 
   if (gate_after_ok || ctrl_after_ok) {
@@ -571,7 +669,7 @@ void MCF8316DComponent::pulse_clear_faults() {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
     const bool force_shutdown =
-        this->should_force_speed_shutdown_(gate_after, gate_after_ok, ctrl_after, ctrl_after_ok);
+      this->should_force_speed_shutdown_(gate_after, gate_after_ok, ctrl_after, ctrl_after_ok);
     this->handle_fault_shutdown_(force_shutdown);
   }
 
@@ -583,14 +681,18 @@ void MCF8316DComponent::pulse_clear_faults() {
 
 void MCF8316DComponent::pulse_watchdog_tickle() {
   ESP_LOGD(TAG, "Pulsing watchdog tickle");
-  if (this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK)) {
-    (void) this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0);
+  if (this->update_bits32(
+        REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK
+      )) {
+    (void)this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0);
   }
   this->last_watchdog_tickle_ms_ = millis();
 }
 
 bool MCF8316DComponent::apply_startup_tune_profile() {
-  ESP_LOGW(TAG, "Applying startup tune profile (double-align + higher max speed + startup current tuning)");
+  ESP_LOGW(
+    TAG, "Applying startup tune profile (double-align + higher max speed + startup current tuning)"
+  );
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
     ESP_LOGW(TAG, "Failed to set speed to 0%% before applying startup tune");
@@ -609,7 +711,7 @@ bool MCF8316DComponent::apply_startup_tune_profile() {
     this->brake_switch_->publish_state(false);
   }
 
-  auto apply_masked_bits = [this](const char *label, uint16_t reg, uint32_t mask, uint32_t value) {
+  auto apply_masked_bits = [this](const char* label, uint16_t reg, uint32_t mask, uint32_t value) {
     uint32_t before = 0;
     if (!this->read_reg32(reg, before)) {
       ESP_LOGW(TAG, "%s read failed (reg=0x%04X)", label, reg);
@@ -631,60 +733,97 @@ bool MCF8316DComponent::apply_startup_tune_profile() {
 
     const bool fields_match = (after & mask) == (value & mask);
     if (!fields_match) {
-      ESP_LOGW(TAG, "%s verify mismatch (reg=0x%04X): expected mask=0x%08X actual mask=0x%08X", label, reg,
-               (value & mask), (after & mask));
+      ESP_LOGW(
+        TAG,
+        "%s verify mismatch (reg=0x%04X): expected mask=0x%08X actual mask=0x%08X",
+        label,
+        reg,
+        (value & mask),
+        (after & mask)
+      );
     }
     return fields_match;
   };
 
   ok &= apply_masked_bits(
-      "FAULT_CONFIG1 tuning", REG_FAULT_CONFIG1,
-      FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK | FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK |
-          FAULT_CONFIG1_LCK_RETRY_MASK | FAULT_CONFIG1_MTR_LCK_MODE_MASK,
-      (STARTUP_TUNE_HW_LOCK_ILIMIT << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) |
-          (STARTUP_TUNE_LOCK_ILIMIT_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
-          (STARTUP_TUNE_LOCK_ILIMIT_DEG << FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) |
-          (STARTUP_TUNE_LCK_RETRY << FAULT_CONFIG1_LCK_RETRY_SHIFT) |
-          (STARTUP_TUNE_MTR_LCK_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT));
+    "FAULT_CONFIG1 tuning",
+    REG_FAULT_CONFIG1,
+    FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK | FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK |
+      FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG1_LCK_RETRY_MASK |
+      FAULT_CONFIG1_MTR_LCK_MODE_MASK,
+    (STARTUP_TUNE_HW_LOCK_ILIMIT << FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) |
+      (STARTUP_TUNE_LOCK_ILIMIT_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
+      (STARTUP_TUNE_LOCK_ILIMIT_DEG << FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) |
+      (STARTUP_TUNE_LCK_RETRY << FAULT_CONFIG1_LCK_RETRY_SHIFT) |
+      (STARTUP_TUNE_MTR_LCK_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT)
+  );
   ok &= apply_masked_bits(
-      "FAULT_CONFIG2 tuning", REG_FAULT_CONFIG2,
-      FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK | FAULT_CONFIG2_LOCK2_EN_MASK,
-      (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) |
-          (STARTUP_TUNE_HW_LOCK_ILIMIT_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) |
-          (STARTUP_TUNE_LOCK2_EN ? FAULT_CONFIG2_LOCK2_EN_MASK : 0u));
+    "FAULT_CONFIG2 tuning",
+    REG_FAULT_CONFIG2,
+    FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK |
+      FAULT_CONFIG2_LOCK2_EN_MASK,
+    (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) |
+      (STARTUP_TUNE_HW_LOCK_ILIMIT_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT) |
+      (STARTUP_TUNE_LOCK2_EN ? FAULT_CONFIG2_LOCK2_EN_MASK : 0u)
+  );
   ok &= apply_masked_bits(
-      "MOTOR_STARTUP1 tuning", REG_MOTOR_STARTUP1,
-      MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_TIME_MASK | MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
-      (STARTUP_TUNE_MTR_STARTUP << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) |
+    "MOTOR_STARTUP1 tuning",
+    REG_MOTOR_STARTUP1,
+    MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_TIME_MASK |
+      MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
+    (STARTUP_TUNE_MTR_STARTUP << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) |
       (STARTUP_TUNE_ALIGN_TIME << MOTOR_STARTUP1_ALIGN_TIME_SHIFT) |
-      (STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT));
+      (STARTUP_TUNE_ALIGN_OR_SLOW_CURRENT_ILIMIT
+       << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT)
+  );
   ok &= apply_masked_bits(
-      "MOTOR_STARTUP2 tuning", REG_MOTOR_STARTUP2,
-      MOTOR_STARTUP2_OL_ILIMIT_MASK | MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK | MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK |
-          MOTOR_STARTUP2_ALIGN_ANGLE_MASK | MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK |
-          MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK,
-      (STARTUP_TUNE_OL_ILIMIT << MOTOR_STARTUP2_OL_ILIMIT_SHIFT) |
-          (STARTUP_TUNE_AUTO_HANDOFF_EN << MOTOR_STARTUP2_AUTO_HANDOFF_EN_SHIFT) |
-          (STARTUP_TUNE_OPN_CL_HANDOFF_THR << MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) |
-          (STARTUP_TUNE_ALIGN_ANGLE << MOTOR_STARTUP2_ALIGN_ANGLE_SHIFT) |
-          (STARTUP_TUNE_SLOW_FIRST_CYC_FREQ << MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT) |
-          (STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL ? MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK : 0u));
-  ok &= apply_masked_bits("CLOSED_LOOP1 tuning", REG_CLOSED_LOOP1, CLOSED_LOOP1_PWM_FREQ_OUT_MASK,
-                          (STARTUP_TUNE_PWM_FREQ_OUT << CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT));
-  ok &= apply_masked_bits("DEVICE_CONFIG2 tuning", REG_DEVICE_CONFIG2, DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK,
-                          STARTUP_TUNE_DYNAMIC_CSA_GAIN_EN ? DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK : 0u);
-  ok &= apply_masked_bits("GD_CONFIG1 tuning", REG_GD_CONFIG1, GD_CONFIG1_CSA_GAIN_MASK,
-                          (STARTUP_TUNE_CSA_GAIN << GD_CONFIG1_CSA_GAIN_SHIFT));
+    "MOTOR_STARTUP2 tuning",
+    REG_MOTOR_STARTUP2,
+    MOTOR_STARTUP2_OL_ILIMIT_MASK | MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK |
+      MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK | MOTOR_STARTUP2_ALIGN_ANGLE_MASK |
+      MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK | MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK,
+    (STARTUP_TUNE_OL_ILIMIT << MOTOR_STARTUP2_OL_ILIMIT_SHIFT) |
+      (STARTUP_TUNE_AUTO_HANDOFF_EN << MOTOR_STARTUP2_AUTO_HANDOFF_EN_SHIFT) |
+      (STARTUP_TUNE_OPN_CL_HANDOFF_THR << MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) |
+      (STARTUP_TUNE_ALIGN_ANGLE << MOTOR_STARTUP2_ALIGN_ANGLE_SHIFT) |
+      (STARTUP_TUNE_SLOW_FIRST_CYC_FREQ << MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_SHIFT) |
+      (STARTUP_TUNE_FIRST_CYCLE_FREQ_SEL ? MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK : 0u)
+  );
   ok &= apply_masked_bits(
-      "ISD_CONFIG tuning", REG_ISD_CONFIG,
-      ISD_CONFIG_ISD_EN_MASK | ISD_CONFIG_BRAKE_EN_MASK | ISD_CONFIG_RESYNC_EN_MASK | ISD_CONFIG_BRK_CONFIG_MASK |
-          ISD_CONFIG_BRK_TIME_MASK,
-      (STARTUP_TUNE_ISD_EN ? ISD_CONFIG_ISD_EN_MASK : 0u) | (STARTUP_TUNE_BRAKE_EN ? ISD_CONFIG_BRAKE_EN_MASK : 0u) |
-          (STARTUP_TUNE_RESYNC_EN ? ISD_CONFIG_RESYNC_EN_MASK : 0u) |
-          (STARTUP_TUNE_BRK_CONFIG ? ISD_CONFIG_BRK_CONFIG_MASK : 0u) |
-          (STARTUP_TUNE_BRK_TIME << ISD_CONFIG_BRK_TIME_SHIFT));
-  ok &= apply_masked_bits("CLOSED_LOOP4 tuning", REG_CLOSED_LOOP4, CLOSED_LOOP4_MAX_SPEED_MASK,
-                          (STARTUP_TUNE_MAX_SPEED << CLOSED_LOOP4_MAX_SPEED_SHIFT));
+    "CLOSED_LOOP1 tuning",
+    REG_CLOSED_LOOP1,
+    CLOSED_LOOP1_PWM_FREQ_OUT_MASK,
+    (STARTUP_TUNE_PWM_FREQ_OUT << CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT)
+  );
+  ok &= apply_masked_bits(
+    "DEVICE_CONFIG2 tuning",
+    REG_DEVICE_CONFIG2,
+    DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK,
+    STARTUP_TUNE_DYNAMIC_CSA_GAIN_EN ? DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK : 0u
+  );
+  ok &= apply_masked_bits(
+    "GD_CONFIG1 tuning",
+    REG_GD_CONFIG1,
+    GD_CONFIG1_CSA_GAIN_MASK,
+    (STARTUP_TUNE_CSA_GAIN << GD_CONFIG1_CSA_GAIN_SHIFT)
+  );
+  ok &= apply_masked_bits(
+    "ISD_CONFIG tuning",
+    REG_ISD_CONFIG,
+    ISD_CONFIG_ISD_EN_MASK | ISD_CONFIG_BRAKE_EN_MASK | ISD_CONFIG_RESYNC_EN_MASK |
+      ISD_CONFIG_BRK_CONFIG_MASK | ISD_CONFIG_BRK_TIME_MASK,
+    (STARTUP_TUNE_ISD_EN ? ISD_CONFIG_ISD_EN_MASK : 0u) |
+      (STARTUP_TUNE_BRAKE_EN ? ISD_CONFIG_BRAKE_EN_MASK : 0u) |
+      (STARTUP_TUNE_RESYNC_EN ? ISD_CONFIG_RESYNC_EN_MASK : 0u) |
+      (STARTUP_TUNE_BRK_CONFIG ? ISD_CONFIG_BRK_CONFIG_MASK : 0u) |
+      (STARTUP_TUNE_BRK_TIME << ISD_CONFIG_BRK_TIME_SHIFT)
+  );
+  ok &= apply_masked_bits(
+    "CLOSED_LOOP4 tuning",
+    REG_CLOSED_LOOP4,
+    CLOSED_LOOP4_MAX_SPEED_MASK,
+    (STARTUP_TUNE_MAX_SPEED << CLOSED_LOOP4_MAX_SPEED_SHIFT)
+  );
 
   if (ok) {
     ESP_LOGI(TAG, "Startup tune profile applied; pulsing CLR_FLT");
@@ -700,7 +839,9 @@ bool MCF8316DComponent::apply_startup_tune_profile() {
 
 bool MCF8316DComponent::apply_hw_lock_report_only_profile() {
   ESP_LOGW(TAG, "Applying locks-disabled + short-align debug profile");
-  ESP_LOGW(TAG, "WARNING: LOCK/HW_LOCK/MTR_LCK protective actions are disabled for this debug mode");
+  ESP_LOGW(
+    TAG, "WARNING: LOCK/HW_LOCK/MTR_LCK protective actions are disabled for this debug mode"
+  );
 
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
@@ -743,8 +884,12 @@ bool MCF8316DComponent::apply_hw_lock_report_only_profile() {
   ESP_LOGI(TAG, "FAULT_CONFIG2 HW_LOCK_ILIMIT_MODE: 0x%08X -> 0x%08X", before, after);
   const bool mode_ok = (after & mask) == (value & mask);
   if (!mode_ok) {
-    ESP_LOGW(TAG, "FAULT_CONFIG2 verify mismatch: expected mask=0x%08X actual mask=0x%08X", (value & mask),
-             (after & mask));
+    ESP_LOGW(
+      TAG,
+      "FAULT_CONFIG2 verify mismatch: expected mask=0x%08X actual mask=0x%08X",
+      (value & mask),
+      (after & mask)
+    );
   }
   ok &= mode_ok;
 
@@ -772,8 +917,12 @@ bool MCF8316DComponent::apply_hw_lock_report_only_profile() {
   ESP_LOGI(TAG, "FAULT_CONFIG1 LOCK/MTR modes: 0x%08X -> 0x%08X", fc1_before, fc1_after);
   const bool fc1_mode_ok = (fc1_after & fc1_mask) == (fc1_value & fc1_mask);
   if (!fc1_mode_ok) {
-    ESP_LOGW(TAG, "FAULT_CONFIG1 verify mismatch: expected mask=0x%08X actual mask=0x%08X", (fc1_value & fc1_mask),
-             (fc1_after & fc1_mask));
+    ESP_LOGW(
+      TAG,
+      "FAULT_CONFIG1 verify mismatch: expected mask=0x%08X actual mask=0x%08X",
+      (fc1_value & fc1_mask),
+      (fc1_after & fc1_mask)
+    );
   }
   ok &= fc1_mode_ok;
 
@@ -799,8 +948,12 @@ bool MCF8316DComponent::apply_hw_lock_report_only_profile() {
   ESP_LOGI(TAG, "MOTOR_STARTUP1 mode/align-time: 0x%08X -> 0x%08X", s1_before, s1_after);
   const bool s1_ok = (s1_after & s1_mask) == (s1_value & s1_mask);
   if (!s1_ok) {
-    ESP_LOGW(TAG, "MOTOR_STARTUP1 verify mismatch: expected mask=0x%08X actual mask=0x%08X", (s1_value & s1_mask),
-             (s1_after & s1_mask));
+    ESP_LOGW(
+      TAG,
+      "MOTOR_STARTUP1 verify mismatch: expected mask=0x%08X actual mask=0x%08X",
+      (s1_value & s1_mask),
+      (s1_after & s1_mask)
+    );
   }
   ok &= s1_ok;
 
@@ -822,7 +975,11 @@ bool MCF8316DComponent::start_startup_current_sweep() {
   if (this->startup_sweep_active_) {
     ESP_LOGW(TAG, "Startup current sweep already active; restarting from step 1");
   } else {
-    ESP_LOGI(TAG, "Starting startup current sweep (%u steps)", static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT));
+    ESP_LOGI(
+      TAG,
+      "Starting startup current sweep (%u steps)",
+      static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT)
+    );
   }
 
   if (!this->apply_startup_tune_profile()) {
@@ -847,7 +1004,9 @@ bool MCF8316DComponent::start_scope_probe_test() {
   if (this->scope_probe_test_active_) {
     ESP_LOGW(TAG, "Scope probe test already active; restarting from stage 1");
   } else {
-    ESP_LOGI(TAG, "Starting scope probe test (%u stages)", static_cast<unsigned>(SCOPE_PROBE_STAGE_COUNT));
+    ESP_LOGI(
+      TAG, "Starting scope probe test (%u stages)", static_cast<unsigned>(SCOPE_PROBE_STAGE_COUNT)
+    );
   }
 
   if (!this->apply_startup_tune_profile()) {
@@ -875,7 +1034,7 @@ float MCF8316DComponent::scope_probe_stage_speed_percent_(uint8_t stage_index) c
 }
 
 uint32_t MCF8316DComponent::scope_probe_stage_hold_ms_(uint8_t stage_index) const {
-  (void) stage_index;
+  (void)stage_index;
   return 7000u;
 }
 
@@ -888,43 +1047,68 @@ bool MCF8316DComponent::begin_scope_probe_stage_() {
     ESP_LOGI(TAG, "Scope probe test finished");
     this->scope_probe_test_active_ = false;
     this->scope_probe_stage_pending_ = false;
-    (void) this->set_speed_percent(0.0f);
+    (void)this->set_speed_percent(0.0f);
     return true;
   }
 
-  const float speed_percent = this->scope_probe_stage_speed_percent_(this->scope_probe_stage_index_);
+  const float speed_percent =
+    this->scope_probe_stage_speed_percent_(this->scope_probe_stage_index_);
   const uint32_t hold_ms = this->scope_probe_stage_hold_ms_(this->scope_probe_stage_index_);
 
   if (!this->set_speed_percent(0.0f)) {
-    ESP_LOGW(TAG, "Scope probe stage %u failed to set speed to 0%% before configure",
-             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Scope probe stage %u failed to set speed to 0%% before configure",
+      static_cast<unsigned>(this->scope_probe_stage_index_ + 1u)
+    );
   }
   if (!this->set_direction_mode("cw")) {
-    ESP_LOGW(TAG, "Scope probe stage %u failed to force direction cw",
-             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Scope probe stage %u failed to force direction cw",
+      static_cast<unsigned>(this->scope_probe_stage_index_ + 1u)
+    );
   }
   if (!this->set_brake_override(false)) {
-    ESP_LOGW(TAG, "Scope probe stage %u failed to force brake OFF",
-             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Scope probe stage %u failed to force brake OFF",
+      static_cast<unsigned>(this->scope_probe_stage_index_ + 1u)
+    );
   }
   this->pulse_clear_faults();
   if (!this->set_speed_percent(speed_percent)) {
-    ESP_LOGW(TAG, "Scope probe stage %u failed to set speed to %.1f%%",
-             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), speed_percent);
+    ESP_LOGW(
+      TAG,
+      "Scope probe stage %u failed to set speed to %.1f%%",
+      static_cast<unsigned>(this->scope_probe_stage_index_ + 1u),
+      speed_percent
+    );
     this->scope_probe_test_active_ = false;
     return false;
   }
 
   this->scope_probe_stage_start_ms_ = millis();
-  ESP_LOGI(TAG, "[scope_probe] Stage %u/%u start: speed=%.1f%% hold=%ums",
-           static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), static_cast<unsigned>(SCOPE_PROBE_STAGE_COUNT),
-           speed_percent, static_cast<unsigned>(hold_ms));
+  ESP_LOGI(
+    TAG,
+    "[scope_probe] Stage %u/%u start: speed=%.1f%% hold=%ums",
+    static_cast<unsigned>(this->scope_probe_stage_index_ + 1u),
+    static_cast<unsigned>(SCOPE_PROBE_STAGE_COUNT),
+    speed_percent,
+    static_cast<unsigned>(hold_ms)
+  );
   return true;
 }
 
-void MCF8316DComponent::process_scope_probe_test_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
-                                                         bool fault_state_valid, bool controller_valid,
-                                                         uint32_t controller_fault_status, uint16_t volt_mag_raw) {
+void MCF8316DComponent::process_scope_probe_test_(
+  bool algorithm_state_valid,
+  uint16_t algorithm_state,
+  bool fault_active,
+  bool fault_state_valid,
+  bool controller_valid,
+  uint32_t controller_fault_status,
+  uint16_t volt_mag_raw
+) {
   if (!this->scope_probe_test_active_) {
     return;
   }
@@ -935,30 +1119,41 @@ void MCF8316DComponent::process_scope_probe_test_(bool algorithm_state_valid, ui
       return;
     }
     if (fault_state_valid && fault_active) {
-      ESP_LOGI(TAG, "[scope_probe] waiting for fault clear before stage %u",
-               static_cast<unsigned>(this->scope_probe_stage_index_ + 1u));
+      ESP_LOGI(
+        TAG,
+        "[scope_probe] waiting for fault clear before stage %u",
+        static_cast<unsigned>(this->scope_probe_stage_index_ + 1u)
+      );
       this->pulse_clear_faults();
       this->scope_probe_next_stage_due_ms_ = now + SCOPE_PROBE_CLEAR_RETRY_MS;
       return;
     }
     this->scope_probe_stage_pending_ = false;
-    (void) this->begin_scope_probe_stage_();
+    (void)this->begin_scope_probe_stage_();
     return;
   }
 
   const uint32_t elapsed_ms = now - this->scope_probe_stage_start_ms_;
   const uint32_t hold_ms = this->scope_probe_stage_hold_ms_(this->scope_probe_stage_index_);
-  const float speed_percent = this->scope_probe_stage_speed_percent_(this->scope_probe_stage_index_);
+  const float speed_percent =
+    this->scope_probe_stage_speed_percent_(this->scope_probe_stage_index_);
   const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
 
   if (fault_state_valid && fault_active) {
     const uint32_t ctrl_fault_word = controller_valid ? controller_fault_status : 0u;
-    ESP_LOGW(TAG,
-             "[scope_probe] Stage %u FAULT: speed=%.1f%% elapsed=%ums ctrl_fault=0x%08X ctrl_valid=%s state=%s volt_mag=%.1f%%",
-             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), speed_percent, static_cast<unsigned>(elapsed_ms),
-             ctrl_fault_word, YESNO(controller_valid),
-             algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
-    (void) this->set_speed_percent(0.0f);
+    ESP_LOGW(
+      TAG,
+      "[scope_probe] Stage %u FAULT: speed=%.1f%% elapsed=%ums ctrl_fault=0x%08X ctrl_valid=%s "
+      "state=%s volt_mag=%.1f%%",
+      static_cast<unsigned>(this->scope_probe_stage_index_ + 1u),
+      speed_percent,
+      static_cast<unsigned>(elapsed_ms),
+      ctrl_fault_word,
+      YESNO(controller_valid),
+      algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
+      volt_mag_percent
+    );
+    (void)this->set_speed_percent(0.0f);
     this->scope_probe_stage_index_++;
     this->scope_probe_stage_pending_ = true;
     this->scope_probe_next_stage_due_ms_ = now + SCOPE_PROBE_INTER_STAGE_DELAY_MS;
@@ -966,10 +1161,16 @@ void MCF8316DComponent::process_scope_probe_test_(bool algorithm_state_valid, ui
   }
 
   if (elapsed_ms >= hold_ms) {
-    ESP_LOGI(TAG, "[scope_probe] Stage %u complete: speed=%.1f%% elapsed=%ums state=%s volt_mag=%.1f%%",
-             static_cast<unsigned>(this->scope_probe_stage_index_ + 1u), speed_percent, static_cast<unsigned>(elapsed_ms),
-             algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
-    (void) this->set_speed_percent(0.0f);
+    ESP_LOGI(
+      TAG,
+      "[scope_probe] Stage %u complete: speed=%.1f%% elapsed=%ums state=%s volt_mag=%.1f%%",
+      static_cast<unsigned>(this->scope_probe_stage_index_ + 1u),
+      speed_percent,
+      static_cast<unsigned>(elapsed_ms),
+      algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
+      volt_mag_percent
+    );
+    (void)this->set_speed_percent(0.0f);
     this->scope_probe_stage_index_++;
     this->scope_probe_stage_pending_ = true;
     this->scope_probe_next_stage_due_ms_ = now + SCOPE_PROBE_INTER_STAGE_DELAY_MS;
@@ -991,15 +1192,33 @@ uint32_t MCF8316DComponent::startup_sweep_current_code_(uint8_t step_index) cons
 }
 
 float MCF8316DComponent::current_limit_code_to_amps_(uint32_t current_limit_code) const {
-  static const float kCurrentThresholdA[16] = {0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f,
-                                               3.5f,   4.0f,  4.5f, 5.0f, 5.5f, 6.0f, 7.0f, 8.0f};
+  static const float kCurrentThresholdA[16] = {
+    0.125f,
+    0.25f,
+    0.5f,
+    1.0f,
+    1.5f,
+    2.0f,
+    2.5f,
+    3.0f,
+    3.5f,
+    4.0f,
+    4.5f,
+    5.0f,
+    5.5f,
+    6.0f,
+    7.0f,
+    8.0f};
   return kCurrentThresholdA[current_limit_code & 0xFu];
 }
 
 bool MCF8316DComponent::apply_startup_sweep_current_limits_(uint32_t current_limit_code) {
-  const uint32_t s1_value = (current_limit_code << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT);
+  const uint32_t s1_value =
+    (current_limit_code << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT);
   const uint32_t s2_value = (current_limit_code << MOTOR_STARTUP2_OL_ILIMIT_SHIFT);
-  if (!this->update_bits32(REG_MOTOR_STARTUP1, MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK, s1_value)) {
+  if (!this->update_bits32(
+        REG_MOTOR_STARTUP1, MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK, s1_value
+      )) {
     ESP_LOGW(TAG, "Startup sweep MOTOR_STARTUP1 write failed");
     return false;
   }
@@ -1013,12 +1232,21 @@ bool MCF8316DComponent::apply_startup_sweep_current_limits_(uint32_t current_lim
   const bool startup1_ok = this->read_reg32(REG_MOTOR_STARTUP1, startup1);
   const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
   if (startup1_ok && startup2_ok) {
-    const uint32_t align_ilimit =
-        (startup1 & MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK) >> MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT;
-    const uint32_t ol_ilimit = (startup2 & MOTOR_STARTUP2_OL_ILIMIT_MASK) >> MOTOR_STARTUP2_OL_ILIMIT_SHIFT;
-    ESP_LOGI(TAG, "Startup sweep current limits: startup1=0x%08X startup2=0x%08X align_ilimit=%u(%.3gA) ol_ilimit=%u(%.3gA)",
-             startup1, startup2, static_cast<unsigned>(align_ilimit), this->current_limit_code_to_amps_(align_ilimit),
-             static_cast<unsigned>(ol_ilimit), this->current_limit_code_to_amps_(ol_ilimit));
+    const uint32_t align_ilimit = (startup1 & MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK) >>
+                                  MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT;
+    const uint32_t ol_ilimit =
+      (startup2 & MOTOR_STARTUP2_OL_ILIMIT_MASK) >> MOTOR_STARTUP2_OL_ILIMIT_SHIFT;
+    ESP_LOGI(
+      TAG,
+      "Startup sweep current limits: startup1=0x%08X startup2=0x%08X align_ilimit=%u(%.3gA) "
+      "ol_ilimit=%u(%.3gA)",
+      startup1,
+      startup2,
+      static_cast<unsigned>(align_ilimit),
+      this->current_limit_code_to_amps_(align_ilimit),
+      static_cast<unsigned>(ol_ilimit),
+      this->current_limit_code_to_amps_(ol_ilimit)
+    );
   }
   return true;
 }
@@ -1029,61 +1257,94 @@ bool MCF8316DComponent::begin_startup_sweep_step_() {
   }
 
   if (this->startup_sweep_step_index_ >= STARTUP_SWEEP_STEP_COUNT) {
-    ESP_LOGI(TAG, "Startup current sweep finished: %u/%u steps reached open/closed loop",
-             static_cast<unsigned>(this->startup_sweep_pass_count_), static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT));
+    ESP_LOGI(
+      TAG,
+      "Startup current sweep finished: %u/%u steps reached open/closed loop",
+      static_cast<unsigned>(this->startup_sweep_pass_count_),
+      static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT)
+    );
     this->startup_sweep_active_ = false;
     this->startup_sweep_step_pending_ = false;
-    (void) this->set_speed_percent(0.0f);
+    (void)this->set_speed_percent(0.0f);
     return true;
   }
 
-  const uint32_t current_limit_code = this->startup_sweep_current_code_(this->startup_sweep_step_index_);
+  const uint32_t current_limit_code =
+    this->startup_sweep_current_code_(this->startup_sweep_step_index_);
   const float current_limit_a = this->current_limit_code_to_amps_(current_limit_code);
 
   if (!this->set_speed_percent(0.0f)) {
-    ESP_LOGW(TAG, "Startup sweep step %u failed to set speed to 0%% before configuring",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Startup sweep step %u failed to set speed to 0%% before configuring",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u)
+    );
   }
   if (!this->set_direction_mode("cw")) {
-    ESP_LOGW(TAG, "Startup sweep step %u failed to force direction cw",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Startup sweep step %u failed to force direction cw",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u)
+    );
   }
   if (!this->set_brake_override(false)) {
-    ESP_LOGW(TAG, "Startup sweep step %u failed to force brake OFF",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Startup sweep step %u failed to force brake OFF",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u)
+    );
   }
 
   if (!this->apply_startup_sweep_current_limits_(current_limit_code)) {
-    ESP_LOGW(TAG, "Startup sweep step %u failed to apply current limits",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+    ESP_LOGW(
+      TAG,
+      "Startup sweep step %u failed to apply current limits",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u)
+    );
     this->startup_sweep_active_ = false;
     return false;
   }
 
   this->pulse_clear_faults();
   if (!this->set_speed_percent(STARTUP_SWEEP_SPEED_PERCENT)) {
-    ESP_LOGW(TAG, "Startup sweep step %u failed to set speed to %.1f%%",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), STARTUP_SWEEP_SPEED_PERCENT);
+    ESP_LOGW(
+      TAG,
+      "Startup sweep step %u failed to set speed to %.1f%%",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u),
+      STARTUP_SWEEP_SPEED_PERCENT
+    );
     this->startup_sweep_active_ = false;
     return false;
   }
   this->startup_sweep_step_start_ms_ = millis();
 
-  ESP_LOGI(TAG, "[startup_sweep] Step %u/%u start: current_limit=%u (%.3gA), speed=%.1f%%",
-           static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT),
-           static_cast<unsigned>(current_limit_code), current_limit_a, STARTUP_SWEEP_SPEED_PERCENT);
+  ESP_LOGI(
+    TAG,
+    "[startup_sweep] Step %u/%u start: current_limit=%u (%.3gA), speed=%.1f%%",
+    static_cast<unsigned>(this->startup_sweep_step_index_ + 1u),
+    static_cast<unsigned>(STARTUP_SWEEP_STEP_COUNT),
+    static_cast<unsigned>(current_limit_code),
+    current_limit_a,
+    STARTUP_SWEEP_SPEED_PERCENT
+  );
   return true;
 }
 
 void MCF8316DComponent::schedule_startup_sweep_step_(uint32_t delay_ms) {
-  (void) this->set_speed_percent(0.0f);
+  (void)this->set_speed_percent(0.0f);
   this->startup_sweep_step_pending_ = true;
   this->startup_sweep_next_step_due_ms_ = millis() + delay_ms;
 }
 
-void MCF8316DComponent::process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
-                                                      bool fault_state_valid, bool controller_valid,
-                                                      uint32_t controller_fault_status, uint16_t volt_mag_raw) {
+void MCF8316DComponent::process_startup_sweep_(
+  bool algorithm_state_valid,
+  uint16_t algorithm_state,
+  bool fault_active,
+  bool fault_state_valid,
+  bool controller_valid,
+  uint32_t controller_fault_status,
+  uint16_t volt_mag_raw
+) {
   if (!this->startup_sweep_active_) {
     return;
   }
@@ -1094,30 +1355,42 @@ void MCF8316DComponent::process_startup_sweep_(bool algorithm_state_valid, uint1
       return;
     }
     if (fault_state_valid && fault_active) {
-      ESP_LOGI(TAG, "[startup_sweep] waiting for fault clear before step %u", static_cast<unsigned>(this->startup_sweep_step_index_ + 1u));
+      ESP_LOGI(
+        TAG,
+        "[startup_sweep] waiting for fault clear before step %u",
+        static_cast<unsigned>(this->startup_sweep_step_index_ + 1u)
+      );
       this->pulse_clear_faults();
       this->startup_sweep_next_step_due_ms_ = now + STARTUP_SWEEP_CLEAR_RETRY_MS;
       return;
     }
     this->startup_sweep_step_pending_ = false;
-    (void) this->begin_startup_sweep_step_();
+    (void)this->begin_startup_sweep_step_();
     return;
   }
 
   const uint32_t elapsed_ms = now - this->startup_sweep_step_start_ms_;
-  const uint32_t current_limit_code = this->startup_sweep_current_code_(this->startup_sweep_step_index_);
+  const uint32_t current_limit_code =
+    this->startup_sweep_current_code_(this->startup_sweep_step_index_);
   const float current_limit_a = this->current_limit_code_to_amps_(current_limit_code);
   const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
   const bool reached_drive_state =
-      algorithm_state_valid &&
-      ((algorithm_state == ALGORITHM_STATE_OPEN_LOOP) || (algorithm_state == ALGORITHM_STATE_CLOSED_LOOP_UNALIGNED) ||
-       (algorithm_state == ALGORITHM_STATE_CLOSED_LOOP_ALIGNED));
+    algorithm_state_valid && ((algorithm_state == ALGORITHM_STATE_OPEN_LOOP) ||
+                              (algorithm_state == ALGORITHM_STATE_CLOSED_LOOP_UNALIGNED) ||
+                              (algorithm_state == ALGORITHM_STATE_CLOSED_LOOP_ALIGNED));
 
   if (reached_drive_state && !fault_active && (volt_mag_raw > 0u)) {
-    ESP_LOGI(TAG, "[startup_sweep] Step %u PASS: current_limit=%u (%.3gA), elapsed=%ums, state=%s, volt_mag=%.1f%%",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(current_limit_code),
-             current_limit_a, static_cast<unsigned>(elapsed_ms), this->algorithm_state_to_string_(algorithm_state),
-             volt_mag_percent);
+    ESP_LOGI(
+      TAG,
+      "[startup_sweep] Step %u PASS: current_limit=%u (%.3gA), elapsed=%ums, state=%s, "
+      "volt_mag=%.1f%%",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u),
+      static_cast<unsigned>(current_limit_code),
+      current_limit_a,
+      static_cast<unsigned>(elapsed_ms),
+      this->algorithm_state_to_string_(algorithm_state),
+      volt_mag_percent
+    );
     this->startup_sweep_pass_count_++;
     this->startup_sweep_step_index_++;
     this->schedule_startup_sweep_step_(STARTUP_SWEEP_INTER_STEP_DELAY_MS);
@@ -1126,22 +1399,35 @@ void MCF8316DComponent::process_startup_sweep_(bool algorithm_state_valid, uint1
 
   if (fault_state_valid && fault_active) {
     const uint32_t ctrl_fault_word = controller_valid ? controller_fault_status : 0u;
-    ESP_LOGW(TAG,
-             "[startup_sweep] Step %u FAIL: current_limit=%u (%.3gA), elapsed=%ums, ctrl_fault=0x%08X ctrl_valid=%s state=%s volt_mag=%.1f%%",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(current_limit_code),
-             current_limit_a, static_cast<unsigned>(elapsed_ms), ctrl_fault_word, YESNO(controller_valid),
-             algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN", volt_mag_percent);
+    ESP_LOGW(
+      TAG,
+      "[startup_sweep] Step %u FAIL: current_limit=%u (%.3gA), elapsed=%ums, ctrl_fault=0x%08X "
+      "ctrl_valid=%s state=%s volt_mag=%.1f%%",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u),
+      static_cast<unsigned>(current_limit_code),
+      current_limit_a,
+      static_cast<unsigned>(elapsed_ms),
+      ctrl_fault_word,
+      YESNO(controller_valid),
+      algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
+      volt_mag_percent
+    );
     this->startup_sweep_step_index_++;
     this->schedule_startup_sweep_step_(STARTUP_SWEEP_INTER_STEP_DELAY_MS);
     return;
   }
 
   if (elapsed_ms >= STARTUP_SWEEP_STEP_TIMEOUT_MS) {
-    ESP_LOGW(TAG,
-             "[startup_sweep] Step %u TIMEOUT: current_limit=%u (%.3gA), state=%s, volt_mag=%.1f%%, no drive-state transition",
-             static_cast<unsigned>(this->startup_sweep_step_index_ + 1u), static_cast<unsigned>(current_limit_code),
-             current_limit_a, algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
-             volt_mag_percent);
+    ESP_LOGW(
+      TAG,
+      "[startup_sweep] Step %u TIMEOUT: current_limit=%u (%.3gA), state=%s, volt_mag=%.1f%%, no "
+      "drive-state transition",
+      static_cast<unsigned>(this->startup_sweep_step_index_ + 1u),
+      static_cast<unsigned>(current_limit_code),
+      current_limit_a,
+      algorithm_state_valid ? this->algorithm_state_to_string_(algorithm_state) : "UNKNOWN",
+      volt_mag_percent
+    );
     this->startup_sweep_step_index_++;
     this->schedule_startup_sweep_step_(STARTUP_SWEEP_INTER_STEP_DELAY_MS);
   }
@@ -1197,7 +1483,11 @@ bool MCF8316DComponent::ensure_buck_current_limit_for_manual_() {
     return true;
   }
 
-  ESP_LOGW(TAG, "GD_CONFIG2 has BUCK_CL=150mA (gd2=0x%08X); setting to 600mA for manual validation", gd_config2);
+  ESP_LOGW(
+    TAG,
+    "GD_CONFIG2 has BUCK_CL=150mA (gd2=0x%08X); setting to 600mA for manual validation",
+    gd_config2
+  );
   if (!this->update_bits32(REG_GD_CONFIG2, GD_CONFIG2_BUCK_CL_MASK, 0)) {
     ESP_LOGW(TAG, "Failed to write GD_CONFIG2 BUCK_CL to 600mA");
     return false;
@@ -1208,8 +1498,12 @@ bool MCF8316DComponent::ensure_buck_current_limit_for_manual_() {
     ESP_LOGW(TAG, "Failed to verify GD_CONFIG2 after BUCK_CL update");
     return false;
   }
-  ESP_LOGI(TAG, "GD_CONFIG2 after BUCK_CL update: 0x%08X (BUCK_CL=%s)", gd_verify,
-           ((gd_verify & GD_CONFIG2_BUCK_CL_MASK) != 0) ? "150mA" : "600mA");
+  ESP_LOGI(
+    TAG,
+    "GD_CONFIG2 after BUCK_CL update: 0x%08X (BUCK_CL=%s)",
+    gd_verify,
+    ((gd_verify & GD_CONFIG2_BUCK_CL_MASK) != 0) ? "150mA" : "600mA"
+  );
   return true;
 }
 
@@ -1223,19 +1517,25 @@ bool MCF8316DComponent::seed_closed_loop_params_if_zero_() {
     return false;
   }
 
-  const uint32_t motor_res =
-      static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT);
-  const uint32_t motor_ind =
-      static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT);
-  const uint32_t motor_bemf =
-      static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
-  const uint32_t spd_loop_kp_msb =
-      static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT);
-  const uint32_t spd_loop_kp_lsb =
-      static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
+  const uint32_t motor_res = static_cast<uint32_t>(
+    (closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT
+  );
+  const uint32_t motor_ind = static_cast<uint32_t>(
+    (closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT
+  );
+  const uint32_t motor_bemf = static_cast<uint32_t>(
+    (closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT
+  );
+  const uint32_t spd_loop_kp_msb = static_cast<uint32_t>(
+    (closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT
+  );
+  const uint32_t spd_loop_kp_lsb = static_cast<uint32_t>(
+    (closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT
+  );
   const uint32_t spd_loop_kp = (spd_loop_kp_msb << 7) | spd_loop_kp_lsb;
-  const uint32_t spd_loop_ki =
-      static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT);
+  const uint32_t spd_loop_ki = static_cast<uint32_t>(
+    (closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT
+  );
 
   uint32_t closed_loop2_next = closed_loop2;
   uint32_t closed_loop3_next = closed_loop3;
@@ -1243,13 +1543,15 @@ bool MCF8316DComponent::seed_closed_loop_params_if_zero_() {
   bool needs_seed = false;
 
   if (motor_res == 0U) {
-    closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_RES_MASK) |
-                        ((CLOSED_LOOP_SEED_MOTOR_RES << CLOSED_LOOP2_MOTOR_RES_SHIFT) & CLOSED_LOOP2_MOTOR_RES_MASK);
+    closed_loop2_next =
+      (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_RES_MASK) |
+      ((CLOSED_LOOP_SEED_MOTOR_RES << CLOSED_LOOP2_MOTOR_RES_SHIFT) & CLOSED_LOOP2_MOTOR_RES_MASK);
     needs_seed = true;
   }
   if (motor_ind == 0U) {
-    closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_IND_MASK) |
-                        ((CLOSED_LOOP_SEED_MOTOR_IND << CLOSED_LOOP2_MOTOR_IND_SHIFT) & CLOSED_LOOP2_MOTOR_IND_MASK);
+    closed_loop2_next =
+      (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_IND_MASK) |
+      ((CLOSED_LOOP_SEED_MOTOR_IND << CLOSED_LOOP2_MOTOR_IND_SHIFT) & CLOSED_LOOP2_MOTOR_IND_MASK);
     needs_seed = true;
   }
   if (motor_bemf == 0U) {
@@ -1268,8 +1570,9 @@ bool MCF8316DComponent::seed_closed_loop_params_if_zero_() {
     needs_seed = true;
   }
   if (spd_loop_ki == 0U) {
-    closed_loop4_next = (closed_loop4_next & ~CLOSED_LOOP4_SPD_LOOP_KI_MASK) |
-                        ((CLOSED_LOOP_SEED_SPD_KI << CLOSED_LOOP4_SPD_LOOP_KI_SHIFT) & CLOSED_LOOP4_SPD_LOOP_KI_MASK);
+    closed_loop4_next =
+      (closed_loop4_next & ~CLOSED_LOOP4_SPD_LOOP_KI_MASK) |
+      ((CLOSED_LOOP_SEED_SPD_KI << CLOSED_LOOP4_SPD_LOOP_KI_SHIFT) & CLOSED_LOOP4_SPD_LOOP_KI_MASK);
     needs_seed = true;
   }
 
@@ -1278,14 +1581,26 @@ bool MCF8316DComponent::seed_closed_loop_params_if_zero_() {
     return true;
   }
 
-  ESP_LOGW(TAG,
-           "Seeding zero CLOSED_LOOP params to avoid forced MPET: cl2 0x%08X->0x%08X cl3 0x%08X->0x%08X "
-           "cl4 0x%08X->0x%08X",
-           closed_loop2, closed_loop2_next, closed_loop3, closed_loop3_next, closed_loop4, closed_loop4_next);
-  ESP_LOGW(TAG, "Seed codes: MOTOR_RES=0x%02X MOTOR_IND=0x%02X MOTOR_BEMF=0x%02X SPD_KP=%u SPD_KI=%u",
-           static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_RES), static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_IND),
-           static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_BEMF), static_cast<unsigned>(CLOSED_LOOP_SEED_SPD_KP),
-           static_cast<unsigned>(CLOSED_LOOP_SEED_SPD_KI));
+  ESP_LOGW(
+    TAG,
+    "Seeding zero CLOSED_LOOP params to avoid forced MPET: cl2 0x%08X->0x%08X cl3 0x%08X->0x%08X "
+    "cl4 0x%08X->0x%08X",
+    closed_loop2,
+    closed_loop2_next,
+    closed_loop3,
+    closed_loop3_next,
+    closed_loop4,
+    closed_loop4_next
+  );
+  ESP_LOGW(
+    TAG,
+    "Seed codes: MOTOR_RES=0x%02X MOTOR_IND=0x%02X MOTOR_BEMF=0x%02X SPD_KP=%u SPD_KI=%u",
+    static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_RES),
+    static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_IND),
+    static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_BEMF),
+    static_cast<unsigned>(CLOSED_LOOP_SEED_SPD_KP),
+    static_cast<unsigned>(CLOSED_LOOP_SEED_SPD_KI)
+  );
 
   bool ok = true;
   if (closed_loop2_next != closed_loop2) {
@@ -1307,18 +1622,20 @@ bool MCF8316DComponent::seed_closed_loop_params_if_zero_() {
   uint32_t verify4 = 0;
   if (this->read_reg32(REG_CLOSED_LOOP2, verify2) && this->read_reg32(REG_CLOSED_LOOP3, verify3) &&
       this->read_reg32(REG_CLOSED_LOOP4, verify4)) {
-    ESP_LOGI(TAG, "CLOSED_LOOP after seed: cl2=0x%08X cl3=0x%08X cl4=0x%08X", verify2, verify3, verify4);
+    ESP_LOGI(
+      TAG, "CLOSED_LOOP after seed: cl2=0x%08X cl3=0x%08X cl4=0x%08X", verify2, verify3, verify4
+    );
   }
 
   return true;
 }
 
-bool MCF8316DComponent::perform_read_(uint16_t offset, uint32_t &value) {
+bool MCF8316DComponent::perform_read_(uint16_t offset, uint32_t& value) {
   const uint32_t control_word = this->build_control_word_(true, offset, true);
   const uint8_t cw[3] = {
-      static_cast<uint8_t>((control_word >> 16) & 0xFF),
-      static_cast<uint8_t>((control_word >> 8) & 0xFF),
-      static_cast<uint8_t>(control_word & 0xFF),
+    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+    static_cast<uint8_t>(control_word & 0xFF),
   };
 
   uint8_t rx[4] = {0, 0, 0, 0};
@@ -1329,17 +1646,17 @@ bool MCF8316DComponent::perform_read_(uint16_t offset, uint32_t &value) {
     return false;
   }
 
-  value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) | (static_cast<uint32_t>(rx[2]) << 16) |
-          (static_cast<uint32_t>(rx[3]) << 24);
+  value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) |
+          (static_cast<uint32_t>(rx[2]) << 16) | (static_cast<uint32_t>(rx[3]) << 24);
   return true;
 }
 
-bool MCF8316DComponent::perform_read16_(uint16_t offset, uint16_t &value) {
+bool MCF8316DComponent::perform_read16_(uint16_t offset, uint16_t& value) {
   const uint32_t control_word = this->build_control_word_(true, offset, false);
   const uint8_t cw[3] = {
-      static_cast<uint8_t>((control_word >> 16) & 0xFF),
-      static_cast<uint8_t>((control_word >> 8) & 0xFF),
-      static_cast<uint8_t>(control_word & 0xFF),
+    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+    static_cast<uint8_t>(control_word & 0xFF),
   };
 
   uint8_t rx[2] = {0, 0};
@@ -1357,27 +1674,30 @@ bool MCF8316DComponent::perform_read16_(uint16_t offset, uint16_t &value) {
 bool MCF8316DComponent::perform_write_(uint16_t offset, uint32_t value) {
   const uint32_t control_word = this->build_control_word_(false, offset, true);
   const uint8_t cw[3] = {
-      static_cast<uint8_t>((control_word >> 16) & 0xFF),
-      static_cast<uint8_t>((control_word >> 8) & 0xFF),
-      static_cast<uint8_t>(control_word & 0xFF),
+    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+    static_cast<uint8_t>(control_word & 0xFF),
   };
   const uint8_t payload[4] = {
-      static_cast<uint8_t>(value & 0xFF),
-      static_cast<uint8_t>((value >> 8) & 0xFF),
-      static_cast<uint8_t>((value >> 16) & 0xFF),
-      static_cast<uint8_t>((value >> 24) & 0xFF),
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+    static_cast<uint8_t>((value >> 16) & 0xFF),
+    static_cast<uint8_t>((value >> 24) & 0xFF),
   };
 
   const uint8_t tx[7] = {cw[0], cw[1], cw[2], payload[0], payload[1], payload[2], payload[3]};
   const i2c::ErrorCode err = this->write(tx, sizeof(tx));
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err));
+    ESP_LOGW(
+      TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
+    );
     return false;
   }
   return true;
 }
 
-uint32_t MCF8316DComponent::build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const {
+uint32_t MCF8316DComponent::build_control_word_(bool is_read, uint16_t offset, bool is_32bit)
+  const {
   const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
   return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
 }
@@ -1388,8 +1708,12 @@ void MCF8316DComponent::delay_between_bytes_() const {
   }
 }
 
-void MCF8316DComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t fault_status,
-                                              bool controller_fault_valid) {
+void MCF8316DComponent::publish_faults_(
+  uint32_t gate_fault_status,
+  bool gate_fault_valid,
+  uint32_t fault_status,
+  bool controller_fault_valid
+) {
   std::vector<std::string> faults;
   bool gate_detail_found = false;
   bool controller_detail_found = false;
@@ -1504,7 +1828,9 @@ void MCF8316DComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
   }
 }
 
-void MCF8316DComponent::log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status) {
+void MCF8316DComponent::log_buck_fault_diagnostics_(
+  const char* context, uint32_t gate_fault_status
+) {
   uint32_t gd_config2 = 0;
   const bool gd_ok = this->read_reg32(REG_GD_CONFIG2, gd_config2);
 
@@ -1513,8 +1839,15 @@ void MCF8316DComponent::log_buck_fault_diagnostics_(const char *context, uint32_
   const bool vcp_uv = (gate_fault_status & GATE_FAULT_VCP_UV) != 0;
 
   if (!gd_ok) {
-    ESP_LOGW(TAG, "[%s] BUCK fault diag: gate=0x%08X buck_ocp=%s buck_uv=%s vcp_uv=%s gd_config2=READ_FAIL", context,
-             gate_fault_status, YESNO(buck_ocp), YESNO(buck_uv), YESNO(vcp_uv));
+    ESP_LOGW(
+      TAG,
+      "[%s] BUCK fault diag: gate=0x%08X buck_ocp=%s buck_uv=%s vcp_uv=%s gd_config2=READ_FAIL",
+      context,
+      gate_fault_status,
+      YESNO(buck_ocp),
+      YESNO(buck_uv),
+      YESNO(vcp_uv)
+    );
     return;
   }
 
@@ -1523,7 +1856,7 @@ void MCF8316DComponent::log_buck_fault_diagnostics_(const char *context, uint32_
   const bool buck_cl_150ma = (gd_config2 & GD_CONFIG2_BUCK_CL_MASK) != 0;
   const uint32_t buck_sel = (gd_config2 & GD_CONFIG2_BUCK_SEL_MASK) >> GD_CONFIG2_BUCK_SEL_SHIFT;
 
-  const char *buck_sel_label = "unknown";
+  const char* buck_sel_label = "unknown";
   switch (buck_sel) {
     case 0:
       buck_sel_label = "3.3V";
@@ -1542,20 +1875,39 @@ void MCF8316DComponent::log_buck_fault_diagnostics_(const char *context, uint32_
   }
 
   ESP_LOGW(
-      TAG,
-      "[%s] BUCK fault diag: gate=0x%08X buck_ocp=%s buck_uv=%s vcp_uv=%s gd2=0x%08X buck_dis=%s buck_ps_dis=%s "
-      "buck_cl=%s buck_sel=%u(%s)",
-      context, gate_fault_status, YESNO(buck_ocp), YESNO(buck_uv), YESNO(vcp_uv), gd_config2, YESNO(buck_disabled),
-      YESNO(buck_ps_disabled), buck_cl_150ma ? "150mA" : "600mA", static_cast<unsigned>(buck_sel), buck_sel_label);
+    TAG,
+    "[%s] BUCK fault diag: gate=0x%08X buck_ocp=%s buck_uv=%s vcp_uv=%s gd2=0x%08X buck_dis=%s "
+    "buck_ps_dis=%s "
+    "buck_cl=%s buck_sel=%u(%s)",
+    context,
+    gate_fault_status,
+    YESNO(buck_ocp),
+    YESNO(buck_uv),
+    YESNO(vcp_uv),
+    gd_config2,
+    YESNO(buck_disabled),
+    YESNO(buck_ps_disabled),
+    buck_cl_150ma ? "150mA" : "600mA",
+    static_cast<unsigned>(buck_sel),
+    buck_sel_label
+  );
 
   if (buck_disabled) {
-    ESP_LOGW(TAG, "[%s] BUCK is disabled while BUCK fault bits are set; check HW config and FB_BK wiring", context);
+    ESP_LOGW(
+      TAG,
+      "[%s] BUCK is disabled while BUCK fault bits are set; check HW config and FB_BK wiring",
+      context
+    );
   } else if (buck_cl_150ma) {
-    ESP_LOGW(TAG, "[%s] BUCK current limit is 150mA; external load may exceed limit and cause BUCK_OCP", context);
+    ESP_LOGW(
+      TAG,
+      "[%s] BUCK current limit is 150mA; external load may exceed limit and cause BUCK_OCP",
+      context
+    );
   }
 }
 
-void MCF8316DComponent::log_mpet_diagnostics_(const char *context) {
+void MCF8316DComponent::log_mpet_diagnostics_(const char* context) {
   uint32_t ctrl_fault = 0;
   uint32_t algo_debug2 = 0;
   uint32_t algo_status_mpet = 0;
@@ -1568,9 +1920,17 @@ void MCF8316DComponent::log_mpet_diagnostics_(const char *context) {
   const bool mtr_ok = this->read_reg32(REG_MTR_PARAMS, mtr_params);
   const bool state_ok = this->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
 
-  ESP_LOGI(TAG, "[%s] MPET diag: state=0x%04X(%s) ctrl=0x%08X dbg2=0x%08X mpet=0x%08X mtr=0x%08X", context,
-           static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state), ctrl_fault,
-           algo_debug2, algo_status_mpet, mtr_params);
+  ESP_LOGI(
+    TAG,
+    "[%s] MPET diag: state=0x%04X(%s) ctrl=0x%08X dbg2=0x%08X mpet=0x%08X mtr=0x%08X",
+    context,
+    static_cast<unsigned>(algorithm_state),
+    this->algorithm_state_to_string_(algorithm_state),
+    ctrl_fault,
+    algo_debug2,
+    algo_status_mpet,
+    mtr_params
+  );
 
   if (dbg2_ok || mpet_ok || mtr_ok) {
     const bool mpet_cmd = (algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0;
@@ -1583,30 +1943,56 @@ void MCF8316DComponent::log_mpet_diagnostics_(const char *context) {
     const bool mpet_l_done = (algo_status_mpet & ALGO_STATUS_MPET_L_DONE_MASK) != 0;
     const bool mpet_ke_done = (algo_status_mpet & ALGO_STATUS_MPET_KE_DONE_MASK) != 0;
     const bool mpet_mech_done = (algo_status_mpet & ALGO_STATUS_MPET_MECH_DONE_MASK) != 0;
-    const uint32_t mpet_pwm_freq =
-        static_cast<uint32_t>((algo_status_mpet & ALGO_STATUS_MPET_PWM_FREQ_MASK) >> ALGO_STATUS_MPET_PWM_FREQ_SHIFT);
-    const uint32_t motor_r = static_cast<uint32_t>((mtr_params & MTR_PARAMS_R_MASK) >> MTR_PARAMS_R_SHIFT);
-    const uint32_t motor_l = static_cast<uint32_t>((mtr_params & MTR_PARAMS_L_MASK) >> MTR_PARAMS_L_SHIFT);
-    const uint32_t motor_ke = static_cast<uint32_t>((mtr_params & MTR_PARAMS_KE_MASK) >> MTR_PARAMS_KE_SHIFT);
+    const uint32_t mpet_pwm_freq = static_cast<uint32_t>(
+      (algo_status_mpet & ALGO_STATUS_MPET_PWM_FREQ_MASK) >> ALGO_STATUS_MPET_PWM_FREQ_SHIFT
+    );
+    const uint32_t motor_r =
+      static_cast<uint32_t>((mtr_params & MTR_PARAMS_R_MASK) >> MTR_PARAMS_R_SHIFT);
+    const uint32_t motor_l =
+      static_cast<uint32_t>((mtr_params & MTR_PARAMS_L_MASK) >> MTR_PARAMS_L_SHIFT);
+    const uint32_t motor_ke =
+      static_cast<uint32_t>((mtr_params & MTR_PARAMS_KE_MASK) >> MTR_PARAMS_KE_SHIFT);
 
-    ESP_LOGI(TAG,
-             "[%s] MPET fields: cmd=%s r=%s l=%s ke=%s mech=%s wr_shadow=%s done[r=%s l=%s ke=%s mech=%s] pwm=%u "
-             "params[R=%u L=%u Ke=%u]",
-             context, YESNO(mpet_cmd), YESNO(mpet_r), YESNO(mpet_l), YESNO(mpet_ke), YESNO(mpet_mech),
-             YESNO(mpet_write_shadow), YESNO(mpet_r_done), YESNO(mpet_l_done), YESNO(mpet_ke_done),
-             YESNO(mpet_mech_done), static_cast<unsigned>(mpet_pwm_freq), static_cast<unsigned>(motor_r),
-             static_cast<unsigned>(motor_l), static_cast<unsigned>(motor_ke));
+    ESP_LOGI(
+      TAG,
+      "[%s] MPET fields: cmd=%s r=%s l=%s ke=%s mech=%s wr_shadow=%s done[r=%s l=%s ke=%s mech=%s] "
+      "pwm=%u "
+      "params[R=%u L=%u Ke=%u]",
+      context,
+      YESNO(mpet_cmd),
+      YESNO(mpet_r),
+      YESNO(mpet_l),
+      YESNO(mpet_ke),
+      YESNO(mpet_mech),
+      YESNO(mpet_write_shadow),
+      YESNO(mpet_r_done),
+      YESNO(mpet_l_done),
+      YESNO(mpet_ke_done),
+      YESNO(mpet_mech_done),
+      static_cast<unsigned>(mpet_pwm_freq),
+      static_cast<unsigned>(motor_r),
+      static_cast<unsigned>(motor_l),
+      static_cast<unsigned>(motor_ke)
+    );
 
     this->log_mpet_entry_conditions_(context, algo_debug2);
   }
 
   if (!(ctrl_ok && dbg2_ok && mpet_ok && mtr_ok && state_ok)) {
-    ESP_LOGW(TAG, "[%s] MPET diag read warning: ctrl=%s dbg2=%s mpet=%s mtr=%s state=%s", context, YESNO(ctrl_ok),
-             YESNO(dbg2_ok), YESNO(mpet_ok), YESNO(mtr_ok), YESNO(state_ok));
+    ESP_LOGW(
+      TAG,
+      "[%s] MPET diag read warning: ctrl=%s dbg2=%s mpet=%s mtr=%s state=%s",
+      context,
+      YESNO(ctrl_ok),
+      YESNO(dbg2_ok),
+      YESNO(mpet_ok),
+      YESNO(mtr_ok),
+      YESNO(state_ok)
+    );
   }
 }
 
-void MCF8316DComponent::log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2) {
+void MCF8316DComponent::log_mpet_entry_conditions_(const char* context, uint32_t algo_debug2) {
   uint32_t closed_loop2 = 0;
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
@@ -1616,25 +2002,34 @@ void MCF8316DComponent::log_mpet_entry_conditions_(const char *context, uint32_t
   const bool cl4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
 
   if (cl2_ok && cl3_ok && cl4_ok) {
-    const uint32_t motor_res =
-        static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT);
-    const uint32_t motor_ind =
-        static_cast<uint32_t>((closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT);
+    const uint32_t motor_res = static_cast<uint32_t>(
+      (closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT
+    );
+    const uint32_t motor_ind = static_cast<uint32_t>(
+      (closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT
+    );
     const uint32_t motor_bemf = static_cast<uint32_t>(
-        (closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
-    const uint32_t curr_loop_kp =
-        static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_CURR_LOOP_KP_MASK) >> CLOSED_LOOP3_CURR_LOOP_KP_SHIFT);
-    const uint32_t curr_loop_ki =
-        static_cast<uint32_t>((closed_loop3 & CLOSED_LOOP3_CURR_LOOP_KI_MASK) >> CLOSED_LOOP3_CURR_LOOP_KI_SHIFT);
+      (closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT
+    );
+    const uint32_t curr_loop_kp = static_cast<uint32_t>(
+      (closed_loop3 & CLOSED_LOOP3_CURR_LOOP_KP_MASK) >> CLOSED_LOOP3_CURR_LOOP_KP_SHIFT
+    );
+    const uint32_t curr_loop_ki = static_cast<uint32_t>(
+      (closed_loop3 & CLOSED_LOOP3_CURR_LOOP_KI_MASK) >> CLOSED_LOOP3_CURR_LOOP_KI_SHIFT
+    );
     const uint32_t spd_loop_kp_msb = static_cast<uint32_t>(
-        (closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT);
+      (closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT
+    );
     const uint32_t spd_loop_kp_lsb = static_cast<uint32_t>(
-        (closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
+      (closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT
+    );
     const uint32_t spd_loop_kp = (spd_loop_kp_msb << 7) | spd_loop_kp_lsb;
-    const uint32_t spd_loop_ki =
-        static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT);
-    const uint32_t max_speed =
-        static_cast<uint32_t>((closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT);
+    const uint32_t spd_loop_ki = static_cast<uint32_t>(
+      (closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT
+    );
+    const uint32_t max_speed = static_cast<uint32_t>(
+      (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
+    );
 
     const bool mpet_cmd = (algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0;
     const bool mpet_r = (algo_debug2 & ALGO_DEBUG2_MPET_R_MASK) != 0;
@@ -1645,28 +2040,58 @@ void MCF8316DComponent::log_mpet_entry_conditions_(const char *context, uint32_t
     const bool rl_forced_by_zero = (motor_res == 0U) || (motor_ind == 0U);
     const bool ke_forced_by_zero = (motor_bemf == 0U);
     const bool mech_forced_by_zero = (spd_loop_kp == 0U) || (spd_loop_ki == 0U);
-    const bool mpet_on_nonzero_speed = mpet_r || mpet_l || mpet_ke || mpet_mech || rl_forced_by_zero ||
-                                       ke_forced_by_zero || mech_forced_by_zero;
+    const bool mpet_on_nonzero_speed = mpet_r || mpet_l || mpet_ke || mpet_mech ||
+                                       rl_forced_by_zero || ke_forced_by_zero ||
+                                       mech_forced_by_zero;
 
-    ESP_LOGI(TAG,
-             "[%s] MPET cfg: cl2=0x%08X cl3=0x%08X cl4=0x%08X motor_res=0x%02X motor_ind=0x%02X motor_bemf=0x%02X "
-             "curr_kp=%u curr_ki=%u spd_kp=%u spd_ki=%u max_speed=%u",
-             context, closed_loop2, closed_loop3, closed_loop4, static_cast<unsigned>(motor_res),
-             static_cast<unsigned>(motor_ind), static_cast<unsigned>(motor_bemf), static_cast<unsigned>(curr_loop_kp),
-             static_cast<unsigned>(curr_loop_ki), static_cast<unsigned>(spd_loop_kp), static_cast<unsigned>(spd_loop_ki),
-             static_cast<unsigned>(max_speed));
     ESP_LOGI(
-        TAG,
-        "[%s] MPET triggers: cmd=%s bits[r=%s l=%s ke=%s mech=%s] zero_forced[rl=%s ke=%s mech=%s] enter_on_speed=%s",
-        context, YESNO(mpet_cmd), YESNO(mpet_r), YESNO(mpet_l), YESNO(mpet_ke), YESNO(mpet_mech), YESNO(rl_forced_by_zero),
-        YESNO(ke_forced_by_zero), YESNO(mech_forced_by_zero), YESNO(mpet_on_nonzero_speed));
+      TAG,
+      "[%s] MPET cfg: cl2=0x%08X cl3=0x%08X cl4=0x%08X motor_res=0x%02X motor_ind=0x%02X "
+      "motor_bemf=0x%02X "
+      "curr_kp=%u curr_ki=%u spd_kp=%u spd_ki=%u max_speed=%u",
+      context,
+      closed_loop2,
+      closed_loop3,
+      closed_loop4,
+      static_cast<unsigned>(motor_res),
+      static_cast<unsigned>(motor_ind),
+      static_cast<unsigned>(motor_bemf),
+      static_cast<unsigned>(curr_loop_kp),
+      static_cast<unsigned>(curr_loop_ki),
+      static_cast<unsigned>(spd_loop_kp),
+      static_cast<unsigned>(spd_loop_ki),
+      static_cast<unsigned>(max_speed)
+    );
+    ESP_LOGI(
+      TAG,
+      "[%s] MPET triggers: cmd=%s bits[r=%s l=%s ke=%s mech=%s] zero_forced[rl=%s ke=%s mech=%s] "
+      "enter_on_speed=%s",
+      context,
+      YESNO(mpet_cmd),
+      YESNO(mpet_r),
+      YESNO(mpet_l),
+      YESNO(mpet_ke),
+      YESNO(mpet_mech),
+      YESNO(rl_forced_by_zero),
+      YESNO(ke_forced_by_zero),
+      YESNO(mech_forced_by_zero),
+      YESNO(mpet_on_nonzero_speed)
+    );
   } else {
-    ESP_LOGW(TAG, "[%s] MPET cfg read warning: cl2=%s cl3=%s cl4=%s", context, YESNO(cl2_ok), YESNO(cl3_ok),
-             YESNO(cl4_ok));
+    ESP_LOGW(
+      TAG,
+      "[%s] MPET cfg read warning: cl2=%s cl3=%s cl4=%s",
+      context,
+      YESNO(cl2_ok),
+      YESNO(cl3_ok),
+      YESNO(cl4_ok)
+    );
   }
 }
 
-void MCF8316DComponent::log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status) {
+void MCF8316DComponent::log_lock_limit_diagnostics_(
+  const char* context, uint32_t controller_fault_status
+) {
   uint16_t algorithm_state = 0;
   uint16_t csa_gain_feedback = 0;
   uint32_t algo_status = 0;
@@ -1698,24 +2123,38 @@ void MCF8316DComponent::log_lock_limit_diagnostics_(const char *context, uint32_
   const bool rev_ok = this->read_reg32(REG_REV_DRIVE_CONFIG, rev_drive_config);
 
   ESP_LOGW(
-      TAG,
-      "[%s] LOCK_LIMIT diag: ctrl=0x%08X state=0x%04X(%s) algo=0x%08X dbg1=0x%08X dbg2=0x%08X fcfg1=0x%08X "
-      "fcfg2=0x%08X s1=0x%08X s2=0x%08X isd=0x%08X rev=0x%08X",
-      context, controller_fault_status, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
-      algo_status, algo_debug1, algo_debug2, fault_config1, fault_config2, startup1, startup2, isd_config,
-      rev_drive_config);
+    TAG,
+    "[%s] LOCK_LIMIT diag: ctrl=0x%08X state=0x%04X(%s) algo=0x%08X dbg1=0x%08X dbg2=0x%08X "
+    "fcfg1=0x%08X "
+    "fcfg2=0x%08X s1=0x%08X s2=0x%08X isd=0x%08X rev=0x%08X",
+    context,
+    controller_fault_status,
+    static_cast<unsigned>(algorithm_state),
+    this->algorithm_state_to_string_(algorithm_state),
+    algo_status,
+    algo_debug1,
+    algo_debug2,
+    fault_config1,
+    fault_config2,
+    startup1,
+    startup2,
+    isd_config,
+    rev_drive_config
+  );
 
   this->log_mpet_entry_conditions_(context, algo_debug2);
 
   if (cl1_ok && dev2_ok && gd1_ok && csa_fb_ok) {
-    const uint32_t pwm_freq_code =
-        static_cast<uint32_t>((closed_loop1 & CLOSED_LOOP1_PWM_FREQ_OUT_MASK) >> CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT);
+    const uint32_t pwm_freq_code = static_cast<uint32_t>(
+      (closed_loop1 & CLOSED_LOOP1_PWM_FREQ_OUT_MASK) >> CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT
+    );
     const bool dynamic_csa_gain = (device_config2 & DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK) != 0;
-    const bool dynamic_voltage_gain = (device_config2 & DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK) != 0;
+    const bool dynamic_voltage_gain =
+      (device_config2 & DEVICE_CONFIG2_DYNAMIC_VOLTAGE_GAIN_EN_MASK) != 0;
     const uint32_t csa_gain_cfg =
-        static_cast<uint32_t>((gd_config1 & GD_CONFIG1_CSA_GAIN_MASK) >> GD_CONFIG1_CSA_GAIN_SHIFT);
+      static_cast<uint32_t>((gd_config1 & GD_CONFIG1_CSA_GAIN_MASK) >> GD_CONFIG1_CSA_GAIN_SHIFT);
 
-    const char *pwm_freq_label = "n/a";
+    const char* pwm_freq_label = "n/a";
     switch (pwm_freq_code) {
       case 0:
         pwm_freq_label = "10kHz";
@@ -1754,7 +2193,7 @@ void MCF8316DComponent::log_lock_limit_diagnostics_(const char *context, uint32_
         break;
     }
 
-    const char *csa_gain_cfg_label = "unknown";
+    const char* csa_gain_cfg_label = "unknown";
     switch (csa_gain_cfg) {
       case 0:
         csa_gain_cfg_label = "0.15V/A";
@@ -1772,7 +2211,7 @@ void MCF8316DComponent::log_lock_limit_diagnostics_(const char *context, uint32_
         break;
     }
 
-    const char *csa_gain_fb_label = "unknown";
+    const char* csa_gain_fb_label = "unknown";
     switch (csa_gain_feedback) {
       case 0:
         csa_gain_fb_label = "1.2V/A (min*8)";
@@ -1790,82 +2229,183 @@ void MCF8316DComponent::log_lock_limit_diagnostics_(const char *context, uint32_
         break;
     }
 
-    ESP_LOGI(TAG,
-             "[%s] DRIVE cfg: cl1=0x%08X pwm_freq=%u(%s) dev2=0x%08X dyn_csa=%s dyn_vgain=%s gd1=0x%08X "
-             "csa_gain_cfg=%u(%s) csa_gain_fb=0x%04X(%s)",
-             context, closed_loop1, static_cast<unsigned>(pwm_freq_code), pwm_freq_label, device_config2,
-             YESNO(dynamic_csa_gain), YESNO(dynamic_voltage_gain), gd_config1, static_cast<unsigned>(csa_gain_cfg),
-             csa_gain_cfg_label, static_cast<unsigned>(csa_gain_feedback), csa_gain_fb_label);
+    ESP_LOGI(
+      TAG,
+      "[%s] DRIVE cfg: cl1=0x%08X pwm_freq=%u(%s) dev2=0x%08X dyn_csa=%s dyn_vgain=%s gd1=0x%08X "
+      "csa_gain_cfg=%u(%s) csa_gain_fb=0x%04X(%s)",
+      context,
+      closed_loop1,
+      static_cast<unsigned>(pwm_freq_code),
+      pwm_freq_label,
+      device_config2,
+      YESNO(dynamic_csa_gain),
+      YESNO(dynamic_voltage_gain),
+      gd_config1,
+      static_cast<unsigned>(csa_gain_cfg),
+      csa_gain_cfg_label,
+      static_cast<unsigned>(csa_gain_feedback),
+      csa_gain_fb_label
+    );
   }
 
   if (fault_cfg_ok) {
-    const uint32_t ilimit = (fault_config1 & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT;
+    const uint32_t ilimit =
+      (fault_config1 & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT;
     const uint32_t hw_lock_ilimit =
-        (fault_config1 & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT;
-    const uint32_t lock_ilimit = (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_SHIFT;
+      (fault_config1 & FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT;
+    const uint32_t lock_ilimit =
+      (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_SHIFT;
     const uint32_t lock_mode =
-        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
+      (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
     const uint32_t lock_deg =
-        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT;
-    const uint32_t lck_retry = (fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT;
+      (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT;
+    const uint32_t lck_retry =
+      (fault_config1 & FAULT_CONFIG1_LCK_RETRY_MASK) >> FAULT_CONFIG1_LCK_RETRY_SHIFT;
     const bool lock_limit = (controller_fault_status & FAULT_LOCK_LIMIT) != 0;
     const bool hw_lock_limit = (controller_fault_status & FAULT_HW_LOCK_LIMIT) != 0;
 
-    static const float kCurrentThresholdA[16] = {0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f,
-                                                 3.5f,   4.0f,  4.5f, 5.0f, 5.5f, 6.0f, 7.0f, 8.0f};
-    static const float kLockDegMs[16] = {0.0f,   0.1f,  0.2f, 0.5f, 1.0f, 2.5f, 5.0f, 7.5f,
-                                         10.0f, 25.0f, 50.0f, 75.0f, 100.0f, 200.0f, 500.0f, 1000.0f};
-    static const uint16_t kLckRetryMs[16] = {300,   500,   1000, 2000, 3000, 4000, 5000, 6000,
-                                             7000,  8000,  9000, 10000, 11000, 12000, 13000, 14000};
-    static const char *const kLockModeName[8] = {"latched_hiz",      "latched_ls_brake", "latched_hs_brake",
-                                                 "retry_hiz",         "retry_ls_brake",   "retry_hs_brake",
-                                                 "report_only",       "disabled"};
+    static const float kCurrentThresholdA[16] = {
+      0.125f,
+      0.25f,
+      0.5f,
+      1.0f,
+      1.5f,
+      2.0f,
+      2.5f,
+      3.0f,
+      3.5f,
+      4.0f,
+      4.5f,
+      5.0f,
+      5.5f,
+      6.0f,
+      7.0f,
+      8.0f};
+    static const float kLockDegMs[16] = {
+      0.0f,
+      0.1f,
+      0.2f,
+      0.5f,
+      1.0f,
+      2.5f,
+      5.0f,
+      7.5f,
+      10.0f,
+      25.0f,
+      50.0f,
+      75.0f,
+      100.0f,
+      200.0f,
+      500.0f,
+      1000.0f};
+    static const uint16_t kLckRetryMs[16] = {
+      300,
+      500,
+      1000,
+      2000,
+      3000,
+      4000,
+      5000,
+      6000,
+      7000,
+      8000,
+      9000,
+      10000,
+      11000,
+      12000,
+      13000,
+      14000};
+    static const char* const kLockModeName[8] = {
+      "latched_hiz",
+      "latched_ls_brake",
+      "latched_hs_brake",
+      "retry_hiz",
+      "retry_ls_brake",
+      "retry_hs_brake",
+      "report_only",
+      "disabled"};
 
     const float ilimit_a = kCurrentThresholdA[ilimit & 0xFu];
     const float lock_ilimit_a = kCurrentThresholdA[lock_ilimit & 0xFu];
     const float hw_lock_ilimit_a = kCurrentThresholdA[hw_lock_ilimit & 0xFu];
     const float lock_deg_ms = kLockDegMs[lock_deg & 0xFu];
     const float lck_retry_s = static_cast<float>(kLckRetryMs[lck_retry & 0xFu]) / 1000.0f;
-    const char *lock_mode_name = kLockModeName[lock_mode & 0x7u];
+    const char* lock_mode_name = kLockModeName[lock_mode & 0x7u];
 
     uint32_t hw_lock_mode = 0;
     uint32_t hw_lock_deg = 0;
-    const char *hw_lock_mode_name = "unknown";
+    const char* hw_lock_mode_name = "unknown";
     float hw_lock_deg_us = 0.0f;
     if (fault_cfg2_ok) {
-      hw_lock_mode =
-          (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT;
-      hw_lock_deg = (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT;
+      hw_lock_mode = (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >>
+                     FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT;
+      hw_lock_deg = (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK) >>
+                    FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT;
       static const float kHwLockDegUs[8] = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f};
       hw_lock_mode_name = kLockModeName[hw_lock_mode & 0x7u];
       hw_lock_deg_us = kHwLockDegUs[hw_lock_deg & 0x7u];
     }
 
-    ESP_LOGW(TAG,
-             "[%s] LOCK_LIMIT fields: lock=%s hw_lock=%s ILIMIT=%u(%.3gA) LOCK_ILIMIT=%u(%.3gA) "
-             "HW_LOCK_ILIMIT=%u(%.3gA) LOCK_MODE=%u(%s) LOCK_DEG=%u(%.1fms) LCK_RETRY=%u(%.1fs) "
-             "HW_LOCK_MODE=%u(%s) HW_LOCK_DEG=%u(%.1fus)",
-             context, YESNO(lock_limit), YESNO(hw_lock_limit), static_cast<unsigned>(ilimit), ilimit_a,
-             static_cast<unsigned>(lock_ilimit), lock_ilimit_a, static_cast<unsigned>(hw_lock_ilimit), hw_lock_ilimit_a,
-             static_cast<unsigned>(lock_mode), lock_mode_name, static_cast<unsigned>(lock_deg), lock_deg_ms,
-             static_cast<unsigned>(lck_retry), lck_retry_s, static_cast<unsigned>(hw_lock_mode), hw_lock_mode_name,
-             static_cast<unsigned>(hw_lock_deg), hw_lock_deg_us);
+    ESP_LOGW(
+      TAG,
+      "[%s] LOCK_LIMIT fields: lock=%s hw_lock=%s ILIMIT=%u(%.3gA) LOCK_ILIMIT=%u(%.3gA) "
+      "HW_LOCK_ILIMIT=%u(%.3gA) LOCK_MODE=%u(%s) LOCK_DEG=%u(%.1fms) LCK_RETRY=%u(%.1fs) "
+      "HW_LOCK_MODE=%u(%s) HW_LOCK_DEG=%u(%.1fus)",
+      context,
+      YESNO(lock_limit),
+      YESNO(hw_lock_limit),
+      static_cast<unsigned>(ilimit),
+      ilimit_a,
+      static_cast<unsigned>(lock_ilimit),
+      lock_ilimit_a,
+      static_cast<unsigned>(hw_lock_ilimit),
+      hw_lock_ilimit_a,
+      static_cast<unsigned>(lock_mode),
+      lock_mode_name,
+      static_cast<unsigned>(lock_deg),
+      lock_deg_ms,
+      static_cast<unsigned>(lck_retry),
+      lck_retry_s,
+      static_cast<unsigned>(hw_lock_mode),
+      hw_lock_mode_name,
+      static_cast<unsigned>(hw_lock_deg),
+      hw_lock_deg_us
+    );
   }
 
-  if (!(state_ok && csa_fb_ok && algo_ok && dbg1_ok && dbg2_ok && cl1_ok && dev2_ok && fault_cfg_ok && fault_cfg2_ok &&
-        gd1_ok && startup1_ok && startup2_ok && isd_ok && rev_ok)) {
-    ESP_LOGW(TAG,
-             "[%s] LOCK_LIMIT diag read warning: state=%s csa_fb=%s algo=%s dbg1=%s dbg2=%s cl1=%s dev2=%s fcfg1=%s "
-             "fcfg2=%s gd1=%s s1=%s s2=%s isd=%s rev=%s",
-             context, YESNO(state_ok), YESNO(csa_fb_ok), YESNO(algo_ok), YESNO(dbg1_ok), YESNO(dbg2_ok), YESNO(cl1_ok),
-             YESNO(dev2_ok), YESNO(fault_cfg_ok), YESNO(fault_cfg2_ok), YESNO(gd1_ok), YESNO(startup1_ok),
-             YESNO(startup2_ok), YESNO(isd_ok), YESNO(rev_ok));
+  if (!(state_ok && csa_fb_ok && algo_ok && dbg1_ok && dbg2_ok && cl1_ok && dev2_ok &&
+        fault_cfg_ok && fault_cfg2_ok && gd1_ok && startup1_ok && startup2_ok && isd_ok &&
+        rev_ok)) {
+    ESP_LOGW(
+      TAG,
+      "[%s] LOCK_LIMIT diag read warning: state=%s csa_fb=%s algo=%s dbg1=%s dbg2=%s cl1=%s "
+      "dev2=%s fcfg1=%s "
+      "fcfg2=%s gd1=%s s1=%s s2=%s isd=%s rev=%s",
+      context,
+      YESNO(state_ok),
+      YESNO(csa_fb_ok),
+      YESNO(algo_ok),
+      YESNO(dbg1_ok),
+      YESNO(dbg2_ok),
+      YESNO(cl1_ok),
+      YESNO(dev2_ok),
+      YESNO(fault_cfg_ok),
+      YESNO(fault_cfg2_ok),
+      YESNO(gd1_ok),
+      YESNO(startup1_ok),
+      YESNO(startup2_ok),
+      YESNO(isd_ok),
+      YESNO(rev_ok)
+    );
   }
 }
 
-bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid,
-                                                            uint32_t controller_fault_status,
-                                                            bool controller_fault_valid) {
+bool MCF8316DComponent::should_force_speed_shutdown_(
+  uint32_t gate_fault_status,
+  bool gate_fault_valid,
+  uint32_t controller_fault_status,
+  bool controller_fault_valid
+) {
   if (gate_fault_valid && ((gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0)) {
     return true;
   }
@@ -1879,7 +2419,8 @@ bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status,
     return false;
   }
 
-  const uint32_t motor_lock_faults = FAULT_MTR_LCK | FAULT_ABN_SPEED | FAULT_ABN_BEMF | FAULT_NO_MTR;
+  const uint32_t motor_lock_faults =
+    FAULT_MTR_LCK | FAULT_ABN_SPEED | FAULT_ABN_BEMF | FAULT_NO_MTR;
   uint32_t fault_config1 = 0;
   bool fault_config1_valid = false;
   if ((remaining_faults & (FAULT_LOCK_LIMIT | motor_lock_faults)) != 0u) {
@@ -1891,7 +2432,7 @@ bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status,
 
   if ((remaining_faults & FAULT_LOCK_LIMIT) != 0u) {
     const uint32_t lock_mode =
-        (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
+      (fault_config1 & FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT;
     if (lock_mode >= LOCK_MODE_AUTO_RECOVERY_MIN) {
       remaining_faults &= ~FAULT_LOCK_LIMIT;
     }
@@ -1899,7 +2440,7 @@ bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status,
 
   if ((remaining_faults & motor_lock_faults) != 0u) {
     const uint32_t mtr_lock_mode =
-        (fault_config1 & FAULT_CONFIG1_MTR_LCK_MODE_MASK) >> FAULT_CONFIG1_MTR_LCK_MODE_SHIFT;
+      (fault_config1 & FAULT_CONFIG1_MTR_LCK_MODE_MASK) >> FAULT_CONFIG1_MTR_LCK_MODE_SHIFT;
     if (mtr_lock_mode >= LOCK_MODE_AUTO_RECOVERY_MIN) {
       remaining_faults &= ~motor_lock_faults;
     }
@@ -1910,8 +2451,8 @@ bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status,
     if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2)) {
       return true;
     }
-    const uint32_t hw_lock_mode =
-        (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >> FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT;
+    const uint32_t hw_lock_mode = (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >>
+                                  FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT;
     if (hw_lock_mode >= LOCK_MODE_AUTO_RECOVERY_MIN) {
       remaining_faults &= ~FAULT_HW_LOCK_LIMIT;
     }
@@ -1920,7 +2461,7 @@ bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status,
   return remaining_faults != 0u;
 }
 
-const char *MCF8316DComponent::algorithm_state_to_string_(uint16_t state) const {
+const char* MCF8316DComponent::algorithm_state_to_string_(uint16_t state) const {
   switch (state) {
     case 0x00:
       return "MOTOR_IDLE";
@@ -1977,7 +2518,7 @@ const char *MCF8316DComponent::algorithm_state_to_string_(uint16_t state) const 
   }
 }
 
-const char *MCF8316DComponent::brake_input_to_string_(uint32_t brake_input_value) const {
+const char* MCF8316DComponent::brake_input_to_string_(uint32_t brake_input_value) const {
   switch (brake_input_value & 0x3u) {
     case 0x0:
       return "hardware_or_hiz";
@@ -1990,7 +2531,7 @@ const char *MCF8316DComponent::brake_input_to_string_(uint32_t brake_input_value
   }
 }
 
-const char *MCF8316DComponent::direction_input_to_string_(uint32_t direction_input_value) const {
+const char* MCF8316DComponent::direction_input_to_string_(uint32_t direction_input_value) const {
   switch (direction_input_value & 0x3u) {
     case 0x0:
       return "hardware";
@@ -2003,8 +2544,13 @@ const char *MCF8316DComponent::direction_input_to_string_(uint32_t direction_inp
   }
 }
 
-void MCF8316DComponent::log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw,
-                                                       uint16_t volt_mag_raw, bool fault_active) {
+void MCF8316DComponent::log_control_diagnostics_(
+  const char* context,
+  uint16_t algorithm_state,
+  uint16_t duty_raw,
+  uint16_t volt_mag_raw,
+  bool fault_active
+) {
   uint32_t pin_config = 0;
   uint32_t peri_config1 = 0;
   uint32_t algo_debug1 = 0;
@@ -2014,57 +2560,100 @@ void MCF8316DComponent::log_control_diagnostics_(const char *context, uint16_t a
   const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
   const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
 
-  const uint32_t brake_input_value = pin_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10) : 0u;
-  const uint32_t direction_input_value = peri_ok ? (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK) : 0u;
+  const uint32_t brake_input_value =
+    pin_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10) : 0u;
+  const uint32_t direction_input_value =
+    peri_ok ? (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK) : 0u;
   const bool digital_override = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_OVERRIDE_MASK) != 0u);
   const uint16_t digital_speed_raw =
-      dbg1_ok ? static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16) : 0u;
-  const bool closed_loop_disabled = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_CLOSED_LOOP_DIS_MASK) != 0u);
+    dbg1_ok ? static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16) : 0u;
+  const bool closed_loop_disabled =
+    dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_CLOSED_LOOP_DIS_MASK) != 0u);
   const bool force_align_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ALIGN_EN_MASK) != 0u);
-  const bool force_slow_first_cycle_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_SLOW_FIRST_CYCLE_EN_MASK) != 0u);
+  const bool force_slow_first_cycle_en =
+    dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_SLOW_FIRST_CYCLE_EN_MASK) != 0u);
   const bool force_ipd_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_IPD_EN_MASK) != 0u);
   const bool force_isd_en = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ISD_EN_MASK) != 0u);
-  const bool force_align_angle_src = dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ALIGN_ANGLE_SRC_SEL_MASK) != 0u);
+  const bool force_align_angle_src =
+    dbg1_ok && ((algo_debug1 & ALGO_DEBUG1_FORCE_ALIGN_ANGLE_SRC_SEL_MASK) != 0u);
   const uint32_t isd_en = isd_ok && ((isd_config & ISD_CONFIG_ISD_EN_MASK) != 0u);
   const uint32_t isd_brake_en = isd_ok && ((isd_config & ISD_CONFIG_BRAKE_EN_MASK) != 0u);
   const uint32_t isd_brk_cfg = isd_ok && ((isd_config & ISD_CONFIG_BRK_CONFIG_MASK) != 0u);
-  const uint32_t isd_brk_time = isd_ok ? ((isd_config & ISD_CONFIG_BRK_TIME_MASK) >> ISD_CONFIG_BRK_TIME_SHIFT) : 0u;
+  const uint32_t isd_brk_time =
+    isd_ok ? ((isd_config & ISD_CONFIG_BRK_TIME_MASK) >> ISD_CONFIG_BRK_TIME_SHIFT) : 0u;
 
   const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
   const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
   const float digital_speed_percent = (static_cast<float>(digital_speed_raw) / 32767.0f) * 100.0f;
 
-  ESP_LOGI(TAG,
-           "[%s] CTRL diag: state=0x%04X(%s) fault=%s duty=%.1f%% volt_mag=%.1f%% pin=0x%08X brake_sel=%u(%s) "
-           "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%% cl_dis=%s "
-           "force[align=%s slow=%s ipd=%s isd=%s ang_src=%s] isd=0x%08X isd_en=%s isd_brk=%s isd_brk_cfg=%s "
-           "isd_brk_time=%u",
-           context, static_cast<unsigned>(algorithm_state), this->algorithm_state_to_string_(algorithm_state),
-           YESNO(fault_active), duty_percent, volt_mag_percent, pin_config, static_cast<unsigned>(brake_input_value),
-           this->brake_input_to_string_(brake_input_value), peri_config1, static_cast<unsigned>(direction_input_value),
-           this->direction_input_to_string_(direction_input_value), algo_debug1, YESNO(digital_override),
-           digital_speed_percent, YESNO(closed_loop_disabled), YESNO(force_align_en), YESNO(force_slow_first_cycle_en),
-           YESNO(force_ipd_en), YESNO(force_isd_en), force_align_angle_src ? "forced_align_angle" : "align_angle",
-           isd_config, YESNO(isd_en), YESNO(isd_brake_en), YESNO(isd_brk_cfg), static_cast<unsigned>(isd_brk_time));
+  ESP_LOGI(
+    TAG,
+    "[%s] CTRL diag: state=0x%04X(%s) fault=%s duty=%.1f%% volt_mag=%.1f%% pin=0x%08X "
+    "brake_sel=%u(%s) "
+    "peri=0x%08X dir_sel=%u(%s) dbg1=0x%08X ovrd=%s speed_cmd=%.1f%% cl_dis=%s "
+    "force[align=%s slow=%s ipd=%s isd=%s ang_src=%s] isd=0x%08X isd_en=%s isd_brk=%s "
+    "isd_brk_cfg=%s "
+    "isd_brk_time=%u",
+    context,
+    static_cast<unsigned>(algorithm_state),
+    this->algorithm_state_to_string_(algorithm_state),
+    YESNO(fault_active),
+    duty_percent,
+    volt_mag_percent,
+    pin_config,
+    static_cast<unsigned>(brake_input_value),
+    this->brake_input_to_string_(brake_input_value),
+    peri_config1,
+    static_cast<unsigned>(direction_input_value),
+    this->direction_input_to_string_(direction_input_value),
+    algo_debug1,
+    YESNO(digital_override),
+    digital_speed_percent,
+    YESNO(closed_loop_disabled),
+    YESNO(force_align_en),
+    YESNO(force_slow_first_cycle_en),
+    YESNO(force_ipd_en),
+    YESNO(force_isd_en),
+    force_align_angle_src ? "forced_align_angle" : "align_angle",
+    isd_config,
+    YESNO(isd_en),
+    YESNO(isd_brake_en),
+    YESNO(isd_brk_cfg),
+    static_cast<unsigned>(isd_brk_time)
+  );
 
   if (!(pin_ok && peri_ok && dbg1_ok && isd_ok)) {
-    ESP_LOGW(TAG, "[%s] CTRL diag read warning: pin=%s peri=%s dbg1=%s isd=%s", context, YESNO(pin_ok), YESNO(peri_ok),
-             YESNO(dbg1_ok), YESNO(isd_ok));
+    ESP_LOGW(
+      TAG,
+      "[%s] CTRL diag read warning: pin=%s peri=%s dbg1=%s isd=%s",
+      context,
+      YESNO(pin_ok),
+      YESNO(peri_ok),
+      YESNO(dbg1_ok),
+      YESNO(isd_ok)
+    );
   }
 }
 
 void MCF8316DComponent::publish_algo_status_(uint32_t algo_status) {
   const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
-  const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
+  const uint16_t volt_mag_raw =
+    (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
 
   if (this->duty_cmd_percent_sensor_ != nullptr) {
-    this->duty_cmd_percent_sensor_->publish_state((static_cast<float>(duty_raw) / 4095.0f) * 100.0f);
+    this->duty_cmd_percent_sensor_->publish_state(
+      (static_cast<float>(duty_raw) / 4095.0f) * 100.0f
+    );
   }
   if (this->volt_mag_percent_sensor_ != nullptr) {
-    this->volt_mag_percent_sensor_->publish_state((static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f);
+    this->volt_mag_percent_sensor_->publish_state(
+      (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f
+    );
   }
   if (this->sys_enable_binary_sensor_ != nullptr) {
-    this->sys_enable_binary_sensor_->publish_state((algo_status & ALGO_STATUS_SYS_ENABLE_FLAG_MASK) != 0);
+    this->sys_enable_binary_sensor_->publish_state(
+      (algo_status & ALGO_STATUS_SYS_ENABLE_FLAG_MASK) != 0
+    );
   }
 }
 
@@ -2079,7 +2668,7 @@ void MCF8316DComponent::handle_fault_shutdown_(bool fault_active) {
 
   this->fault_latched_ = true;
   ESP_LOGW(TAG, "Fault detected, forcing speed command to 0%%");
-  (void) this->set_speed_percent(0.0f);
+  (void)this->set_speed_percent(0.0f);
 }
 
 }  // namespace mcf8316d

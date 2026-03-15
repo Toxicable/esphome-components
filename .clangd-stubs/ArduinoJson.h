@@ -7,24 +7,27 @@ namespace ArduinoJson {
 class Allocator {
  public:
   virtual ~Allocator() = default;
-  virtual void *allocate(size_t size) = 0;
-  virtual void deallocate(void *ptr) = 0;
-  virtual void *reallocate(void *ptr, size_t new_size) = 0;
+  virtual void* allocate(size_t size) = 0;
+  virtual void deallocate(void* ptr) = 0;
+  virtual void* reallocate(void* ptr, size_t new_size) = 0;
 };
 
 class JsonObject {};
 
 class JsonVariant {
  public:
-  void set(const char * /*value*/) {}
+  void set(const char* /*value*/) {}
 };
 
 class JsonDocument {
  public:
   JsonDocument() = default;
-  explicit JsonDocument(Allocator * /*allocator*/) {}
+  explicit JsonDocument(Allocator* /*allocator*/) {}
 
-  template <typename T> T to() { return T{}; }
+  template <typename T>
+  T to() {
+    return T{};
+  }
 };
 
 }  // namespace ArduinoJson

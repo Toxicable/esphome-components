@@ -4,7 +4,7 @@
 namespace esphome {
 namespace mlx90614 {
 
-static const char *const TAG = "mlx90614";
+static const char* const TAG = "mlx90614";
 
 void MLX90614Component::setup() {
   ESP_LOGCONFIG(TAG, "Setting up MLX90614...");
@@ -53,7 +53,7 @@ void MLX90614Component::update() {
   }
 }
 
-bool MLX90614Component::read_temp_c_(uint8_t ram_addr, float *out_c) {
+bool MLX90614Component::read_temp_c_(uint8_t ram_addr, float* out_c) {
   uint16_t word = 0;
   if (!this->read_word_with_pec_(ram_addr, &word))
     return false;
@@ -70,7 +70,7 @@ bool MLX90614Component::read_temp_c_(uint8_t ram_addr, float *out_c) {
   return true;
 }
 
-bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t *out_word) {
+bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t* out_word) {
   // SMBus Read Word: low, high, PEC
   uint8_t data[3]{0, 0, 0};
 
@@ -101,7 +101,7 @@ bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t *out_word)
   return true;
 }
 
-uint8_t MLX90614Component::crc8_smbus_(const uint8_t *data, size_t len) const {
+uint8_t MLX90614Component::crc8_smbus_(const uint8_t* data, size_t len) const {
   // SMBus PEC: CRC-8 poly 0x07, MSB-first.
   uint8_t crc = 0x00;
   for (size_t i = 0; i < len; i++) {
@@ -116,5 +116,5 @@ uint8_t MLX90614Component::crc8_smbus_(const uint8_t *data, size_t len) const {
   return crc;
 }
 
-} // namespace mlx90614
-} // namespace esphome
+}  // namespace mlx90614
+}  // namespace esphome
