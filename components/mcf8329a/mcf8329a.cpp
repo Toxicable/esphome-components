@@ -381,6 +381,24 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
                         ((static_cast<uint32_t>(this->startup_brake_time_) << CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT) &
                          CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK);
   }
+  if (apply_custom_settings && this->startup_motor_bemf_const_set_) {
+    const uint32_t motor_res =
+        (closed_loop2_next & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT;
+    const uint32_t motor_ind =
+        (closed_loop2_next & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT;
+    if (motor_res == 0u) {
+      closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_RES_MASK) |
+                          (CLOSED_LOOP_SEED_MOTOR_RES << CLOSED_LOOP2_MOTOR_RES_SHIFT);
+      ESP_LOGW(TAG, "Seeding MOTOR_RES from 0 to %u while applying startup_motor_bemf_const",
+               static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_RES));
+    }
+    if (motor_ind == 0u) {
+      closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_IND_MASK) |
+                          (CLOSED_LOOP_SEED_MOTOR_IND << CLOSED_LOOP2_MOTOR_IND_SHIFT);
+      ESP_LOGW(TAG, "Seeding MOTOR_IND from 0 to %u while applying startup_motor_bemf_const",
+               static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_IND));
+    }
+  }
   if (apply_custom_settings && closed_loop2_next != closed_loop2) {
     ok &= this->write_reg32(REG_CLOSED_LOOP2, closed_loop2_next);
     ESP_LOGI(TAG, "CLOSED_LOOP2 startup cfg: 0x%08X -> 0x%08X", closed_loop2, closed_loop2_next);
@@ -488,6 +506,10 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_ALIGN_TIME_MASK) >> MOTOR_STARTUP1_ALIGN_TIME_SHIFT);
   const uint8_t effective_motor_bemf_const = static_cast<uint8_t>(
       (closed_loop3_effective & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT);
+  const uint32_t effective_motor_res =
+      (closed_loop2_effective & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT;
+  const uint32_t effective_motor_ind =
+      (closed_loop2_effective & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT;
   const uint32_t effective_spd_loop_kp =
       (((closed_loop3_effective & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >> CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT) << 7) |
       ((closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >> CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT);
@@ -495,10 +517,11 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       (closed_loop4_effective & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT;
   const char *apply_state = this->apply_startup_config_ ? "on" : "off";
   const char *profile_state = apply_custom_settings ? "custom" : "current";
-  char summary[224];
+  char summary[240];
   std::snprintf(summary, sizeof(summary),
-                "apply=%s profile=%s dir=%s bemf=0x%02X spd_kp=%u spd_ki=%u startup=%s align=%s stop=%s stop_brake=%s",
+                "apply=%s profile=%s dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u startup=%s align=%s stop=%s stop_brake=%s",
                 apply_state, profile_state, effective_direction.c_str(), static_cast<unsigned>(effective_motor_bemf_const),
+                static_cast<unsigned>(effective_motor_res), static_cast<unsigned>(effective_motor_ind),
                 static_cast<unsigned>(effective_spd_loop_kp), static_cast<unsigned>(effective_spd_loop_ki),
                 this->startup_mode_to_string_(effective_startup_mode),
                 this->startup_align_time_to_string_(effective_align_time),
@@ -886,6 +909,7 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   uint32_t algo_debug1 = 0;
   uint32_t algo_debug2 = 0;
   uint32_t pin_config = 0;
+  uint32_t closed_loop2 = 0;
   uint32_t mtr_params = 0;
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
@@ -893,6 +917,7 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   const bool algo_debug1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
   const bool algo_debug2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
   const bool pin_config_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
+  const bool closed_loop2_ok = this->read_reg32(REG_CLOSED_LOOP2, closed_loop2);
   const bool mtr_params_ok = this->read_reg32(REG_MTR_PARAMS, mtr_params);
   const bool closed_loop3_ok = this->read_reg32(REG_CLOSED_LOOP3, closed_loop3);
   const bool closed_loop4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
@@ -906,6 +931,10 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   const uint32_t brake_input = pin_config_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 2) : 0u;
   const uint32_t motor_bemf_const =
       mtr_params_ok ? ((mtr_params & MTR_PARAMS_MOTOR_BEMF_CONST_MASK) >> MTR_PARAMS_MOTOR_BEMF_CONST_SHIFT) : 0u;
+  const uint32_t configured_motor_res =
+      closed_loop2_ok ? ((closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT) : 0u;
+  const uint32_t configured_motor_ind =
+      closed_loop2_ok ? ((closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT) : 0u;
   const uint32_t configured_bemf_const = closed_loop3_ok
                                              ? ((closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >>
                                                 CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT)
@@ -918,19 +947,23 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   const uint32_t configured_spd_loop_ki =
       closed_loop4_ok ? ((closed_loop4 & CLOSED_LOOP4_SPD_LOOP_KI_MASK) >> CLOSED_LOOP4_SPD_LOOP_KI_SHIFT) : 0u;
 
-  if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && mtr_params_ok && closed_loop3_ok && closed_loop4_ok) {
+  if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && closed_loop2_ok && mtr_params_ok && closed_loop3_ok &&
+      closed_loop4_ok) {
     ESP_LOGW(TAG,
              "MPET_BEMF diag: speed_cmd=%.1f%% brake=%s mpet(cmd=%s ke=%s mech=%s write_shadow=%s) "
-             "measured_bemf=%u configured_bemf=0x%02X configured_spd_kp=%u configured_spd_ki=%u",
+             "measured_bemf=%u configured_bemf=0x%02X configured_mres=%u configured_mind=%u "
+             "configured_spd_kp=%u configured_spd_ki=%u",
              speed_cmd_percent, this->brake_input_to_string_(brake_input), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_CMD_MASK) != 0u),
              YESNO((algo_debug2 & ALGO_DEBUG2_MPET_KE_MASK) != 0u), YESNO((algo_debug2 & ALGO_DEBUG2_MPET_MECH_MASK) != 0u),
              YESNO((algo_debug2 & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) != 0u), static_cast<unsigned>(motor_bemf_const),
-             static_cast<unsigned>(configured_bemf_const), static_cast<unsigned>(configured_spd_loop_kp),
+             static_cast<unsigned>(configured_bemf_const), static_cast<unsigned>(configured_motor_res),
+             static_cast<unsigned>(configured_motor_ind), static_cast<unsigned>(configured_spd_loop_kp),
              static_cast<unsigned>(configured_spd_loop_ki));
   } else {
-    ESP_LOGW(TAG, "MPET_BEMF diag: read failure ad1=%s ad2=%s pin_cfg=%s mtr_params=%s closed_loop3=%s closed_loop4=%s",
-             YESNO(algo_debug1_ok), YESNO(algo_debug2_ok), YESNO(pin_config_ok), YESNO(mtr_params_ok), YESNO(closed_loop3_ok),
-             YESNO(closed_loop4_ok));
+    ESP_LOGW(TAG,
+             "MPET_BEMF diag: read failure ad1=%s ad2=%s pin_cfg=%s cl2=%s mtr_params=%s closed_loop3=%s closed_loop4=%s",
+             YESNO(algo_debug1_ok), YESNO(algo_debug2_ok), YESNO(pin_config_ok), YESNO(closed_loop2_ok), YESNO(mtr_params_ok),
+             YESNO(closed_loop3_ok), YESNO(closed_loop4_ok));
   }
 
   ESP_LOGW(TAG,
