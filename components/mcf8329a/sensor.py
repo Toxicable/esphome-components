@@ -6,31 +6,31 @@ from esphome.const import DEVICE_CLASS_VOLTAGE, STATE_CLASS_MEASUREMENT, UNIT_PE
 from . import MCF8329AComponent
 
 CONF_MCF8329A_ID = "mcf8329a_id"
+CONF_VM_VOLTAGE = "vm_voltage"
+CONF_DUTY_CMD_PERCENT = "duty_cmd_percent"
+CONF_VOLT_MAG_PERCENT = "volt_mag_percent"
+CONF_MOTOR_BEMF_CONSTANT = "motor_bemf_constant"
 
 CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_MCF8329A_ID): cv.use_id(MCF8329AComponent),
-        cv.Optional("vm_voltage"): sensor.sensor_schema(
+        cv.Optional(CONF_VM_VOLTAGE): sensor.sensor_schema(
             unit_of_measurement=UNIT_VOLT,
             accuracy_decimals=2,
             device_class=DEVICE_CLASS_VOLTAGE,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
-        cv.Optional("duty_cmd_percent"): sensor.sensor_schema(
+        cv.Optional(CONF_DUTY_CMD_PERCENT): sensor.sensor_schema(
             unit_of_measurement=UNIT_PERCENT,
             accuracy_decimals=1,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
-        cv.Optional("volt_mag_percent"): sensor.sensor_schema(
+        cv.Optional(CONF_VOLT_MAG_PERCENT): sensor.sensor_schema(
             unit_of_measurement=UNIT_PERCENT,
             accuracy_decimals=1,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
-        cv.Optional("algorithm_state_code"): sensor.sensor_schema(
-            accuracy_decimals=0,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
-        cv.Optional("motor_bemf_constant"): sensor.sensor_schema(
+        cv.Optional(CONF_MOTOR_BEMF_CONSTANT): sensor.sensor_schema(
             accuracy_decimals=0,
             state_class=STATE_CLASS_MEASUREMENT,
         ),
@@ -41,22 +41,18 @@ CONFIG_SCHEMA = cv.Schema(
 async def to_code(config):
     parent = await cg.get_variable(config[CONF_MCF8329A_ID])
 
-    if "vm_voltage" in config:
-        sens = await sensor.new_sensor(config["vm_voltage"])
+    if CONF_VM_VOLTAGE in config:
+        sens = await sensor.new_sensor(config[CONF_VM_VOLTAGE])
         cg.add(parent.set_vm_voltage_sensor(sens))
 
-    if "duty_cmd_percent" in config:
-        sens = await sensor.new_sensor(config["duty_cmd_percent"])
+    if CONF_DUTY_CMD_PERCENT in config:
+        sens = await sensor.new_sensor(config[CONF_DUTY_CMD_PERCENT])
         cg.add(parent.set_duty_cmd_percent_sensor(sens))
 
-    if "volt_mag_percent" in config:
-        sens = await sensor.new_sensor(config["volt_mag_percent"])
+    if CONF_VOLT_MAG_PERCENT in config:
+        sens = await sensor.new_sensor(config[CONF_VOLT_MAG_PERCENT])
         cg.add(parent.set_volt_mag_percent_sensor(sens))
 
-    if "algorithm_state_code" in config:
-        sens = await sensor.new_sensor(config["algorithm_state_code"])
-        cg.add(parent.set_algorithm_state_code_sensor(sens))
-
-    if "motor_bemf_constant" in config:
-        sens = await sensor.new_sensor(config["motor_bemf_constant"])
+    if CONF_MOTOR_BEMF_CONSTANT in config:
+        sens = await sensor.new_sensor(config[CONF_MOTOR_BEMF_CONSTANT])
         cg.add(parent.set_motor_bemf_constant_sensor(sens))

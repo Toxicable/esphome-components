@@ -11,6 +11,7 @@ MCF8329AComponent = mcf8329a_ns.class_("MCF8329AComponent", cg.PollingComponent,
 
 CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
+CONF_CLEAR_MPET_ON_STARTUP = "clear_mpet_on_startup"
 CONF_APPLY_STARTUP_CONFIG = "apply_startup_config"
 CONF_STARTUP_BRAKE_MODE = "startup_brake_mode"
 CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
@@ -78,6 +79,7 @@ CONFIG_SCHEMA = (
             cv.GenerateID(): cv.declare_id(MCF8329AComponent),
             cv.Optional(CONF_INTER_BYTE_DELAY_US, default=100): cv.positive_int,
             cv.Optional(CONF_AUTO_TICKLE_WATCHDOG, default=False): cv.boolean,
+            cv.Optional(CONF_CLEAR_MPET_ON_STARTUP, default=True): cv.boolean,
             cv.Optional(CONF_APPLY_STARTUP_CONFIG, default=True): cv.boolean,
             cv.Optional(CONF_STARTUP_BRAKE_MODE): cv.enum(STARTUP_BRAKE_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_BRAKE_TIME): cv.enum(STARTUP_BRAKE_TIME_OPTIONS, lower=True),
@@ -98,6 +100,7 @@ async def to_code(config):
 
     cg.add(var.set_inter_byte_delay_us(config[CONF_INTER_BYTE_DELAY_US]))
     cg.add(var.set_auto_tickle_watchdog(config[CONF_AUTO_TICKLE_WATCHDOG]))
+    cg.add(var.set_clear_mpet_on_startup(config[CONF_CLEAR_MPET_ON_STARTUP]))
     cg.add(var.set_apply_startup_config(config[CONF_APPLY_STARTUP_CONFIG]))
 
     if CONF_STARTUP_BRAKE_MODE in config:

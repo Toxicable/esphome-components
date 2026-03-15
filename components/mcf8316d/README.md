@@ -1,4 +1,4 @@
-# mcf8316d_manual
+# mcf8316d
 
 Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
 `inter_byte_delay_us` is currently informational and not applied when using standard ESPHome I2C transactions.
@@ -28,7 +28,7 @@ logger:
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ mcf8316d_manual ]
+    components: [ mcf8316d ]
 
 i2c:
   sda: GPIO21
@@ -36,7 +36,7 @@ i2c:
   scan: true
   frequency: 50kHz
 
-mcf8316d_manual:
+mcf8316d:
   id: mcf
   address: 0x01
   update_interval: 250ms
@@ -44,23 +44,23 @@ mcf8316d_manual:
   auto_tickle_watchdog: false
 
 switch:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     name: "MCF Brake"
 
 select:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     name: "MCF Direction"
 
 number:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     name: "MCF Speed %"
 
 button:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     clear_faults:
       name: "MCF Clear Faults"
     # Optional:
@@ -76,8 +76,8 @@ button:
     #   name: "MCF Scope Probe Test"
 
 binary_sensor:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     fault_active:
       name: "MCF Fault Active"
       # true means fault asserted (nFAULT active/low)
@@ -87,8 +87,8 @@ binary_sensor:
       # (for example GUI/manual writes can control the device), not "motor is spinning".
 
 sensor:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     vm_voltage:
       name: "MCF VM Voltage"
     duty_cmd_percent:
@@ -97,8 +97,8 @@ sensor:
       name: "MCF Volt Mag %"
 
 text_sensor:
-  - platform: mcf8316d_manual
-    mcf8316d_manual_id: mcf
+  - platform: mcf8316d
+    mcf8316d_id: mcf
     fault_summary:
       name: "MCF Fault Summary"
       # Comma-separated active faults from gate-driver + controller status.

@@ -3,30 +3,30 @@ import esphome.config_validation as cv
 from esphome.components import button
 from esphome.const import CONF_ID, ENTITY_CATEGORY_CONFIG
 
-from . import MCF8316DManualComponent, mcf8316d_manual_ns
+from . import MCF8316DComponent, mcf8316d_ns
 
-CONF_MCF8316D_MANUAL_ID = "mcf8316d_manual_id"
+CONF_MCF8316D_ID = "mcf8316d_id"
 
-MCF8316DClearFaultsButton = mcf8316d_manual_ns.class_("MCF8316DClearFaultsButton", button.Button)
-MCF8316DWatchdogTickleButton = mcf8316d_manual_ns.class_(
+MCF8316DClearFaultsButton = mcf8316d_ns.class_("MCF8316DClearFaultsButton", button.Button)
+MCF8316DWatchdogTickleButton = mcf8316d_ns.class_(
     "MCF8316DWatchdogTickleButton", button.Button
 )
-MCF8316DApplyStartupTuneButton = mcf8316d_manual_ns.class_(
+MCF8316DApplyStartupTuneButton = mcf8316d_ns.class_(
     "MCF8316DApplyStartupTuneButton", button.Button
 )
-MCF8316DApplyHwLockReportOnlyButton = mcf8316d_manual_ns.class_(
+MCF8316DApplyHwLockReportOnlyButton = mcf8316d_ns.class_(
     "MCF8316DApplyHwLockReportOnlyButton", button.Button
 )
-MCF8316DRunStartupSweepButton = mcf8316d_manual_ns.class_(
+MCF8316DRunStartupSweepButton = mcf8316d_ns.class_(
     "MCF8316DRunStartupSweepButton", button.Button
 )
-MCF8316DRunScopeProbeTestButton = mcf8316d_manual_ns.class_(
+MCF8316DRunScopeProbeTestButton = mcf8316d_ns.class_(
     "MCF8316DRunScopeProbeTestButton", button.Button
 )
 
 CONFIG_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(CONF_MCF8316D_MANUAL_ID): cv.use_id(MCF8316DManualComponent),
+        cv.GenerateID(CONF_MCF8316D_ID): cv.use_id(MCF8316DComponent),
         cv.Required("clear_faults"): button.button_schema(
             MCF8316DClearFaultsButton,
             entity_category=ENTITY_CATEGORY_CONFIG,
@@ -56,7 +56,7 @@ CONFIG_SCHEMA = cv.Schema(
 
 
 async def to_code(config):
-    parent = await cg.get_variable(config[CONF_MCF8316D_MANUAL_ID])
+    parent = await cg.get_variable(config[CONF_MCF8316D_ID])
 
     clear_faults = await button.new_button(config["clear_faults"])
     cg.add(clear_faults.set_parent(parent))

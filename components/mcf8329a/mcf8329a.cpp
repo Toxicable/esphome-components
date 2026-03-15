@@ -108,7 +108,6 @@ void MCF8329AComponent::update() {
   if (gate_ok || controller_ok) {
     this->publish_faults_(gate_fault_status, gate_ok, controller_fault_status, controller_ok);
   }
-  this->publish_status_texts_(gate_fault_status, gate_ok, controller_fault_status, controller_ok, algo_status, algo_ok);
 
   if (fault_state_valid) {
     if (this->fault_active_binary_sensor_ != nullptr) {
@@ -117,18 +116,6 @@ void MCF8329AComponent::update() {
     this->handle_fault_shutdown_(fault_active);
   } else {
     this->fault_latched_ = false;
-  }
-
-  if (this->algorithm_state_text_sensor_ != nullptr || this->algorithm_state_code_sensor_ != nullptr) {
-    uint16_t algorithm_state = 0;
-    if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
-      if (this->algorithm_state_code_sensor_ != nullptr) {
-        this->algorithm_state_code_sensor_->publish_state(static_cast<float>(algorithm_state));
-      }
-      if (this->algorithm_state_text_sensor_ != nullptr) {
-        this->algorithm_state_text_sensor_->publish_state(this->algorithm_state_to_string_(algorithm_state));
-      }
-    }
   }
 
   if (this->motor_bemf_constant_sensor_ != nullptr) {
@@ -164,6 +151,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(TAG, "  Note: inter-byte delay is currently not applied with ESPHome I2C transactions");
   }
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
+  ESP_LOGCONFIG(TAG, "  Clear MPET bits on startup: %s", YESNO(this->clear_mpet_on_startup_));
   ESP_LOGCONFIG(TAG, "  Apply startup config: %s", YESNO(this->apply_startup_config_));
   ESP_LOGCONFIG(TAG, "  Startup brake mode: %s",
                 this->startup_brake_mode_set_ ? this->startup_brake_mode_to_string_(this->startup_brake_mode_)
@@ -343,11 +331,34 @@ void MCF8329AComponent::apply_post_comms_setup_() {
     ESP_LOGW(TAG, "Failed to set startup direction mode to %s", direction_mode.c_str());
   }
 
+  if (this->clear_mpet_on_startup_) {
+    uint32_t algo_debug2 = 0;
+    if (this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+      const uint32_t mpet_bits = algo_debug2 & ALGO_DEBUG2_MPET_ALL_MASK;
+      if (mpet_bits != 0u) {
+        const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
+        if (this->write_reg32(REG_ALGO_DEBUG2, next)) {
+          ESP_LOGI(TAG, "Cleared MPET command bits in ALGO_DEBUG2: 0x%08X -> 0x%08X", algo_debug2, next);
+        } else {
+          ESP_LOGW(TAG, "Failed to clear MPET command bits in ALGO_DEBUG2");
+        }
+      }
+    } else {
+      ESP_LOGW(TAG, "Failed to read ALGO_DEBUG2 for MPET startup clear");
+    }
+  }
+
   if (!this->apply_startup_motor_config_()) {
     ESP_LOGW(TAG, "Failed to apply one or more configured startup motor settings");
   }
-  if (this->startup_config_text_sensor_ != nullptr) {
-    this->startup_config_text_sensor_->publish_state(this->startup_config_summary_);
+
+  if (this->clear_mpet_on_startup_) {
+    uint32_t controller_fault_status = 0;
+    if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, controller_fault_status) &&
+        (controller_fault_status & FAULT_MPET_BEMF) != 0u) {
+      ESP_LOGW(TAG, "MPET_BEMF fault present at startup; pulsing CLR_FLT once");
+      this->pulse_clear_faults();
+    }
   }
 }
 
@@ -437,115 +448,6 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   this->startup_config_summary_ = summary;
   ESP_LOGI(TAG, "Startup motor config: %s", this->startup_config_summary_.c_str());
   return ok;
-}
-
-void MCF8329AComponent::publish_status_texts_(uint32_t gate_fault_status, bool gate_ok, uint32_t controller_fault_status,
-                                              bool controller_ok, uint32_t algo_status, bool algo_ok) {
-  if (this->gate_fault_status_text_sensor_ != nullptr) {
-    if (!gate_ok) {
-      this->gate_fault_status_text_sensor_->publish_state("read_error");
-    } else {
-      std::vector<std::string> labels;
-      if (gate_fault_status & GATE_FAULT_OTS)
-        labels.emplace_back("overtemp");
-      if (gate_fault_status & GATE_FAULT_OCP_VDS)
-        labels.emplace_back("ocp_vds");
-      if (gate_fault_status & GATE_FAULT_OCP_SNS)
-        labels.emplace_back("ocp_sns");
-      if (gate_fault_status & GATE_FAULT_BST_UV)
-        labels.emplace_back("bst_uv");
-      if (gate_fault_status & GATE_FAULT_GVDD_UV)
-        labels.emplace_back("gvdd_uv");
-      if (gate_fault_status & GATE_FAULT_DRV_OFF)
-        labels.emplace_back("drv_off");
-      if (labels.empty()) {
-        if ((gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0u) {
-          this->gate_fault_status_text_sensor_->publish_state("fault_active_unknown");
-        } else {
-          this->gate_fault_status_text_sensor_->publish_state("none");
-        }
-      } else {
-        std::string text;
-        for (size_t i = 0; i < labels.size(); i++) {
-          if (i != 0) {
-            text += ", ";
-          }
-          text += labels[i];
-        }
-        this->gate_fault_status_text_sensor_->publish_state(text);
-      }
-    }
-  }
-
-  if (this->controller_fault_status_text_sensor_ != nullptr) {
-    if (!controller_ok) {
-      this->controller_fault_status_text_sensor_->publish_state("read_error");
-    } else {
-      std::vector<std::string> labels;
-      if (controller_fault_status & FAULT_IPD_FREQ)
-        labels.emplace_back("ipd_freq");
-      if (controller_fault_status & FAULT_IPD_T1)
-        labels.emplace_back("ipd_t1");
-      if (controller_fault_status & FAULT_BUS_CURRENT_LIMIT)
-        labels.emplace_back("bus_current_limit");
-      if (controller_fault_status & FAULT_MPET_BEMF)
-        labels.emplace_back("mpet_bemf");
-      if (controller_fault_status & FAULT_ABN_SPEED)
-        labels.emplace_back("abn_speed");
-      if (controller_fault_status & FAULT_ABN_BEMF)
-        labels.emplace_back("abn_bemf");
-      if (controller_fault_status & FAULT_NO_MTR)
-        labels.emplace_back("no_motor");
-      if (controller_fault_status & FAULT_MTR_LCK)
-        labels.emplace_back("motor_lock");
-      if (controller_fault_status & FAULT_LOCK_LIMIT)
-        labels.emplace_back("lock_limit");
-      if (controller_fault_status & FAULT_HW_LOCK_LIMIT)
-        labels.emplace_back("hw_lock_limit");
-      if (controller_fault_status & FAULT_DCBUS_UNDER_VOLTAGE)
-        labels.emplace_back("dcbus_uv");
-      if (controller_fault_status & FAULT_DCBUS_OVER_VOLTAGE)
-        labels.emplace_back("dcbus_ov");
-      if (controller_fault_status & FAULT_SPEED_LOOP_SATURATION)
-        labels.emplace_back("speed_loop_sat");
-      if (controller_fault_status & FAULT_CURRENT_LOOP_SATURATION)
-        labels.emplace_back("current_loop_sat");
-      if (controller_fault_status & FAULT_WATCHDOG)
-        labels.emplace_back("watchdog");
-      if (labels.empty()) {
-        if ((controller_fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0u) {
-          this->controller_fault_status_text_sensor_->publish_state("fault_active_unknown");
-        } else {
-          this->controller_fault_status_text_sensor_->publish_state("none");
-        }
-      } else {
-        std::string text;
-        for (size_t i = 0; i < labels.size(); i++) {
-          if (i != 0) {
-            text += ", ";
-          }
-          text += labels[i];
-        }
-        this->controller_fault_status_text_sensor_->publish_state(text);
-      }
-    }
-  }
-
-  if (this->algo_status_text_sensor_ != nullptr) {
-    if (!algo_ok) {
-      this->algo_status_text_sensor_->publish_state("read_error");
-    } else {
-      const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
-      const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
-      const float duty_percent = (static_cast<float>(duty_raw) / 4095.0f) * 100.0f;
-      const float volt_mag_percent = (static_cast<float>(volt_mag_raw) * 100.0f) / 32768.0f;
-      const bool sys_enable = (algo_status & ALGO_STATUS_SYS_ENABLE_FLAG_MASK) != 0u;
-      char text[96];
-      std::snprintf(text, sizeof(text), "sys=%s duty=%.1f%% volt_mag=%.1f%%", sys_enable ? "on" : "off", duty_percent,
-                    volt_mag_percent);
-      this->algo_status_text_sensor_->publish_state(text);
-    }
-  }
 }
 
 bool MCF8329AComponent::read_reg32(uint16_t offset, uint32_t &value) { return this->perform_read_(offset, value); }
@@ -858,8 +760,8 @@ void MCF8329AComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fa
     }
   }
 
-  if (this->fault_summary_text_sensor_ != nullptr) {
-    this->fault_summary_text_sensor_->publish_state(summary);
+  if (this->current_fault_text_sensor_ != nullptr) {
+    this->current_fault_text_sensor_->publish_state(summary);
   }
 
   if (summary != this->last_fault_summary_) {
@@ -918,63 +820,6 @@ const char *MCF8329AComponent::startup_brake_time_to_string_(uint8_t code) const
       "100ms", "250ms",  "500ms",  "1000ms", "2500ms", "5000ms", "10000ms", "15000ms",
   };
   return kBrakeTimeLabels[code & 0x0Fu];
-}
-
-const char *MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const {
-  switch (state) {
-    case 0x00:
-      return "MOTOR_IDLE";
-    case 0x01:
-      return "MOTOR_ISD";
-    case 0x02:
-      return "MOTOR_TRISTATE";
-    case 0x03:
-      return "MOTOR_BRAKE_ON_START";
-    case 0x04:
-      return "MOTOR_IPD";
-    case 0x05:
-      return "MOTOR_SLOW_FIRST_CYCLE";
-    case 0x06:
-      return "MOTOR_ALIGN";
-    case 0x07:
-      return "MOTOR_OPEN_LOOP";
-    case 0x08:
-      return "MOTOR_CLOSED_LOOP_UNALIGNED";
-    case 0x09:
-      return "MOTOR_CLOSED_LOOP_ALIGNED";
-    case 0x0A:
-      return "MOTOR_CLOSED_LOOP_ACTIVE_BRAKING";
-    case 0x0B:
-      return "MOTOR_SOFT_STOP";
-    case 0x0C:
-      return "MOTOR_RECIRCULATE_STOP";
-    case 0x0D:
-      return "MOTOR_BRAKE_ON_STOP";
-    case 0x0E:
-      return "MOTOR_FAULT";
-    case 0x0F:
-      return "MOTOR_MPET_MOTOR_STOP_CHECK";
-    case 0x10:
-      return "MOTOR_MPET_MOTOR_STOP_WAIT";
-    case 0x11:
-      return "MOTOR_MPET_MOTOR_BRAKE";
-    case 0x12:
-      return "MOTOR_MPET_ALGORITHM_PARAMETERS_INIT";
-    case 0x13:
-      return "MOTOR_MPET_RL_MEASURE";
-    case 0x14:
-      return "MOTOR_MPET_KE_MEASURE";
-    case 0x15:
-      return "MOTOR_MPET_STALL_CURRENT_MEASURE";
-    case 0x16:
-      return "MOTOR_MPET_TORQUE_MODE";
-    case 0x17:
-      return "MOTOR_MPET_DONE";
-    case 0x18:
-      return "MOTOR_MPET_FAULT";
-    default:
-      return "UNKNOWN";
-  }
 }
 
 const char *MCF8329AComponent::brake_input_to_string_(uint32_t brake_input_value) const {

@@ -8,7 +8,7 @@ This component provides manual runtime control and telemetry:
 - digital speed command (`number`, percent)
 - fault clear and watchdog tickle buttons (`button`)
 - startup motor settings applied during setup (optional): braking strategy, stop brake time, startup mode, align time, and startup direction
-- fault/sys-enable state, voltage, duty, modulation index, algorithm state, motor BEMF constant, and raw status registers
+- fault summary text state plus core runtime telemetry
 
 `inter_byte_delay_us` is informational only with current ESPHome I2C transactions.
 
@@ -30,6 +30,7 @@ mcf8329a:
   update_interval: 250ms
   inter_byte_delay_us: 100
   auto_tickle_watchdog: false
+  clear_mpet_on_startup: true
   # Optional startup motor config (applied after comms are established):
   # apply_startup_config: true
   # startup_brake_mode: recirculation
@@ -70,6 +71,12 @@ binary_sensor:
     sys_enable:
       name: "MCF Sys Enable"
 
+text_sensor:
+  - platform: mcf8329a
+    mcf8329a_id: mcf
+    current_fault:
+      name: "MCF Current Fault"
+
 sensor:
   - platform: mcf8329a
     mcf8329a_id: mcf
@@ -80,29 +87,7 @@ sensor:
     volt_mag_percent:
       name: "MCF Volt Mag %"
     # Optional:
-    # algorithm_state_code:
-    #   name: "MCF Algorithm State Code"
     # motor_bemf_constant:
     #   name: "MCF Motor BEMF Const"
 
-text_sensor:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
-    fault_summary:
-      name: "MCF Fault Summary"
-    # Optional:
-    # gate_fault_status:
-    #   name: "MCF Gate Fault Status"
-    #   # Decoded gate-driver fault labels (or "none"/"read_error")
-    # controller_fault_status:
-    #   name: "MCF Controller Fault Status"
-    #   # Decoded controller fault labels (or "none"/"read_error")
-    # algo_status:
-    #   name: "MCF Algo Status"
-    #   # "sys=on/off duty=x% volt_mag=y%"
-    # startup_config:
-    #   name: "MCF Startup Config"
-    #   # "apply=on/off profile=current/custom dir=... startup=... align=... stop=... stop_brake=..."
-    # algorithm_state:
-    #   name: "MCF Algorithm State"
 ```

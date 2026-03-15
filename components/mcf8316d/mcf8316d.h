@@ -14,92 +14,92 @@
 #include "esphome/core/component.h"
 
 namespace esphome {
-namespace mcf8316d_manual {
+namespace mcf8316d {
 
-class MCF8316DManualComponent;
+class MCF8316DComponent;
 
 class MCF8316DBrakeSwitch : public switch_::Switch {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void write_state(bool state) override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DDirectionSelect : public select::Select {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void control(const std::string &value) override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DSpeedNumber : public number::Number {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void control(float value) override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DClearFaultsButton : public button::Button {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void press_action() override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DWatchdogTickleButton : public button::Button {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void press_action() override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DApplyStartupTuneButton : public button::Button {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void press_action() override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DApplyHwLockReportOnlyButton : public button::Button {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void press_action() override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DRunStartupSweepButton : public button::Button {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void press_action() override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
 class MCF8316DRunScopeProbeTestButton : public button::Button {
  public:
-  void set_parent(MCF8316DManualComponent *parent) { parent_ = parent; }
+  void set_parent(MCF8316DComponent *parent) { parent_ = parent; }
 
  protected:
   void press_action() override;
-  MCF8316DManualComponent *parent_{nullptr};
+  MCF8316DComponent *parent_{nullptr};
 };
 
-class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
+class MCF8316DComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
   void update() override;
@@ -494,5 +494,5 @@ class MCF8316DManualComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor *algorithm_state_text_sensor_{nullptr};
 };
 
-}  // namespace mcf8316d_manual
+}  // namespace mcf8316d
 }  // namespace esphome

@@ -3,13 +3,13 @@ import esphome.config_validation as cv
 from esphome.components import sensor
 from esphome.const import DEVICE_CLASS_VOLTAGE, STATE_CLASS_MEASUREMENT, UNIT_PERCENT, UNIT_VOLT
 
-from . import MCF8316DManualComponent
+from . import MCF8316DComponent
 
-CONF_MCF8316D_MANUAL_ID = "mcf8316d_manual_id"
+CONF_MCF8316D_ID = "mcf8316d_id"
 
 CONFIG_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(CONF_MCF8316D_MANUAL_ID): cv.use_id(MCF8316DManualComponent),
+        cv.GenerateID(CONF_MCF8316D_ID): cv.use_id(MCF8316DComponent),
         cv.Optional("vm_voltage"): sensor.sensor_schema(
             unit_of_measurement=UNIT_VOLT,
             accuracy_decimals=2,
@@ -31,7 +31,7 @@ CONFIG_SCHEMA = cv.Schema(
 
 
 async def to_code(config):
-    parent = await cg.get_variable(config[CONF_MCF8316D_MANUAL_ID])
+    parent = await cg.get_variable(config[CONF_MCF8316D_ID])
 
     if "vm_voltage" in config:
         sens = await sensor.new_sensor(config["vm_voltage"])

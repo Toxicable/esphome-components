@@ -1,6 +1,6 @@
-# AGENTS_KNOWLEDGE: mcf8316d_manual
+# AGENTS_KNOWLEDGE: mcf8316d
 
-Component-scoped notes for `components/mcf8316d_manual`.
+Component-scoped notes for `components/mcf8316d`.
 
 - Adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), and fault-triggered speed shutdown that defers lock-family handling to configured lock modes.
 - Should follow repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
@@ -16,7 +16,7 @@ Component-scoped notes for `components/mcf8316d_manual`.
 - Setup seeds zero `CLOSED_LOOP2/3/4` fields (`MOTOR_RES`, `MOTOR_IND`, `MOTOR_BEMF_CONST`, `SPD_LOOP_KP`, `SPD_LOOP_KI`) with minimal non-zero shadow defaults to avoid forced MPET entry on blank configs (no EEPROM write).
 - Logs BUCK fault diagnostics (`GD_CONFIG2` decode: `BUCK_DIS`, `BUCK_PS_DIS`, `BUCK_CL`, `BUCK_SEL`) when `DRV_BUCK_OCP`/`DRV_BUCK_UV` are active and after `clear_faults`; these faults are condition-active and may not clear with `CLR_FLT` until rail/load issues are fixed.
 - Setup forces `GD_CONFIG2.BUCK_CL` to `600mA` (clears `BUCK_CL` bit in shadow register) for manual validation to avoid immediate `DRV_BUCK_OCP/DRV_BUCK_UV` from 150mA default on loaded buck rails.
-- Datasheet source is `components/mcf8316d_manual/mcf8316d.pdf`; extracted Markdown text is tracked at `components/mcf8316d_manual/mcf8316d.txt` (page breaks rendered as `---`).
+- Datasheet source is `components/mcf8316d/mcf8316d.pdf`; extracted Markdown text is tracked at `components/mcf8316d/mcf8316d.txt` (page breaks rendered as `---`).
 - Datasheet `CLOSED_LOOP3` defines `CURR_LOOP_KP=0` and `CURR_LOOP_KI=0` as valid auto-calculation mode (not necessarily a misconfiguration).
 - For `LOCK_LIMIT` startup debug, decode `MOTOR_STARTUP1/2` with `FAULT_CONFIG1`: very small `LOCK_ILIMIT_DEG` (e.g. `0.2ms`) and low `ALIGN_OR_SLOW_CURRENT_ILIMIT`/`OL_ILIMIT` (e.g. `1.5A`) commonly cause immediate retry-loop faults on higher-inertia outrunners.
 - Supports optional `apply_startup_tune` button that forces `speed=0%`, `direction=cw`, `brake=off`, writes RAM-only startup profile (`FAULT_CONFIG1`, `FAULT_CONFIG2`, `MOTOR_STARTUP1`, `MOTOR_STARTUP2`, `CLOSED_LOOP4`) including `MTR_STARTUP=double_align`, `ALIGN_ANGLE=90°`, `MAX_SPEED=0x2710`, `HW_LOCK_ILIMIT=8A`, `HW_LOCK_ILIMIT_DEG=7us`, then pulses `CLR_FLT`.

@@ -1,4 +1,4 @@
-#include "mcf8316d_manual.h"
+#include "mcf8316d.h"
 
 #include <cmath>
 #include <cstdio>
@@ -8,9 +8,9 @@
 #include "esphome/core/log.h"
 
 namespace esphome {
-namespace mcf8316d_manual {
+namespace mcf8316d {
 
-static const char *const TAG = "mcf8316d_manual";
+static const char *const TAG = "mcf8316d";
 
 void MCF8316DBrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -86,8 +86,8 @@ void MCF8316DRunScopeProbeTestButton::press_action() {
   }
 }
 
-void MCF8316DManualComponent::setup() {
-  ESP_LOGCONFIG(TAG, "Setting up mcf8316d_manual");
+void MCF8316DComponent::setup() {
+  ESP_LOGCONFIG(TAG, "Setting up mcf8316d");
   this->normal_operation_ready_ = false;
   this->deferred_comms_last_retry_ms_ = 0u;
   this->deferred_comms_last_scan_ms_ = 0u;
@@ -108,7 +108,7 @@ void MCF8316DManualComponent::setup() {
   this->apply_post_comms_setup_();
 }
 
-void MCF8316DManualComponent::update() {
+void MCF8316DComponent::update() {
   if (!this->normal_operation_ready_) {
     this->process_deferred_startup_();
     return;
@@ -257,7 +257,7 @@ void MCF8316DManualComponent::update() {
   }
 }
 
-void MCF8316DManualComponent::dump_config() {
+void MCF8316DComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "MCF8316D Manual Validation Component:");
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
@@ -272,7 +272,7 @@ void MCF8316DManualComponent::dump_config() {
                 static_cast<unsigned>(DEFERRED_COMMS_RETRY_INTERVAL_MS));
 }
 
-const char *MCF8316DManualComponent::i2c_error_to_string_(i2c::ErrorCode error_code) const {
+const char *MCF8316DComponent::i2c_error_to_string_(i2c::ErrorCode error_code) const {
   switch (error_code) {
     case i2c::ERROR_OK:
       return "ok";
@@ -295,7 +295,7 @@ const char *MCF8316DManualComponent::i2c_error_to_string_(i2c::ErrorCode error_c
   }
 }
 
-bool MCF8316DManualComponent::probe_device_ack_(i2c::ErrorCode &error_code) const {
+bool MCF8316DComponent::probe_device_ack_(i2c::ErrorCode &error_code) const {
   if (this->bus_ == nullptr) {
     error_code = i2c::ERROR_NOT_INITIALIZED;
     return false;
@@ -305,7 +305,7 @@ bool MCF8316DManualComponent::probe_device_ack_(i2c::ErrorCode &error_code) cons
   return error_code == i2c::ERROR_OK;
 }
 
-bool MCF8316DManualComponent::scan_i2c_bus_() {
+bool MCF8316DComponent::scan_i2c_bus_() {
   if (this->bus_ == nullptr) {
     ESP_LOGW(TAG, "I2C scan skipped: bus is not initialized");
     return false;
@@ -347,7 +347,7 @@ bool MCF8316DManualComponent::scan_i2c_bus_() {
   return device_count > 0u;
 }
 
-bool MCF8316DManualComponent::establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays) {
+bool MCF8316DComponent::establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays) {
   if (attempts == 0u) {
     return false;
   }
@@ -378,7 +378,7 @@ bool MCF8316DManualComponent::establish_communications_(uint8_t attempts, uint32
   return false;
 }
 
-void MCF8316DManualComponent::process_deferred_startup_() {
+void MCF8316DComponent::process_deferred_startup_() {
   const uint32_t now = millis();
   const bool should_scan = this->deferred_comms_last_scan_ms_ == 0u ||
                            (now - this->deferred_comms_last_scan_ms_) >= DEFERRED_SCAN_INTERVAL_MS;
@@ -407,7 +407,7 @@ void MCF8316DManualComponent::process_deferred_startup_() {
   this->apply_post_comms_setup_();
 }
 
-void MCF8316DManualComponent::apply_post_comms_setup_() {
+void MCF8316DComponent::apply_post_comms_setup_() {
   uint32_t ctrl_fault = 0;
 
   if (this->speed_number_ != nullptr) {
@@ -457,13 +457,13 @@ void MCF8316DManualComponent::apply_post_comms_setup_() {
   this->log_mpet_diagnostics_("setup");
 }
 
-bool MCF8316DManualComponent::read_reg32(uint16_t offset, uint32_t &value) { return this->perform_read_(offset, value); }
+bool MCF8316DComponent::read_reg32(uint16_t offset, uint32_t &value) { return this->perform_read_(offset, value); }
 
-bool MCF8316DManualComponent::read_reg16(uint16_t offset, uint16_t &value) { return this->perform_read16_(offset, value); }
+bool MCF8316DComponent::read_reg16(uint16_t offset, uint16_t &value) { return this->perform_read16_(offset, value); }
 
-bool MCF8316DManualComponent::write_reg32(uint16_t offset, uint32_t value) { return this->perform_write_(offset, value); }
+bool MCF8316DComponent::write_reg32(uint16_t offset, uint32_t value) { return this->perform_write_(offset, value); }
 
-bool MCF8316DManualComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
+bool MCF8316DComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
   uint32_t current = 0;
   if (!this->read_reg32(offset, current)) {
     return false;
@@ -475,7 +475,7 @@ bool MCF8316DManualComponent::update_bits32(uint16_t offset, uint32_t mask, uint
   return this->write_reg32(offset, next);
 }
 
-bool MCF8316DManualComponent::set_brake_override(bool brake_on) {
+bool MCF8316DComponent::set_brake_override(bool brake_on) {
   const uint32_t value = brake_on ? PIN_CONFIG_BRAKE_INPUT_BRAKE : PIN_CONFIG_BRAKE_INPUT_NO_BRAKE;
   if (!this->update_bits32(REG_PIN_CONFIG, PIN_CONFIG_BRAKE_INPUT_MASK, value)) {
     return false;
@@ -490,7 +490,7 @@ bool MCF8316DManualComponent::set_brake_override(bool brake_on) {
   return true;
 }
 
-bool MCF8316DManualComponent::set_direction_mode(const std::string &direction_mode) {
+bool MCF8316DComponent::set_direction_mode(const std::string &direction_mode) {
   uint32_t value = PERI_CONFIG1_DIR_INPUT_HARDWARE;
   if (direction_mode == "cw") {
     value = PERI_CONFIG1_DIR_INPUT_CW;
@@ -510,7 +510,7 @@ bool MCF8316DManualComponent::set_direction_mode(const std::string &direction_mo
   return true;
 }
 
-bool MCF8316DManualComponent::set_speed_percent(float speed_percent) {
+bool MCF8316DComponent::set_speed_percent(float speed_percent) {
   if (std::isnan(speed_percent)) {
     return false;
   }
@@ -531,7 +531,7 @@ bool MCF8316DManualComponent::set_speed_percent(float speed_percent) {
   return true;
 }
 
-void MCF8316DManualComponent::pulse_clear_faults() {
+void MCF8316DComponent::pulse_clear_faults() {
   ESP_LOGI(TAG, "Pulsing clear faults");
   uint32_t gate_before = 0;
   uint32_t ctrl_before = 0;
@@ -581,7 +581,7 @@ void MCF8316DManualComponent::pulse_clear_faults() {
   }
 }
 
-void MCF8316DManualComponent::pulse_watchdog_tickle() {
+void MCF8316DComponent::pulse_watchdog_tickle() {
   ESP_LOGD(TAG, "Pulsing watchdog tickle");
   if (this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK)) {
     (void) this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0);
@@ -589,7 +589,7 @@ void MCF8316DManualComponent::pulse_watchdog_tickle() {
   this->last_watchdog_tickle_ms_ = millis();
 }
 
-bool MCF8316DManualComponent::apply_startup_tune_profile() {
+bool MCF8316DComponent::apply_startup_tune_profile() {
   ESP_LOGW(TAG, "Applying startup tune profile (double-align + higher max speed + startup current tuning)");
   bool ok = true;
   if (!this->set_speed_percent(0.0f)) {
@@ -698,7 +698,7 @@ bool MCF8316DManualComponent::apply_startup_tune_profile() {
   return ok;
 }
 
-bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
+bool MCF8316DComponent::apply_hw_lock_report_only_profile() {
   ESP_LOGW(TAG, "Applying locks-disabled + short-align debug profile");
   ESP_LOGW(TAG, "WARNING: LOCK/HW_LOCK/MTR_LCK protective actions are disabled for this debug mode");
 
@@ -813,7 +813,7 @@ bool MCF8316DManualComponent::apply_hw_lock_report_only_profile() {
   return ok;
 }
 
-bool MCF8316DManualComponent::start_startup_current_sweep() {
+bool MCF8316DComponent::start_startup_current_sweep() {
   if (this->scope_probe_test_active_) {
     ESP_LOGW(TAG, "Scope probe test active; stopping probe sequence before startup sweep");
     this->scope_probe_test_active_ = false;
@@ -838,7 +838,7 @@ bool MCF8316DManualComponent::start_startup_current_sweep() {
   return this->begin_startup_sweep_step_();
 }
 
-bool MCF8316DManualComponent::start_scope_probe_test() {
+bool MCF8316DComponent::start_scope_probe_test() {
   if (this->startup_sweep_active_) {
     ESP_LOGW(TAG, "Startup sweep is active; stopping sweep before scope probe test");
     this->startup_sweep_active_ = false;
@@ -862,7 +862,7 @@ bool MCF8316DManualComponent::start_scope_probe_test() {
   return this->begin_scope_probe_stage_();
 }
 
-float MCF8316DManualComponent::scope_probe_stage_speed_percent_(uint8_t stage_index) const {
+float MCF8316DComponent::scope_probe_stage_speed_percent_(uint8_t stage_index) const {
   switch (stage_index) {
     case 0:
       return 5.0f;
@@ -874,12 +874,12 @@ float MCF8316DManualComponent::scope_probe_stage_speed_percent_(uint8_t stage_in
   }
 }
 
-uint32_t MCF8316DManualComponent::scope_probe_stage_hold_ms_(uint8_t stage_index) const {
+uint32_t MCF8316DComponent::scope_probe_stage_hold_ms_(uint8_t stage_index) const {
   (void) stage_index;
   return 7000u;
 }
 
-bool MCF8316DManualComponent::begin_scope_probe_stage_() {
+bool MCF8316DComponent::begin_scope_probe_stage_() {
   if (!this->scope_probe_test_active_) {
     return false;
   }
@@ -922,7 +922,7 @@ bool MCF8316DManualComponent::begin_scope_probe_stage_() {
   return true;
 }
 
-void MCF8316DManualComponent::process_scope_probe_test_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
+void MCF8316DComponent::process_scope_probe_test_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
                                                          bool fault_state_valid, bool controller_valid,
                                                          uint32_t controller_fault_status, uint16_t volt_mag_raw) {
   if (!this->scope_probe_test_active_) {
@@ -976,7 +976,7 @@ void MCF8316DManualComponent::process_scope_probe_test_(bool algorithm_state_val
   }
 }
 
-uint32_t MCF8316DManualComponent::startup_sweep_current_code_(uint8_t step_index) const {
+uint32_t MCF8316DComponent::startup_sweep_current_code_(uint8_t step_index) const {
   switch (step_index) {
     case 0:
       return 3u;  // 1.0A
@@ -990,13 +990,13 @@ uint32_t MCF8316DManualComponent::startup_sweep_current_code_(uint8_t step_index
   }
 }
 
-float MCF8316DManualComponent::current_limit_code_to_amps_(uint32_t current_limit_code) const {
+float MCF8316DComponent::current_limit_code_to_amps_(uint32_t current_limit_code) const {
   static const float kCurrentThresholdA[16] = {0.125f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f,
                                                3.5f,   4.0f,  4.5f, 5.0f, 5.5f, 6.0f, 7.0f, 8.0f};
   return kCurrentThresholdA[current_limit_code & 0xFu];
 }
 
-bool MCF8316DManualComponent::apply_startup_sweep_current_limits_(uint32_t current_limit_code) {
+bool MCF8316DComponent::apply_startup_sweep_current_limits_(uint32_t current_limit_code) {
   const uint32_t s1_value = (current_limit_code << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT);
   const uint32_t s2_value = (current_limit_code << MOTOR_STARTUP2_OL_ILIMIT_SHIFT);
   if (!this->update_bits32(REG_MOTOR_STARTUP1, MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK, s1_value)) {
@@ -1023,7 +1023,7 @@ bool MCF8316DManualComponent::apply_startup_sweep_current_limits_(uint32_t curre
   return true;
 }
 
-bool MCF8316DManualComponent::begin_startup_sweep_step_() {
+bool MCF8316DComponent::begin_startup_sweep_step_() {
   if (!this->startup_sweep_active_) {
     return false;
   }
@@ -1075,13 +1075,13 @@ bool MCF8316DManualComponent::begin_startup_sweep_step_() {
   return true;
 }
 
-void MCF8316DManualComponent::schedule_startup_sweep_step_(uint32_t delay_ms) {
+void MCF8316DComponent::schedule_startup_sweep_step_(uint32_t delay_ms) {
   (void) this->set_speed_percent(0.0f);
   this->startup_sweep_step_pending_ = true;
   this->startup_sweep_next_step_due_ms_ = millis() + delay_ms;
 }
 
-void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
+void MCF8316DComponent::process_startup_sweep_(bool algorithm_state_valid, uint16_t algorithm_state, bool fault_active,
                                                       bool fault_state_valid, bool controller_valid,
                                                       uint32_t controller_fault_status, uint16_t volt_mag_raw) {
   if (!this->startup_sweep_active_) {
@@ -1147,7 +1147,7 @@ void MCF8316DManualComponent::process_startup_sweep_(bool algorithm_state_valid,
   }
 }
 
-bool MCF8316DManualComponent::read_probe_and_publish_() {
+bool MCF8316DComponent::read_probe_and_publish_() {
   uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t fault_status = 0;
@@ -1184,7 +1184,7 @@ bool MCF8316DManualComponent::read_probe_and_publish_() {
   return ok;
 }
 
-bool MCF8316DManualComponent::ensure_buck_current_limit_for_manual_() {
+bool MCF8316DComponent::ensure_buck_current_limit_for_manual_() {
   uint32_t gd_config2 = 0;
   if (!this->read_reg32(REG_GD_CONFIG2, gd_config2)) {
     ESP_LOGW(TAG, "Failed to read GD_CONFIG2 for BUCK_CL check");
@@ -1213,7 +1213,7 @@ bool MCF8316DManualComponent::ensure_buck_current_limit_for_manual_() {
   return true;
 }
 
-bool MCF8316DManualComponent::seed_closed_loop_params_if_zero_() {
+bool MCF8316DComponent::seed_closed_loop_params_if_zero_() {
   uint32_t closed_loop2 = 0;
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
@@ -1313,7 +1313,7 @@ bool MCF8316DManualComponent::seed_closed_loop_params_if_zero_() {
   return true;
 }
 
-bool MCF8316DManualComponent::perform_read_(uint16_t offset, uint32_t &value) {
+bool MCF8316DComponent::perform_read_(uint16_t offset, uint32_t &value) {
   const uint32_t control_word = this->build_control_word_(true, offset, true);
   const uint8_t cw[3] = {
       static_cast<uint8_t>((control_word >> 16) & 0xFF),
@@ -1334,7 +1334,7 @@ bool MCF8316DManualComponent::perform_read_(uint16_t offset, uint32_t &value) {
   return true;
 }
 
-bool MCF8316DManualComponent::perform_read16_(uint16_t offset, uint16_t &value) {
+bool MCF8316DComponent::perform_read16_(uint16_t offset, uint16_t &value) {
   const uint32_t control_word = this->build_control_word_(true, offset, false);
   const uint8_t cw[3] = {
       static_cast<uint8_t>((control_word >> 16) & 0xFF),
@@ -1354,7 +1354,7 @@ bool MCF8316DManualComponent::perform_read16_(uint16_t offset, uint16_t &value) 
   return true;
 }
 
-bool MCF8316DManualComponent::perform_write_(uint16_t offset, uint32_t value) {
+bool MCF8316DComponent::perform_write_(uint16_t offset, uint32_t value) {
   const uint32_t control_word = this->build_control_word_(false, offset, true);
   const uint8_t cw[3] = {
       static_cast<uint8_t>((control_word >> 16) & 0xFF),
@@ -1377,18 +1377,18 @@ bool MCF8316DManualComponent::perform_write_(uint16_t offset, uint32_t value) {
   return true;
 }
 
-uint32_t MCF8316DManualComponent::build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const {
+uint32_t MCF8316DComponent::build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const {
   const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
   return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
 }
 
-void MCF8316DManualComponent::delay_between_bytes_() const {
+void MCF8316DComponent::delay_between_bytes_() const {
   if (this->inter_byte_delay_us_ > 0) {
     delay_microseconds_safe(this->inter_byte_delay_us_);
   }
 }
 
-void MCF8316DManualComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t fault_status,
+void MCF8316DComponent::publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t fault_status,
                                               bool controller_fault_valid) {
   std::vector<std::string> faults;
   bool gate_detail_found = false;
@@ -1504,7 +1504,7 @@ void MCF8316DManualComponent::publish_faults_(uint32_t gate_fault_status, bool g
   }
 }
 
-void MCF8316DManualComponent::log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status) {
+void MCF8316DComponent::log_buck_fault_diagnostics_(const char *context, uint32_t gate_fault_status) {
   uint32_t gd_config2 = 0;
   const bool gd_ok = this->read_reg32(REG_GD_CONFIG2, gd_config2);
 
@@ -1555,7 +1555,7 @@ void MCF8316DManualComponent::log_buck_fault_diagnostics_(const char *context, u
   }
 }
 
-void MCF8316DManualComponent::log_mpet_diagnostics_(const char *context) {
+void MCF8316DComponent::log_mpet_diagnostics_(const char *context) {
   uint32_t ctrl_fault = 0;
   uint32_t algo_debug2 = 0;
   uint32_t algo_status_mpet = 0;
@@ -1606,7 +1606,7 @@ void MCF8316DManualComponent::log_mpet_diagnostics_(const char *context) {
   }
 }
 
-void MCF8316DManualComponent::log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2) {
+void MCF8316DComponent::log_mpet_entry_conditions_(const char *context, uint32_t algo_debug2) {
   uint32_t closed_loop2 = 0;
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
@@ -1666,7 +1666,7 @@ void MCF8316DManualComponent::log_mpet_entry_conditions_(const char *context, ui
   }
 }
 
-void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status) {
+void MCF8316DComponent::log_lock_limit_diagnostics_(const char *context, uint32_t controller_fault_status) {
   uint16_t algorithm_state = 0;
   uint16_t csa_gain_feedback = 0;
   uint32_t algo_status = 0;
@@ -1863,7 +1863,7 @@ void MCF8316DManualComponent::log_lock_limit_diagnostics_(const char *context, u
   }
 }
 
-bool MCF8316DManualComponent::should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid,
+bool MCF8316DComponent::should_force_speed_shutdown_(uint32_t gate_fault_status, bool gate_fault_valid,
                                                             uint32_t controller_fault_status,
                                                             bool controller_fault_valid) {
   if (gate_fault_valid && ((gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0)) {
@@ -1920,7 +1920,7 @@ bool MCF8316DManualComponent::should_force_speed_shutdown_(uint32_t gate_fault_s
   return remaining_faults != 0u;
 }
 
-const char *MCF8316DManualComponent::algorithm_state_to_string_(uint16_t state) const {
+const char *MCF8316DComponent::algorithm_state_to_string_(uint16_t state) const {
   switch (state) {
     case 0x00:
       return "MOTOR_IDLE";
@@ -1977,7 +1977,7 @@ const char *MCF8316DManualComponent::algorithm_state_to_string_(uint16_t state) 
   }
 }
 
-const char *MCF8316DManualComponent::brake_input_to_string_(uint32_t brake_input_value) const {
+const char *MCF8316DComponent::brake_input_to_string_(uint32_t brake_input_value) const {
   switch (brake_input_value & 0x3u) {
     case 0x0:
       return "hardware_or_hiz";
@@ -1990,7 +1990,7 @@ const char *MCF8316DManualComponent::brake_input_to_string_(uint32_t brake_input
   }
 }
 
-const char *MCF8316DManualComponent::direction_input_to_string_(uint32_t direction_input_value) const {
+const char *MCF8316DComponent::direction_input_to_string_(uint32_t direction_input_value) const {
   switch (direction_input_value & 0x3u) {
     case 0x0:
       return "hardware";
@@ -2003,7 +2003,7 @@ const char *MCF8316DManualComponent::direction_input_to_string_(uint32_t directi
   }
 }
 
-void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw,
+void MCF8316DComponent::log_control_diagnostics_(const char *context, uint16_t algorithm_state, uint16_t duty_raw,
                                                        uint16_t volt_mag_raw, bool fault_active) {
   uint32_t pin_config = 0;
   uint32_t peri_config1 = 0;
@@ -2053,7 +2053,7 @@ void MCF8316DManualComponent::log_control_diagnostics_(const char *context, uint
   }
 }
 
-void MCF8316DManualComponent::publish_algo_status_(uint32_t algo_status) {
+void MCF8316DComponent::publish_algo_status_(uint32_t algo_status) {
   const uint16_t duty_raw = (algo_status & ALGO_STATUS_DUTY_CMD_MASK) >> ALGO_STATUS_DUTY_CMD_SHIFT;
   const uint16_t volt_mag_raw = (algo_status & ALGO_STATUS_VOLT_MAG_MASK) >> ALGO_STATUS_VOLT_MAG_SHIFT;
 
@@ -2068,7 +2068,7 @@ void MCF8316DManualComponent::publish_algo_status_(uint32_t algo_status) {
   }
 }
 
-void MCF8316DManualComponent::handle_fault_shutdown_(bool fault_active) {
+void MCF8316DComponent::handle_fault_shutdown_(bool fault_active) {
   if (!fault_active) {
     this->fault_latched_ = false;
     return;
@@ -2082,5 +2082,5 @@ void MCF8316DManualComponent::handle_fault_shutdown_(bool fault_active) {
   (void) this->set_speed_percent(0.0f);
 }
 
-}  // namespace mcf8316d_manual
+}  // namespace mcf8316d
 }  // namespace esphome

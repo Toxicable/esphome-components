@@ -82,6 +82,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) { inter_byte_delay_us_ = inter_byte_delay_us; }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) { auto_tickle_watchdog_ = auto_tickle_watchdog; }
+  void set_clear_mpet_on_startup(bool clear_mpet_on_startup) { clear_mpet_on_startup_ = clear_mpet_on_startup; }
   void set_apply_startup_config(bool apply_startup_config) { apply_startup_config_ = apply_startup_config; }
   void set_startup_brake_mode(uint8_t startup_brake_mode) {
     startup_brake_mode_ = startup_brake_mode;
@@ -112,14 +113,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void set_vm_voltage_sensor(sensor::Sensor *s) { vm_voltage_sensor_ = s; }
   void set_duty_cmd_percent_sensor(sensor::Sensor *s) { duty_cmd_percent_sensor_ = s; }
   void set_volt_mag_percent_sensor(sensor::Sensor *s) { volt_mag_percent_sensor_ = s; }
-  void set_algorithm_state_code_sensor(sensor::Sensor *s) { algorithm_state_code_sensor_ = s; }
   void set_motor_bemf_constant_sensor(sensor::Sensor *s) { motor_bemf_constant_sensor_ = s; }
-  void set_fault_summary_text_sensor(text_sensor::TextSensor *s) { fault_summary_text_sensor_ = s; }
-  void set_algorithm_state_text_sensor(text_sensor::TextSensor *s) { algorithm_state_text_sensor_ = s; }
-  void set_gate_fault_status_text_sensor(text_sensor::TextSensor *s) { gate_fault_status_text_sensor_ = s; }
-  void set_controller_fault_status_text_sensor(text_sensor::TextSensor *s) { controller_fault_status_text_sensor_ = s; }
-  void set_algo_status_text_sensor(text_sensor::TextSensor *s) { algo_status_text_sensor_ = s; }
-  void set_startup_config_text_sensor(text_sensor::TextSensor *s) { startup_config_text_sensor_ = s; }
+  void set_current_fault_text_sensor(text_sensor::TextSensor *s) { current_fault_text_sensor_ = s; }
 
  protected:
   bool read_probe_and_publish_();
@@ -129,8 +124,6 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void process_deferred_startup_();
   void apply_post_comms_setup_();
   bool apply_startup_motor_config_();
-  void publish_status_texts_(uint32_t gate_fault_status, bool gate_ok, uint32_t controller_fault_status, bool controller_ok,
-                             uint32_t algo_status, bool algo_ok);
   const char *i2c_error_to_string_(i2c::ErrorCode error_code) const;
   const char *startup_mode_to_string_(uint8_t mode) const;
   const char *startup_align_time_to_string_(uint8_t code) const;
@@ -145,7 +138,6 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_faults_(uint32_t gate_fault_status, bool gate_fault_valid, uint32_t controller_fault_status,
                        bool controller_fault_valid);
   void publish_algo_status_(uint32_t algo_status);
-  const char *algorithm_state_to_string_(uint16_t state) const;
   const char *brake_input_to_string_(uint32_t brake_input_value) const;
   const char *direction_input_to_string_(uint32_t direction_input_value) const;
   void handle_fault_shutdown_(bool fault_active);
@@ -156,11 +148,11 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_MTR_PARAMS = 0x00E6;
   static constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
   static constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
+  static constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
   static constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
   static constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
   static constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
-  static constexpr uint16_t REG_ALGORITHM_STATE = 0x0196;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
 
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 2);
@@ -177,6 +169,13 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t ALGO_CTRL1_CLR_FLT_MASK = (1u << 29);
   static constexpr uint32_t ALGO_CTRL1_WATCHDOG_TICKLE_MASK = (1u << 10);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_CMD_MASK = (1u << 5);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_KE_MASK = (1u << 2);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_MECH_MASK = (1u << 1);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK = (1u << 0);
+  static constexpr uint32_t ALGO_DEBUG2_MPET_ALL_MASK =
+      ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_KE_MASK | ALGO_DEBUG2_MPET_MECH_MASK |
+      ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
 
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = (0x0FFFu << 4);
   static constexpr uint32_t ALGO_STATUS_DUTY_CMD_SHIFT = 4;
@@ -232,6 +231,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
 
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
+  bool clear_mpet_on_startup_{true};
   bool apply_startup_config_{true};
   bool startup_brake_mode_set_{false};
   bool startup_brake_time_set_{false};
@@ -260,14 +260,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor *vm_voltage_sensor_{nullptr};
   sensor::Sensor *duty_cmd_percent_sensor_{nullptr};
   sensor::Sensor *volt_mag_percent_sensor_{nullptr};
-  sensor::Sensor *algorithm_state_code_sensor_{nullptr};
   sensor::Sensor *motor_bemf_constant_sensor_{nullptr};
-  text_sensor::TextSensor *fault_summary_text_sensor_{nullptr};
-  text_sensor::TextSensor *algorithm_state_text_sensor_{nullptr};
-  text_sensor::TextSensor *gate_fault_status_text_sensor_{nullptr};
-  text_sensor::TextSensor *controller_fault_status_text_sensor_{nullptr};
-  text_sensor::TextSensor *algo_status_text_sensor_{nullptr};
-  text_sensor::TextSensor *startup_config_text_sensor_{nullptr};
+  text_sensor::TextSensor *current_fault_text_sensor_{nullptr};
 };
 
 }  // namespace mcf8329a
