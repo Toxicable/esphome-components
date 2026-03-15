@@ -22,4 +22,4 @@ Component-scoped notes for `components/mcf8329a`.
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
   - `text_sensor.gate_fault_status`, `controller_fault_status` (decoded labels, not raw hex)
   - `text_sensor.algo_status` (`sys=... duty=... volt_mag=...`)
-  - `text_sensor.startup_config` (applied startup config summary)
+  - `text_sensor.startup_config` (full decoded effective startup status line: apply/profile/dir/startup/align/stop/stop_brake)

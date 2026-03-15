@@ -352,38 +352,32 @@ void MCF8329AComponent::apply_post_comms_setup_() {
 }
 
 bool MCF8329AComponent::apply_startup_motor_config_() {
-  if (!this->apply_startup_config_) {
-    this->startup_config_summary_ = "disabled";
-    ESP_LOGI(TAG, "Startup motor config application disabled");
-    return true;
-  }
-
   const bool has_startup_settings =
       this->startup_brake_mode_set_ || this->startup_brake_time_set_ || this->startup_mode_set_ || this->startup_align_time_set_;
-  if (!has_startup_settings) {
-    this->startup_config_summary_ = "default";
-    return true;
-  }
+  const bool apply_custom_settings = this->apply_startup_config_ && has_startup_settings;
+  const std::string effective_direction =
+      (this->apply_startup_config_ && this->startup_direction_mode_set_) ? this->startup_direction_mode_ : "hardware";
 
   bool ok = true;
 
   uint32_t closed_loop2 = 0;
   if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2)) {
     ESP_LOGW(TAG, "Failed to read CLOSED_LOOP2 for startup config");
+    this->startup_config_summary_ = "read_error";
     return false;
   }
   uint32_t closed_loop2_next = closed_loop2;
-  if (this->startup_brake_mode_set_) {
+  if (apply_custom_settings && this->startup_brake_mode_set_) {
     closed_loop2_next =
         (closed_loop2_next & ~CLOSED_LOOP2_MTR_STOP_MASK) |
         ((static_cast<uint32_t>(this->startup_brake_mode_) << CLOSED_LOOP2_MTR_STOP_SHIFT) & CLOSED_LOOP2_MTR_STOP_MASK);
   }
-  if (this->startup_brake_time_set_) {
+  if (apply_custom_settings && this->startup_brake_time_set_) {
     closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK) |
                         ((static_cast<uint32_t>(this->startup_brake_time_) << CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT) &
                          CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK);
   }
-  if (closed_loop2_next != closed_loop2) {
+  if (apply_custom_settings && closed_loop2_next != closed_loop2) {
     ok &= this->write_reg32(REG_CLOSED_LOOP2, closed_loop2_next);
     ESP_LOGI(TAG, "CLOSED_LOOP2 startup cfg: 0x%08X -> 0x%08X", closed_loop2, closed_loop2_next);
   }
@@ -391,60 +385,55 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   uint32_t motor_startup1 = 0;
   if (!this->read_reg32(REG_MOTOR_STARTUP1, motor_startup1)) {
     ESP_LOGW(TAG, "Failed to read MOTOR_STARTUP1 for startup config");
+    this->startup_config_summary_ = "read_error";
     return false;
   }
   uint32_t motor_startup1_next = motor_startup1;
-  if (this->startup_mode_set_) {
+  if (apply_custom_settings && this->startup_mode_set_) {
     motor_startup1_next =
         (motor_startup1_next & ~MOTOR_STARTUP1_MTR_STARTUP_MASK) |
         ((static_cast<uint32_t>(this->startup_mode_) << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) & MOTOR_STARTUP1_MTR_STARTUP_MASK);
   }
-  if (this->startup_align_time_set_) {
+  if (apply_custom_settings && this->startup_align_time_set_) {
     motor_startup1_next =
         (motor_startup1_next & ~MOTOR_STARTUP1_ALIGN_TIME_MASK) |
         ((static_cast<uint32_t>(this->startup_align_time_) << MOTOR_STARTUP1_ALIGN_TIME_SHIFT) & MOTOR_STARTUP1_ALIGN_TIME_MASK);
   }
-  if (motor_startup1_next != motor_startup1) {
+  if (apply_custom_settings && motor_startup1_next != motor_startup1) {
     ok &= this->write_reg32(REG_MOTOR_STARTUP1, motor_startup1_next);
     ESP_LOGI(TAG, "MOTOR_STARTUP1 startup cfg: 0x%08X -> 0x%08X", motor_startup1, motor_startup1_next);
   }
 
-  std::string summary;
-  if (this->startup_brake_mode_set_) {
-    summary += "stop=";
-    summary += this->startup_brake_mode_to_string_(this->startup_brake_mode_);
+  if (!this->apply_startup_config_) {
+    ESP_LOGI(TAG, "Startup motor config application disabled");
   }
-  if (this->startup_brake_time_set_) {
-    if (!summary.empty()) {
-      summary += ",";
-    }
-    summary += "stop_brake_time=";
-    summary += this->startup_brake_time_to_string_(this->startup_brake_time_);
+
+  uint32_t closed_loop2_effective = closed_loop2_next;
+  uint32_t motor_startup1_effective = motor_startup1_next;
+  if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2_effective)) {
+    ESP_LOGW(TAG, "Failed to read back CLOSED_LOOP2 after startup config apply");
   }
-  if (this->startup_mode_set_) {
-    if (!summary.empty()) {
-      summary += ",";
-    }
-    summary += "startup=";
-    summary += this->startup_mode_to_string_(this->startup_mode_);
+  if (!this->read_reg32(REG_MOTOR_STARTUP1, motor_startup1_effective)) {
+    ESP_LOGW(TAG, "Failed to read back MOTOR_STARTUP1 after startup config apply");
   }
-  if (this->startup_align_time_set_) {
-    if (!summary.empty()) {
-      summary += ",";
-    }
-    summary += "align_time=";
-    summary += this->startup_align_time_to_string_(this->startup_align_time_);
-  }
-  if (this->startup_direction_mode_set_) {
-    if (!summary.empty()) {
-      summary += ",";
-    }
-    summary += "dir=";
-    summary += this->startup_direction_mode_;
-  }
-  if (summary.empty()) {
-    summary = "default";
-  }
+
+  const uint8_t effective_brake_mode =
+      static_cast<uint8_t>((closed_loop2_effective & CLOSED_LOOP2_MTR_STOP_MASK) >> CLOSED_LOOP2_MTR_STOP_SHIFT);
+  const uint8_t effective_brake_time = static_cast<uint8_t>(
+      (closed_loop2_effective & CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK) >> CLOSED_LOOP2_MTR_STOP_BRK_TIME_SHIFT);
+  const uint8_t effective_startup_mode =
+      static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_MTR_STARTUP_MASK) >> MOTOR_STARTUP1_MTR_STARTUP_SHIFT);
+  const uint8_t effective_align_time =
+      static_cast<uint8_t>((motor_startup1_effective & MOTOR_STARTUP1_ALIGN_TIME_MASK) >> MOTOR_STARTUP1_ALIGN_TIME_SHIFT);
+  const char *apply_state = this->apply_startup_config_ ? "on" : "off";
+  const char *profile_state = apply_custom_settings ? "custom" : "current";
+  char summary[192];
+  std::snprintf(summary, sizeof(summary),
+                "apply=%s profile=%s dir=%s startup=%s align=%s stop=%s stop_brake=%s", apply_state, profile_state,
+                effective_direction.c_str(), this->startup_mode_to_string_(effective_startup_mode),
+                this->startup_align_time_to_string_(effective_align_time),
+                this->startup_brake_mode_to_string_(effective_brake_mode),
+                this->startup_brake_time_to_string_(effective_brake_time));
   this->startup_config_summary_ = summary;
   ESP_LOGI(TAG, "Startup motor config: %s", this->startup_config_summary_.c_str());
   return ok;

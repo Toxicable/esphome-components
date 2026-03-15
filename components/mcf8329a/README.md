@@ -102,6 +102,7 @@ text_sensor:
     #   # "sys=on/off duty=x% volt_mag=y%"
     # startup_config:
     #   name: "MCF Startup Config"
+    #   # "apply=on/off profile=current/custom dir=... startup=... align=... stop=... stop_brake=..."
     # algorithm_state:
     #   name: "MCF Algorithm State"
 ```
