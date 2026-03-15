@@ -31,9 +31,7 @@ Component-scoped notes for `components/mcf8329a`.
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
 - Runtime behavior:
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
-  - If `startup_lock_mode` is configured as `retry`/`report_only`/`disabled`, lock-only controller faults
-    (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `MTR_LCK`) do not trigger firmware speed-forced-to-zero, so hardware retry/report
-    behavior can operate.
+  - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
 - `binary_sensor` now only exposes aggregate signals (`fault_active`, `sys_enable`); per-fault bit entities were removed.
 - On `MPET_BEMF_FAULT`, component logs one-shot diagnostics (speed command, brake input decode, MPET bits, motor BEMF const)

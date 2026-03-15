@@ -134,6 +134,7 @@ def validate_lock_ilimit_percent(value):
         )
     return value
 
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
