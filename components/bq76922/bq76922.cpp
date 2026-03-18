@@ -345,18 +345,41 @@ void BQ76922Component::dump_config() {
 }
 
 bool BQ76922Component::set_power_path_mode(const char* mode) {
+  uint16_t manufacturing_status = 0;
+  if (!this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status)) {
+    ESP_LOGW(TAG, "Failed to read Manufacturing Status before power-path change");
+    return false;
+  }
+  if ((manufacturing_status & MANUFACTURING_STATUS_FET_EN) == 0) {
+    ESP_LOGW(
+      TAG,
+      "Power-path control blocked: FET_EN=0 (FET test mode). Enable autonomous_fet_control first."
+    );
+    return false;
+  }
+
   uint16_t command = 0;
   bool clear_host_blocks_first = false;
+  bool expected_chg = false;
+  bool expected_dsg = false;
   if (std::strcmp(mode, "off") == 0) {
     command = SUBCMD_ALL_FETS_OFF;
+    expected_chg = false;
+    expected_dsg = false;
   } else if (std::strcmp(mode, "charge") == 0) {
     command = SUBCMD_DSG_PDSG_OFF;
     clear_host_blocks_first = true;
+    expected_chg = true;
+    expected_dsg = false;
   } else if (std::strcmp(mode, "discharge") == 0) {
     command = SUBCMD_CHG_PCHG_OFF;
     clear_host_blocks_first = true;
+    expected_chg = false;
+    expected_dsg = true;
   } else if (std::strcmp(mode, "bidirectional") == 0) {
     command = SUBCMD_ALL_FETS_ON;
+    expected_chg = true;
+    expected_dsg = true;
   } else {
     return false;
   }
@@ -374,6 +397,29 @@ bool BQ76922Component::set_power_path_mode(const char* mode) {
     return false;
   }
   delay_microseconds_safe(800);
+
+  uint8_t fet_status = 0;
+  uint16_t battery_status = 0;
+  if (!this->read_byte_(REG_FET_STATUS, fet_status) || !this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to verify FET state after power-path command");
+    return false;
+  }
+
+  const bool actual_chg = (fet_status & FET_STATUS_CHG) != 0;
+  const bool actual_dsg = (fet_status & FET_STATUS_DSG) != 0;
+  if (actual_chg != expected_chg || actual_dsg != expected_dsg) {
+    ESP_LOGW(
+      TAG,
+      "Power-path request '%s' blocked by device conditions. CHG=%s DSG=%s SS=%s PF=%s",
+      mode,
+      actual_chg ? "on" : "off",
+      actual_dsg ? "on" : "off",
+      (battery_status & BATTERY_STATUS_SS) ? "1" : "0",
+      (battery_status & BATTERY_STATUS_PF) ? "1" : "0"
+    );
+    return false;
+  }
+
   return true;
 }
 

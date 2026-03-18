@@ -12,6 +12,8 @@ Component-scoped notes for `components/bq76922`.
 - `0x0022 FET_ENABLE()` toggles `FET_EN` and is allowed only in `UNSEALED`/`FULLACCESS`.
 - Runtime power-path host commands are:
   - `0x0093` DSG/PDSG off, `0x0094` CHG/PCHG off, `0x0095` all off, `0x0096` all on.
+- `power_path` control now checks `Manufacturing Status[FET_EN]` first; if `FET_EN=0` (test mode), control is rejected with a log warning.
+- `power_path` now verifies CHG/DSG readback after command and rejects if device conditions keep FETs off; warning includes SS/PF bits.
 - CC2 current units and stack/PACK/LD voltage units are auto-detected from `Settings:Configuration:DA Configuration` (`0x9303`) during setup.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
 - User preference: allow `cell_count` configuration range `1..5` in this component schema.
