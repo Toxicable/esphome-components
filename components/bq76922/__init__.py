@@ -100,7 +100,7 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(BQ76922Component),
-            cv.Optional(CONF_CELL_COUNT, default=5): cv.int_range(min=3, max=5),
+            cv.Optional(CONF_CELL_COUNT, default=5): cv.int_range(min=1, max=5),
             cv.Optional(CONF_AUTONOMOUS_FET_MODE, default="preserve"): cv.enum(
                 AUTONOMOUS_FET_MODE_OPTIONS, lower=True
             ),

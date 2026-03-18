@@ -61,6 +61,7 @@ constexpr uint8_t FET_STATUS_DSG = 1u << 2;
 constexpr uint8_t FET_STATUS_CHG = 1u << 0;
 
 constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
+constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 }  // namespace
 
 void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
@@ -171,17 +172,61 @@ void BQ76922Component::update() {
     }
   }
 
+  std::array<int16_t, 5> raw_cell_mv{};
+  for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
+    if (!this->read_i16_(static_cast<uint8_t>(REG_CELL1_VOLTAGE + i * 2), raw_cell_mv[i])) {
+      ESP_LOGW(TAG, "Failed to read cell command %u voltage", static_cast<unsigned>(i + 1));
+      this->status_set_warning();
+      return;
+    }
+  }
+
+  if (!cell_map_initialized_) {
+    std::array<uint8_t, 5> present_indices{};
+    uint8_t present_count = 0;
+    for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
+      if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
+        present_indices[present_count++] = i;
+      }
+    }
+
+    if (present_count >= cell_count_) {
+      for (uint8_t i = 0; i < cell_count_; i++) {
+        cell_read_map_[i] = present_indices[i];
+      }
+    } else {
+      for (uint8_t i = 0; i < cell_count_; i++) {
+        cell_read_map_[i] = i;
+      }
+    }
+
+    bool non_sequential_map = false;
+    for (uint8_t i = 0; i < cell_count_; i++) {
+      if (cell_read_map_[i] != i) {
+        non_sequential_map = true;
+        break;
+      }
+    }
+    if (non_sequential_map) {
+      for (uint8_t i = 0; i < cell_count_; i++) {
+        ESP_LOGI(
+          TAG,
+          "Cell %u mapped to command Cell %u Voltage",
+          static_cast<unsigned>(i + 1),
+          static_cast<unsigned>(cell_read_map_[i] + 1)
+        );
+      }
+    }
+
+    cell_map_initialized_ = true;
+  }
+
   for (uint8_t i = 0; i < cell_count_; i++) {
     if (cell_voltage_sensors_[i] == nullptr) {
       continue;
     }
-    int16_t cell_mv = 0;
-    if (!this->read_i16_(static_cast<uint8_t>(REG_CELL1_VOLTAGE + i * 2), cell_mv)) {
-      ESP_LOGW(TAG, "Failed to read cell %u voltage", static_cast<unsigned>(i + 1));
-      this->status_set_warning();
-      return;
-    }
-    cell_voltage_sensors_[i]->publish_state(static_cast<float>(cell_mv) / 1000.0f);
+    const uint8_t raw_index = cell_read_map_[i];
+    cell_voltage_sensors_[i]->publish_state(static_cast<float>(raw_cell_mv[raw_index]) / 1000.0f);
   }
 
   if (stack_voltage_sensor_ != nullptr) {

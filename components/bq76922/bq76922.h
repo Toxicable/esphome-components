@@ -141,6 +141,8 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool user_volts_cv_{true};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
+  std::array<uint8_t, 5> cell_read_map_{0, 1, 2, 3, 4};
+  bool cell_map_initialized_{false};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};

@@ -14,3 +14,5 @@ Component-scoped notes for `components/bq76922`.
   - `0x0093` DSG/PDSG off, `0x0094` CHG/PCHG off, `0x0095` all off, `0x0096` all on.
 - CC2 current units and stack/PACK/LD voltage units are auto-detected from `Settings:Configuration:DA Configuration` (`0x9303`) during setup.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
+- User preference: allow `cell_count` configuration range `1..5` in this component schema.
+- Cell voltage read mapping is auto-selected once at startup based on non-zero commands (>500mV), so common fewer-cell jumper layouts (for example 4S using Cell 1/2/3/5 commands) publish correctly.

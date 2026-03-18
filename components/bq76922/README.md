@@ -28,7 +28,7 @@ bq76922:
   address: 0x08
   update_interval: 1s
 
-  # Number of cells in series (3 to 5):
+  # Number of cells in series (1 to 5):
   cell_count: 5
 
   # Startup behavior:
@@ -102,13 +102,17 @@ bq76922:
 
 ## Config Options You’ll Likely Tune
 
-- `cell_count`: match your physical stack (`3..5`)
+- `cell_count`: match your physical stack (`1..5`)
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
 
 Current and voltage scaling are automatically detected from the chip configuration.
 No manual unit settings are needed.
+
+If you use fewer than 5 cells and jumper unused sense inputs, the component auto-detects
+which cell-voltage commands are active on first read. This covers common layouts like 4S
+with VC4 tied to VC3 and VC5 at BAT+.
 
 ## Autonomous Mode
 
