@@ -152,6 +152,8 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool read_data_memory_u8_(uint16_t address, uint8_t& value);
   bool write_data_memory_u8_(uint16_t address, uint8_t value);
   bool set_cfgupdate_mode_(bool enabled);
+  bool has_current_limit_config_() const;
+  bool ota_pending_verify_() const;
 
   bool apply_boot_modes_();
   bool load_unit_scaling_();
@@ -182,6 +184,8 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t sleep_mode_{BOOT_PRESERVE};
   std::array<uint8_t, 5> cell_read_map_{0, 1, 2, 3, 4};
   bool cell_map_initialized_{false};
+  bool current_limit_config_deferred_{false};
+  uint32_t deferred_current_limit_log_ms_{0};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};

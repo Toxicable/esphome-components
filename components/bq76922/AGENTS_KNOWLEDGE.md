@@ -29,6 +29,8 @@ Component-scoped notes for `components/bq76922`.
   - Writes require `FULLACCESS` and are applied in `CONFIG_UPDATE` mode.
   - Entering `CONFIG_UPDATE` turns CHG/DSG FETs off briefly; if the host MCU is powered through that switched path,
     this can reset the MCU and look like an OTA rollback (boot not marked successful).
+  - Runtime behavior: if ESP32 OTA rollback is active and the running image is `PENDING_VERIFY`, boot-time current-limit
+    writes are deferred until OTA verification is complete, then applied once.
 - Public config key for top-of-stack voltage is `bat_voltage`; keep `stack_voltage` as backward-compatible alias.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
 - User preference: allow `cell_count` configuration range `1..5` in this component schema.

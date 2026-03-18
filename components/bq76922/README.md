@@ -132,8 +132,10 @@ Current limit notes:
 - Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
 - They require the chip to be in `FULLACCESS`.
 - Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
-- If your ESP is powered through that switched FET path, the ESP can reset before boot is marked
-  successful, and the next boot may report OTA rollback.
+- When ESP32 OTA rollback is active and the image is still pending verification, this component
+  now defers these writes until the boot is marked successful to avoid rollback loops.
+- If your ESP is powered through that switched FET path, expect one reset when deferred writes are
+  finally applied (after boot is already marked successful).
 
 ## Autonomous Mode
 

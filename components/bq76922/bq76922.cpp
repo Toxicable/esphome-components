@@ -6,6 +6,10 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
+#if defined(USE_ESP32) && defined(USE_OTA_ROLLBACK)
+#include <esp_ota_ops.h>
+#endif
+
 namespace esphome {
 namespace bq76922 {
 
@@ -91,8 +95,17 @@ void BQ76922Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if (!this->apply_current_limit_config_()) {
-    this->status_set_warning();
+  if (this->has_current_limit_config_() && this->ota_pending_verify_()) {
+    this->current_limit_config_deferred_ = true;
+    this->deferred_current_limit_log_ms_ = 0;
+    ESP_LOGW(
+      TAG,
+      "Deferring boot current-limit config while OTA image is pending verify (avoids rollback resets)"
+    );
+  } else {
+    if (!this->apply_current_limit_config_()) {
+      this->status_set_warning();
+    }
   }
   if (!this->apply_boot_modes_()) {
     this->status_set_warning();
@@ -100,6 +113,22 @@ void BQ76922Component::setup() {
 }
 
 void BQ76922Component::update() {
+  if (this->current_limit_config_deferred_) {
+    if (this->ota_pending_verify_()) {
+      const uint32_t now = millis();
+      if (now >= this->deferred_current_limit_log_ms_) {
+        ESP_LOGI(TAG, "Current-limit config still deferred: waiting for OTA boot to be marked successful");
+        this->deferred_current_limit_log_ms_ = now + 15000;
+      }
+    } else {
+      ESP_LOGI(TAG, "OTA boot marked successful; applying deferred current-limit config");
+      if (!this->apply_current_limit_config_()) {
+        this->status_set_warning();
+      }
+      this->current_limit_config_deferred_ = false;
+    }
+  }
+
   uint16_t control_status = 0;
   uint16_t battery_status = 0;
   uint8_t fet_status = 0;
@@ -565,11 +594,30 @@ bool BQ76922Component::set_cfgupdate_mode_(bool enabled) {
   return false;
 }
 
+bool BQ76922Component::has_current_limit_config_() const {
+  return has_charge_current_limit_ || has_discharge_current_limit_ || has_charge_current_delay_ ||
+         has_discharge_current_delay_ || has_current_recovery_time_;
+}
+
+bool BQ76922Component::ota_pending_verify_() const {
+#if defined(USE_ESP32) && defined(USE_OTA_ROLLBACK)
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  if (running == nullptr) {
+    return false;
+  }
+
+  esp_ota_img_states_t ota_state = ESP_OTA_IMG_UNDEFINED;
+  if (esp_ota_get_state_partition(running, &ota_state) != ESP_OK) {
+    return false;
+  }
+  return ota_state == ESP_OTA_IMG_PENDING_VERIFY;
+#else
+  return false;
+#endif
+}
+
 bool BQ76922Component::apply_current_limit_config_() {
-  if (
-    !has_charge_current_limit_ && !has_discharge_current_limit_ && !has_charge_current_delay_ &&
-    !has_discharge_current_delay_ && !has_current_recovery_time_
-  ) {
+  if (!this->has_current_limit_config_()) {
     return true;
   }
 
