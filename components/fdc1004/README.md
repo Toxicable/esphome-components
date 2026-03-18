@@ -3,7 +3,7 @@
 Datasheet: https://www.ti.com/lit/ds/symlink/fdc1004.pdf
 
 ## What it does
-Reads capacitance from a TI FDC1004 over I2C using repeated conversions.  
+Reads capacitance from a TI FDC1004 over I2C using repeated conversions.
 Each configured channel publishes capacitance in `pF`.
 
 ## How to use it
@@ -20,34 +20,34 @@ i2c:
   scl: GPIO22
   frequency: 400kHz
 
-sensor:
-  - platform: fdc1004
-    i2c_id: i2c_bus
-    address: 0x50  # Optional / default
-    update_interval: 200ms  # Optional / default
-    sample_rate: 100  # Optional: 100, 200, or 400 (S/s)
-    cin1:
-      name: "FDC1004 CIN1"
-      # capdac: 0  # Optional: 0..31 steps, 3.125pF/step
-    # cin2:
-    #   name: "FDC1004 CIN2"
-    #   capdac: 0
-    # cin3:
-    #   name: "FDC1004 CIN3"
-    #   capdac: 0
-    # cin4:
-    #   name: "FDC1004 CIN4"
-    #   capdac: 0
-    # cin1_offset:
-    #   name: "FDC1004 CIN1 Offset"
-    # cin2_offset:
-    #   name: "FDC1004 CIN2 Offset"
-    # cin3_offset:
-    #   name: "FDC1004 CIN3 Offset"
-    # cin4_offset:
-    #   name: "FDC1004 CIN4 Offset"
-    # zero_now:
-    #   name: "FDC1004 Zero Now"
+fdc1004:
+  id: capsense
+  i2c_id: i2c_bus
+  address: 0x50  # Optional / default
+  update_interval: 200ms  # Optional / default
+  sample_rate: 100  # Optional: 100, 200, or 400 (S/s)
+  cin1:
+    name: "CIN1"
+    # capdac: 0  # Optional: 0..31 steps, 3.125pF/step
+  # cin2:
+  #   name: "CIN2"
+  #   capdac: 0
+  # cin3:
+  #   name: "CIN3"
+  #   capdac: 0
+  # cin4:
+  #   name: "CIN4"
+  #   capdac: 0
+  # cin1_offset:
+  #   name: "CIN1 Offset"
+  # cin2_offset:
+  #   name: "CIN2 Offset"
+  # cin3_offset:
+  #   name: "CIN3 Offset"
+  # cin4_offset:
+  #   name: "CIN4 Offset"
+  # zero_now:
+  #   name: "Zero Now"
 ```
 
 Notes:

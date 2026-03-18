@@ -27,6 +27,8 @@ Component-scoped notes for `components/bq76922`.
     - `Settings:Protection:CHG FET Protections A` (`0x9265`) sets OCC bit (bit 4) for CHG turnoff.
     - `Settings:Protection:DSG FET Protections A` (`0x9269`) sets OCD1 bit (bit 5) for DSG turnoff.
   - Writes require `FULLACCESS` and are applied in `CONFIG_UPDATE` mode.
+  - Entering `CONFIG_UPDATE` turns CHG/DSG FETs off briefly; if the host MCU is powered through that switched path,
+    this can reset the MCU and look like an OTA rollback (boot not marked successful).
 - Public config key for top-of-stack voltage is `bat_voltage`; keep `stack_voltage` as backward-compatible alias.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
 - User preference: allow `cell_count` configuration range `1..5` in this component schema.

@@ -44,13 +44,13 @@ bq769x0:
   avg_cell_mv:
     name: "Avg Cell mV"
   alerts:
-    name: "BQ Alerts"
+    name: "Alerts"
   power_path:
-    name: "BQ Power Path"
+    name: "Power Path"
   power_path_state:
-    name: "BQ Power Path State"
+    name: "Power Path State"
   clear_faults:
-    name: "Clear BQ Faults"
+    name: "Clear Faults"
 ```
 
 ## Optional sensors and entities

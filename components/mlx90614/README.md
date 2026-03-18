@@ -3,7 +3,7 @@
 Datasheet: https://www.melexis.com/-/media/files/documents/datasheets/mlx90614-datasheet-melexis.pdf
 
 ## What it does
-Reads ambient and object temperatures from a Melexis MLX90614 infrared thermometer over I²C.
+Reads ambient and object temperatures from a Melexis MLX90614 infrared thermometer over I2C.
 
 ## How to use it
 Minimal configuration:
@@ -20,14 +20,16 @@ i2c:
   scl: GPIO22
   frequency: 100kHz
 
-sensor:
-  - platform: mlx90614
-    i2c_id: i2c_bus
-    address: 0x5A  # Optional / default
-    ambient:
-      name: "MLX90614 Ambient"
-    object:
-      name: "MLX90614 Object"
+mlx90614:
+  id: ir_temp
+  i2c_id: i2c_bus
+  address: 0x5A  # Optional / default
+  ambient:
+    name: "Ambient"
+  object:
+    name: "Object"
+  # object2:
+  #   name: "Object 2"
 ```
 
 Notes:

@@ -33,32 +33,32 @@ mcf8329a:
   startup_mode: double_align
   startup_brake_mode: recirculation
 
-  # Optional bring-up helpers:
+  ## Optional bring-up helpers:
   # clear_mpet_on_startup: true
   # auto_tickle_watchdog: false
 
-  # Startup direction/alignment:
+  ## Startup direction/alignment:
   # startup_direction_mode: cw
   # startup_align_time: 100ms
 
-  # Motor/speed scaling:
+  ## Motor/speed scaling:
   # startup_motor_bemf_const: 0x57
   # startup_max_speed_hz: 900
 
-  # Startup current + open-loop handoff shaping:
+  ## Startup current + open-loop handoff shaping:
   # startup_ilimit_percent: 80
   # startup_open_loop_ilimit_percent: 50
   # startup_open_loop_accel_hz_per_s: 25
   # startup_auto_handoff_enable: false
   # startup_open_to_closed_handoff_percent: 10
 
-  # Lock/fault handling:
+  ## Lock/fault handling:
   # startup_lock_mode: retry
   # startup_lock_ilimit_percent: 40
   # startup_hw_lock_ilimit_percent: 40
   # startup_lock_retry_time: 2s
 
-  # Advanced lock detector thresholds (usually leave at defaults):
+  ## Advanced lock detector thresholds (usually leave at defaults):
   # startup_abn_speed_lock_enable: true
   # startup_abn_bemf_lock_enable: true
   # startup_no_motor_lock_enable: true
@@ -66,37 +66,37 @@ mcf8329a:
   # startup_abnormal_bemf_threshold_percent: 40
   # startup_no_motor_threshold_percent: 20
 
-  # Optional stop/brake timing:
+  ## Optional stop/brake timing:
   # startup_brake_time: 100ms
 
   brake:
-    name: "MCF Brake"
-    # Note: any non-zero speed command auto-releases brake in firmware.
+    name: "Brake"
+    ## Note: any non-zero speed command auto-releases brake in firmware.
   direction:
-    name: "MCF Direction"
+    name: "Direction"
   speed_percent:
-    name: "MCF Speed %"
+    name: "Speed %"
 
   clear_faults:
-    name: "MCF Clear Faults"
+    name: "Clear Faults"
   # watchdog_tickle:
-  #   name: "MCF Watchdog Tickle"
+  #   name: "Watchdog Tickle"
 
   fault_active:
-    name: "MCF Fault Active"
+    name: "Fault Active"
   sys_enable:
-    name: "MCF Sys Enable"
+    name: "Sys Enable"
   current_fault:
-    name: "MCF Current Fault"
+    name: "Current Fault"
 
   vm_voltage:
-    name: "MCF VM Voltage"
+    name: "VM Voltage"
   duty_cmd_percent:
-    name: "MCF Duty Cmd %"
+    name: "Duty Cmd %"
   volt_mag_percent:
-    name: "MCF Volt Mag %"
+    name: "Volt Mag %"
   # motor_bemf_constant:
-  #   name: "MCF Motor BEMF Const"
+  #   name: "Motor BEMF Const"
   #   # Measured/estimated BEMF (MTR_PARAMS), not the configured CLOSED_LOOP3 value.
 ```
 

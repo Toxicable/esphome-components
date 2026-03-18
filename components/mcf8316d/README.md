@@ -43,67 +43,45 @@ mcf8316d:
   inter_byte_delay_us: 100
   auto_tickle_watchdog: false
 
-switch:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    name: "MCF Brake"
+  brake:
+    name: "Brake"
+  direction:
+    name: "Direction"
+  speed_percent:
+    name: "Speed %"
 
-select:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    name: "MCF Direction"
+  clear_faults:
+    name: "Clear Faults"
+  # watchdog_tickle:
+  #   name: "Watchdog Tickle"
+  # apply_startup_tune:
+  #   name: "Apply Startup Tune"
+  # apply_hw_lock_report_only:
+  #   name: "Locks Disabled (Debug)"
+  # run_startup_sweep:
+  #   name: "Startup Sweep"
+  # run_scope_probe_test:
+  #   name: "Scope Probe Test"
 
-number:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    name: "MCF Speed %"
+  fault_active:
+    name: "Fault Active"
+    ## true means fault asserted (nFAULT active/low)
+  sys_enable:
+    name: "Sys Enable"
+    ## ALGO_STATUS[2] SYS_ENABLE_FLAG: 1 means register control is active
+    ## (for example GUI/manual writes can control the device), not "motor is spinning".
 
-button:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    clear_faults:
-      name: "MCF Clear Faults"
-    # Optional:
-    # watchdog_tickle:
-    #   name: "MCF Watchdog Tickle"
-    # apply_startup_tune:
-    #   name: "MCF Apply Startup Tune"
-    # apply_hw_lock_report_only:
-    #   name: "MCF Locks Disabled (Debug)"
-    # run_startup_sweep:
-    #   name: "MCF Startup Sweep"
-    # run_scope_probe_test:
-    #   name: "MCF Scope Probe Test"
+  vm_voltage:
+    name: "VM Voltage"
+  duty_cmd_percent:
+    name: "Duty Cmd %"
+  volt_mag_percent:
+    name: "Volt Mag %"
 
-binary_sensor:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    fault_active:
-      name: "MCF Fault Active"
-      # true means fault asserted (nFAULT active/low)
-    sys_enable:
-      name: "MCF Sys Enable"
-      # ALGO_STATUS[2] SYS_ENABLE_FLAG: 1 means register control is active
-      # (for example GUI/manual writes can control the device), not "motor is spinning".
-
-sensor:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    vm_voltage:
-      name: "MCF VM Voltage"
-    duty_cmd_percent:
-      name: "MCF Duty Cmd %"
-    volt_mag_percent:
-      name: "MCF Volt Mag %"
-
-text_sensor:
-  - platform: mcf8316d
-    mcf8316d_id: mcf
-    fault_summary:
-      name: "MCF Fault Summary"
-      # Comma-separated active faults from gate-driver + controller status.
-      # Falls back to DRV_FAULT_ACTIVE / CTRL_FAULT_ACTIVE if only summary bits are set.
-    # Optional:
-    # algorithm_state:
-    #   name: "MCF Algorithm State"
+  fault_summary:
+    name: "Fault Summary"
+    ## Comma-separated active faults from gate-driver + controller status.
+    ## Falls back to DRV_FAULT_ACTIVE / CTRL_FAULT_ACTIVE if only summary bits are set.
+  # algorithm_state:
+  #   name: "Algorithm State"
 ```

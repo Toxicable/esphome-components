@@ -3,15 +3,14 @@
 Datasheet: https://www.ti.com/lit/ds/symlink/drv8243-q1.pdf
 
 ## What it does
-Provides an ESPHome `output` that drives a TI DRV8243 H-bridge using one required PWM channel plus control pins.
+Provides a monolith `drv8243:` ESPHome output component for driving a TI DRV8243 H-bridge with one required PWM channel plus control pins.
 
 In plain terms:
-- With only `ch1` configured, this acts like a **single-channel dimmable output**.
-- You can optionally add a **second PWM channel** with `ch2`; use `ch1_id`/`ch2_id` for separate lights.
-- Alternatively, you can configure `out2_pin` as a simple polarity/control pin.
+- With only `ch1` configured, this acts like a single dimmable output.
+- You can optionally add a second PWM channel with `ch2`; use `ch1_id`/`ch2_id` for separate lights.
+- Alternatively, configure `out2_pin` as a simple static polarity/control pin.
 
 ## How to use it
-### Single-channel output (e.g., one light)
 
 ```yaml
 external_components:
@@ -19,51 +18,41 @@ external_components:
     refresh: 0s
     components: [ drv8243 ]
 
-output:
-  - platform: drv8243
-    id: light_drive
-    nsleep_pin: GPIO5
-    nfault_pin: GPIO10
-    out2_pin: GPIO7
-    flip_polarity: false  # Optional / default: false
-    ch1:
-      pin: GPIO6
-      frequency: 20000 Hz
+drv8243:
+  id: light_drive
+  nsleep_pin: GPIO5
+  nfault_pin: GPIO10
+  out2_pin: GPIO7
+  flip_polarity: false  # Optional / default: false
+  # min_level: 1.4%  # Optional / default: 1.4%
+  # exponent: 1.8    # Optional / default: 1.8
+
+  ch1:
+    pin: GPIO6
+    frequency: 20000 Hz
+
+  ## Optional second PWM channel:
+  # ch2:
+  #   pin: GPIO7
+  #   frequency: 20000 Hz
+
+  ## Optional channel-specific output IDs:
+  # ch1_id: light1
+  # ch2_id: light2
 
 light:
   - platform: monochromatic
-    name: "DRV8243 Light"
+    name: "Light"
     output: light_drive
+
+  ## Optional per-channel lights if ch1_id/ch2_id are set:
+  # - platform: monochromatic
+  #   name: "Light 1"
+  #   output: light1
+  # - platform: monochromatic
+  #   name: "Light 2"
+  #   output: light2
 ```
-
-### Two-channel output (independent channels)
-
-```yaml
-output:
-  - platform: drv8243
-    ch1_id: light1
-    ch2_id: light2
-    nsleep_pin: GPIO4
-    nfault_pin: GPIO5
-    ch1:
-      pin: GPIO6
-      frequency: 20000 Hz
-    ch2:
-      pin: GPIO7
-      frequency: 20000 Hz
-
-light:
-  - platform: monochromatic
-    name: "DRV8243 Light 1"
-    output: light1
-  - platform: monochromatic
-    name: "DRV8243 Light 2"
-    output: light2
-```
-
-## Examples
-
-### Single output channel, but reversable via onboard pot
 
 Notes:
 - `ch1` is required and may be either a simple `{pin, frequency}` config or a reference to another float output.

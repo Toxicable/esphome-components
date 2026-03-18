@@ -44,6 +44,8 @@ Component-scoped notes for `components/mcf8329a`.
   - Keep one example, but group optional startup knobs by purpose (direction/alignment, scaling, handoff, lock handling).
   - Omit default-valued keys from the example unless they materially aid bring-up.
   - Do not include `apply_startup_config`; startup config is always applied.
+  - Use monolith integration style: controls/telemetry are configured inline under `mcf8329a:` (for example
+    `brake`, `direction`, `speed_percent`, `clear_faults`, sensors/text/binary entries), not in separate platform blocks.
 - Runtime behavior:
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
   - `set_speed_percent(...)` now logs `INFO` lines with caller reason (`number_control`, `startup_init`, `fault_shutdown`)

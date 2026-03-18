@@ -5,7 +5,7 @@
 ## What it does
 Reads distance in millimeters from the DFRobot underwater ultrasonic obstacle avoidance sensor over UART.
 
-Product code: **5AE0077**  
+Product code: **5AE0077**
 Model tested: **DYP-L041MTW-V1.0** (L04xMTW)
 
 ## How to use it
@@ -18,16 +18,17 @@ external_components:
     components: [ l04xmtw ]
 
 uart:
+  id: uart_bus
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 115200
 
-sensor:
-  - platform: l04xmtw
-    distance:
-      name: "L04xMTW Distance"
+l04xmtw:
+  id: sonar
+  uart_id: uart_bus
+  distance:
+    name: "Distance"
 ```
 
 Notes:
 - Update interval defaults to `1s`.
-- If you have multiple UART buses, set `uart_id` under the sensor.

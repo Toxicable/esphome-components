@@ -23,21 +23,17 @@ i2c:
   frequency: 400kHz
 
 bq76922:
-  id: bms
-  i2c_id: i2c_bus
-  address: 0x08
-  update_interval: 1s
 
-  # Number of cells in series (1 to 5):
+  ## Number of cells in series (1 to 5):
   cell_count: 5
 
-  # Startup behavior:
-  # preserve = don't change device state on boot
-  # enable/disable send startup subcommands
+  ## Startup behavior:
+  ## preserve = don't change device state on boot
+  ## enable/disable send startup subcommands
   autonomous_fet_mode: preserve
   sleep_mode: preserve
 
-  # Optional current protection thresholds (applied at boot):
+  ## Optional current protection thresholds (applied at boot):
   # sense_resistor_milliohm: 1.0
   # charge_current_limit_a: 20.0
   # discharge_current_limit_a: 40.0
@@ -45,67 +41,67 @@ bq76922:
   # discharge_current_delay_ms: 23
   # current_recovery_time_s: 3
 
-  # Optional sensors:
+  ## Optional sensors:
   # bat_voltage:
-  #   name: "BQ76922 BAT Voltage"
+  #   name: "BAT Voltage"
   # pack_voltage:
-  #   name: "BQ76922 Pack Voltage"
+  #   name: "Pack Voltage"
   # ld_voltage:
-  #   name: "BQ76922 Load Detect Pin Voltage"
+  #   name: "Load Detect Pin Voltage"
   # cell1_voltage:
-  #   name: "BQ76922 Cell 1"
+  #   name: "Cell 1"
   # cell2_voltage:
-  #   name: "BQ76922 Cell 2"
+  #   name: "Cell 2"
   # cell3_voltage:
-  #   name: "BQ76922 Cell 3"
+  #   name: "Cell 3"
   # cell4_voltage:
-  #   name: "BQ76922 Cell 4"
+  #   name: "Cell 4"
   # cell5_voltage:
-  #   name: "BQ76922 Cell 5"
+  #   name: "Cell 5"
   # current:
-  #   name: "BQ76922 Current"
+  #   name: "Current"
   # die_temperature:
-  #   name: "BQ76922 Die Temperature"
+  #   name: "Die Temperature"
 
-  # Optional text sensors:
+  ## Optional text sensors:
   # security_state:
-  #   name: "BQ76922 Security State"
+  #   name: "Security State"
   # operating_mode:
-  #   name: "BQ76922 Operating Mode"
+  #   name: "Operating Mode"
   # power_path_state:
-  #   name: "BQ76922 Power Path State"
+  #   name: "Power Path State"
   # alarm_flags:
-  #   name: "BQ76922 Alarm Flags"
+  #   name: "Alarm Flags"
 
-  # Optional binary sensors:
+  ## Optional binary sensors:
   # sleep_mode_active:
-  #   name: "BQ76922 Sleep Active"
+  #   name: "Sleep Active"
   # cfgupdate_mode:
-  #   name: "BQ76922 Config Update"
+  #   name: "Config Update"
   # protection_fault:
-  #   name: "BQ76922 Safety Fault"
+  #   name: "Safety Fault"
   # permanent_fail:
-  #   name: "BQ76922 Permanent Fail"
+  #   name: "Permanent Fail"
   # sleep_allowed_state:
-  #   name: "BQ76922 Sleep Allowed"
+  #   name: "Sleep Allowed"
   # alert_pin:
-  #   name: "BQ76922 ALERT Pin"
+  #   name: "ALERT Pin"
   # chg_fet_on:
-  #   name: "BQ76922 CHG FET"
+  #   name: "CHG FET"
   # dsg_fet_on:
-  #   name: "BQ76922 DSG FET"
+  #   name: "DSG FET"
   # autonomous_fet_enabled:
-  #   name: "BQ76922 Autonomous FET"
+  #   name: "Autonomous FET"
 
-  # Optional controls:
+  ## Optional controls:
   # power_path:
-  #   name: "BQ76922 Power Path"
+  #   name: "Power Path"
   # autonomous_fet_control:
-  #   name: "BQ76922 Autonomous FET Control"
+  #   name: "Autonomous FET Control"
   # sleep_allowed_control:
-  #   name: "BQ76922 Sleep Allowed Control"
+  #   name: "Sleep Allowed Control"
   # clear_alarms:
-  #   name: "BQ76922 Clear Alarms"
+  #   name: "Clear Alarms"
 ```
 
 ## Config Options You’ll Likely Tune
@@ -136,6 +132,8 @@ Current limit notes:
 - Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
 - They require the chip to be in `FULLACCESS`.
 - Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
+- If your ESP is powered through that switched FET path, the ESP can reset before boot is marked
+  successful, and the next boot may report OTA rollback.
 
 ## Autonomous Mode
 

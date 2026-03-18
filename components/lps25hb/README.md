@@ -3,7 +3,7 @@
 Datasheet: https://www.st.com/resource/en/datasheet/lps25hb.pdf
 
 ## What it does
-Reads temperature and barometric pressure from an ST LPS25HB sensor over I²C.
+Reads temperature and barometric pressure from an ST LPS25HB sensor over I2C.
 
 ## How to use it
 Minimal configuration:
@@ -20,14 +20,14 @@ i2c:
   scl: GPIO22
   frequency: 400kHz
 
-sensor:
-  - platform: lps25hb
-    i2c_id: i2c_bus
-    address: 0x5C  # Optional / default
-    temperature:
-      name: "LPS25HB Temperature"
-    pressure:
-      name: "LPS25HB Pressure"
+lps25hb:
+  id: baro
+  i2c_id: i2c_bus
+  address: 0x5C  # Optional / default
+  temperature:
+    name: "Temperature"
+  pressure:
+    name: "Pressure"
 ```
 
 Notes:

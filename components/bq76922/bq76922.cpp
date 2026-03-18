@@ -573,6 +573,15 @@ bool BQ76922Component::apply_current_limit_config_() {
     return true;
   }
 
+  ESP_LOGW(
+    TAG,
+    "Boot current-limit config enabled: entering CONFIG_UPDATE will briefly turn CHG/DSG FETs off"
+  );
+  ESP_LOGW(
+    TAG,
+    "If ESP power depends on switched PACK path, this can reset the MCU and trigger OTA rollback"
+  );
+
   uint16_t battery_status = 0;
   if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
     ESP_LOGW(TAG, "Failed to read Battery Status before current-limit configuration");

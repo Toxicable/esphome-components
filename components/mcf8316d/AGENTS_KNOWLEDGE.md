@@ -3,6 +3,8 @@
 Component-scoped notes for `components/mcf8316d`.
 
 - Adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), and fault-triggered speed shutdown that defers lock-family handling to configured lock modes.
+- Use monolith integration style: configure controls/telemetry/buttons inline under `mcf8316d:` (for example
+  `brake`, `direction`, `speed_percent`, `clear_faults`, `fault_summary`) rather than separate platform blocks.
 - Should follow repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
 - VM voltage decode currently uses an 11-bit field from `REG_VM_VOLTAGE` (`bits 26:16`) with scaling `60/2048`, and debug log prints both `adc8` and `adc_q11`.
 - `fault_active` should mirror asserted `nFAULT` using gate + controller summary bits (`GATE_DRIVER_FAULT_STATUS[31]` OR `CONTROLLER_FAULT_STATUS[31]`); controller detail bits are at datasheet positions (e.g. `WATCHDOG_FAULT` is bit 3, not bit 1).

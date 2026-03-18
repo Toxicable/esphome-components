@@ -13,6 +13,8 @@
 
 ## Cross-component learned project notes
 - Component READMEs should present a single configuration example with optional items commented out instead of separate basic/full examples.
+- README entity example names should not be prefixed with the component name (for example, use `Pack Voltage` instead of `BQ76922 Pack Voltage`).
+- In README YAML examples, use `##` for section/explanatory comment lines and keep single `#` for commented keys so bulk-uncomment keeps headings as comments.
 - Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.
 - Validate any chip assumptions against the datasheet before implementing or documenting behavior.
 - `tools/pdf_to_text.py` extracts verbatim text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
@@ -24,3 +26,4 @@
 - README `external_components` examples should use `source: github://Toxicable/esphome-components@main` with `refresh: 0s`, and list the specific component in `components: [ ... ]`.
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
 - `.clang-format` should keep a JS-like feel for C++ formatting (2-space indents, attached braces, and tighter wrapping).
+- Prefer monolith ESPHome integrations in component `__init__.py` (single `<component_name>:` YAML block with optional nested entity configs) over split platform modules (`sensor.py`, `switch.py`, `number.py`, etc.).

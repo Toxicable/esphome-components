@@ -30,61 +30,61 @@ bq25798:
   update_interval: 1s
   disable_watchdog: true
   # ibus_current:
-  #   name: "BQ25798 IBUS Current"
+  #   name: "IBUS Current"
   # ibat_current:
-  #   name: "BQ25798 IBAT Current"
+  #   name: "IBAT Current"
   # vbus_voltage:
-  #   name: "BQ25798 VBUS Voltage"
+  #   name: "VBUS Voltage"
   # vbat_voltage:
-  #   name: "BQ25798 VBAT Voltage"
+  #   name: "VBAT Voltage"
   # vsys_voltage:
-  #   name: "BQ25798 VSYS Voltage"
+  #   name: "VSYS Voltage"
   # ts_percent:
-  #   name: "BQ25798 TS Percent"
+  #   name: "TS Percent"
   # die_temperature:
-  #   name: "BQ25798 Die Temperature"
+  #   name: "Die Temperature"
   # charge_status:
-  #   name: "BQ25798 Charge Status"
+  #   name: "Charge Status"
   # vbus_status:
-  #   name: "BQ25798 VBUS Status"
+  #   name: "VBUS Status"
   # pg_good:
-  #   name: "BQ25798 PG Good"
+  #   name: "PG Good"
   # vbus_present:
-  #   name: "BQ25798 VBUS Present"
+  #   name: "VBUS Present"
   # vbat_present:
-  #   name: "BQ25798 VBAT Present"
+  #   name: "VBAT Present"
   # watchdog_expired:
-  #   name: "BQ25798 Watchdog Expired"
+  #   name: "Watchdog Expired"
   # iindpm_active:
-  #   name: "BQ25798 IINDPM Active"
+  #   name: "IINDPM Active"
   # vindpm_active:
-  #   name: "BQ25798 VINDPM Active"
+  #   name: "VINDPM Active"
   # thermal_regulation:
-  #   name: "BQ25798 Thermal Regulation"
+  #   name: "Thermal Regulation"
   # vsys_regulation:
-  #   name: "BQ25798 VSYS Regulation"
+  #   name: "VSYS Regulation"
   # ts_cold:
-  #   name: "BQ25798 TS Cold"
+  #   name: "TS Cold"
   # ts_cool:
-  #   name: "BQ25798 TS Cool"
+  #   name: "TS Cool"
   # ts_warm:
-  #   name: "BQ25798 TS Warm"
+  #   name: "TS Warm"
   # ts_hot:
-  #   name: "BQ25798 TS Hot"
+  #   name: "TS Hot"
   # status_flags:
-  #   name: "BQ25798 Status Flags"
+  #   name: "Status Flags"
   # charge_enable:
-  #   name: "BQ25798 Charge Enable"
+  #   name: "Charge Enable"
   # hiz_mode:
-  #   name: "BQ25798 HIZ Mode"
+  #   name: "HIZ Mode"
   # otg_mode:
-  #   name: "BQ25798 OTG Mode"
+  #   name: "OTG Mode"
   # watchdog:
-  #   name: "BQ25798 Watchdog"
+  #   name: "Watchdog"
   # watchdog_reset:
-  #   name: "BQ25798 Watchdog Reset"
+  #   name: "Watchdog Reset"
   # dump_registers:
-  #   name: "BQ25798 Dump Registers"
+  #   name: "Dump Registers"
 ```
 
 ## Entities
