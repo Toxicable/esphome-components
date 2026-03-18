@@ -3,7 +3,7 @@
 ESPHome external component for TI BQ76922 (3S to 5S packs over I2C).
 
 It provides:
-- core telemetry (cell voltages, stack voltage, pack voltage, load-detect pin voltage, current, die temperature)
+- core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature)
 - battery/FET/alarm status entities
 - host controls for FET path, sleep-allow, and alarm-clear
 - startup policy options for autonomous FET control and sleep mode
@@ -38,8 +38,8 @@ bq76922:
   sleep_mode: preserve
 
   # Optional sensors:
-  # stack_voltage:
-  #   name: "BQ76922 Stack Voltage"
+  # bat_voltage:
+  #   name: "BQ76922 BAT Voltage"
   # pack_voltage:
   #   name: "BQ76922 Pack Voltage"
   # ld_voltage:
@@ -109,6 +109,8 @@ bq76922:
 
 Current and voltage scaling are automatically detected from the chip configuration.
 No manual unit settings are needed.
+
+`bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
 If you use fewer than 5 cells and jumper unused sense inputs, the component auto-detects
 which cell-voltage commands are active on first read. This covers common layouts like 4S

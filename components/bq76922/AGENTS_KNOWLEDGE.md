@@ -15,6 +15,7 @@ Component-scoped notes for `components/bq76922`.
 - `power_path` control now checks `Manufacturing Status[FET_EN]` first; if `FET_EN=0` (test mode), control is rejected with a log warning.
 - `power_path` now verifies CHG/DSG readback after command and rejects if device conditions keep FETs off; warning includes SS/PF bits.
 - CC2 current units and stack/PACK/LD voltage units are auto-detected from `Settings:Configuration:DA Configuration` (`0x9303`) during setup.
+- Public config key for top-of-stack voltage is `bat_voltage`; keep `stack_voltage` as backward-compatible alias.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
 - User preference: allow `cell_count` configuration range `1..5` in this component schema.
 - Cell voltage read mapping is auto-selected once at startup based on non-zero commands (>500mV), so common fewer-cell jumper layouts (for example 4S using Cell 1/2/3/5 commands) publish correctly.

@@ -28,6 +28,7 @@ CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
 CONF_SLEEP_MODE = "sleep_mode"
 
+CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
 CONF_LD_VOLTAGE = "ld_voltage"
@@ -82,6 +83,9 @@ VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
 )
 
 def _validate_config(config):
+    if CONF_BAT_VOLTAGE in config and CONF_STACK_VOLTAGE in config:
+        raise cv.Invalid("Use only one of 'bat_voltage' or legacy alias 'stack_voltage'")
+
     cell_count = config[CONF_CELL_COUNT]
     cell_keys = [
         CONF_CELL1_VOLTAGE,
@@ -107,6 +111,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SLEEP_MODE, default="preserve"): cv.enum(
                 SLEEP_MODE_OPTIONS, lower=True
             ),
+            cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
+            # Backward-compatible alias for bat_voltage.
             cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
             cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
             cv.Optional(CONF_LD_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -199,7 +205,10 @@ async def to_code(config):
     cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
     cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
 
-    if CONF_STACK_VOLTAGE in config:
+    if CONF_BAT_VOLTAGE in config:
+        sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])
+        cg.add(var.set_stack_voltage_sensor(sens))
+    elif CONF_STACK_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_STACK_VOLTAGE])
         cg.add(var.set_stack_voltage_sensor(sens))
     if CONF_PACK_VOLTAGE in config:

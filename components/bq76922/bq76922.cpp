@@ -232,7 +232,7 @@ void BQ76922Component::update() {
   if (stack_voltage_sensor_ != nullptr) {
     int16_t stack_uv = 0;
     if (!this->read_i16_(REG_STACK_VOLTAGE, stack_uv)) {
-      ESP_LOGW(TAG, "Failed to read Stack Voltage");
+      ESP_LOGW(TAG, "Failed to read BAT Voltage");
       this->status_set_warning();
       return;
     }
@@ -313,7 +313,7 @@ void BQ76922Component::dump_config() {
   ESP_LOGCONFIG(TAG, "  autonomous_fet_mode: %s", autonomous_mode);
   ESP_LOGCONFIG(TAG, "  sleep_mode: %s", sleep_mode);
 
-  LOG_SENSOR("  ", "Stack Voltage", stack_voltage_sensor_);
+  LOG_SENSOR("  ", "BAT Voltage", stack_voltage_sensor_);
   LOG_SENSOR("  ", "PACK Voltage", pack_voltage_sensor_);
   LOG_SENSOR("  ", "LD Voltage", ld_voltage_sensor_);
   LOG_SENSOR("  ", "Cell 1 Voltage", cell_voltage_sensors_[0]);
