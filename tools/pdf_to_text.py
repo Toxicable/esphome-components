@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - runtime dependency guard
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Extract text from a text-based PDF and write <pdf>.txt verbatim."
+            "Extract text from a text-based PDF and write <pdf>.txt."
         )
     )
     parser.add_argument("pdf", type=Path, help="Path to the PDF file.")
@@ -27,6 +27,13 @@ def _extract_text(pdf_path: Path, page_separator: str = "\f") -> str:
     for page in reader.pages:
         pages.append(page.extract_text() or "")
     return page_separator.join(pages)
+
+
+def _strip_nul_bytes(text: str) -> tuple[str, int]:
+    removed = text.count("\x00")
+    if removed:
+        text = text.replace("\x00", "")
+    return text, removed
 
 
 def main() -> int:
@@ -43,7 +50,13 @@ def main() -> int:
 
     output_path = args.pdf.with_suffix(".txt")
     text = _extract_text(args.pdf)
+    text, removed_nuls = _strip_nul_bytes(text)
     output_path.write_text(text, encoding="utf-8")
+    if removed_nuls:
+        print(
+            f"Removed {removed_nuls} NUL byte(s) from extracted text.",
+            file=sys.stderr,
+        )
     return 0
 
 

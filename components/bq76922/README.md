@@ -3,7 +3,7 @@
 ESPHome external component for TI BQ76922 (3S to 5S packs over I2C).
 
 It provides:
-- core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature)
+- core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature, TS1 temperature)
 - battery/FET/alarm status entities
 - host controls for FET path, sleep-allow, and alarm-clear
 - startup policy options for autonomous FET control and sleep mode
@@ -62,6 +62,8 @@ bq76922:
   #   name: "Current"
   # die_temperature:
   #   name: "Die Temperature"
+  # ts1_temperature:
+  #   name: "TS1 Temperature"
 
   ## Optional text sensors:
   # security_state:
@@ -122,6 +124,9 @@ No manual unit settings are needed.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
+`ts1_temperature` expects TS1 to be configured as a thermistor input. If TS1 is set to ADC input mode in the
+chip configuration, this command reports TS1 pin voltage instead of temperature.
+
 If you use fewer than 5 cells and jumper unused sense inputs, the component auto-detects
 which cell-voltage commands are active on first read. This covers common layouts like 4S
 with VC4 tied to VC3 and VC5 at BAT+.
@@ -132,6 +137,8 @@ Current limit notes:
 - Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
 - They require the chip to be in `FULLACCESS`.
 - Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
+- If requested values are already present in data memory, the component skips `CONFIG_UPDATE` and
+  does not re-apply them.
 - When ESP32 OTA rollback is active and the image is still pending verification, this component
   now defers these writes until the boot is marked successful to avoid rollback loops.
 - If your ESP is powered through that switched FET path, expect one reset when deferred writes are

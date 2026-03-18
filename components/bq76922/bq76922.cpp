@@ -25,6 +25,7 @@ constexpr uint8_t REG_LD_VOLTAGE = 0x38;
 constexpr uint8_t REG_CC2_CURRENT = 0x3A;
 constexpr uint8_t REG_ALARM_STATUS = 0x62;
 constexpr uint8_t REG_INT_TEMPERATURE = 0x68;
+constexpr uint8_t REG_TS1_TEMPERATURE = 0x70;
 constexpr uint8_t REG_FET_STATUS = 0x7F;
 
 constexpr uint8_t REG_SUBCMD_LO = 0x3E;
@@ -336,6 +337,17 @@ void BQ76922Component::update() {
     die_temperature_sensor_->publish_state(temp_c);
   }
 
+  if (ts1_temperature_sensor_ != nullptr) {
+    int16_t temp_0p1k = 0;
+    if (!this->read_i16_(REG_TS1_TEMPERATURE, temp_0p1k)) {
+      ESP_LOGW(TAG, "Failed to read TS1 Temperature");
+      this->status_set_warning();
+      return;
+    }
+    const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
+    ts1_temperature_sensor_->publish_state(temp_c);
+  }
+
   this->status_clear_warning();
 }
 
@@ -388,6 +400,7 @@ void BQ76922Component::dump_config() {
   LOG_SENSOR("  ", "Cell 5 Voltage", cell_voltage_sensors_[4]);
   LOG_SENSOR("  ", "Current", current_sensor_);
   LOG_SENSOR("  ", "Int Temperature", die_temperature_sensor_);
+  LOG_SENSOR("  ", "TS1 Temperature", ts1_temperature_sensor_);
 
   LOG_TEXT_SENSOR("  ", "Security State", security_state_sensor_);
   LOG_TEXT_SENSOR("  ", "Operating Mode", operating_mode_sensor_);
@@ -621,15 +634,6 @@ bool BQ76922Component::apply_current_limit_config_() {
     return true;
   }
 
-  ESP_LOGW(
-    TAG,
-    "Boot current-limit config enabled: entering CONFIG_UPDATE will briefly turn CHG/DSG FETs off"
-  );
-  ESP_LOGW(
-    TAG,
-    "If ESP power depends on switched PACK path, this can reset the MCU and trigger OTA rollback"
-  );
-
   uint16_t battery_status = 0;
   if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
     ESP_LOGW(TAG, "Failed to read Battery Status before current-limit configuration");
@@ -645,6 +649,171 @@ bool BQ76922Component::apply_current_limit_config_() {
     );
     return false;
   }
+
+  uint8_t occ_threshold_code = 0;
+  uint8_t ocd1_threshold_code = 0;
+  uint8_t occ_delay_code = 0;
+  uint8_t ocd1_delay_code = 0;
+
+  if (has_charge_current_limit_) {
+    const float threshold_mv = charge_current_limit_a_ * sense_resistor_milliohm_;
+    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
+    const int raw_code = code;
+    if (code < 2) {
+      code = 2;
+    } else if (code > 62) {
+      code = 62;
+    }
+    occ_threshold_code = static_cast<uint8_t>(code);
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Charge current limit clipped to device range: code=%d", code);
+    }
+  }
+
+  if (has_discharge_current_limit_) {
+    const float threshold_mv = discharge_current_limit_a_ * sense_resistor_milliohm_;
+    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
+    const int raw_code = code;
+    if (code < 2) {
+      code = 2;
+    } else if (code > 100) {
+      code = 100;
+    }
+    ocd1_threshold_code = static_cast<uint8_t>(code);
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Discharge current limit clipped to device range: code=%d", code);
+    }
+  }
+
+  if (has_charge_current_delay_) {
+    int code = static_cast<int>(std::lround(static_cast<float>(charge_current_delay_ms_) / 3.3f - 2.0f));
+    const int raw_code = code;
+    if (code < 1) {
+      code = 1;
+    } else if (code > 127) {
+      code = 127;
+    }
+    occ_delay_code = static_cast<uint8_t>(code);
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Charge current delay clipped to device range: code=%d", code);
+    }
+  }
+
+  if (has_discharge_current_delay_) {
+    int code = static_cast<int>(std::lround(static_cast<float>(discharge_current_delay_ms_) / 3.3f - 2.0f));
+    const int raw_code = code;
+    if (code < 1) {
+      code = 1;
+    } else if (code > 127) {
+      code = 127;
+    }
+    ocd1_delay_code = static_cast<uint8_t>(code);
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Discharge current delay clipped to device range: code=%d", code);
+    }
+  }
+
+  bool needs_write = false;
+  bool precheck_ok = true;
+  uint8_t data = 0;
+
+  uint8_t required_enabled_protections_bits = 0;
+  if (has_charge_current_limit_) {
+    required_enabled_protections_bits |= PROTECTION_A_OCC;
+  }
+  if (has_discharge_current_limit_) {
+    required_enabled_protections_bits |= PROTECTION_A_OCD1;
+  }
+
+  if (required_enabled_protections_bits != 0) {
+    if (!this->read_data_memory_u8_(DM_ENABLED_PROTECTIONS_A, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of Enabled Protections A");
+      precheck_ok = false;
+    } else if ((data & required_enabled_protections_bits) != required_enabled_protections_bits) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_charge_current_limit_) {
+    if (!this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of CHG FET Protections A");
+      precheck_ok = false;
+    } else if ((data & CHG_FET_PROTECTION_A_OCC) == 0) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_discharge_current_limit_) {
+    if (!this->read_data_memory_u8_(DM_DSG_FET_PROTECTIONS_A, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of DSG FET Protections A");
+      precheck_ok = false;
+    } else if ((data & DSG_FET_PROTECTION_A_OCD1) == 0) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_charge_current_limit_) {
+    if (!this->read_data_memory_u8_(DM_OCC_THRESHOLD, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of OCC threshold");
+      precheck_ok = false;
+    } else if (data != occ_threshold_code) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_charge_current_delay_) {
+    if (!this->read_data_memory_u8_(DM_OCC_DELAY, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of OCC delay");
+      precheck_ok = false;
+    } else if (data != occ_delay_code) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_discharge_current_limit_) {
+    if (!this->read_data_memory_u8_(DM_OCD1_THRESHOLD, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of OCD1 threshold");
+      precheck_ok = false;
+    } else if (data != ocd1_threshold_code) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_discharge_current_delay_) {
+    if (!this->read_data_memory_u8_(DM_OCD1_DELAY, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of OCD1 delay");
+      precheck_ok = false;
+    } else if (data != ocd1_delay_code) {
+      needs_write = true;
+    }
+  }
+
+  if (!needs_write && has_current_recovery_time_) {
+    if (!this->read_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, data)) {
+      ESP_LOGW(TAG, "Failed pre-check read of current recovery time");
+      precheck_ok = false;
+    } else if (data != current_recovery_time_s_) {
+      needs_write = true;
+    }
+  }
+
+  if (precheck_ok && !needs_write) {
+    ESP_LOGI(TAG, "Current-limit configuration already matches requested values; skipping CONFIG_UPDATE");
+    return true;
+  }
+
+  if (!precheck_ok) {
+    ESP_LOGW(TAG, "Current-limit pre-check incomplete; proceeding with CONFIG_UPDATE");
+  }
+
+  ESP_LOGW(
+    TAG,
+    "Applying current-limit config: entering CONFIG_UPDATE will briefly turn CHG/DSG FETs off"
+  );
+  ESP_LOGW(
+    TAG,
+    "If ESP power depends on switched PACK path, this can reset the MCU and trigger OTA rollback"
+  );
 
   if (!this->set_cfgupdate_mode_(true)) {
     ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for current-limit configuration");
@@ -716,115 +885,98 @@ bool BQ76922Component::apply_current_limit_config_() {
   }
 
   if (has_charge_current_limit_) {
-    const float threshold_mv = charge_current_limit_a_ * sense_resistor_milliohm_;
-    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
-    const int raw_code = code;
-    if (code < 2) {
-      code = 2;
-    } else if (code > 62) {
-      code = 62;
-    }
-
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Charge current limit clipped to device range: code=%d", code);
-    }
-
-    if (!this->write_data_memory_u8_(DM_OCC_THRESHOLD, static_cast<uint8_t>(code))) {
-      ESP_LOGW(TAG, "Failed writing OCC threshold");
+    if (!this->read_data_memory_u8_(DM_OCC_THRESHOLD, data)) {
+      ESP_LOGW(TAG, "Failed reading OCC threshold");
       ok = false;
-    } else {
-      ESP_LOGI(TAG, "Configured charge current limit %.3f A (OCC code=%d)", charge_current_limit_a_, code);
+    } else if (data != occ_threshold_code) {
+      if (!this->write_data_memory_u8_(DM_OCC_THRESHOLD, occ_threshold_code)) {
+        ESP_LOGW(TAG, "Failed writing OCC threshold");
+        ok = false;
+      } else {
+        ESP_LOGI(
+          TAG,
+          "Configured charge current limit %.3f A (OCC code=%d)",
+          charge_current_limit_a_,
+          static_cast<int>(occ_threshold_code)
+        );
+      }
     }
   }
 
   if (has_charge_current_delay_) {
-    int code = static_cast<int>(std::lround(static_cast<float>(charge_current_delay_ms_) / 3.3f - 2.0f));
-    const int raw_code = code;
-    if (code < 1) {
-      code = 1;
-    } else if (code > 127) {
-      code = 127;
-    }
-
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Charge current delay clipped to device range: code=%d", code);
-    }
-
-    if (!this->write_data_memory_u8_(DM_OCC_DELAY, static_cast<uint8_t>(code))) {
-      ESP_LOGW(TAG, "Failed writing OCC delay");
+    if (!this->read_data_memory_u8_(DM_OCC_DELAY, data)) {
+      ESP_LOGW(TAG, "Failed reading OCC delay");
       ok = false;
-    } else {
-      const float effective_ms = static_cast<float>(code + 2) * 3.3f;
-      ESP_LOGI(
-        TAG,
-        "Configured charge current delay %u ms (OCC code=%d, effective=%.1f ms)",
-        static_cast<unsigned>(charge_current_delay_ms_),
-        code,
-        effective_ms
-      );
+    } else if (data != occ_delay_code) {
+      if (!this->write_data_memory_u8_(DM_OCC_DELAY, occ_delay_code)) {
+        ESP_LOGW(TAG, "Failed writing OCC delay");
+        ok = false;
+      } else {
+        const float effective_ms = static_cast<float>(occ_delay_code + 2) * 3.3f;
+        ESP_LOGI(
+          TAG,
+          "Configured charge current delay %u ms (OCC code=%d, effective=%.1f ms)",
+          static_cast<unsigned>(charge_current_delay_ms_),
+          static_cast<int>(occ_delay_code),
+          effective_ms
+        );
+      }
     }
   }
 
   if (has_discharge_current_limit_) {
-    const float threshold_mv = discharge_current_limit_a_ * sense_resistor_milliohm_;
-    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
-    const int raw_code = code;
-    if (code < 2) {
-      code = 2;
-    } else if (code > 100) {
-      code = 100;
-    }
-
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Discharge current limit clipped to device range: code=%d", code);
-    }
-
-    if (!this->write_data_memory_u8_(DM_OCD1_THRESHOLD, static_cast<uint8_t>(code))) {
-      ESP_LOGW(TAG, "Failed writing OCD1 threshold");
+    if (!this->read_data_memory_u8_(DM_OCD1_THRESHOLD, data)) {
+      ESP_LOGW(TAG, "Failed reading OCD1 threshold");
       ok = false;
-    } else {
-      ESP_LOGI(
-        TAG, "Configured discharge current limit %.3f A (OCD1 code=%d)", discharge_current_limit_a_, code
-      );
+    } else if (data != ocd1_threshold_code) {
+      if (!this->write_data_memory_u8_(DM_OCD1_THRESHOLD, ocd1_threshold_code)) {
+        ESP_LOGW(TAG, "Failed writing OCD1 threshold");
+        ok = false;
+      } else {
+        ESP_LOGI(
+          TAG,
+          "Configured discharge current limit %.3f A (OCD1 code=%d)",
+          discharge_current_limit_a_,
+          static_cast<int>(ocd1_threshold_code)
+        );
+      }
     }
   }
 
   if (has_discharge_current_delay_) {
-    int code = static_cast<int>(std::lround(static_cast<float>(discharge_current_delay_ms_) / 3.3f - 2.0f));
-    const int raw_code = code;
-    if (code < 1) {
-      code = 1;
-    } else if (code > 127) {
-      code = 127;
-    }
-
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Discharge current delay clipped to device range: code=%d", code);
-    }
-
-    if (!this->write_data_memory_u8_(DM_OCD1_DELAY, static_cast<uint8_t>(code))) {
-      ESP_LOGW(TAG, "Failed writing OCD1 delay");
+    if (!this->read_data_memory_u8_(DM_OCD1_DELAY, data)) {
+      ESP_LOGW(TAG, "Failed reading OCD1 delay");
       ok = false;
-    } else {
-      const float effective_ms = static_cast<float>(code + 2) * 3.3f;
-      ESP_LOGI(
-        TAG,
-        "Configured discharge current delay %u ms (OCD1 code=%d, effective=%.1f ms)",
-        static_cast<unsigned>(discharge_current_delay_ms_),
-        code,
-        effective_ms
-      );
+    } else if (data != ocd1_delay_code) {
+      if (!this->write_data_memory_u8_(DM_OCD1_DELAY, ocd1_delay_code)) {
+        ESP_LOGW(TAG, "Failed writing OCD1 delay");
+        ok = false;
+      } else {
+        const float effective_ms = static_cast<float>(ocd1_delay_code + 2) * 3.3f;
+        ESP_LOGI(
+          TAG,
+          "Configured discharge current delay %u ms (OCD1 code=%d, effective=%.1f ms)",
+          static_cast<unsigned>(discharge_current_delay_ms_),
+          static_cast<int>(ocd1_delay_code),
+          effective_ms
+        );
+      }
     }
   }
 
   if (has_current_recovery_time_) {
-    if (!this->write_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_)) {
-      ESP_LOGW(TAG, "Failed writing current recovery time");
+    if (!this->read_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, data)) {
+      ESP_LOGW(TAG, "Failed reading current recovery time");
       ok = false;
-    } else {
-      ESP_LOGI(
-        TAG, "Configured current recovery time %u s", static_cast<unsigned>(current_recovery_time_s_)
-      );
+    } else if (data != current_recovery_time_s_) {
+      if (!this->write_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_)) {
+        ESP_LOGW(TAG, "Failed writing current recovery time");
+        ok = false;
+      } else {
+        ESP_LOGI(
+          TAG, "Configured current recovery time %u s", static_cast<unsigned>(current_recovery_time_s_)
+        );
+      }
     }
   }
 

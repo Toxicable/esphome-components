@@ -45,6 +45,7 @@ CONF_CELL4_VOLTAGE = "cell4_voltage"
 CONF_CELL5_VOLTAGE = "cell5_voltage"
 CONF_CURRENT = "current"
 CONF_DIE_TEMPERATURE = "die_temperature"
+CONF_TS1_TEMPERATURE = "ts1_temperature"
 
 CONF_SECURITY_STATE = "security_state"
 CONF_OPERATING_MODE = "operating_mode"
@@ -140,6 +141,12 @@ CONFIG_SCHEMA = cv.All(
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
             cv.Optional(CONF_DIE_TEMPERATURE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_CELSIUS,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_TS1_TEMPERATURE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_CELSIUS,
                 accuracy_decimals=1,
                 device_class=DEVICE_CLASS_TEMPERATURE,
@@ -259,6 +266,9 @@ async def to_code(config):
     if CONF_DIE_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_DIE_TEMPERATURE])
         cg.add(var.set_die_temperature_sensor(sens))
+    if CONF_TS1_TEMPERATURE in config:
+        sens = await sensor.new_sensor(config[CONF_TS1_TEMPERATURE])
+        cg.add(var.set_ts1_temperature_sensor(sens))
 
     if CONF_SECURITY_STATE in config:
         ts = await text_sensor.new_text_sensor(config[CONF_SECURITY_STATE])

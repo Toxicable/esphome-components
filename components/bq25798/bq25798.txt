@@ -6092,7 +6092,7 @@ SDRV
 Optional
 100   
 QON
-2.2 k   
+2.2 k  
 0.1 µF  
 0.1 µF  1 × 0.1 µF and 3 × 10 µF  
 Optional
@@ -6168,7 +6168,7 @@ SDRV
 Optional
 100   
 QON
-2.2 k   
+2.2 k  
 0.1 µF  1 × 0.1 µF, 3 × 10 µF
 and 2 x 33 µF POSCAP   
 47 nF  
@@ -6240,7 +6240,7 @@ SDRV
 Optional
 100   
 QON
-2.2 k   
+2.2 k  
 0.1 µF  1 × 0.1 µF, 3 × 10 µF
 and 2 x 33 µF POSCAP   
 47 nF  

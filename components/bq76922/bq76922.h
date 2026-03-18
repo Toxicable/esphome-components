@@ -69,6 +69,9 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   void set_die_temperature_sensor(sensor::Sensor* sensor) {
     die_temperature_sensor_ = sensor;
   }
+  void set_ts1_temperature_sensor(sensor::Sensor* sensor) {
+    ts1_temperature_sensor_ = sensor;
+  }
 
   void set_security_state_sensor(text_sensor::TextSensor* sensor) {
     security_state_sensor_ = sensor;
@@ -193,6 +196,7 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   std::array<sensor::Sensor*, 5> cell_voltage_sensors_{};
   sensor::Sensor* current_sensor_{nullptr};
   sensor::Sensor* die_temperature_sensor_{nullptr};
+  sensor::Sensor* ts1_temperature_sensor_{nullptr};
 
   text_sensor::TextSensor* security_state_sensor_{nullptr};
   text_sensor::TextSensor* operating_mode_sensor_{nullptr};

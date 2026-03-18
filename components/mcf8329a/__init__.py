@@ -343,7 +343,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_INTER_BYTE_DELAY_US, default=100): cv.positive_int,
             cv.Optional(CONF_AUTO_TICKLE_WATCHDOG, default=False): cv.boolean,
             cv.Optional(CONF_CLEAR_MPET_ON_STARTUP, default=True): cv.boolean,
-            cv.Optional(CONF_STARTUP_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
+            cv.Required(CONF_STARTUP_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
             cv.Required(CONF_STARTUP_BRAKE_MODE): cv.enum(STARTUP_BRAKE_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_BRAKE_TIME): cv.enum(STARTUP_BRAKE_TIME_OPTIONS, lower=True),
             cv.Required(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
@@ -360,7 +360,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT): validate_lock_abn_speed_threshold_percent,
             cv.Optional(CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
             cv.Optional(CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
-            cv.Optional(CONF_STARTUP_MAX_SPEED_HZ): validate_startup_max_speed_hz,
+            cv.Required(CONF_STARTUP_MAX_SPEED_HZ): validate_startup_max_speed_hz,
             cv.Optional(CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S): validate_open_loop_accel_hz_per_s,
             cv.Optional(CONF_STARTUP_AUTO_HANDOFF_ENABLE): cv.boolean,
@@ -425,8 +425,7 @@ async def to_code(config):
     cg.add(var.set_auto_tickle_watchdog(config[CONF_AUTO_TICKLE_WATCHDOG]))
     cg.add(var.set_clear_mpet_on_startup(config[CONF_CLEAR_MPET_ON_STARTUP]))
 
-    if CONF_STARTUP_MOTOR_BEMF_CONST in config:
-        cg.add(var.set_startup_motor_bemf_const(config[CONF_STARTUP_MOTOR_BEMF_CONST]))
+    cg.add(var.set_startup_motor_bemf_const(config[CONF_STARTUP_MOTOR_BEMF_CONST]))
     cg.add(var.set_startup_brake_mode(config[CONF_STARTUP_BRAKE_MODE]))
     if CONF_STARTUP_BRAKE_TIME in config:
         cg.add(var.set_startup_brake_time(config[CONF_STARTUP_BRAKE_TIME]))
@@ -469,8 +468,7 @@ async def to_code(config):
                 NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT]]
             )
         )
-    if CONF_STARTUP_MAX_SPEED_HZ in config:
-        cg.add(var.set_startup_max_speed_code(encode_max_speed_hz(config[CONF_STARTUP_MAX_SPEED_HZ])))
+    cg.add(var.set_startup_max_speed_code(encode_max_speed_hz(config[CONF_STARTUP_MAX_SPEED_HZ])))
     if CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT in config:
         cg.add(var.set_startup_open_loop_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT]]))
     if CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S in config:

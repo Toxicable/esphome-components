@@ -17,7 +17,8 @@
 - In README YAML examples, use `##` for section/explanatory comment lines and keep single `#` for commented keys so bulk-uncomment keeps headings as comments.
 - Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.
 - Validate any chip assumptions against the datasheet before implementing or documenting behavior.
-- `tools/pdf_to_text.py` extracts verbatim text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
+- `tools/pdf_to_text.py` extracts text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
+- `tools/pdf_to_text.py` strips embedded `\x00` bytes automatically so `rg`/`grep` treat output as text.
 - Devcontainer installs `pypdf` alongside `esphome` for the PDF ingestion tool.
 - Devcontainer shells default to the ESP-IDF Python venv; Python deps needed at runtime should be installed into that env (Dockerfile sources `export.sh` before installing).
 - ESPHome `i2c::I2CDevice::write_read()` returns `i2c::ErrorCode` (not bool); always compare to `i2c::ERROR_OK` or reads will be inverted.

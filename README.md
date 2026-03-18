@@ -1,7 +1,7 @@
 # esphome-components
 
 ## LLM ingestion
-Use `tools/pdf_to_text.py` to generate `<pdf>.txt` from PDFs, and provide the `.txt` file to LLMs instead of the PDF.
+Use `tools/pdf_to_text.py` to generate `<pdf>.txt` from PDFs, and provide the `.txt` file to LLMs instead of the PDF. The tool strips embedded `\x00` bytes automatically so the output stays searchable as plain text.
 
 ## Checks
 - `./check.bash` runs `clangd --check` on C/C++ headers/sources (or pass a specific file path).

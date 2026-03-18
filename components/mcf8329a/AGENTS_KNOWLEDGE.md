@@ -12,7 +12,8 @@ Component-scoped notes for `components/mcf8329a`.
   - `ALGO_CTRL1.CLR_FLT` is bit `29`, `WATCHDOG_TICKLE` is bit `10`.
 - `VM_VOLTAGE` is decoded as full 32-bit Q27 (`volts = raw * 60 / 2^27`) instead of an 11-bit field.
 - Startup motor config can be set from YAML and is applied at setup:
-  - `startup_mode` and `startup_brake_mode` are required in YAML (explicit startup and stop strategy selection).
+  - Required in YAML: `startup_mode`, `startup_brake_mode`, `startup_motor_bemf_const`,
+    and `startup_max_speed_hz` (explicit startup/stop strategy plus mandatory motor scaling).
   - `startup_motor_bemf_const` -> `CLOSED_LOOP3.MOTOR_BEMF_CONST[30:23]`
   - `startup_brake_mode` -> `CLOSED_LOOP2.MTR_STOP[30:28]`
   - `startup_brake_time` -> `CLOSED_LOOP2.MTR_STOP_BRK_TIME[27:24]`

@@ -4,7 +4,8 @@ Component-scoped notes for `components/bq76922`.
 
 - Use `components/bq76922/sluucg7.pdf` (TRM) as the command source of truth; the datasheet alone does not include full command/subcommand behavior.
 - Direct commands used by this component come from TRM Table 12-1 and use little-endian values (`I2`/`U2`):
-  - `0x12` Battery Status, `0x14..0x1D` cell voltages, `0x34/0x36/0x38` stack/PACK/LD, `0x3A` CC2 current, `0x62` Alarm Status, `0x68` internal temperature, `0x7F` FET Status.
+  - `0x12` Battery Status, `0x14..0x1D` cell voltages, `0x34/0x36/0x38` stack/PACK/LD, `0x3A` CC2 current, `0x62` Alarm Status, `0x68` internal temperature, `0x70` TS1 temperature, `0x7F` FET Status.
+  - `0x70 TS1 Temperature()` returns 0.1K when TS1 is thermistor-configured; if TS1 is configured as ADCIN it returns TS1 pin voltage in mV.
 - Subcommands are written little-endian to `0x3E/0x3F`; readback data comes from `0x40..`.
 - `FET_EN` semantics (Manufacturing Status bit 4):
   - `1` = normal firmware/autonomous FET control
@@ -31,6 +32,8 @@ Component-scoped notes for `components/bq76922`.
     this can reset the MCU and look like an OTA rollback (boot not marked successful).
   - Runtime behavior: if ESP32 OTA rollback is active and the running image is `PENDING_VERIFY`, boot-time current-limit
     writes are deferred until OTA verification is complete, then applied once.
+  - Before entering `CONFIG_UPDATE`, the component now pre-checks current-limit-related data memory values and skips
+    re-apply when requested values already match (avoids unnecessary FET-off windows/resets).
 - Public config key for top-of-stack voltage is `bat_voltage`; keep `stack_voltage` as backward-compatible alias.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
 - User preference: allow `cell_count` configuration range `1..5` in this component schema.
