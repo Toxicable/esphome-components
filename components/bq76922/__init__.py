@@ -27,6 +27,9 @@ BQ76922ClearAlarmsButton = bq76922_ns.class_("BQ76922ClearAlarmsButton", button.
 CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
 CONF_SLEEP_MODE = "sleep_mode"
+CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
+CONF_CHARGE_CURRENT_LIMIT_A = "charge_current_limit_a"
+CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
@@ -111,6 +114,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SLEEP_MODE, default="preserve"): cv.enum(
                 SLEEP_MODE_OPTIONS, lower=True
             ),
+            cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
+            cv.Optional(CONF_CHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
+            cv.Optional(CONF_DISCHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
             cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
             # Backward-compatible alias for bat_voltage.
             cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -202,8 +208,13 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
 
     cg.add(var.set_cell_count(config[CONF_CELL_COUNT]))
+    cg.add(var.set_sense_resistor_milliohm(config[CONF_SENSE_RESISTOR_MILLIOHM]))
     cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
     cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
+    if CONF_CHARGE_CURRENT_LIMIT_A in config:
+        cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))
+    if CONF_DISCHARGE_CURRENT_LIMIT_A in config:
+        cg.add(var.set_discharge_current_limit_a(config[CONF_DISCHARGE_CURRENT_LIMIT_A]))
 
     if CONF_BAT_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])

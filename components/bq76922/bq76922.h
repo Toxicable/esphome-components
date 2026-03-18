@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
@@ -21,6 +22,17 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
  public:
   void set_cell_count(uint8_t cell_count) {
     cell_count_ = cell_count;
+  }
+  void set_sense_resistor_milliohm(float value) {
+    sense_resistor_milliohm_ = value;
+  }
+  void set_charge_current_limit_a(float value) {
+    charge_current_limit_a_ = value;
+    has_charge_current_limit_ = true;
+  }
+  void set_discharge_current_limit_a(float value) {
+    discharge_current_limit_a_ = value;
+    has_discharge_current_limit_ = true;
   }
   void set_autonomous_fet_mode(uint8_t mode) {
     autonomous_fet_mode_ = mode;
@@ -125,9 +137,12 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool read_subcommand_(uint16_t subcommand, uint8_t* data, size_t len);
   bool read_subcommand_u16_(uint16_t subcommand, uint16_t& value);
   bool write_subcommand_data_(uint16_t subcommand, const uint8_t* data, size_t len);
+  bool write_data_memory_u8_(uint16_t address, uint8_t value);
+  bool set_cfgupdate_mode_(bool enabled);
 
   bool apply_boot_modes_();
   bool load_unit_scaling_();
+  bool apply_current_limit_config_();
 
   const char* security_state_to_string_(uint16_t battery_status) const;
   const char* operating_mode_to_string_(uint16_t battery_status, uint16_t control_status) const;
@@ -139,6 +154,11 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   // Auto-detected from Settings:Configuration:DA Configuration (0x9303).
   int32_t current_lsb_ua_{1000};
   bool user_volts_cv_{true};
+  float sense_resistor_milliohm_{1.0f};
+  float charge_current_limit_a_{0.0f};
+  float discharge_current_limit_a_{0.0f};
+  bool has_charge_current_limit_{false};
+  bool has_discharge_current_limit_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
   std::array<uint8_t, 5> cell_read_map_{0, 1, 2, 3, 4};

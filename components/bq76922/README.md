@@ -37,6 +37,11 @@ bq76922:
   autonomous_fet_mode: preserve
   sleep_mode: preserve
 
+  # Optional current protection thresholds (applied at boot):
+  # sense_resistor_milliohm: 1.0
+  # charge_current_limit_a: 20.0
+  # discharge_current_limit_a: 40.0
+
   # Optional sensors:
   # bat_voltage:
   #   name: "BQ76922 BAT Voltage"
@@ -105,6 +110,9 @@ bq76922:
 - `cell_count`: match your physical stack (`1..5`)
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
+- `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
+- `charge_current_limit_a`: charge overcurrent protection threshold
+- `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
 
 Current and voltage scaling are automatically detected from the chip configuration.
@@ -115,6 +123,11 @@ No manual unit settings are needed.
 If you use fewer than 5 cells and jumper unused sense inputs, the component auto-detects
 which cell-voltage commands are active on first read. This covers common layouts like 4S
 with VC4 tied to VC3 and VC5 at BAT+.
+
+Current limit notes:
+- These values are written to device protection settings during boot.
+- They require the chip to be in `FULLACCESS`.
+- Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
 
 ## Autonomous Mode
 

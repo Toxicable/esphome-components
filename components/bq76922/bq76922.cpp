@@ -1,5 +1,6 @@
 #include "bq76922.h"
 
+#include <cmath>
 #include <cstring>
 
 #include "esphome/core/hal.h"
@@ -28,6 +29,8 @@ constexpr uint8_t REG_SUBCMD_CHECKSUM = 0x60;
 
 constexpr uint16_t SUBCMD_FET_ENABLE = 0x0022;
 constexpr uint16_t SUBCMD_MANUFACTURING_STATUS = 0x0057;
+constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
+constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
 constexpr uint16_t SUBCMD_DA_CONFIGURATION = 0x9303;
 constexpr uint16_t SUBCMD_DSG_PDSG_OFF = 0x0093;
 constexpr uint16_t SUBCMD_CHG_PCHG_OFF = 0x0094;
@@ -62,6 +65,9 @@ constexpr uint8_t FET_STATUS_CHG = 1u << 0;
 
 constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
+
+constexpr uint16_t DM_OCC_THRESHOLD = 0x9280;
+constexpr uint16_t DM_OCD1_THRESHOLD = 0x9282;
 }  // namespace
 
 void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
@@ -73,6 +79,9 @@ void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* se
 void BQ76922Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
+  }
+  if (!this->apply_current_limit_config_()) {
+    this->status_set_warning();
   }
   if (!this->apply_boot_modes_()) {
     this->status_set_warning();
@@ -295,6 +304,13 @@ void BQ76922Component::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  cell_count: %u", static_cast<unsigned>(cell_count_));
+  ESP_LOGCONFIG(TAG, "  sense_resistor_milliohm: %.3f", sense_resistor_milliohm_);
+  if (has_charge_current_limit_) {
+    ESP_LOGCONFIG(TAG, "  charge_current_limit_a: %.3f", charge_current_limit_a_);
+  }
+  if (has_discharge_current_limit_) {
+    ESP_LOGCONFIG(TAG, "  discharge_current_limit_a: %.3f", discharge_current_limit_a_);
+  }
 
   const char* autonomous_mode = "preserve";
   if (autonomous_fet_mode_ == BOOT_ENABLE) {
@@ -487,6 +503,124 @@ bool BQ76922Component::clear_alarm_latches() {
   }
 
   return true;
+}
+
+bool BQ76922Component::write_data_memory_u8_(uint16_t address, uint8_t value) {
+  if (!this->write_subcommand_data_(address, &value, 1)) {
+    return false;
+  }
+
+  uint8_t verify = 0;
+  if (!this->read_subcommand_(address, &verify, 1)) {
+    return false;
+  }
+  return verify == value;
+}
+
+bool BQ76922Component::set_cfgupdate_mode_(bool enabled) {
+  const uint16_t command = enabled ? SUBCMD_SET_CFGUPDATE : SUBCMD_EXIT_CFGUPDATE;
+  if (!this->write_subcommand_(command)) {
+    return false;
+  }
+
+  delay_microseconds_safe(enabled ? 2200 : 1200);
+  const uint32_t start_ms = millis();
+  while (millis() - start_ms < 500) {
+    uint16_t battery_status = 0;
+    if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+      return false;
+    }
+    const bool in_cfgupdate = (battery_status & BATTERY_STATUS_CFGUPDATE) != 0;
+    if (in_cfgupdate == enabled) {
+      return true;
+    }
+    delay_microseconds_safe(1000);
+  }
+
+  ESP_LOGW(TAG, "Timed out waiting for CONFIG_UPDATE=%s", enabled ? "1" : "0");
+  return false;
+}
+
+bool BQ76922Component::apply_current_limit_config_() {
+  if (!has_charge_current_limit_ && !has_discharge_current_limit_) {
+    return true;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before current-limit configuration");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "Current-limit configuration requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for current-limit configuration");
+    return false;
+  }
+
+  bool ok = true;
+
+  if (has_charge_current_limit_) {
+    const float threshold_mv = charge_current_limit_a_ * sense_resistor_milliohm_;
+    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
+    const int raw_code = code;
+    if (code < 2) {
+      code = 2;
+    } else if (code > 62) {
+      code = 62;
+    }
+
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Charge current limit clipped to device range: code=%d", code);
+    }
+
+    if (!this->write_data_memory_u8_(DM_OCC_THRESHOLD, static_cast<uint8_t>(code))) {
+      ESP_LOGW(TAG, "Failed writing OCC threshold");
+      ok = false;
+    } else {
+      ESP_LOGI(TAG, "Configured charge current limit %.3f A (OCC code=%d)", charge_current_limit_a_, code);
+    }
+  }
+
+  if (has_discharge_current_limit_) {
+    const float threshold_mv = discharge_current_limit_a_ * sense_resistor_milliohm_;
+    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
+    const int raw_code = code;
+    if (code < 2) {
+      code = 2;
+    } else if (code > 100) {
+      code = 100;
+    }
+
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Discharge current limit clipped to device range: code=%d", code);
+    }
+
+    if (!this->write_data_memory_u8_(DM_OCD1_THRESHOLD, static_cast<uint8_t>(code))) {
+      ESP_LOGW(TAG, "Failed writing OCD1 threshold");
+      ok = false;
+    } else {
+      ESP_LOGI(
+        TAG, "Configured discharge current limit %.3f A (OCD1 code=%d)", discharge_current_limit_a_, code
+      );
+    }
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after current-limit configuration");
+    ok = false;
+  }
+
+  return ok;
 }
 
 bool BQ76922Component::read_byte_(uint8_t reg, uint8_t& value) {
