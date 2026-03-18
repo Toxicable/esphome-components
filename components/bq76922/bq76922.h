@@ -22,12 +22,6 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   void set_cell_count(uint8_t cell_count) {
     cell_count_ = cell_count;
   }
-  void set_current_lsb_ua(int32_t current_lsb_ua) {
-    current_lsb_ua_ = current_lsb_ua;
-  }
-  void set_user_volts_cv(bool user_volts_cv) {
-    user_volts_cv_ = user_volts_cv;
-  }
   void set_autonomous_fet_mode(uint8_t mode) {
     autonomous_fet_mode_ = mode;
   }
@@ -133,6 +127,7 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool write_subcommand_data_(uint16_t subcommand, const uint8_t* data, size_t len);
 
   bool apply_boot_modes_();
+  bool load_unit_scaling_();
 
   const char* security_state_to_string_(uint16_t battery_status) const;
   const char* operating_mode_to_string_(uint16_t battery_status, uint16_t control_status) const;
@@ -141,6 +136,7 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   void append_flag_(std::string& flags, const char* flag) const;
 
   uint8_t cell_count_{5};
+  // Auto-detected from Settings:Configuration:DA Configuration (0x9303).
   int32_t current_lsb_ua_{1000};
   bool user_volts_cv_{true};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};

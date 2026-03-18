@@ -3,7 +3,7 @@
 ESPHome external component for TI BQ76922 (3S to 5S packs over I2C).
 
 It provides:
-- core telemetry (cell, stack, PACK, LD, current, die temperature)
+- core telemetry (cell voltages, stack voltage, pack voltage, load-detect pin voltage, current, die temperature)
 - battery/FET/alarm status entities
 - host controls for FET path, sleep-allow, and alarm-clear
 - startup policy options for autonomous FET control and sleep mode
@@ -28,13 +28,8 @@ bq76922:
   address: 0x08
   update_interval: 1s
 
-  # Pack wiring and current scaling:
+  # Number of cells in series (3 to 5):
   cell_count: 5
-  # 0.1mA/1mA/10mA/100mA per CC2 LSB (TRM USER_AMPS_1:0):
-  current_lsb_ua: 1000
-  # true => stack/PACK/LD use centivolts (10mV per LSB, DA config default)
-  # false => stack/PACK/LD use millivolts (1mV per LSB)
-  user_volts_cv: true
 
   # Startup behavior:
   # preserve = don't change device state on boot
@@ -46,9 +41,9 @@ bq76922:
   # stack_voltage:
   #   name: "BQ76922 Stack Voltage"
   # pack_voltage:
-  #   name: "BQ76922 PACK Voltage"
+  #   name: "BQ76922 Pack Voltage"
   # ld_voltage:
-  #   name: "BQ76922 LD Voltage"
+  #   name: "BQ76922 Load Detect Pin Voltage"
   # cell1_voltage:
   #   name: "BQ76922 Cell 1"
   # cell2_voltage:
@@ -108,11 +103,12 @@ bq76922:
 ## Config Options You’ll Likely Tune
 
 - `cell_count`: match your physical stack (`3..5`)
-- `current_lsb_ua`: match device DA current units (`100`, `1000`, `10000`, `100000`)
-- `user_volts_cv`: match DA voltage unit (`true`=cV/10mV per LSB, `false`=mV/1mV per LSB)
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
+
+Current and voltage scaling are automatically detected from the chip configuration.
+No manual unit settings are needed.
 
 ## Autonomous Mode
 

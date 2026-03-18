@@ -28,6 +28,7 @@ constexpr uint8_t REG_SUBCMD_CHECKSUM = 0x60;
 
 constexpr uint16_t SUBCMD_FET_ENABLE = 0x0022;
 constexpr uint16_t SUBCMD_MANUFACTURING_STATUS = 0x0057;
+constexpr uint16_t SUBCMD_DA_CONFIGURATION = 0x9303;
 constexpr uint16_t SUBCMD_DSG_PDSG_OFF = 0x0093;
 constexpr uint16_t SUBCMD_CHG_PCHG_OFF = 0x0094;
 constexpr uint16_t SUBCMD_ALL_FETS_OFF = 0x0095;
@@ -69,6 +70,9 @@ void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* se
 }
 
 void BQ76922Component::setup() {
+  if (!this->load_unit_scaling_()) {
+    ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
+  }
   if (!this->apply_boot_modes_()) {
     this->status_set_warning();
   }
@@ -246,8 +250,6 @@ void BQ76922Component::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  cell_count: %u", static_cast<unsigned>(cell_count_));
-  ESP_LOGCONFIG(TAG, "  current_lsb_ua: %d", static_cast<int>(current_lsb_ua_));
-  ESP_LOGCONFIG(TAG, "  user_volts_cv: %s", user_volts_cv_ ? "true" : "false");
 
   const char* autonomous_mode = "preserve";
   if (autonomous_fet_mode_ == BOOT_ENABLE) {
@@ -543,6 +545,41 @@ bool BQ76922Component::apply_boot_modes_() {
   }
 
   return ok;
+}
+
+bool BQ76922Component::load_unit_scaling_() {
+  uint8_t da_config = 0;
+  if (!this->read_subcommand_(SUBCMD_DA_CONFIGURATION, &da_config, 1)) {
+    ESP_LOGW(TAG, "Failed to read unit scaling settings from device");
+    return false;
+  }
+
+  user_volts_cv_ = (da_config & 0x04) != 0;
+  switch (da_config & 0x03) {
+    case 0:
+      current_lsb_ua_ = 100;
+      break;
+    case 1:
+      current_lsb_ua_ = 1000;
+      break;
+    case 2:
+      current_lsb_ua_ = 10000;
+      break;
+    case 3:
+      current_lsb_ua_ = 100000;
+      break;
+    default:
+      current_lsb_ua_ = 1000;
+      break;
+  }
+
+  ESP_LOGI(
+    TAG,
+    "Auto scaling: current=%d uA/LSB, pack/stack/load pin=%s per LSB",
+    static_cast<int>(current_lsb_ua_),
+    user_volts_cv_ ? "10mV" : "1mV"
+  );
+  return true;
 }
 
 const char* BQ76922Component::security_state_to_string_(uint16_t battery_status) const {

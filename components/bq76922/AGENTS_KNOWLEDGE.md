@@ -12,5 +12,5 @@ Component-scoped notes for `components/bq76922`.
 - `0x0022 FET_ENABLE()` toggles `FET_EN` and is allowed only in `UNSEALED`/`FULLACCESS`.
 - Runtime power-path host commands are:
   - `0x0093` DSG/PDSG off, `0x0094` CHG/PCHG off, `0x0095` all off, `0x0096` all on.
-- CC2 current unit depends on DA config `USER_AMPS_1:0`; this component exposes `current_lsb_ua` to match pack configuration (`100`, `1000`, `10000`, `100000`).
-- Stack/PACK/LD direct commands are in `user-volts` units (not fixed microvolts): DA config `USER_VOLTS_CV=1` means 10mV/LSB; `0` means 1mV/LSB. This component uses `user_volts_cv` for that scaling.
+- CC2 current units and stack/PACK/LD voltage units are auto-detected from `Settings:Configuration:DA Configuration` (`0x9303`) during setup.
+- User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).

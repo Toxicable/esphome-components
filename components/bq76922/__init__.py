@@ -25,8 +25,6 @@ BQ76922SleepAllowedSwitch = bq76922_ns.class_("BQ76922SleepAllowedSwitch", switc
 BQ76922ClearAlarmsButton = bq76922_ns.class_("BQ76922ClearAlarmsButton", button.Button)
 
 CONF_CELL_COUNT = "cell_count"
-CONF_CURRENT_LSB_UA = "current_lsb_ua"
-CONF_USER_VOLTS_CV = "user_volts_cv"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
 CONF_SLEEP_MODE = "sleep_mode"
 
@@ -83,17 +81,6 @@ VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
     state_class=STATE_CLASS_MEASUREMENT,
 )
 
-
-def validate_current_lsb_ua(value):
-    value = cv.int_(value)
-    allowed = (100, 1000, 10000, 100000)
-    if value not in allowed:
-        raise cv.Invalid(
-            "current_lsb_ua must be one of 100, 1000, 10000, or 100000 (userA per LSB)"
-        )
-    return value
-
-
 def _validate_config(config):
     cell_count = config[CONF_CELL_COUNT]
     cell_keys = [
@@ -114,8 +101,6 @@ CONFIG_SCHEMA = cv.All(
         {
             cv.GenerateID(): cv.declare_id(BQ76922Component),
             cv.Optional(CONF_CELL_COUNT, default=5): cv.int_range(min=3, max=5),
-            cv.Optional(CONF_CURRENT_LSB_UA, default=1000): validate_current_lsb_ua,
-            cv.Optional(CONF_USER_VOLTS_CV, default=True): cv.boolean,
             cv.Optional(CONF_AUTONOMOUS_FET_MODE, default="preserve"): cv.enum(
                 AUTONOMOUS_FET_MODE_OPTIONS, lower=True
             ),
@@ -211,8 +196,6 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
 
     cg.add(var.set_cell_count(config[CONF_CELL_COUNT]))
-    cg.add(var.set_current_lsb_ua(config[CONF_CURRENT_LSB_UA]))
-    cg.add(var.set_user_volts_cv(config[CONF_USER_VOLTS_CV]))
     cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
     cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
 
