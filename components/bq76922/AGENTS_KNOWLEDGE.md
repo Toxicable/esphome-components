@@ -11,6 +11,22 @@ Component-scoped notes for `components/bq76922`.
   - `1` = normal firmware/autonomous FET control
   - `0` = FET test mode (normal firmware FET control disabled)
 - `0x0022 FET_ENABLE()` toggles `FET_EN` and is allowed only in `UNSEALED`/`FULLACCESS`.
+- `CFETOFF`/`DFETOFF` hardware FET override details (TRM data-memory settings):
+  - `Settings:Configuration:CFETOFF Pin Config` (`0x92FA`) and `...:DFETOFF Pin Config` (`0x92FB`) default to `0x00` (`PIN_FXN=0`, pin unused).
+  - To use pin-based FET disable, set `PIN_FXN=2` on the relevant pin (`CFETOFF` or `DFETOFF/BOTHOFF`).
+  - `OPT5` sets polarity: `0` active-high assert, `1` active-low assert.
+  - `DFETOFF` `OPT4=1` selects `BOTHOFF` (asserting DFETOFF disables both CHG/PCHG and DSG/PDSG).
+  - Asserting these pins disables FETs without serial commands; deasserting only allows re-enable if no other blocks are latched (for example host `FET_CONTROL`/`ALL_FETS_OFF` latch or active faults).
+  - `REG18` is the internal 1.8V LDO rail and should only be used for internal circuitry/capacitor; for external pull-ups (for example CFETOFF/DFETOFF logic levels), use `REG1` or another valid external logic rail.
+- Datasheet pin guidance when regulator chain is unused:
+  - `REG1` can be left floating or tied to `VSS`.
+  - `REGIN` should be tied to `VSS` if unused.
+  - If both `BREG` and `REGIN` are unused, tie both to `VSS`.
+  - Therefore, a board that hard-ties `REG1/REGIN/BREG` to `GND` is valid for a design not using the REG0/REG1 rails.
+- `REG1` usage dependency:
+  - `REG1` output requires `REGIN` around 5.5V.
+  - If `REGIN` is not externally supplied, `REG0_EN` must be enabled and the external preregulator transistor driven by `BREG` must be present.
+  - If `REGIN` is externally supplied, `BREG` is not used and should be tied to `REGIN`.
 - Runtime power-path host commands are:
   - `0x0093` DSG/PDSG off, `0x0094` CHG/PCHG off, `0x0095` all off, `0x0096` all on.
 - `power_path` control now checks `Manufacturing Status[FET_EN]` first; if `FET_EN=0` (test mode), control is rejected with a log warning.
