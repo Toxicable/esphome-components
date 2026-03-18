@@ -1,4 +1,4 @@
-# BQ76922 Battery Monitor
+# BQ76922 Battery Monitor BMS
 
 ESPHome external component for TI BQ76922 (3S to 5S packs over I2C).
 

@@ -10,3 +10,6 @@ Component-scoped notes for `components/bq25798`.
 - Can publish buttons: `watchdog_reset`, `dump_registers`.
 - Still logs status bytes `0x1B..0x1F` and ADC raws.
 - Flag entities (`status_flags` text + split status binary sensors) should use `entity_category: diagnostic`.
+- BAT/BATP pins are only rated to `-0.3V` minimum (absolute max table), so reversed battery must be blocked externally.
+- For bidirectional battery paths (charge + discharge), single-FET/diode reverse protection is not sufficient; use keyed connector or a bidirectional ideal-diode/back-to-back FET stage.
+- Ship-FET designs should keep `BATP` on the battery side of the ship FET so battery-only I2C bias behavior matches TI guidance.

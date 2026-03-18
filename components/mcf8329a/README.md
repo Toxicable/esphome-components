@@ -3,10 +3,10 @@
 Manual ESPHome I2C component for TI MCF8329A (ESP32 + esp-idf).
 
 This component provides manual runtime control and telemetry:
-- brake override (`switch`)
-- direction override (`select`: `hardware`, `cw`, `ccw`)
-- digital speed command (`number`, percent)
-- fault clear and watchdog tickle buttons (`button`)
+- brake override (`brake` switch)
+- direction override (`direction` select: `hardware`, `cw`, `ccw`)
+- digital speed command (`speed_percent` number)
+- fault clear and watchdog tickle buttons (`clear_faults`, `watchdog_tickle`)
 - startup motor settings applied during setup (optional): braking strategy, stop brake time, startup mode, align time, and startup direction
 - fault summary text state plus core runtime telemetry
 
@@ -69,59 +69,35 @@ mcf8329a:
   # Optional stop/brake timing:
   # startup_brake_time: 100ms
 
-switch:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
+  brake:
     name: "MCF Brake"
     # Note: any non-zero speed command auto-releases brake in firmware.
-
-select:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
+  direction:
     name: "MCF Direction"
-
-number:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
+  speed_percent:
     name: "MCF Speed %"
 
-button:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
-    clear_faults:
-      name: "MCF Clear Faults"
-    # Optional:
-    # watchdog_tickle:
-    #   name: "MCF Watchdog Tickle"
+  clear_faults:
+    name: "MCF Clear Faults"
+  # watchdog_tickle:
+  #   name: "MCF Watchdog Tickle"
 
-binary_sensor:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
-    fault_active:
-      name: "MCF Fault Active"
-    sys_enable:
-      name: "MCF Sys Enable"
+  fault_active:
+    name: "MCF Fault Active"
+  sys_enable:
+    name: "MCF Sys Enable"
+  current_fault:
+    name: "MCF Current Fault"
 
-text_sensor:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
-    current_fault:
-      name: "MCF Current Fault"
-
-sensor:
-  - platform: mcf8329a
-    mcf8329a_id: mcf
-    vm_voltage:
-      name: "MCF VM Voltage"
-    duty_cmd_percent:
-      name: "MCF Duty Cmd %"
-    volt_mag_percent:
-      name: "MCF Volt Mag %"
-    # Optional:
-    # motor_bemf_constant:
-    #   name: "MCF Motor BEMF Const"
-    #   # Measured/estimated BEMF (MTR_PARAMS), not the configured CLOSED_LOOP3 value.
-
+  vm_voltage:
+    name: "MCF VM Voltage"
+  duty_cmd_percent:
+    name: "MCF Duty Cmd %"
+  volt_mag_percent:
+    name: "MCF Volt Mag %"
+  # motor_bemf_constant:
+  #   name: "MCF Motor BEMF Const"
+  #   # Measured/estimated BEMF (MTR_PARAMS), not the configured CLOSED_LOOP3 value.
 ```
 
 Back-voltage/regen risk knobs:

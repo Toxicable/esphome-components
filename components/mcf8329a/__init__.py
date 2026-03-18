@@ -1,13 +1,25 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import i2c
-from esphome.const import CONF_ID
+from esphome.components import binary_sensor, button, i2c, number, select, sensor, switch as switch_, text_sensor
+from esphome.const import (
+    CONF_ID,
+    DEVICE_CLASS_VOLTAGE,
+    ENTITY_CATEGORY_CONFIG,
+    STATE_CLASS_MEASUREMENT,
+    UNIT_PERCENT,
+    UNIT_VOLT,
+)
 
 DEPENDENCIES = ["i2c"]
 AUTO_LOAD = ["sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
 
 mcf8329a_ns = cg.esphome_ns.namespace("mcf8329a")
 MCF8329AComponent = mcf8329a_ns.class_("MCF8329AComponent", cg.PollingComponent, i2c.I2CDevice)
+MCF8329ABrakeSwitch = mcf8329a_ns.class_("MCF8329ABrakeSwitch", switch_.Switch)
+MCF8329ADirectionSelect = mcf8329a_ns.class_("MCF8329ADirectionSelect", select.Select)
+MCF8329ASpeedNumber = mcf8329a_ns.class_("MCF8329ASpeedNumber", number.Number)
+MCF8329AClearFaultsButton = mcf8329a_ns.class_("MCF8329AClearFaultsButton", button.Button)
+MCF8329AWatchdogTickleButton = mcf8329a_ns.class_("MCF8329AWatchdogTickleButton", button.Button)
 
 CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
@@ -34,6 +46,19 @@ CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT = "startup_open_loop_ilimit_percent"
 CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S = "startup_open_loop_accel_hz_per_s"
 CONF_STARTUP_AUTO_HANDOFF_ENABLE = "startup_auto_handoff_enable"
 CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT = "startup_open_to_closed_handoff_percent"
+
+CONF_BRAKE = "brake"
+CONF_DIRECTION = "direction"
+CONF_SPEED_PERCENT = "speed_percent"
+CONF_CLEAR_FAULTS = "clear_faults"
+CONF_WATCHDOG_TICKLE = "watchdog_tickle"
+CONF_FAULT_ACTIVE = "fault_active"
+CONF_SYS_ENABLE = "sys_enable"
+CONF_CURRENT_FAULT = "current_fault"
+CONF_VM_VOLTAGE = "vm_voltage"
+CONF_DUTY_CMD_PERCENT = "duty_cmd_percent"
+CONF_VOLT_MAG_PERCENT = "volt_mag_percent"
+CONF_MOTOR_BEMF_CONSTANT = "motor_bemf_constant"
 
 STARTUP_BRAKE_MODE_OPTIONS = {
     "hiz": 0,
@@ -88,6 +113,8 @@ STARTUP_DIRECTION_MODE_OPTIONS = {
     "cw": "cw",
     "ccw": "ccw",
 }
+
+DIRECTION_OPTIONS = ["hardware", "cw", "ccw"]
 
 STARTUP_LOCK_MODE_OPTIONS = {
     "latched": 0,
@@ -338,6 +365,50 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S): validate_open_loop_accel_hz_per_s,
             cv.Optional(CONF_STARTUP_AUTO_HANDOFF_ENABLE): cv.boolean,
             cv.Optional(CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT): validate_open_to_closed_handoff_percent,
+            cv.Optional(CONF_BRAKE): switch_.switch_schema(
+                MCF8329ABrakeSwitch,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_DIRECTION): select.select_schema(
+                MCF8329ADirectionSelect,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_SPEED_PERCENT): number.number_schema(
+                MCF8329ASpeedNumber,
+                unit_of_measurement=UNIT_PERCENT,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_CLEAR_FAULTS): button.button_schema(
+                MCF8329AClearFaultsButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_WATCHDOG_TICKLE): button.button_schema(
+                MCF8329AWatchdogTickleButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_FAULT_ACTIVE): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_SYS_ENABLE): binary_sensor.binary_sensor_schema(),
+            cv.Optional(CONF_CURRENT_FAULT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_VM_VOLTAGE): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT,
+                accuracy_decimals=2,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_DUTY_CMD_PERCENT): sensor.sensor_schema(
+                unit_of_measurement=UNIT_PERCENT,
+                accuracy_decimals=1,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_VOLT_MAG_PERCENT): sensor.sensor_schema(
+                unit_of_measurement=UNIT_PERCENT,
+                accuracy_decimals=1,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_MOTOR_BEMF_CONSTANT): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
         }
     )
     .extend(cv.polling_component_schema("250ms"))
@@ -412,3 +483,59 @@ async def to_code(config):
                 OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT]]
             )
         )
+
+    if CONF_BRAKE in config:
+        sw = await switch_.new_switch(config[CONF_BRAKE])
+        cg.add(sw.set_parent(var))
+        cg.add(var.set_brake_switch(sw))
+
+    if CONF_DIRECTION in config:
+        sel = await select.new_select(config[CONF_DIRECTION], options=DIRECTION_OPTIONS)
+        cg.add(sel.set_parent(var))
+        cg.add(var.set_direction_select(sel))
+
+    if CONF_SPEED_PERCENT in config:
+        num = await number.new_number(
+            config[CONF_SPEED_PERCENT],
+            min_value=0,
+            max_value=100,
+            step=1,
+        )
+        cg.add(num.set_parent(var))
+        cg.add(var.set_speed_number(num))
+
+    if CONF_CLEAR_FAULTS in config:
+        clear_faults = await button.new_button(config[CONF_CLEAR_FAULTS])
+        cg.add(clear_faults.set_parent(var))
+
+    if CONF_WATCHDOG_TICKLE in config:
+        watchdog_tickle = await button.new_button(config[CONF_WATCHDOG_TICKLE])
+        cg.add(watchdog_tickle.set_parent(var))
+
+    if CONF_FAULT_ACTIVE in config:
+        sens = await binary_sensor.new_binary_sensor(config[CONF_FAULT_ACTIVE])
+        cg.add(var.set_fault_active_binary_sensor(sens))
+
+    if CONF_SYS_ENABLE in config:
+        sens = await binary_sensor.new_binary_sensor(config[CONF_SYS_ENABLE])
+        cg.add(var.set_sys_enable_binary_sensor(sens))
+
+    if CONF_CURRENT_FAULT in config:
+        sens = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULT])
+        cg.add(var.set_current_fault_text_sensor(sens))
+
+    if CONF_VM_VOLTAGE in config:
+        sens = await sensor.new_sensor(config[CONF_VM_VOLTAGE])
+        cg.add(var.set_vm_voltage_sensor(sens))
+
+    if CONF_DUTY_CMD_PERCENT in config:
+        sens = await sensor.new_sensor(config[CONF_DUTY_CMD_PERCENT])
+        cg.add(var.set_duty_cmd_percent_sensor(sens))
+
+    if CONF_VOLT_MAG_PERCENT in config:
+        sens = await sensor.new_sensor(config[CONF_VOLT_MAG_PERCENT])
+        cg.add(var.set_volt_mag_percent_sensor(sens))
+
+    if CONF_MOTOR_BEMF_CONSTANT in config:
+        sens = await sensor.new_sensor(config[CONF_MOTOR_BEMF_CONSTANT])
+        cg.add(var.set_motor_bemf_constant_sensor(sens))
