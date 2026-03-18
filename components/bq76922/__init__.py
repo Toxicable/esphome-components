@@ -30,6 +30,9 @@ CONF_SLEEP_MODE = "sleep_mode"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
 CONF_CHARGE_CURRENT_LIMIT_A = "charge_current_limit_a"
 CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
+CONF_CHARGE_CURRENT_DELAY_MS = "charge_current_delay_ms"
+CONF_DISCHARGE_CURRENT_DELAY_MS = "discharge_current_delay_ms"
+CONF_CURRENT_RECOVERY_TIME_S = "current_recovery_time_s"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
@@ -117,6 +120,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
             cv.Optional(CONF_CHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
             cv.Optional(CONF_DISCHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
+            cv.Optional(CONF_CHARGE_CURRENT_DELAY_MS): cv.int_range(min=10, max=426),
+            cv.Optional(CONF_DISCHARGE_CURRENT_DELAY_MS): cv.int_range(min=10, max=426),
+            cv.Optional(CONF_CURRENT_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
             cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
             # Backward-compatible alias for bat_voltage.
             cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -215,6 +221,12 @@ async def to_code(config):
         cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))
     if CONF_DISCHARGE_CURRENT_LIMIT_A in config:
         cg.add(var.set_discharge_current_limit_a(config[CONF_DISCHARGE_CURRENT_LIMIT_A]))
+    if CONF_CHARGE_CURRENT_DELAY_MS in config:
+        cg.add(var.set_charge_current_delay_ms(config[CONF_CHARGE_CURRENT_DELAY_MS]))
+    if CONF_DISCHARGE_CURRENT_DELAY_MS in config:
+        cg.add(var.set_discharge_current_delay_ms(config[CONF_DISCHARGE_CURRENT_DELAY_MS]))
+    if CONF_CURRENT_RECOVERY_TIME_S in config:
+        cg.add(var.set_current_recovery_time_s(config[CONF_CURRENT_RECOVERY_TIME_S]))
 
     if CONF_BAT_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])

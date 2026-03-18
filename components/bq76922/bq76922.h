@@ -34,6 +34,18 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
     discharge_current_limit_a_ = value;
     has_discharge_current_limit_ = true;
   }
+  void set_charge_current_delay_ms(uint16_t value) {
+    charge_current_delay_ms_ = value;
+    has_charge_current_delay_ = true;
+  }
+  void set_discharge_current_delay_ms(uint16_t value) {
+    discharge_current_delay_ms_ = value;
+    has_discharge_current_delay_ = true;
+  }
+  void set_current_recovery_time_s(uint8_t value) {
+    current_recovery_time_s_ = value;
+    has_current_recovery_time_ = true;
+  }
   void set_autonomous_fet_mode(uint8_t mode) {
     autonomous_fet_mode_ = mode;
   }
@@ -137,6 +149,7 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool read_subcommand_(uint16_t subcommand, uint8_t* data, size_t len);
   bool read_subcommand_u16_(uint16_t subcommand, uint16_t& value);
   bool write_subcommand_data_(uint16_t subcommand, const uint8_t* data, size_t len);
+  bool read_data_memory_u8_(uint16_t address, uint8_t& value);
   bool write_data_memory_u8_(uint16_t address, uint8_t value);
   bool set_cfgupdate_mode_(bool enabled);
 
@@ -157,8 +170,14 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   float sense_resistor_milliohm_{1.0f};
   float charge_current_limit_a_{0.0f};
   float discharge_current_limit_a_{0.0f};
+  uint16_t charge_current_delay_ms_{0};
+  uint16_t discharge_current_delay_ms_{0};
+  uint8_t current_recovery_time_s_{0};
   bool has_charge_current_limit_{false};
   bool has_discharge_current_limit_{false};
+  bool has_charge_current_delay_{false};
+  bool has_discharge_current_delay_{false};
+  bool has_current_recovery_time_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
   std::array<uint8_t, 5> cell_read_map_{0, 1, 2, 3, 4};

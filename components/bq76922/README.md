@@ -41,6 +41,9 @@ bq76922:
   # sense_resistor_milliohm: 1.0
   # charge_current_limit_a: 20.0
   # discharge_current_limit_a: 40.0
+  # charge_current_delay_ms: 23
+  # discharge_current_delay_ms: 23
+  # current_recovery_time_s: 3
 
   # Optional sensors:
   # bat_voltage:
@@ -113,6 +116,9 @@ bq76922:
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
 - `charge_current_limit_a`: charge overcurrent protection threshold
 - `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
+- `charge_current_delay_ms`: OCC trip delay (10ms to 426ms)
+- `discharge_current_delay_ms`: OCD1 trip delay (10ms to 426ms)
+- `current_recovery_time_s`: shared recovery timer for OCC/OCD protections (0s to 255s)
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
 
 Current and voltage scaling are automatically detected from the chip configuration.
@@ -126,6 +132,8 @@ with VC4 tied to VC3 and VC5 at BAT+.
 
 Current limit notes:
 - These values are written to device protection settings during boot.
+- Setting `charge_current_limit_a` automatically enables OCC and CHG-FET trip-on-OCC.
+- Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
 - They require the chip to be in `FULLACCESS`.
 - Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
 

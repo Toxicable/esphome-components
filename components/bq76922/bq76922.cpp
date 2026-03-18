@@ -66,8 +66,19 @@ constexpr uint8_t FET_STATUS_CHG = 1u << 0;
 constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
+constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
+constexpr uint16_t DM_CHG_FET_PROTECTIONS_A = 0x9265;
+constexpr uint16_t DM_DSG_FET_PROTECTIONS_A = 0x9269;
 constexpr uint16_t DM_OCC_THRESHOLD = 0x9280;
+constexpr uint16_t DM_OCC_DELAY = 0x9281;
 constexpr uint16_t DM_OCD1_THRESHOLD = 0x9282;
+constexpr uint16_t DM_OCD1_DELAY = 0x9283;
+constexpr uint16_t DM_PROTECTION_RECOVERY_TIME = 0x92AF;
+
+constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
+constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
+constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
+constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
 }  // namespace
 
 void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
@@ -311,6 +322,15 @@ void BQ76922Component::dump_config() {
   if (has_discharge_current_limit_) {
     ESP_LOGCONFIG(TAG, "  discharge_current_limit_a: %.3f", discharge_current_limit_a_);
   }
+  if (has_charge_current_delay_) {
+    ESP_LOGCONFIG(TAG, "  charge_current_delay_ms: %u", static_cast<unsigned>(charge_current_delay_ms_));
+  }
+  if (has_discharge_current_delay_) {
+    ESP_LOGCONFIG(TAG, "  discharge_current_delay_ms: %u", static_cast<unsigned>(discharge_current_delay_ms_));
+  }
+  if (has_current_recovery_time_) {
+    ESP_LOGCONFIG(TAG, "  current_recovery_time_s: %u", static_cast<unsigned>(current_recovery_time_s_));
+  }
 
   const char* autonomous_mode = "preserve";
   if (autonomous_fet_mode_ == BOOT_ENABLE) {
@@ -517,6 +537,10 @@ bool BQ76922Component::write_data_memory_u8_(uint16_t address, uint8_t value) {
   return verify == value;
 }
 
+bool BQ76922Component::read_data_memory_u8_(uint16_t address, uint8_t& value) {
+  return this->read_subcommand_(address, &value, 1);
+}
+
 bool BQ76922Component::set_cfgupdate_mode_(bool enabled) {
   const uint16_t command = enabled ? SUBCMD_SET_CFGUPDATE : SUBCMD_EXIT_CFGUPDATE;
   if (!this->write_subcommand_(command)) {
@@ -542,7 +566,10 @@ bool BQ76922Component::set_cfgupdate_mode_(bool enabled) {
 }
 
 bool BQ76922Component::apply_current_limit_config_() {
-  if (!has_charge_current_limit_ && !has_discharge_current_limit_) {
+  if (
+    !has_charge_current_limit_ && !has_discharge_current_limit_ && !has_charge_current_delay_ &&
+    !has_discharge_current_delay_ && !has_current_recovery_time_
+  ) {
     return true;
   }
 
@@ -569,6 +596,68 @@ bool BQ76922Component::apply_current_limit_config_() {
 
   bool ok = true;
 
+  if (has_charge_current_limit_ || has_discharge_current_limit_) {
+    uint8_t enabled_protections_a = 0;
+    if (!this->read_data_memory_u8_(DM_ENABLED_PROTECTIONS_A, enabled_protections_a)) {
+      ESP_LOGW(TAG, "Failed reading Enabled Protections A");
+      ok = false;
+    } else {
+      uint8_t required_bits = 0;
+      if (has_charge_current_limit_) {
+        required_bits |= PROTECTION_A_OCC;
+      }
+      if (has_discharge_current_limit_) {
+        required_bits |= PROTECTION_A_OCD1;
+      }
+
+      const uint8_t updated = static_cast<uint8_t>(enabled_protections_a | required_bits);
+      if (updated != enabled_protections_a) {
+        if (!this->write_data_memory_u8_(DM_ENABLED_PROTECTIONS_A, updated)) {
+          ESP_LOGW(TAG, "Failed writing Enabled Protections A");
+          ok = false;
+        } else {
+          ESP_LOGI(TAG, "Enabled OCC/OCD1 protections (Enabled Protections A=0x%02X)", updated);
+        }
+      }
+    }
+  }
+
+  if (has_charge_current_limit_) {
+    uint8_t chg_fet_protections_a = 0;
+    if (!this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, chg_fet_protections_a)) {
+      ESP_LOGW(TAG, "Failed reading CHG FET Protections A");
+      ok = false;
+    } else {
+      const uint8_t updated = static_cast<uint8_t>(chg_fet_protections_a | CHG_FET_PROTECTION_A_OCC);
+      if (updated != chg_fet_protections_a) {
+        if (!this->write_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, updated)) {
+          ESP_LOGW(TAG, "Failed writing CHG FET Protections A");
+          ok = false;
+        } else {
+          ESP_LOGI(TAG, "Enabled CHG FET trip on OCC (CHG FET Protections A=0x%02X)", updated);
+        }
+      }
+    }
+  }
+
+  if (has_discharge_current_limit_) {
+    uint8_t dsg_fet_protections_a = 0;
+    if (!this->read_data_memory_u8_(DM_DSG_FET_PROTECTIONS_A, dsg_fet_protections_a)) {
+      ESP_LOGW(TAG, "Failed reading DSG FET Protections A");
+      ok = false;
+    } else {
+      const uint8_t updated = static_cast<uint8_t>(dsg_fet_protections_a | DSG_FET_PROTECTION_A_OCD1);
+      if (updated != dsg_fet_protections_a) {
+        if (!this->write_data_memory_u8_(DM_DSG_FET_PROTECTIONS_A, updated)) {
+          ESP_LOGW(TAG, "Failed writing DSG FET Protections A");
+          ok = false;
+        } else {
+          ESP_LOGI(TAG, "Enabled DSG FET trip on OCD1 (DSG FET Protections A=0x%02X)", updated);
+        }
+      }
+    }
+  }
+
   if (has_charge_current_limit_) {
     const float threshold_mv = charge_current_limit_a_ * sense_resistor_milliohm_;
     int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
@@ -588,6 +677,34 @@ bool BQ76922Component::apply_current_limit_config_() {
       ok = false;
     } else {
       ESP_LOGI(TAG, "Configured charge current limit %.3f A (OCC code=%d)", charge_current_limit_a_, code);
+    }
+  }
+
+  if (has_charge_current_delay_) {
+    int code = static_cast<int>(std::lround(static_cast<float>(charge_current_delay_ms_) / 3.3f - 2.0f));
+    const int raw_code = code;
+    if (code < 1) {
+      code = 1;
+    } else if (code > 127) {
+      code = 127;
+    }
+
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Charge current delay clipped to device range: code=%d", code);
+    }
+
+    if (!this->write_data_memory_u8_(DM_OCC_DELAY, static_cast<uint8_t>(code))) {
+      ESP_LOGW(TAG, "Failed writing OCC delay");
+      ok = false;
+    } else {
+      const float effective_ms = static_cast<float>(code + 2) * 3.3f;
+      ESP_LOGI(
+        TAG,
+        "Configured charge current delay %u ms (OCC code=%d, effective=%.1f ms)",
+        static_cast<unsigned>(charge_current_delay_ms_),
+        code,
+        effective_ms
+      );
     }
   }
 
@@ -611,6 +728,45 @@ bool BQ76922Component::apply_current_limit_config_() {
     } else {
       ESP_LOGI(
         TAG, "Configured discharge current limit %.3f A (OCD1 code=%d)", discharge_current_limit_a_, code
+      );
+    }
+  }
+
+  if (has_discharge_current_delay_) {
+    int code = static_cast<int>(std::lround(static_cast<float>(discharge_current_delay_ms_) / 3.3f - 2.0f));
+    const int raw_code = code;
+    if (code < 1) {
+      code = 1;
+    } else if (code > 127) {
+      code = 127;
+    }
+
+    if (raw_code != code) {
+      ESP_LOGW(TAG, "Discharge current delay clipped to device range: code=%d", code);
+    }
+
+    if (!this->write_data_memory_u8_(DM_OCD1_DELAY, static_cast<uint8_t>(code))) {
+      ESP_LOGW(TAG, "Failed writing OCD1 delay");
+      ok = false;
+    } else {
+      const float effective_ms = static_cast<float>(code + 2) * 3.3f;
+      ESP_LOGI(
+        TAG,
+        "Configured discharge current delay %u ms (OCD1 code=%d, effective=%.1f ms)",
+        static_cast<unsigned>(discharge_current_delay_ms_),
+        code,
+        effective_ms
+      );
+    }
+  }
+
+  if (has_current_recovery_time_) {
+    if (!this->write_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_)) {
+      ESP_LOGW(TAG, "Failed writing current recovery time");
+      ok = false;
+    } else {
+      ESP_LOGI(
+        TAG, "Configured current recovery time %u s", static_cast<unsigned>(current_recovery_time_s_)
       );
     }
   }

@@ -18,7 +18,14 @@ Component-scoped notes for `components/bq76922`.
 - Optional boot-time current-limit settings are supported:
   - `charge_current_limit_a` writes `Protections OCC Threshold` (`0x9280`), 2mV/step, code range `2..62`.
   - `discharge_current_limit_a` writes `Protections OCD1 Threshold` (`0x9282`), 2mV/step, code range `2..100`.
+  - `charge_current_delay_ms` writes `Protections OCC Delay` (`0x9281`) with code conversion `round(delay_ms / 3.3 - 2)`, clamped to `1..127`.
+  - `discharge_current_delay_ms` writes `Protections OCD1 Delay` (`0x9283`) with code conversion `round(delay_ms / 3.3 - 2)`, clamped to `1..127`.
+  - `current_recovery_time_s` writes `Protections:Recovery:Time` (`0x92AF`) in seconds (`0..255`).
   - Conversion uses `sense_resistor_milliohm` with `threshold_mV = current_A * shunt_mOhm`.
+  - When charge/discharge limits are configured, the component also enables matching protection and FET-action bits:
+    - `Settings:Protection:Enabled Protections A` (`0x9261`) sets OCC (bit 4) and/or OCD1 (bit 5).
+    - `Settings:Protection:CHG FET Protections A` (`0x9265`) sets OCC bit (bit 4) for CHG turnoff.
+    - `Settings:Protection:DSG FET Protections A` (`0x9269`) sets OCD1 bit (bit 5) for DSG turnoff.
   - Writes require `FULLACCESS` and are applied in `CONFIG_UPDATE` mode.
 - Public config key for top-of-stack voltage is `bat_voltage`; keep `stack_voltage` as backward-compatible alias.
 - User preference for this component README: keep config simple and avoid jargon-heavy terms where possible (for example, explain `LD` as load-detect pin).
