@@ -132,6 +132,8 @@ void MCF8329AComponent::setup() {
   this->algorithm_state_valid_ = false;
   this->algorithm_state_read_error_latched_ = false;
   this->last_algorithm_state_ = 0xFFFFu;
+  this->startup_profile_last_check_ms_ = 0u;
+  this->startup_profile_last_recovery_ms_ = 0u;
 
   if (!this->scan_i2c_bus_()) {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
@@ -173,6 +175,8 @@ void MCF8329AComponent::update() {
     this->publish_algo_status_(algo_status);
     this->log_algorithm_state_transition_(algo_status, "update");
   }
+
+  this->recover_from_mcf_reset_if_needed_();
 
   const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
   if (gate_ok) {
@@ -616,6 +620,60 @@ void MCF8329AComponent::apply_post_comms_setup_() {
       this->pulse_clear_faults();
     }
   }
+}
+
+void MCF8329AComponent::recover_from_mcf_reset_if_needed_() {
+  if (!this->startup_motor_bemf_const_set_) {
+    return;
+  }
+
+  const uint32_t now = millis();
+  if (this->startup_profile_last_check_ms_ != 0u &&
+      (now - this->startup_profile_last_check_ms_) < STARTUP_PROFILE_CHECK_INTERVAL_MS) {
+    return;
+  }
+  this->startup_profile_last_check_ms_ = now;
+
+  uint32_t closed_loop3 = 0;
+  uint32_t closed_loop4 = 0;
+  if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
+      !this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+    return;
+  }
+
+  const uint8_t bemf_const = static_cast<uint8_t>(
+    (closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >> CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT
+  );
+  const uint16_t max_speed_code = static_cast<uint16_t>(
+    (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
+  );
+
+  // Signature of a fresh-reset/default profile observed in field logs:
+  // BEMF const at 0x00 with MAX_SPEED at default code 1200 (200 Hz).
+  if (bemf_const != 0u || max_speed_code != 1200u) {
+    return;
+  }
+
+  if (this->startup_profile_last_recovery_ms_ != 0u &&
+      (now - this->startup_profile_last_recovery_ms_) < STARTUP_PROFILE_RECOVERY_COOLDOWN_MS) {
+    return;
+  }
+  this->startup_profile_last_recovery_ms_ = now;
+
+  ESP_LOGW(
+    TAG,
+    "Detected probable MCF reset/default profile (bemf=0x%02X max_speed_code=%u). "
+    "Reapplying startup motor config without ESP reboot.",
+    static_cast<unsigned>(bemf_const),
+    static_cast<unsigned>(max_speed_code)
+  );
+
+  // Clear local latches so recovered device state is not blocked by stale software lockouts.
+  this->fault_latched_ = false;
+  this->mpet_bemf_fault_latched_ = false;
+  this->hw_lock_fault_latched_ = false;
+  this->severe_fault_speed_lockout_ = false;
+  this->apply_post_comms_setup_();
 }
 
 bool MCF8329AComponent::apply_startup_motor_config_() {

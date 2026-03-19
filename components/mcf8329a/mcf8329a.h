@@ -227,6 +227,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool scan_i2c_bus_();
   void process_deferred_startup_();
   void apply_post_comms_setup_();
+  void recover_from_mcf_reset_if_needed_();
   bool apply_startup_motor_config_();
   const char* i2c_error_to_string_(i2c::ErrorCode error_code) const;
   const char* startup_mode_to_string_(uint8_t mode) const;
@@ -404,6 +405,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t STARTUP_COMMS_RETRY_DELAY_MS = 250u;
   static constexpr uint32_t DEFERRED_COMMS_RETRY_INTERVAL_MS = 1000u;
   static constexpr uint32_t DEFERRED_SCAN_INTERVAL_MS = 5000u;
+  static constexpr uint32_t STARTUP_PROFILE_CHECK_INTERVAL_MS = 1000u;
+  static constexpr uint32_t STARTUP_PROFILE_RECOVERY_COOLDOWN_MS = 3000u;
   static constexpr uint8_t I2C_SCAN_ADDRESS_MIN = 0x00u;
   static constexpr uint8_t I2C_SCAN_ADDRESS_MAX = 0x7Eu;
 
@@ -468,6 +471,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool algorithm_state_valid_{false};
   bool algorithm_state_read_error_latched_{false};
   uint16_t last_algorithm_state_{0xFFFFu};
+  uint32_t startup_profile_last_check_ms_{0u};
+  uint32_t startup_profile_last_recovery_ms_{0u};
 
   MCF8329ABrakeSwitch* brake_switch_{nullptr};
   MCF8329ADirectionSelect* direction_select_{nullptr};

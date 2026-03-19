@@ -126,6 +126,7 @@ mcf8329a:
 - Verify `startup_max_speed_hz` is realistic for your motor and pole-pair count.
 - Tune `startup_motor_bemf_const` after `startup_max_speed_hz` is correct.
 - If startup still faults at handoff, tune `startup_open_loop_ilimit_percent`, `startup_open_loop_accel_hz_per_s`, and `startup_open_to_closed_handoff_percent`.
+- If only the MCF is power-cycled (ESP stays up), firmware now detects a default-profile reset signature (`bemf=0x00` + `max_speed_code=1200`) and reapplies startup config automatically.
 
 Safety guardrails:
 - By default, config validation blocks:

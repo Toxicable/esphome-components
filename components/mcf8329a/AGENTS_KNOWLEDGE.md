@@ -73,6 +73,9 @@ Component-scoped notes for `components/mcf8329a`.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
   - Severe current faults (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `BUS_CURRENT_LIMIT`) engage a speed-command safety
     lockout; non-zero speed commands are rejected until `clear_faults` succeeds and faults are no longer active.
+  - If the MCF is power-cycled while ESP stays up, firmware now checks for a default-profile signature
+    (`CLOSED_LOOP3.MOTOR_BEMF_CONST=0x00` plus `CLOSED_LOOP4.MAX_SPEED=1200`) and automatically re-runs
+    post-comms startup setup/config apply to recover without requiring an ESP reboot.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
