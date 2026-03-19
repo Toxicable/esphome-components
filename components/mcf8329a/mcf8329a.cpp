@@ -1742,6 +1742,23 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
       ABNORMAL_BEMF_THRESHOLD_LABELS[abnormal_bemf_threshold & 0x7u],
       NO_MOTOR_THRESHOLD_LABELS[no_motor_threshold & 0x7u]
     );
+
+    const bool limits_at_guardrail =
+      ilimit >= 7u && lock_ilimit >= 7u && hw_lock_ilimit >= 7u;
+    if (limits_at_guardrail) {
+      ESP_LOGW(
+        TAG,
+        "HW_LOCK_LIMIT hint: limits are already at the 50%% safety guardrail. "
+        "Do not raise current further; tune startup mode/alignment/open-loop handoff, reduce load, "
+        "and verify motor phase wiring."
+      );
+    } else {
+      ESP_LOGW(
+        TAG,
+        "HW_LOCK_LIMIT hint: use startup_lock_mode=retry and tune startup currents within the "
+        "guardrail range (30-50%%), then adjust open-loop accel/handoff."
+      );
+    }
   } else {
     ESP_LOGW(
       TAG,
@@ -1750,14 +1767,12 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
       YESNO(fault_config1_ok),
       YESNO(fault_config2_ok)
     );
+    ESP_LOGW(
+      TAG,
+      "HW_LOCK_LIMIT hint: keep current limits within guardrails and tune startup mode/alignment/"
+      "handoff before increasing stress."
+    );
   }
-
-  ESP_LOGW(
-    TAG,
-    "HW_LOCK_LIMIT hint: lock limits default to 5%%. For bring-up, try startup_lock_mode=retry and "
-    "raise "
-    "startup_lock_ilimit_percent/startup_hw_lock_ilimit_percent."
-  );
 }
 
 const char* MCF8329AComponent::startup_mode_to_string_(uint8_t mode) const {

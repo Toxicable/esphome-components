@@ -25,6 +25,10 @@ Component-scoped notes for `components/mcf8329a`.
     - `FAULT_CONFIG1.LOCK_ILIMIT_MODE[18:15]`
     - `FAULT_CONFIG1.MTR_LCK_MODE[6:3]`
     - `FAULT_CONFIG2.HW_LOCK_ILIMIT_MODE[18:15]`
+  - Current implementation gap: `FAULT_CONFIG1.LOCK_ILIMIT_DEG[14:11]` and
+    `FAULT_CONFIG2.HW_LOCK_ILIMIT_DEG[14:12]` exist in MCF8329A but are not yet exposed in YAML/startup apply.
+    This can matter when porting `mcf8316d` bring-up behavior, because `apply_startup_tune` there sets non-zero
+    deglitch values (`LOCK_ILIMIT_DEG=6` => 5ms, `HW_LOCK_ILIMIT_DEG=7` => 7us).
   - YAML `startup_lock_mode` intentionally excludes `report_only` (mode `8`) for safer defaults during bring-up.
   - `startup_lock_ilimit_percent` -> `FAULT_CONFIG1.LOCK_ILIMIT[22:19]`
   - `startup_hw_lock_ilimit_percent` -> `FAULT_CONFIG1.HW_LOCK_ILIMIT[26:23]`
@@ -84,6 +88,8 @@ Component-scoped notes for `components/mcf8329a`.
   plus a startup hint to command >10% then ramp down.
 - On `HW_LOCK_LIMIT`, component logs one-shot diagnostics including effective `ILIMIT`, lock current limits, lock modes,
   retry, lock enable bits, and ABN/no-motor thresholds.
+- User preference: default troubleshooting guidance should stay within guardrails and should not suggest
+  `allow_unsafe_current_limits: true` unless explicitly requested.
 - Startup MPET mitigation:
   - `clear_mpet_on_startup` (default `true`) clears `ALGO_DEBUG2` MPET command bits (`MPET_CMD`, `MPET_KE`, `MPET_MECH`,
     `MPET_WRITE_SHADOW`) during post-comms setup.
@@ -94,6 +100,10 @@ Component-scoped notes for `components/mcf8329a`.
   - `clear_faults` button path also clears MPET bits before pulsing `CLR_FLT`, preventing immediate MPET_BEMF relatch.
   - If `MPET_BEMF_FAULT` is still present immediately after startup setup, component pulses `CLR_FLT` once automatically.
 - Bring-up troubleshooting insight from field logs:
+  - Field baseline: this motor/system previously started successfully using `mcf8316d_manual` with the GUI-style
+    startup tune flow (`apply_startup_tune`). Treat that as a known-good hardware baseline when diagnosing
+    `mcf8329a` startup faults; if `mcf8329a` still trips `HW_LOCK_LIMIT`, prioritize register/config parity and
+    startup sequence differences before assuming motor/wiring damage.
   - Sweeping only `startup_motor_bemf_const` (for example `0x52` down to `0x38`) may not change startup behavior when
     faults are `ABN_SPEED`/`MTR_LCK` or `HW_LOCK_LIMIT`; in that case prioritize lock detector tuning (`LOCK1/2/3`
     enables and thresholds), startup mode/direction, and current limit tuning over further BEMF-constant sweeps.
