@@ -24,13 +24,14 @@ MCF8329AWatchdogTickleButton = mcf8329a_ns.class_("MCF8329AWatchdogTickleButton"
 CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
 CONF_CLEAR_MPET_ON_STARTUP = "clear_mpet_on_startup"
+CONF_ALLOW_UNSAFE_CURRENT_LIMITS = "allow_unsafe_current_limits"
 CONF_STARTUP_MOTOR_BEMF_CONST = "startup_motor_bemf_const"
 CONF_STARTUP_BRAKE_MODE = "startup_brake_mode"
 CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
 CONF_STARTUP_MODE = "startup_mode"
 CONF_STARTUP_ALIGN_TIME = "startup_align_time"
 CONF_STARTUP_DIRECTION_MODE = "startup_direction_mode"
-CONF_STARTUP_ILIMIT_PERCENT = "startup_ilimit_percent"
+CONF_PHASE_CURRENT_LIMIT_PERCENT = "phase_current_limit_percent"
 CONF_STARTUP_LOCK_MODE = "startup_lock_mode"
 CONF_STARTUP_LOCK_ILIMIT_PERCENT = "startup_lock_ilimit_percent"
 CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT = "startup_hw_lock_ilimit_percent"
@@ -119,7 +120,6 @@ DIRECTION_OPTIONS = ["hardware", "cw", "ccw"]
 STARTUP_LOCK_MODE_OPTIONS = {
     "latched": 0,
     "retry": 4,
-    "report_only": 8,
     "disabled": 9,
 }
 
@@ -320,6 +320,33 @@ def validate_open_to_closed_handoff_percent(value):
     )
 
 
+def validate_safety_guardrails(config):
+    if config.get(CONF_ALLOW_UNSAFE_CURRENT_LIMITS, False):
+        return config
+
+    max_safe_percent = 50
+    guarded_keys = (
+        CONF_PHASE_CURRENT_LIMIT_PERCENT,
+        CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT,
+        CONF_STARTUP_LOCK_ILIMIT_PERCENT,
+        CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT,
+    )
+    for key in guarded_keys:
+        if key in config and config[key] > max_safe_percent:
+            raise cv.Invalid(
+                f"{key}={config[key]} exceeds safety guardrail ({max_safe_percent}%). "
+                "Set allow_unsafe_current_limits: true to override intentionally."
+            )
+
+    if config.get(CONF_STARTUP_LOCK_MODE) == "disabled":
+        raise cv.Invalid(
+            "startup_lock_mode=disabled is blocked by safety guardrail. "
+            "Set allow_unsafe_current_limits: true to override intentionally."
+        )
+
+    return config
+
+
 def encode_max_speed_hz(value_hz):
     if value_hz <= 1600:
         code = int(round(value_hz * 6.0))
@@ -336,20 +363,21 @@ def encode_max_speed_hz(value_hz):
     return code
 
 
-CONFIG_SCHEMA = (
+CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(MCF8329AComponent),
             cv.Optional(CONF_INTER_BYTE_DELAY_US, default=100): cv.positive_int,
             cv.Optional(CONF_AUTO_TICKLE_WATCHDOG, default=False): cv.boolean,
             cv.Optional(CONF_CLEAR_MPET_ON_STARTUP, default=True): cv.boolean,
+            cv.Optional(CONF_ALLOW_UNSAFE_CURRENT_LIMITS, default=False): cv.boolean,
             cv.Required(CONF_STARTUP_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
             cv.Required(CONF_STARTUP_BRAKE_MODE): cv.enum(STARTUP_BRAKE_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_BRAKE_TIME): cv.enum(STARTUP_BRAKE_TIME_OPTIONS, lower=True),
             cv.Required(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_ALIGN_TIME): cv.enum(STARTUP_ALIGN_TIME_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_DIRECTION_MODE): cv.enum(STARTUP_DIRECTION_MODE_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_PHASE_CURRENT_LIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_LOCK_MODE): cv.enum(STARTUP_LOCK_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
@@ -412,7 +440,8 @@ CONFIG_SCHEMA = (
         }
     )
     .extend(cv.polling_component_schema("250ms"))
-    .extend(i2c.i2c_device_schema(default_address=0x01))
+    .extend(i2c.i2c_device_schema(default_address=0x01)),
+    validate_safety_guardrails,
 )
 
 
@@ -434,8 +463,8 @@ async def to_code(config):
         cg.add(var.set_startup_align_time(config[CONF_STARTUP_ALIGN_TIME]))
     if CONF_STARTUP_DIRECTION_MODE in config:
         cg.add(var.set_startup_direction_mode(config[CONF_STARTUP_DIRECTION_MODE]))
-    if CONF_STARTUP_ILIMIT_PERCENT in config:
-        cg.add(var.set_startup_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_ILIMIT_PERCENT]]))
+    if CONF_PHASE_CURRENT_LIMIT_PERCENT in config:
+        cg.add(var.set_startup_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_PHASE_CURRENT_LIMIT_PERCENT]]))
     if CONF_STARTUP_LOCK_MODE in config:
         cg.add(var.set_startup_lock_mode(config[CONF_STARTUP_LOCK_MODE]))
     if CONF_STARTUP_LOCK_ILIMIT_PERCENT in config:

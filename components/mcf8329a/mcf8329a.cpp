@@ -1143,6 +1143,15 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent, const char* reaso
     clamped = 100.0f;
   }
 
+  if (clamped > 0.0f && this->severe_fault_speed_lockout_) {
+    ESP_LOGE(
+      TAG,
+      "Speed command blocked by safety lockout after severe current fault. "
+      "Clear active faults before commanding non-zero speed."
+    );
+    return false;
+  }
+
   const uint16_t digital_speed_ctrl = static_cast<uint16_t>(lroundf((clamped / 100.0f) * 32767.0f));
 
   if (clamped > 0.0f && this->clear_mpet_on_startup_) {
@@ -1232,6 +1241,10 @@ void MCF8329AComponent::pulse_clear_faults() {
       this->fault_active_binary_sensor_->publish_state(fault_active);
     }
     this->handle_fault_shutdown_(fault_active, ctrl_after, ctrl_after_ok);
+    if (!fault_active && this->severe_fault_speed_lockout_) {
+      this->severe_fault_speed_lockout_ = false;
+      ESP_LOGI(TAG, "Safety lockout cleared after faults were cleared");
+    }
   }
 }
 
@@ -1996,12 +2009,22 @@ void MCF8329AComponent::publish_algo_status_(uint32_t algo_status) {
 void MCF8329AComponent::handle_fault_shutdown_(
   bool fault_active, uint32_t controller_fault_status, bool controller_fault_valid
 ) {
-  (void)controller_fault_status;
-  (void)controller_fault_valid;
   if (!fault_active) {
     this->fault_latched_ = false;
     return;
   }
+
+  if (this->severe_current_fault_active_(controller_fault_status, controller_fault_valid)) {
+    if (!this->severe_fault_speed_lockout_) {
+      this->severe_fault_speed_lockout_ = true;
+      ESP_LOGE(
+        TAG,
+        "Safety lockout engaged due to severe current fault. "
+        "Non-zero speed commands are blocked until faults are cleared."
+      );
+    }
+  }
+
   if (this->fault_latched_) {
     return;
   }
@@ -2009,6 +2032,16 @@ void MCF8329AComponent::handle_fault_shutdown_(
   this->fault_latched_ = true;
   ESP_LOGW(TAG, "Fault detected, forcing speed command to 0%%");
   (void)this->set_speed_percent(0.0f, "fault_shutdown");
+}
+
+bool MCF8329AComponent::severe_current_fault_active_(
+  uint32_t controller_fault_status, bool controller_fault_valid
+) const {
+  if (!controller_fault_valid) {
+    return false;
+  }
+  const uint32_t severe_faults = FAULT_HW_LOCK_LIMIT | FAULT_LOCK_LIMIT | FAULT_BUS_CURRENT_LIMIT;
+  return (controller_fault_status & severe_faults) != 0u;
 }
 
 }  // namespace mcf8329a

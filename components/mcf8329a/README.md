@@ -36,27 +36,42 @@ mcf8329a:
   update_interval: 250ms
 
   ## Required startup keys:
+  ## startup_mode options: align | double_align | ipd | slow_first_cycle
+  ## choose `align` for quick start on low-inertia loads with consistent direction
+  ## choose `double_align` (default) for most loads when startup robustness is more important than fastest start
+  ## choose `ipd` when rotor position/direction at startup is uncertain (for example windmilling or frequent restarts)
+  ## choose `slow_first_cycle` for hard-to-start motors (high inertia/cogging) to reduce startup jerk and current spikes
   startup_mode: double_align
   startup_brake_mode: recirculation
+  ## `Bs` = series cell count, `Rp` = rotor poles, `kV` = motor rating:
+  ## Find nearest Table 7-4 code where KtPH_N(mV/Hz) ~= 97980 / (kV * Rp)
   startup_motor_bemf_const: 0x57
+  ## (kV * (4.2 * Bs) * (Rp / 2)) / 60
   startup_max_speed_hz: 900
+
+  ## Example (`Bs=4`, `kV=750`, `Rp=12`):
+  # startup_motor_bemf_const: 0x39
+  # startup_max_speed_hz: 1260
 
   ## Optional bring-up helpers:
   # clear_mpet_on_startup: true
   # auto_tickle_watchdog: false
+  ## Safety guardrail override (default false):
+  # allow_unsafe_current_limits: false
 
   ## Startup direction/alignment:
   # startup_direction_mode: cw
   # startup_align_time: 100ms
 
   ## Startup current + open-loop handoff shaping:
-  # startup_ilimit_percent: 80
+  # phase_current_limit_percent: 40
   # startup_open_loop_ilimit_percent: 50
   # startup_open_loop_accel_hz_per_s: 25
   # startup_auto_handoff_enable: false
   # startup_open_to_closed_handoff_percent: 10
 
   ## Lock/fault handling:
+  ## startup_lock_mode options: latched | retry | disabled (`report_only` intentionally unsupported for safety)
   # startup_lock_mode: retry
   # startup_lock_ilimit_percent: 40
   # startup_hw_lock_ilimit_percent: 40
@@ -112,8 +127,17 @@ mcf8329a:
 - Tune `startup_motor_bemf_const` after `startup_max_speed_hz` is correct.
 - If startup still faults at handoff, tune `startup_open_loop_ilimit_percent`, `startup_open_loop_accel_hz_per_s`, and `startup_open_to_closed_handoff_percent`.
 
+Safety guardrails:
+- By default, config validation blocks:
+  - `phase_current_limit_percent`, `startup_open_loop_ilimit_percent`, `startup_lock_ilimit_percent`,
+    `startup_hw_lock_ilimit_percent` above 50%.
+  - `startup_lock_mode: disabled`.
+- Set `allow_unsafe_current_limits: true` only when intentionally overriding these protections.
+- Runtime safety lockout engages on severe current faults (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `BUS_CURRENT_LIMIT`):
+  non-zero speed commands are blocked until faults are actually cleared via `clear_faults`.
+
 Back-voltage/regen risk knobs:
 - `startup_brake_mode`: `active_spin_down` is most aggressive and can push energy back to VM quickly.
 - `startup_brake_time`: longer brake windows increase energy returned/recirculated during stop events.
-- `startup_ilimit_percent` and `startup_open_loop_ilimit_percent`: high values increase transient current and bus stress.
+- `phase_current_limit_percent` and `startup_open_loop_ilimit_percent`: high values increase transient current and bus stress.
 - `startup_open_loop_accel_hz_per_s` and low `startup_open_to_closed_handoff_percent`: aggressive handoff can overshoot and ring the bus.

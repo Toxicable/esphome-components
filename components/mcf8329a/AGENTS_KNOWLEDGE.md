@@ -20,11 +20,12 @@ Component-scoped notes for `components/mcf8329a`.
   - `startup_mode` -> `MOTOR_STARTUP1.MTR_STARTUP[30:29]`
   - `startup_align_time` -> `MOTOR_STARTUP1.ALIGN_TIME[24:21]`
   - `startup_direction_mode` uses `PERI_CONFIG1.DIR_INPUT[20:19]`
-  - `startup_ilimit_percent` -> `FAULT_CONFIG1.ILIMIT[30:27]` (phase peak current limit, % of BASE_CURRENT)
+  - `phase_current_limit_percent` -> `FAULT_CONFIG1.ILIMIT[30:27]` (phase peak current limit, % of BASE_CURRENT)
   - `startup_lock_mode` applies the same mode code to:
     - `FAULT_CONFIG1.LOCK_ILIMIT_MODE[18:15]`
     - `FAULT_CONFIG1.MTR_LCK_MODE[6:3]`
     - `FAULT_CONFIG2.HW_LOCK_ILIMIT_MODE[18:15]`
+  - YAML `startup_lock_mode` intentionally excludes `report_only` (mode `8`) for safer defaults during bring-up.
   - `startup_lock_ilimit_percent` -> `FAULT_CONFIG1.LOCK_ILIMIT[22:19]`
   - `startup_hw_lock_ilimit_percent` -> `FAULT_CONFIG1.HW_LOCK_ILIMIT[26:23]`
   - `startup_lock_retry_time` -> `FAULT_CONFIG1.LCK_RETRY[10:7]`
@@ -38,6 +39,17 @@ Component-scoped notes for `components/mcf8329a`.
   - `startup_open_loop_accel_hz_per_s` -> `MOTOR_STARTUP2.OL_ACC_A1[26:23]`
   - `startup_auto_handoff_enable` -> `MOTOR_STARTUP2.AUTO_HANDOFF_EN[18]`
   - `startup_open_to_closed_handoff_percent` -> `MOTOR_STARTUP2.OPN_CL_HANDOFF_THR[17:13]`
+  - `allow_unsafe_current_limits` (default `false`) is a config guardrail override:
+    - Without override, validation blocks `phase_current_limit_percent`, `startup_open_loop_ilimit_percent`,
+      `startup_lock_ilimit_percent`, `startup_hw_lock_ilimit_percent` above 50%.
+    - Without override, validation also blocks `startup_lock_mode: disabled`.
+  - Quick conversion from common motor specs:
+    - For `kV` in mechanical `rpm/V` and `pole_pairs`, estimate
+      `KtPH_N(mV/Hz) ~= 48990 / (kV * pole_pairs)` then choose nearest `MOTOR_BEMF_CONST` table entry.
+    - Estimate electrical speed limit as
+      `startup_max_speed_hz ~= (kV * Vbus_max * pole_pairs) / 60` (keep within schema range `1..3295`).
+    - Example sanity points: `270kV, 7 pole-pairs -> ~26.0 mV/Hz -> 0x57`; `750kV, 7 pole-pairs -> ~9.3 mV/Hz -> 0x34`;
+      `750kV, 12-pole rotor (6 pole-pairs), 4S full -> startup_max_speed_hz ~1260 and bemf code near 0x39`.
 - Added key-info telemetry fields:
   - `sensor.motor_bemf_constant` (from `MTR_PARAMS[23:16]`)
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
@@ -45,6 +57,11 @@ Component-scoped notes for `components/mcf8329a`.
   - Keep one example, but group optional startup knobs by purpose (direction/alignment, scaling, handoff, lock handling).
   - Omit default-valued keys from the example unless they materially aid bring-up.
   - Do not include `apply_startup_config`; startup config is always applied.
+  - Keep motor conversion math inline in the YAML `## Required startup keys` block (not in a separate top-of-README note).
+  - Include an inline `startup_mode` options comment near `startup_mode` in the YAML example.
+  - Include brief inline guidance on when to choose each `startup_mode` option (`align`, `double_align`, `ipd`, `slow_first_cycle`).
+  - Prefer variable names `Bs` (series cells) and `Rp` (rotor poles) in inline README motor equations.
+  - Lock-handling comments should reflect that `startup_lock_mode` supports `latched`, `retry`, and `disabled` only.
   - Use monolith integration style: controls/telemetry are configured inline under `mcf8329a:` (for example
     `brake`, `direction`, `speed_percent`, `clear_faults`, sensors/text/binary entries), not in separate platform blocks.
 - Runtime behavior:
@@ -54,6 +71,8 @@ Component-scoped notes for `components/mcf8329a`.
   - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
     algorithm-state transition logs and fault diagnostics for runtime visibility.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
+  - Severe current faults (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `BUS_CURRENT_LIMIT`) engage a speed-command safety
+    lockout; non-zero speed commands are rejected until `clear_faults` succeeds and faults are no longer active.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
@@ -80,7 +99,7 @@ Component-scoped notes for `components/mcf8329a`.
   - If startup overshoots hard right after `MOTOR_OPEN_LOOP -> MOTOR_CLOSED_LOOP_ALIGNED`, tune `MOTOR_STARTUP2`
     (`OL_ACC_A1`, `OL_ILIMIT`, `AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`) before changing steady-state loop gains.
   - Back-voltage/regen stress is most sensitive to stop and current/accel settings: aggressive `startup_brake_mode`
-    (especially `active_spin_down`), long `startup_brake_time`, high `startup_ilimit_percent`/`startup_open_loop_ilimit_percent`,
+    (especially `active_spin_down`), long `startup_brake_time`, high `phase_current_limit_percent`/`startup_open_loop_ilimit_percent`,
     and aggressive open-loop handoff tuning can all raise VM transients.
   - For the 270kV 5065 test motor at ~27V, `startup_max_speed_hz: 900` produced correct steady-state scaling
     (e.g. 15% command settling around ~135 Hz electrical), but overshoot still originated at open-loop handoff; this

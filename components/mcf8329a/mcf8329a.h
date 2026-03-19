@@ -258,6 +258,9 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void publish_algo_status_(uint32_t algo_status);
   const char* brake_input_to_string_(uint32_t brake_input_value) const;
   const char* direction_input_to_string_(uint32_t direction_input_value) const;
+  bool severe_current_fault_active_(
+    uint32_t controller_fault_status, bool controller_fault_valid
+  ) const;
   void handle_fault_shutdown_(
     bool fault_active, uint32_t controller_fault_status, bool controller_fault_valid
   );
@@ -461,6 +464,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   std::string startup_config_summary_{"default"};
   bool mpet_bemf_fault_latched_{false};
   bool hw_lock_fault_latched_{false};
+  bool severe_fault_speed_lockout_{false};
   bool algorithm_state_valid_{false};
   bool algorithm_state_read_error_latched_{false};
   uint16_t last_algorithm_state_{0xFFFFu};
