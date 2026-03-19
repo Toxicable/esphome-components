@@ -187,3 +187,4 @@ Back-voltage/regen risk knobs:
 - `startup_brake_time`: longer brake windows increase energy returned/recirculated during stop events.
 - `phase_current_limit_percent` and `startup_open_loop_ilimit_percent`: high values increase transient current and bus stress.
 - `startup_open_loop_accel_hz_per_s` and low `startup_open_to_closed_handoff_percent`: aggressive handoff can overshoot and ring the bus.
+ delete this line
