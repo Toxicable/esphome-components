@@ -31,7 +31,10 @@ CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
 CONF_STARTUP_MODE = "startup_mode"
 CONF_STARTUP_ALIGN_TIME = "startup_align_time"
 CONF_STARTUP_DIRECTION_MODE = "startup_direction_mode"
+CONF_STARTUP_CSA_GAIN_V_PER_V = "startup_csa_gain_v_per_v"
+CONF_STARTUP_BASE_CURRENT_AMPS = "startup_base_current_amps"
 CONF_PHASE_CURRENT_LIMIT_PERCENT = "phase_current_limit_percent"
+CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT = "startup_align_or_slow_current_limit_percent"
 CONF_STARTUP_LOCK_MODE = "startup_lock_mode"
 CONF_STARTUP_LOCK_ILIMIT_PERCENT = "startup_lock_ilimit_percent"
 CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT = "startup_hw_lock_ilimit_percent"
@@ -44,6 +47,7 @@ CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT = "startup_abnormal_bemf_threshold_
 CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT = "startup_no_motor_threshold_percent"
 CONF_STARTUP_MAX_SPEED_HZ = "startup_max_speed_hz"
 CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT = "startup_open_loop_ilimit_percent"
+CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE = "startup_open_loop_limit_source"
 CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S = "startup_open_loop_accel_hz_per_s"
 CONF_STARTUP_AUTO_HANDOFF_ENABLE = "startup_auto_handoff_enable"
 CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT = "startup_open_to_closed_handoff_percent"
@@ -113,6 +117,18 @@ STARTUP_DIRECTION_MODE_OPTIONS = {
     "hardware": "hardware",
     "cw": "cw",
     "ccw": "ccw",
+}
+
+STARTUP_CSA_GAIN_V_PER_V_TO_CODE = {
+    5: 0,
+    10: 1,
+    20: 2,
+    40: 3,
+}
+
+STARTUP_OPEN_LOOP_LIMIT_SOURCE_OPTIONS = {
+    "ol_ilimit": 0,
+    "ilimit": 1,
 }
 
 DIRECTION_OPTIONS = ["hardware", "cw", "ccw"]
@@ -298,6 +314,23 @@ def validate_startup_max_speed_hz(value):
     return value
 
 
+def validate_startup_csa_gain_v_per_v(value):
+    value = cv.int_(value)
+    if value not in STARTUP_CSA_GAIN_V_PER_V_TO_CODE:
+        raise cv.Invalid(
+            "startup CSA gain must be one of: "
+            + ", ".join(str(v) for v in STARTUP_CSA_GAIN_V_PER_V_TO_CODE)
+        )
+    return value
+
+
+def validate_startup_base_current_amps(value):
+    value = cv.float_(value)
+    if value <= 0.0 or value > 1200.0:
+        raise cv.Invalid("startup base current must be in range (0, 1200] amps")
+    return value
+
+
 def validate_open_loop_accel_hz_per_s(value):
     value = cv.float_(value)
     for allowed in OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE:
@@ -327,6 +360,7 @@ def validate_safety_guardrails(config):
     max_safe_percent = 50
     guarded_keys = (
         CONF_PHASE_CURRENT_LIMIT_PERCENT,
+        CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT,
         CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT,
         CONF_STARTUP_LOCK_ILIMIT_PERCENT,
         CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT,
@@ -363,6 +397,15 @@ def encode_max_speed_hz(value_hz):
     return code
 
 
+def encode_base_current_amps(value_amps):
+    code = int(round((value_amps * 32768.0) / 1200.0))
+    if code < 1:
+        code = 1
+    if code > 0x7FFF:
+        code = 0x7FFF
+    return code
+
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
@@ -377,7 +420,10 @@ CONFIG_SCHEMA = cv.All(
             cv.Required(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_ALIGN_TIME): cv.enum(STARTUP_ALIGN_TIME_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_DIRECTION_MODE): cv.enum(STARTUP_DIRECTION_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_STARTUP_CSA_GAIN_V_PER_V): validate_startup_csa_gain_v_per_v,
+            cv.Optional(CONF_STARTUP_BASE_CURRENT_AMPS): validate_startup_base_current_amps,
             cv.Optional(CONF_PHASE_CURRENT_LIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_LOCK_MODE): cv.enum(STARTUP_LOCK_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_STARTUP_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
@@ -390,6 +436,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
             cv.Required(CONF_STARTUP_MAX_SPEED_HZ): validate_startup_max_speed_hz,
             cv.Optional(CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE): cv.enum(
+                STARTUP_OPEN_LOOP_LIMIT_SOURCE_OPTIONS, lower=True
+            ),
             cv.Optional(CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S): validate_open_loop_accel_hz_per_s,
             cv.Optional(CONF_STARTUP_AUTO_HANDOFF_ENABLE): cv.boolean,
             cv.Optional(CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT): validate_open_to_closed_handoff_percent,
@@ -463,8 +512,18 @@ async def to_code(config):
         cg.add(var.set_startup_align_time(config[CONF_STARTUP_ALIGN_TIME]))
     if CONF_STARTUP_DIRECTION_MODE in config:
         cg.add(var.set_startup_direction_mode(config[CONF_STARTUP_DIRECTION_MODE]))
+    if CONF_STARTUP_CSA_GAIN_V_PER_V in config:
+        cg.add(var.set_startup_csa_gain(STARTUP_CSA_GAIN_V_PER_V_TO_CODE[config[CONF_STARTUP_CSA_GAIN_V_PER_V]]))
+    if CONF_STARTUP_BASE_CURRENT_AMPS in config:
+        cg.add(var.set_startup_base_current_code(encode_base_current_amps(config[CONF_STARTUP_BASE_CURRENT_AMPS])))
     if CONF_PHASE_CURRENT_LIMIT_PERCENT in config:
         cg.add(var.set_startup_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_PHASE_CURRENT_LIMIT_PERCENT]]))
+    if CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT in config:
+        cg.add(
+            var.set_startup_align_or_slow_current_ilimit(
+                LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT]]
+            )
+        )
     if CONF_STARTUP_LOCK_MODE in config:
         cg.add(var.set_startup_lock_mode(config[CONF_STARTUP_LOCK_MODE]))
     if CONF_STARTUP_LOCK_ILIMIT_PERCENT in config:
@@ -500,6 +559,8 @@ async def to_code(config):
     cg.add(var.set_startup_max_speed_code(encode_max_speed_hz(config[CONF_STARTUP_MAX_SPEED_HZ])))
     if CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT in config:
         cg.add(var.set_startup_open_loop_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT]]))
+    if CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE in config:
+        cg.add(var.set_startup_open_loop_limit_source(config[CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE] == 1))
     if CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S in config:
         cg.add(var.set_startup_open_loop_accel(OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S]]))
     if CONF_STARTUP_AUTO_HANDOFF_ENABLE in config:

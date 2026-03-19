@@ -271,6 +271,29 @@ void MCF8329AComponent::dump_config() {
     this->startup_align_time_set_ ? this->startup_align_time_to_string_(this->startup_align_time_)
                                   : "(unchanged)"
   );
+  if (this->startup_csa_gain_set_) {
+    static constexpr float CSA_GAIN_VV_TABLE[4] = {5.0f, 10.0f, 20.0f, 40.0f};
+    ESP_LOGCONFIG(
+      TAG,
+      "  Startup CSA gain override: %.0fV/V (code=%u)",
+      CSA_GAIN_VV_TABLE[this->startup_csa_gain_ & 0x3u],
+      static_cast<unsigned>(this->startup_csa_gain_)
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup CSA gain override: (unchanged)");
+  }
+  if (this->startup_base_current_set_) {
+    const float startup_base_current_amps =
+      (static_cast<float>(this->startup_base_current_code_) * 1200.0f) / 32768.0f;
+    ESP_LOGCONFIG(
+      TAG,
+      "  Startup BASE_CURRENT override: %u (~%.2fA)",
+      static_cast<unsigned>(this->startup_base_current_code_),
+      startup_base_current_amps
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup BASE_CURRENT override: (unchanged)");
+  }
   ESP_LOGCONFIG(
     TAG,
     "  Startup direction: %s",
@@ -347,6 +370,15 @@ void MCF8329AComponent::dump_config() {
                              ) /
                              100.0f);
       ESP_LOGCONFIG(TAG, "  Startup open-loop ILIMIT approx: %.2fA", limit_a);
+    }
+    if (this->startup_align_or_slow_current_ilimit_set_) {
+      const float limit_a =
+        base_current_a *
+        (static_cast<float>(
+           LOCK_ILIMIT_PERCENT_TABLE[this->startup_align_or_slow_current_ilimit_ & 0x0Fu]
+         ) /
+         100.0f);
+      ESP_LOGCONFIG(TAG, "  Startup align/slow current limit approx: %.2fA", limit_a);
     }
     if (this->startup_lock_ilimit_set_) {
       const float limit_a = base_current_a *
@@ -435,6 +467,28 @@ void MCF8329AComponent::dump_config() {
     );
   } else {
     ESP_LOGCONFIG(TAG, "  Startup open-loop current limit: (unchanged)");
+  }
+  if (this->startup_align_or_slow_current_ilimit_set_) {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Startup align/slow current limit: %u%% BASE_CURRENT (code=%u)",
+      static_cast<unsigned>(
+        LOCK_ILIMIT_PERCENT_TABLE[this->startup_align_or_slow_current_ilimit_ & 0x0Fu]
+      ),
+      static_cast<unsigned>(this->startup_align_or_slow_current_ilimit_)
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup align/slow current limit: (unchanged)");
+  }
+  if (this->startup_open_loop_limit_source_set_) {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Startup open-loop limit source: %s",
+      this->startup_open_loop_limit_use_ilimit_ ? "ILIMIT (FAULT_CONFIG1.ILIMIT)"
+                                                : "OL_ILIMIT (MOTOR_STARTUP2.OL_ILIMIT)"
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Startup open-loop limit source: (unchanged)");
   }
   if (this->startup_open_loop_accel_set_) {
     ESP_LOGCONFIG(
@@ -736,6 +790,42 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
 
   bool ok = true;
 
+  uint32_t gd_config1 = 0;
+  if (!this->read_reg32(REG_GD_CONFIG1, gd_config1)) {
+    ESP_LOGW(TAG, "Failed to read GD_CONFIG1 for startup config");
+    this->startup_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t gd_config1_next = gd_config1;
+  if (this->startup_csa_gain_set_) {
+    gd_config1_next =
+      (gd_config1_next & ~GD_CONFIG1_CSA_GAIN_MASK) |
+      ((static_cast<uint32_t>(this->startup_csa_gain_) << GD_CONFIG1_CSA_GAIN_SHIFT) &
+       GD_CONFIG1_CSA_GAIN_MASK);
+  }
+  if (gd_config1_next != gd_config1) {
+    ok &= this->write_reg32(REG_GD_CONFIG1, gd_config1_next);
+    ESP_LOGI(TAG, "GD_CONFIG1 startup cfg: 0x%08X -> 0x%08X", gd_config1, gd_config1_next);
+  }
+
+  uint32_t gd_config2 = 0;
+  if (!this->read_reg32(REG_GD_CONFIG2, gd_config2)) {
+    ESP_LOGW(TAG, "Failed to read GD_CONFIG2 for startup config");
+    this->startup_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t gd_config2_next = gd_config2;
+  if (this->startup_base_current_set_) {
+    gd_config2_next =
+      (gd_config2_next & ~GD_CONFIG2_BASE_CURRENT_MASK) |
+      ((static_cast<uint32_t>(this->startup_base_current_code_) << GD_CONFIG2_BASE_CURRENT_SHIFT) &
+       GD_CONFIG2_BASE_CURRENT_MASK);
+  }
+  if (gd_config2_next != gd_config2) {
+    ok &= this->write_reg32(REG_GD_CONFIG2, gd_config2_next);
+    ESP_LOGI(TAG, "GD_CONFIG2 startup cfg: 0x%08X -> 0x%08X", gd_config2, gd_config2_next);
+  }
+
   uint32_t fault_config1 = 0;
   if (!this->read_reg32(REG_FAULT_CONFIG1, fault_config1)) {
     ESP_LOGW(TAG, "Failed to read FAULT_CONFIG1 for startup config");
@@ -905,6 +995,20 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
       ((static_cast<uint32_t>(this->startup_align_time_) << MOTOR_STARTUP1_ALIGN_TIME_SHIFT) &
        MOTOR_STARTUP1_ALIGN_TIME_MASK);
   }
+  if (this->startup_align_or_slow_current_ilimit_set_) {
+    motor_startup1_next =
+      (motor_startup1_next & ~MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK) |
+      ((static_cast<uint32_t>(this->startup_align_or_slow_current_ilimit_)
+        << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT) &
+       MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK);
+  }
+  if (this->startup_open_loop_limit_source_set_) {
+    motor_startup1_next =
+      (motor_startup1_next & ~MOTOR_STARTUP1_OL_ILIMIT_CONFIG_MASK) |
+      ((static_cast<uint32_t>(this->startup_open_loop_limit_use_ilimit_ ? 1u : 0u)
+        << MOTOR_STARTUP1_OL_ILIMIT_CONFIG_SHIFT) &
+       MOTOR_STARTUP1_OL_ILIMIT_CONFIG_MASK);
+  }
   if (motor_startup1_next != motor_startup1) {
     ok &= this->write_reg32(REG_MOTOR_STARTUP1, motor_startup1_next);
     ESP_LOGI(
@@ -1009,6 +1113,15 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     ESP_LOGI(TAG, "CLOSED_LOOP4 startup cfg: 0x%08X -> 0x%08X", closed_loop4, closed_loop4_next);
   }
 
+  uint32_t gd_config1_effective = gd_config1_next;
+  uint32_t gd_config2_effective = gd_config2_next;
+  if (!this->read_reg32(REG_GD_CONFIG1, gd_config1_effective)) {
+    ESP_LOGW(TAG, "Failed to read back GD_CONFIG1 after startup config apply");
+  }
+  if (!this->read_reg32(REG_GD_CONFIG2, gd_config2_effective)) {
+    ESP_LOGW(TAG, "Failed to read back GD_CONFIG2 after startup config apply");
+  }
+
   uint32_t fault_config1_effective = fault_config1_next;
   uint32_t fault_config2_effective = fault_config2_next;
   if (!this->read_reg32(REG_FAULT_CONFIG1, fault_config1_effective)) {
@@ -1052,6 +1165,13 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   const uint8_t effective_align_time = static_cast<uint8_t>(
     (motor_startup1_effective & MOTOR_STARTUP1_ALIGN_TIME_MASK) >> MOTOR_STARTUP1_ALIGN_TIME_SHIFT
   );
+  const uint8_t effective_align_or_slow_ilimit = static_cast<uint8_t>(
+    (motor_startup1_effective & MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK) >>
+    MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT
+  );
+  const bool effective_open_loop_limit_use_ilimit =
+    ((motor_startup1_effective & MOTOR_STARTUP1_OL_ILIMIT_CONFIG_MASK) >>
+     MOTOR_STARTUP1_OL_ILIMIT_CONFIG_SHIFT) != 0u;
   const uint8_t effective_ol_ilimit = static_cast<uint8_t>(
     (motor_startup2_effective & MOTOR_STARTUP2_OL_ILIMIT_MASK) >> MOTOR_STARTUP2_OL_ILIMIT_SHIFT
   );
@@ -1122,17 +1242,33 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
   const uint8_t effective_no_motor_threshold = static_cast<uint8_t>(
     (fault_config2_effective & FAULT_CONFIG2_NO_MTR_THR_MASK) >> FAULT_CONFIG2_NO_MTR_THR_SHIFT
   );
-  char summary[640];
+  const uint8_t effective_csa_gain_code = static_cast<uint8_t>(
+    (gd_config1_effective & GD_CONFIG1_CSA_GAIN_MASK) >> GD_CONFIG1_CSA_GAIN_SHIFT
+  );
+  const uint16_t effective_base_current_code = static_cast<uint16_t>(
+    (gd_config2_effective & GD_CONFIG2_BASE_CURRENT_MASK) >> GD_CONFIG2_BASE_CURRENT_SHIFT
+  );
+  static constexpr float CSA_GAIN_VV_TABLE[4] = {5.0f, 10.0f, 20.0f, 40.0f};
+  const float effective_csa_gain_vv = CSA_GAIN_VV_TABLE[effective_csa_gain_code & 0x3u];
+  const float effective_base_current_amps =
+    (static_cast<float>(effective_base_current_code) * 1200.0f) / 32768.0f;
+  char summary[896];
   std::snprintf(
     summary,
     sizeof(summary),
-    "profile=custom dir=%s bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u "
+    "profile=custom dir=%s csa_gain=%u(%.0fV/V) base_current=%u(~%.2fA) "
+    "bemf=0x%02X mres=%u mind=%u spd_kp=%u spd_ki=%u "
     "max_speed=%.1fHz(code=%u) "
-    "startup=%s align=%s ol_ilimit=%u(%u%%) ol_acc=%.2fHz/s auto_handoff=%s handoff=%.1f%% "
+    "startup=%s align=%s align_ilimit=%u(%u%%) ol_limit_src=%s ol_ilimit=%u(%u%%) "
+    "ol_acc=%.2fHz/s auto_handoff=%s handoff=%.1f%% "
     "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
     "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s "
     "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
     effective_direction.c_str(),
+    static_cast<unsigned>(effective_csa_gain_code),
+    effective_csa_gain_vv,
+    static_cast<unsigned>(effective_base_current_code),
+    effective_base_current_amps,
     static_cast<unsigned>(effective_motor_bemf_const),
     static_cast<unsigned>(effective_motor_res),
     static_cast<unsigned>(effective_motor_ind),
@@ -1142,6 +1278,9 @@ bool MCF8329AComponent::apply_startup_motor_config_() {
     static_cast<unsigned>(effective_max_speed_code),
     this->startup_mode_to_string_(effective_startup_mode),
     this->startup_align_time_to_string_(effective_align_time),
+    static_cast<unsigned>(effective_align_or_slow_ilimit),
+    static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_align_or_slow_ilimit & 0x0Fu]),
+    effective_open_loop_limit_use_ilimit ? "ilimit" : "ol_ilimit",
     static_cast<unsigned>(effective_ol_ilimit),
     static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ol_ilimit & 0x0Fu]),
     this->open_loop_accel_code_to_hz_per_s_(effective_ol_accel),

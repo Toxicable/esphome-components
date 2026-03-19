@@ -20,7 +20,14 @@ Component-scoped notes for `components/mcf8329a`.
   - `startup_mode` -> `MOTOR_STARTUP1.MTR_STARTUP[30:29]`
   - `startup_align_time` -> `MOTOR_STARTUP1.ALIGN_TIME[24:21]`
   - `startup_direction_mode` uses `PERI_CONFIG1.DIR_INPUT[20:19]`
+  - `startup_csa_gain_v_per_v` -> `GD_CONFIG1.CSA_GAIN[1:0]` (`5|10|20|40` V/V)
+  - `startup_base_current_amps` -> `GD_CONFIG2.BASE_CURRENT[14:0]` using
+    `code ~= round(amps * 32768 / 1200)` (datasheet: `Base Current (A) = code * 1200 / 32768`)
   - `phase_current_limit_percent` -> `FAULT_CONFIG1.ILIMIT[30:27]` (phase peak current limit, % of BASE_CURRENT)
+  - `startup_align_or_slow_current_limit_percent` ->
+    `MOTOR_STARTUP1.ALIGN_OR_SLOW_CURRENT_ILIMIT[20:17]`
+  - `startup_open_loop_limit_source` -> `MOTOR_STARTUP1.OL_ILIMIT_CONFIG[3]`
+    (`ol_ilimit` => `0` uses `MOTOR_STARTUP2.OL_ILIMIT`; `ilimit` => `1` uses `FAULT_CONFIG1.ILIMIT`)
   - `startup_lock_mode` applies the same mode code to:
     - `FAULT_CONFIG1.LOCK_ILIMIT_MODE[18:15]`
     - `FAULT_CONFIG1.MTR_LCK_MODE[6:3]`
@@ -86,6 +93,8 @@ Component-scoped notes for `components/mcf8329a`.
     - `CSA_GAIN` code and V/V mapping
     - `BASE_CURRENT` code and approximate amps
     - approximate amp values for configured startup current limits
+    - configured overrides for startup `CSA_GAIN`, `BASE_CURRENT`,
+      `ALIGN_OR_SLOW_CURRENT_ILIMIT`, and `OL_ILIMIT_CONFIG` when set from YAML
     This makes `% of BASE_CURRENT` tuning visible without external calculator.
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
 - `binary_sensor` now only exposes aggregate signals (`fault_active`, `sys_enable`); per-fault bit entities were removed.

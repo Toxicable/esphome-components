@@ -15,8 +15,9 @@ Configuration steps:
 2. Set `startup_motor_bemf_const` from your known motor estimate (or TI GUI baseline).
 3. Set `startup_max_speed_hz` from electrical max speed:
    `electrical_hz = (max_mechanical_rpm / 60) * pole_pairs`
-4. Flash with conservative startup current/accel and lock-retry settings.
-5. First spin command should be above 10%, then ramp down to lower duty.
+4. Set startup current scaling (`startup_csa_gain_v_per_v`, `startup_base_current_amps`) and conservative startup current/accel limits.
+5. Flash and verify `Startup motor config:` + `Current scaling:` logs match intended values.
+6. First spin command should be above 10%, then ramp down to lower duty.
 
 ```yaml
 external_components:
@@ -63,12 +64,18 @@ mcf8329a:
   # startup_direction_mode: cw
   # startup_align_time: 100ms
 
-  ## Startup current + open-loop handoff shaping:
-  # phase_current_limit_percent: 40
-  # startup_open_loop_ilimit_percent: 50
-  # startup_open_loop_accel_hz_per_s: 25
+  ## Startup current scaling + shaping:
+  ## For 1mR shunt + 40V/V, hardware BASE_CURRENT ~= 37.5A.
+  ## For tiny motors, start with a low configured BASE_CURRENT for safer bring-up.
+  # startup_csa_gain_v_per_v: 40
+  # startup_base_current_amps: 4.0
+  # phase_current_limit_percent: 30
+  # startup_align_or_slow_current_limit_percent: 20
+  # startup_open_loop_limit_source: ol_ilimit   # ol_ilimit | ilimit
+  # startup_open_loop_ilimit_percent: 20
+  # startup_open_loop_accel_hz_per_s: 5
   # startup_auto_handoff_enable: false
-  # startup_open_to_closed_handoff_percent: 10
+  # startup_open_to_closed_handoff_percent: 15
 
   ## Lock/fault handling:
   ## startup_lock_mode options: latched | retry | disabled (`report_only` intentionally unsupported for safety)
@@ -140,6 +147,40 @@ Safety guardrails:
   open-loop accel/handoff, and verify motor/load/phase wiring first.
 - Startup logs include `CSA_GAIN`, `BASE_CURRENT`, and approximate amp values for configured startup current limits.
   Use these to verify that `%` limits are not translating into unexpectedly high current for your shunt/gain setup.
+
+Suggested startup baseline for a small 750kV 2836 motor on 4S:
+- `startup_motor_bemf_const: 0x39`
+- `startup_max_speed_hz: 1260`
+- `startup_mode: double_align`
+- `startup_direction_mode: cw` (flip to `ccw` if needed)
+- `startup_align_time: 100ms`
+- `startup_csa_gain_v_per_v: 40`
+- `startup_base_current_amps: 4.0`
+- `phase_current_limit_percent: 30` (about 1.2A with 4.0A base current)
+- `startup_align_or_slow_current_limit_percent: 20`
+- `startup_open_loop_limit_source: ol_ilimit`
+- `startup_open_loop_ilimit_percent: 20`
+- `startup_open_loop_accel_hz_per_s: 5`
+- `startup_auto_handoff_enable: false`
+- `startup_open_to_closed_handoff_percent: 15`
+- `startup_lock_mode: retry`
+- `startup_lock_ilimit_percent: 30`
+- `startup_hw_lock_ilimit_percent: 30`
+- `startup_lock_retry_time: 1s`
+- `startup_abn_bemf_lock_enable: false`
+- `clear_mpet_on_startup: true`
+
+Bring-up test plan (safe sequence):
+1. Props/load off, secure motor, bench supply current-limited, and MCF power cycle (not only ESP reset).
+2. Boot and confirm logs show expected `CSA_GAIN`, `BASE_CURRENT`, and startup limit amp estimates.
+3. Send `clear_faults`; confirm `Current Fault` becomes `none`.
+4. Command `speed_percent: 12` and watch state transition: `BRAKE_ON_START -> ALIGN -> OPEN_LOOP`.
+5. Keep run for 5 seconds. Pass if current is stable and no `HW_LOCK_LIMIT`.
+6. Increase to `16%` for 10 seconds. Pass if still no lock faults and current remains in expected range.
+7. If it faults in open-loop: reduce `startup_open_loop_accel_hz_per_s` first, then increase `startup_align_time`.
+8. If it faults at handoff (`OPEN_LOOP -> CLOSED_LOOP... -> FAULT`): lower `startup_open_to_closed_handoff_percent` in small steps (15 -> 12 -> 10) and retry.
+9. If it still overcurrents early, lower `startup_base_current_amps` (for example 4.0 -> 3.0) and retest from step 2.
+10. Only after stable no-fault startup, raise limits one knob at a time and record each change against current draw.
 
 Back-voltage/regen risk knobs:
 - `startup_brake_mode`: `active_spin_down` is most aggressive and can push energy back to VM quickly.
