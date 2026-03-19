@@ -82,6 +82,11 @@ Component-scoped notes for `components/mcf8329a`.
     post-comms startup setup/config apply to recover without requiring an ESP reboot.
   - Algorithm/FOC phase uses `ALGORITHM_STATE` (`0x0196`); component now logs state transitions at `INFO` level only
     (init + changes) with `speed_cmd`, duty, volt_mag, and `sys_enable` context to keep bring-up logs readable.
+  - `dump_config()` now reads `GD_CONFIG1`/`GD_CONFIG2` and logs:
+    - `CSA_GAIN` code and V/V mapping
+    - `BASE_CURRENT` code and approximate amps
+    - approximate amp values for configured startup current limits
+    This makes `% of BASE_CURRENT` tuning visible without external calculator.
 - Startup/algorithm numeric `*_code` sensors were removed from YAML exposure; use logs (`startup_config` summary and fault logs) instead.
 - `binary_sensor` now only exposes aggregate signals (`fault_active`, `sys_enable`); per-fault bit entities were removed.
 - On `MPET_BEMF_FAULT`, component logs one-shot diagnostics (speed command, brake input decode, MPET bits, motor BEMF const)

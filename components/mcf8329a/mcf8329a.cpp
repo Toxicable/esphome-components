@@ -316,6 +316,60 @@ void MCF8329AComponent::dump_config() {
   } else {
     ESP_LOGCONFIG(TAG, "  Startup HW lock current limit: (unchanged)");
   }
+  uint32_t gd_config1 = 0;
+  uint32_t gd_config2 = 0;
+  if (this->read_reg32(REG_GD_CONFIG1, gd_config1) && this->read_reg32(REG_GD_CONFIG2, gd_config2)) {
+    const uint8_t csa_gain_code = static_cast<uint8_t>(
+      (gd_config1 & GD_CONFIG1_CSA_GAIN_MASK) >> GD_CONFIG1_CSA_GAIN_SHIFT
+    );
+    const uint32_t base_current_code =
+      (gd_config2 & GD_CONFIG2_BASE_CURRENT_MASK) >> GD_CONFIG2_BASE_CURRENT_SHIFT;
+    static constexpr float CSA_GAIN_VV_TABLE[4] = {5.0f, 10.0f, 20.0f, 40.0f};
+    const float csa_gain_vv = CSA_GAIN_VV_TABLE[csa_gain_code & 0x3u];
+    const float base_current_a = (static_cast<float>(base_current_code) * 1200.0f) / 32768.0f;
+    ESP_LOGCONFIG(
+      TAG,
+      "  Current scaling: GD_CONFIG1.CSA_GAIN=%u(%.0fV/V) GD_CONFIG2.BASE_CURRENT=%u (~%.2fA)",
+      static_cast<unsigned>(csa_gain_code),
+      csa_gain_vv,
+      static_cast<unsigned>(base_current_code),
+      base_current_a
+    );
+    if (this->startup_ilimit_set_) {
+      const float limit_a =
+        base_current_a * (static_cast<float>(LOCK_ILIMIT_PERCENT_TABLE[this->startup_ilimit_ & 0x0Fu]) / 100.0f);
+      ESP_LOGCONFIG(TAG, "  Startup ILIMIT approx: %.2fA", limit_a);
+    }
+    if (this->startup_open_loop_ilimit_set_) {
+      const float limit_a = base_current_a *
+                            (static_cast<float>(
+                               LOCK_ILIMIT_PERCENT_TABLE[this->startup_open_loop_ilimit_ & 0x0Fu]
+                             ) /
+                             100.0f);
+      ESP_LOGCONFIG(TAG, "  Startup open-loop ILIMIT approx: %.2fA", limit_a);
+    }
+    if (this->startup_lock_ilimit_set_) {
+      const float limit_a = base_current_a *
+                            (static_cast<float>(
+                               LOCK_ILIMIT_PERCENT_TABLE[this->startup_lock_ilimit_ & 0x0Fu]
+                             ) /
+                             100.0f);
+      ESP_LOGCONFIG(TAG, "  Startup lock ILIMIT approx: %.2fA", limit_a);
+    }
+    if (this->startup_hw_lock_ilimit_set_) {
+      const float limit_a = base_current_a *
+                            (static_cast<float>(
+                               LOCK_ILIMIT_PERCENT_TABLE[this->startup_hw_lock_ilimit_ & 0x0Fu]
+                             ) /
+                             100.0f);
+      ESP_LOGCONFIG(TAG, "  Startup HW lock ILIMIT approx: %.2fA", limit_a);
+    }
+  } else {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Current scaling: unable to read GD_CONFIG1/GD_CONFIG2 (CSA_GAIN/BASE_CURRENT)"
+    );
+  }
   ESP_LOGCONFIG(
     TAG,
     "  Startup lock retry: %s",

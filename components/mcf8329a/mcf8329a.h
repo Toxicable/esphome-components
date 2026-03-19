@@ -281,6 +281,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
   static constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
   static constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
+  static constexpr uint16_t REG_GD_CONFIG1 = 0x00AC;
+  static constexpr uint16_t REG_GD_CONFIG2 = 0x00AE;
   static constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
   static constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
@@ -348,6 +350,11 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
 
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_RES = 0x01u;
   static constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_IND = 0x01u;
+
+  static constexpr uint32_t GD_CONFIG1_CSA_GAIN_MASK = 0x3u;
+  static constexpr uint32_t GD_CONFIG1_CSA_GAIN_SHIFT = 0;
+  static constexpr uint32_t GD_CONFIG2_BASE_CURRENT_MASK = 0x7FFFu;
+  static constexpr uint32_t GD_CONFIG2_BASE_CURRENT_SHIFT = 0;
 
   static constexpr uint32_t FAULT_CONFIG1_ILIMIT_MASK = (0xFu << 27);
   static constexpr uint32_t FAULT_CONFIG1_ILIMIT_SHIFT = 27;

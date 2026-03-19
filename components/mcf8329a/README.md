@@ -138,6 +138,8 @@ Safety guardrails:
   non-zero speed commands are blocked until faults are actually cleared via `clear_faults`.
 - If `HW_LOCK_LIMIT` still occurs at 50% limits, do not increase current further. Tune startup mode/alignment,
   open-loop accel/handoff, and verify motor/load/phase wiring first.
+- Startup logs include `CSA_GAIN`, `BASE_CURRENT`, and approximate amp values for configured startup current limits.
+  Use these to verify that `%` limits are not translating into unexpectedly high current for your shunt/gain setup.
 
 Back-voltage/regen risk knobs:
 - `startup_brake_mode`: `active_spin_down` is most aggressive and can push energy back to VM quickly.
