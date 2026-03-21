@@ -99,6 +99,7 @@ class MCF8329ARunMPETButton : public button::Button {
 
 class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
  public:
+  ~MCF8329AComponent() override;
   void setup() override;
   void update() override;
   void dump_config() override;

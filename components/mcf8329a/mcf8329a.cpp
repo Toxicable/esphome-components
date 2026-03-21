@@ -692,6 +692,8 @@ class MCF8329ATuningController {
   uint32_t mpet_characterization_started_ms_{0u};
 };
 
+MCF8329AComponent::~MCF8329AComponent() = default;
+
 void MCF8329ABrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
     this->publish_state(!state);
