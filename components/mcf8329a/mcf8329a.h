@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
@@ -17,6 +18,7 @@ namespace esphome {
 namespace mcf8329a {
 
 class MCF8329AComponent;
+class MCF8329ATuningController;
 
 class MCF8329ABrakeSwitch : public switch_::Switch {
  public:
@@ -73,6 +75,28 @@ class MCF8329AWatchdogTickleButton : public button::Button {
   MCF8329AComponent* parent_{nullptr};
 };
 
+class MCF8329ATuneInitialParamsButton : public button::Button {
+ public:
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
+
+ protected:
+  void press_action() override;
+  MCF8329AComponent* parent_{nullptr};
+};
+
+class MCF8329ARunMPETButton : public button::Button {
+ public:
+  void set_parent(MCF8329AComponent* parent) {
+    parent_ = parent;
+  }
+
+ protected:
+  void press_action() override;
+  MCF8329AComponent* parent_{nullptr};
+};
+
 class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -89,6 +113,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   bool set_speed_percent(float speed_percent, const char* reason = "external");
   void pulse_clear_faults();
   void pulse_watchdog_tickle();
+  void start_tune_initial_params();
+  void start_mpet_characterization();
 
   void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) {
     inter_byte_delay_us_ = inter_byte_delay_us;
@@ -281,11 +307,13 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void set_fg_speed_fdbk_hz_sensor(sensor::Sensor* s) {
     fg_speed_fdbk_hz_sensor_ = s;
   }
-  void set_current_fault_text_sensor(text_sensor::TextSensor* s) {
+ void set_current_fault_text_sensor(text_sensor::TextSensor* s) {
     current_fault_text_sensor_ = s;
   }
 
  protected:
+  friend class MCF8329ATuningController;
+
   bool read_probe_and_publish_();
   bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
   bool probe_device_ack_(i2c::ErrorCode& error_code) const;
@@ -601,6 +629,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint16_t last_algorithm_state_{0xFFFFu};
   uint32_t startup_profile_last_check_ms_{0u};
   uint32_t startup_profile_last_recovery_ms_{0u};
+  std::unique_ptr<MCF8329ATuningController> tuning_controller_{nullptr};
 
   MCF8329ABrakeSwitch* brake_switch_{nullptr};
   MCF8329ADirectionSelect* direction_select_{nullptr};

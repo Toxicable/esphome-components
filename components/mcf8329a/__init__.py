@@ -20,6 +20,8 @@ MCF8329ADirectionSelect = mcf8329a_ns.class_("MCF8329ADirectionSelect", select.S
 MCF8329ASpeedNumber = mcf8329a_ns.class_("MCF8329ASpeedNumber", number.Number)
 MCF8329AClearFaultsButton = mcf8329a_ns.class_("MCF8329AClearFaultsButton", button.Button)
 MCF8329AWatchdogTickleButton = mcf8329a_ns.class_("MCF8329AWatchdogTickleButton", button.Button)
+MCF8329ATuneInitialParamsButton = mcf8329a_ns.class_("MCF8329ATuneInitialParamsButton", button.Button)
+MCF8329ARunMPETButton = mcf8329a_ns.class_("MCF8329ARunMPETButton", button.Button)
 
 CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
@@ -68,6 +70,8 @@ CONF_DIRECTION = "direction"
 CONF_SPEED_PERCENT = "speed_percent"
 CONF_CLEAR_FAULTS = "clear_faults"
 CONF_WATCHDOG_TICKLE = "watchdog_tickle"
+CONF_TUNE_INITIAL_PARAMS = "tune_initial_params"
+CONF_RUN_MPET = "run_mpet"
 CONF_FAULT_ACTIVE = "fault_active"
 CONF_SYS_ENABLE = "sys_enable"
 CONF_CURRENT_FAULT = "current_fault"
@@ -657,6 +661,14 @@ CONFIG_SCHEMA = cv.All(
                 MCF8329AWatchdogTickleButton,
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
+            cv.Optional(CONF_TUNE_INITIAL_PARAMS): button.button_schema(
+                MCF8329ATuneInitialParamsButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_RUN_MPET): button.button_schema(
+                MCF8329ARunMPETButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
             cv.Optional(CONF_FAULT_ACTIVE): binary_sensor.binary_sensor_schema(),
             cv.Optional(CONF_SYS_ENABLE): binary_sensor.binary_sensor_schema(),
             cv.Optional(CONF_CURRENT_FAULT): text_sensor.text_sensor_schema(),
@@ -834,6 +846,14 @@ async def to_code(config):
     if CONF_WATCHDOG_TICKLE in config:
         watchdog_tickle = await button.new_button(config[CONF_WATCHDOG_TICKLE])
         cg.add(watchdog_tickle.set_parent(var))
+
+    if CONF_TUNE_INITIAL_PARAMS in config:
+        tune_initial_params = await button.new_button(config[CONF_TUNE_INITIAL_PARAMS])
+        cg.add(tune_initial_params.set_parent(var))
+
+    if CONF_RUN_MPET in config:
+        run_mpet = await button.new_button(config[CONF_RUN_MPET])
+        cg.add(run_mpet.set_parent(var))
 
     if CONF_FAULT_ACTIVE in config:
         sens = await binary_sensor.new_binary_sensor(config[CONF_FAULT_ACTIVE])

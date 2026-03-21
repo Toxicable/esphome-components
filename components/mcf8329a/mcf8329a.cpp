@@ -151,6 +151,546 @@ static constexpr float LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
 static constexpr uint8_t HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[8] = {
   0, 1, 2, 3, 4, 5, 6, 7,
 };
+struct InitialTuneCandidate {
+  uint8_t phase_ilimit_code;
+  uint8_t lock_ilimit_code;
+  uint8_t hw_lock_ilimit_code;
+  uint8_t open_loop_ilimit_code;
+  uint8_t open_loop_accel_a1_code;
+  uint8_t open_loop_accel_a2_code;
+  uint8_t handoff_code;
+  uint8_t theta_error_ramp_code;
+  uint8_t cl_slow_acc_code;
+  uint8_t lock_ilimit_deglitch_code;
+  uint8_t hw_lock_ilimit_deglitch_code;
+  bool auto_handoff_enable;
+  bool abn_bemf_lock_enable;
+};
+
+static const InitialTuneCandidate INITIAL_TUNE_CANDIDATES[] = {
+  // Baseline: manual handoff at 14%, moderate OL accel.
+  {6u, 6u, 6u, 3u, 5u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
+  // Slightly later handoff.
+  {6u, 6u, 6u, 3u, 5u, 0u, 15u, 2u, 4u, 8u, 7u, false, false},
+  // Slower open-loop ramp with manual handoff.
+  {6u, 6u, 6u, 3u, 4u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
+  // Auto-handoff fallback.
+  {6u, 6u, 6u, 3u, 5u, 0u, 11u, 2u, 4u, 8u, 7u, true, false},
+};
+static constexpr size_t INITIAL_TUNE_CANDIDATE_COUNT =
+  sizeof(INITIAL_TUNE_CANDIDATES) / sizeof(INITIAL_TUNE_CANDIDATES[0]);
+
+class MCF8329ATuningController {
+ public:
+  explicit MCF8329ATuningController(MCF8329AComponent* parent) : parent_(parent) {}
+
+  void reset() {
+    this->initial_tune_active_ = false;
+    this->initial_tune_stage_ = InitialTuneStage::IDLE;
+    this->initial_tune_candidate_index_ = 0u;
+    this->initial_tune_stage_started_ms_ = 0u;
+    this->initial_tune_closed_loop_seen_ = false;
+    this->initial_tune_closed_loop_seen_ms_ = 0u;
+    this->mpet_characterization_active_ = false;
+    this->mpet_characterization_started_ms_ = 0u;
+  }
+
+  void start_initial_tune() {
+    if (this->parent_ == nullptr || !this->parent_->normal_operation_ready_) {
+      ESP_LOGW(TAG, "Initial tune requested before communications are ready");
+      return;
+    }
+    if (this->mpet_characterization_active_) {
+      ESP_LOGW(TAG, "Initial tune blocked while MPET characterization is active");
+      return;
+    }
+
+    this->clear_runtime_speed_command_("initial_tune_prepare");
+    this->parent_->pulse_clear_faults();
+
+    this->initial_tune_active_ = true;
+    this->initial_tune_stage_ = InitialTuneStage::APPLY;
+    this->initial_tune_candidate_index_ = 0u;
+    this->initial_tune_stage_started_ms_ = millis();
+    this->initial_tune_closed_loop_seen_ = false;
+    this->initial_tune_closed_loop_seen_ms_ = 0u;
+
+    ESP_LOGI(
+      TAG,
+      "Initial tune started: %u candidate(s), target speed %.1f%%",
+      static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
+      INITIAL_TUNE_SPEED_PERCENT
+    );
+  }
+
+  void start_mpet_characterization() {
+    if (this->parent_ == nullptr || !this->parent_->normal_operation_ready_) {
+      ESP_LOGW(TAG, "MPET characterization requested before communications are ready");
+      return;
+    }
+    if (this->initial_tune_active_) {
+      ESP_LOGW(TAG, "MPET characterization blocked while initial tuning is active");
+      return;
+    }
+    if (this->mpet_characterization_active_) {
+      ESP_LOGW(TAG, "MPET characterization is already running");
+      return;
+    }
+
+    this->clear_runtime_speed_command_("mpet_prepare");
+    this->parent_->pulse_clear_faults();
+    (void)this->parent_->clear_mpet_bits_("mpet_prepare");
+
+    if (!this->parent_->set_brake_override(false)) {
+      ESP_LOGW(TAG, "MPET characterization aborted: failed to release brake");
+      return;
+    }
+    if (this->parent_->brake_switch_ != nullptr) {
+      this->parent_->brake_switch_->publish_state(false);
+    }
+
+    const uint32_t mpet_bits = MCF8329AComponent::ALGO_DEBUG2_MPET_CMD_MASK |
+                               MCF8329AComponent::ALGO_DEBUG2_MPET_KE_MASK |
+                               MCF8329AComponent::ALGO_DEBUG2_MPET_MECH_MASK |
+                               MCF8329AComponent::ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
+    if (!this->parent_->update_bits32(
+          MCF8329AComponent::REG_ALGO_DEBUG2,
+          MCF8329AComponent::ALGO_DEBUG2_MPET_ALL_MASK,
+          mpet_bits
+        )) {
+      ESP_LOGW(TAG, "MPET characterization aborted: failed to set MPET command bits");
+      return;
+    }
+
+    this->mpet_characterization_active_ = true;
+    this->mpet_characterization_started_ms_ = millis();
+    ESP_LOGI(TAG, "MPET characterization started (timeout %us)", MPET_RUN_TIMEOUT_MS / 1000u);
+  }
+
+  void update(bool normal_operation_ready, bool fault_active) {
+    if (!normal_operation_ready) {
+      return;
+    }
+    const uint32_t now = millis();
+    if (this->initial_tune_active_) {
+      this->process_initial_tune_(fault_active, now);
+    }
+    if (this->mpet_characterization_active_) {
+      this->process_mpet_characterization_(fault_active, now);
+    }
+  }
+
+ private:
+  enum class InitialTuneStage : uint8_t {
+    IDLE = 0,
+    APPLY = 1,
+    START = 2,
+    MONITOR = 3,
+    COOLDOWN = 4,
+  };
+
+  static constexpr float INITIAL_TUNE_SPEED_PERCENT = 11.0f;
+  static constexpr uint32_t INITIAL_TUNE_SETTLE_MS = 250u;
+  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MS = 7000u;
+  static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
+  static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
+  static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 30000u;
+
+  bool is_closed_loop_state_(uint16_t algo_state) const {
+    return algo_state == 0x0008u || algo_state == 0x0009u;
+  }
+
+  bool read_algorithm_state_(uint16_t& algo_state) const {
+    if (this->parent_ == nullptr) {
+      return false;
+    }
+    return this->parent_->read_reg16(MCF8329AComponent::REG_ALGORITHM_STATE, algo_state);
+  }
+
+  void clear_runtime_speed_command_(const char* reason) {
+    if (this->parent_ == nullptr) {
+      return;
+    }
+    this->parent_->speed_target_percent_ = 0.0f;
+    this->parent_->speed_target_active_ = false;
+    this->parent_->start_boost_active_ = false;
+    this->parent_->start_boost_until_ms_ = 0u;
+    this->parent_->last_ramp_update_ms_ = 0u;
+    (void)this->parent_->apply_speed_command_(0.0f, reason, true);
+  }
+
+  bool apply_tune_candidate_(const InitialTuneCandidate& candidate) {
+    if (this->parent_ == nullptr) {
+      return false;
+    }
+
+    const uint32_t fault_cfg1_mask = MCF8329AComponent::FAULT_CONFIG1_ILIMIT_MASK |
+                                     MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_MASK |
+                                     MCF8329AComponent::FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK |
+                                     MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK;
+    const uint32_t fault_cfg1_value =
+      ((static_cast<uint32_t>(candidate.phase_ilimit_code) << MCF8329AComponent::FAULT_CONFIG1_ILIMIT_SHIFT) &
+       MCF8329AComponent::FAULT_CONFIG1_ILIMIT_MASK) |
+      ((static_cast<uint32_t>(candidate.lock_ilimit_code) <<
+        MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_SHIFT) &
+       MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_MASK) |
+      ((static_cast<uint32_t>(candidate.hw_lock_ilimit_code) <<
+        MCF8329AComponent::FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) &
+       MCF8329AComponent::FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) |
+      ((static_cast<uint32_t>(candidate.lock_ilimit_deglitch_code) <<
+        MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) &
+       MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK);
+    if (!this->parent_->update_bits32(MCF8329AComponent::REG_FAULT_CONFIG1, fault_cfg1_mask, fault_cfg1_value)) {
+      return false;
+    }
+
+    const uint32_t fault_cfg2_mask = MCF8329AComponent::FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK |
+                                     MCF8329AComponent::FAULT_CONFIG2_LOCK2_EN_MASK;
+    uint32_t fault_cfg2_value =
+      ((static_cast<uint32_t>(candidate.hw_lock_ilimit_deglitch_code) <<
+        MCF8329AComponent::FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) &
+       MCF8329AComponent::FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK);
+    if (candidate.abn_bemf_lock_enable) {
+      fault_cfg2_value |= MCF8329AComponent::FAULT_CONFIG2_LOCK2_EN_MASK;
+    }
+    if (!this->parent_->update_bits32(MCF8329AComponent::REG_FAULT_CONFIG2, fault_cfg2_mask, fault_cfg2_value)) {
+      return false;
+    }
+
+    const uint32_t startup2_mask = MCF8329AComponent::MOTOR_STARTUP2_OL_ILIMIT_MASK |
+                                   MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A1_MASK |
+                                   MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A2_MASK |
+                                   MCF8329AComponent::MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK |
+                                   MCF8329AComponent::MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK |
+                                   MCF8329AComponent::MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK;
+    uint32_t startup2_value =
+      ((static_cast<uint32_t>(candidate.open_loop_ilimit_code) <<
+        MCF8329AComponent::MOTOR_STARTUP2_OL_ILIMIT_SHIFT) &
+       MCF8329AComponent::MOTOR_STARTUP2_OL_ILIMIT_MASK) |
+      ((static_cast<uint32_t>(candidate.open_loop_accel_a1_code) <<
+        MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A1_SHIFT) &
+       MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A1_MASK) |
+      ((static_cast<uint32_t>(candidate.open_loop_accel_a2_code) <<
+        MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A2_SHIFT) &
+       MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A2_MASK) |
+      ((static_cast<uint32_t>(candidate.handoff_code) <<
+        MCF8329AComponent::MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) &
+       MCF8329AComponent::MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK) |
+      ((static_cast<uint32_t>(candidate.theta_error_ramp_code) <<
+        MCF8329AComponent::MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_SHIFT) &
+       MCF8329AComponent::MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK);
+    if (candidate.auto_handoff_enable) {
+      startup2_value |= MCF8329AComponent::MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
+    }
+    if (!this->parent_->update_bits32(MCF8329AComponent::REG_MOTOR_STARTUP2, startup2_mask, startup2_value)) {
+      return false;
+    }
+
+    const uint32_t int_algo2_value =
+      (static_cast<uint32_t>(candidate.cl_slow_acc_code) << MCF8329AComponent::INT_ALGO_2_CL_SLOW_ACC_SHIFT) &
+      MCF8329AComponent::INT_ALGO_2_CL_SLOW_ACC_MASK;
+    return this->parent_->update_bits32(
+      MCF8329AComponent::REG_INT_ALGO_2,
+      MCF8329AComponent::INT_ALGO_2_CL_SLOW_ACC_MASK,
+      int_algo2_value
+    );
+  }
+
+  void log_tune_candidate_(const InitialTuneCandidate& candidate, const char* prefix) const {
+    ESP_LOGI(TAG, "%s", prefix);
+    ESP_LOGI(
+      TAG,
+      "  phase_current_limit_percent: %u",
+      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.phase_ilimit_code & 0x0Fu])
+    );
+    ESP_LOGI(
+      TAG,
+      "  lock_ilimit_percent: %u",
+      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.lock_ilimit_code & 0x0Fu])
+    );
+    ESP_LOGI(
+      TAG,
+      "  hw_lock_ilimit_percent: %u",
+      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.hw_lock_ilimit_code & 0x0Fu])
+    );
+    ESP_LOGI(
+      TAG,
+      "  open_loop_ilimit_percent: %u",
+      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.open_loop_ilimit_code & 0x0Fu])
+    );
+    ESP_LOGI(
+      TAG,
+      "  open_loop_accel_hz_per_s: %.2f",
+      OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu]
+    );
+    ESP_LOGI(
+      TAG,
+      "  open_loop_accel2_hz_per_s2: %.2f",
+      OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[candidate.open_loop_accel_a2_code & 0x0Fu]
+    );
+    ESP_LOGI(
+      TAG,
+      "  open_to_closed_handoff_percent: %.1f",
+      OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[candidate.handoff_code & 0x1Fu]
+    );
+    ESP_LOGI(
+      TAG,
+      "  theta_error_ramp_rate: %.2f",
+      THETA_ERROR_RAMP_RATE_TABLE[candidate.theta_error_ramp_code & 0x07u]
+    );
+    ESP_LOGI(
+      TAG,
+      "  cl_slow_acc_hz_per_s: %.1f",
+      CL_SLOW_ACC_HZ_PER_S_TABLE[candidate.cl_slow_acc_code & 0x0Fu]
+    );
+    ESP_LOGI(
+      TAG,
+      "  lock_ilimit_deglitch_ms: %.1f",
+      LOCK_ILIMIT_DEGLITCH_MS_TABLE[candidate.lock_ilimit_deglitch_code & 0x0Fu]
+    );
+    ESP_LOGI(
+      TAG,
+      "  hw_lock_ilimit_deglitch_us: %u",
+      static_cast<unsigned>(
+        HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[candidate.hw_lock_ilimit_deglitch_code & 0x07u]
+      )
+    );
+    ESP_LOGI(TAG, "  auto_handoff_enable: %s", candidate.auto_handoff_enable ? "true" : "false");
+    ESP_LOGI(TAG, "  abn_bemf_lock_enable: %s", candidate.abn_bemf_lock_enable ? "true" : "false");
+  }
+
+  void fail_initial_tune_candidate_(const char* reason, uint32_t now) {
+    ESP_LOGW(
+      TAG,
+      "Initial tune candidate %u/%u failed: %s",
+      static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
+      static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
+      reason
+    );
+    this->clear_runtime_speed_command_("initial_tune_fail");
+    this->parent_->pulse_clear_faults();
+    this->initial_tune_closed_loop_seen_ = false;
+    this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
+    this->initial_tune_stage_started_ms_ = now;
+  }
+
+  void finish_initial_tune_failure_() {
+    this->initial_tune_active_ = false;
+    this->initial_tune_stage_ = InitialTuneStage::IDLE;
+    this->initial_tune_closed_loop_seen_ = false;
+    ESP_LOGW(
+      TAG, "Initial tune failed: no candidate reached closed-loop at %.1f%% command", INITIAL_TUNE_SPEED_PERCENT
+    );
+  }
+
+  void process_initial_tune_(bool fault_active, uint32_t now) {
+    if (this->initial_tune_candidate_index_ >= INITIAL_TUNE_CANDIDATE_COUNT) {
+      this->finish_initial_tune_failure_();
+      return;
+    }
+    const InitialTuneCandidate& candidate = INITIAL_TUNE_CANDIDATES[this->initial_tune_candidate_index_];
+
+    switch (this->initial_tune_stage_) {
+      case InitialTuneStage::APPLY: {
+        ESP_LOGI(
+          TAG,
+          "Initial tune trying candidate %u/%u",
+          static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
+          static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT)
+        );
+        if (!this->apply_tune_candidate_(candidate)) {
+          this->fail_initial_tune_candidate_("register write failed", now);
+          return;
+        }
+        this->log_tune_candidate_(candidate, "Initial tune candidate values:");
+        this->initial_tune_stage_ = InitialTuneStage::START;
+        this->initial_tune_stage_started_ms_ = now;
+        return;
+      }
+
+      case InitialTuneStage::START: {
+        if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_SETTLE_MS) {
+          return;
+        }
+        if (!this->parent_->apply_speed_command_(INITIAL_TUNE_SPEED_PERCENT, "initial_tune_start", true)) {
+          this->fail_initial_tune_candidate_("speed command failed", now);
+          return;
+        }
+        this->initial_tune_stage_ = InitialTuneStage::MONITOR;
+        this->initial_tune_stage_started_ms_ = now;
+        this->initial_tune_closed_loop_seen_ = false;
+        this->initial_tune_closed_loop_seen_ms_ = 0u;
+        return;
+      }
+
+      case InitialTuneStage::MONITOR: {
+        if (fault_active) {
+          this->fail_initial_tune_candidate_("fault asserted", now);
+          return;
+        }
+
+        uint16_t algo_state = 0;
+        if (this->read_algorithm_state_(algo_state) && this->is_closed_loop_state_(algo_state)) {
+          if (!this->initial_tune_closed_loop_seen_) {
+            this->initial_tune_closed_loop_seen_ = true;
+            this->initial_tune_closed_loop_seen_ms_ = now;
+            ESP_LOGI(
+              TAG,
+              "Initial tune candidate %u/%u entered %s",
+              static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
+              static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
+              this->parent_->algorithm_state_to_string_(algo_state)
+            );
+          } else if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_SUCCESS_HOLD_MS) {
+            this->clear_runtime_speed_command_("initial_tune_success");
+            this->initial_tune_active_ = false;
+            this->initial_tune_stage_ = InitialTuneStage::IDLE;
+            ESP_LOGI(
+              TAG,
+              "Initial tune success with candidate %u/%u",
+              static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
+              static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT)
+            );
+            this->log_tune_candidate_(
+              candidate,
+              "Initial tune success: copy these keys into your YAML under mcf8329a:"
+            );
+            return;
+          }
+        } else {
+          this->initial_tune_closed_loop_seen_ = false;
+          this->initial_tune_closed_loop_seen_ms_ = 0u;
+        }
+
+        if ((now - this->initial_tune_stage_started_ms_) >= INITIAL_TUNE_MONITOR_TIMEOUT_MS) {
+          this->fail_initial_tune_candidate_("timeout waiting for closed-loop", now);
+          return;
+        }
+        return;
+      }
+
+      case InitialTuneStage::COOLDOWN: {
+        if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_COOLDOWN_MS) {
+          return;
+        }
+        this->initial_tune_candidate_index_++;
+        if (this->initial_tune_candidate_index_ >= INITIAL_TUNE_CANDIDATE_COUNT) {
+          this->finish_initial_tune_failure_();
+          return;
+        }
+        this->initial_tune_stage_ = InitialTuneStage::APPLY;
+        this->initial_tune_stage_started_ms_ = now;
+        return;
+      }
+
+      case InitialTuneStage::IDLE:
+      default:
+        this->initial_tune_active_ = false;
+        return;
+    }
+  }
+
+  void log_mpet_results_() const {
+    uint32_t closed_loop2 = 0;
+    uint32_t closed_loop3 = 0;
+    uint32_t closed_loop4 = 0;
+    if (!this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP2, closed_loop2) ||
+        !this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP3, closed_loop3) ||
+        !this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
+      ESP_LOGW(TAG, "MPET finished but failed to read parameter registers");
+      return;
+    }
+
+    const uint8_t motor_res = static_cast<uint8_t>(
+      (closed_loop2 & MCF8329AComponent::CLOSED_LOOP2_MOTOR_RES_MASK) >> MCF8329AComponent::CLOSED_LOOP2_MOTOR_RES_SHIFT
+    );
+    const uint8_t motor_ind = static_cast<uint8_t>(
+      (closed_loop2 & MCF8329AComponent::CLOSED_LOOP2_MOTOR_IND_MASK) >> MCF8329AComponent::CLOSED_LOOP2_MOTOR_IND_SHIFT
+    );
+    const uint8_t motor_bemf_const = static_cast<uint8_t>(
+      (closed_loop3 & MCF8329AComponent::CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >>
+      MCF8329AComponent::CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT
+    );
+    const uint16_t speed_loop_kp_code = static_cast<uint16_t>(
+      (((closed_loop3 & MCF8329AComponent::CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >>
+        MCF8329AComponent::CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT)
+       << 7) |
+      ((closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >>
+       MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT)
+    );
+    const uint16_t speed_loop_ki_code = static_cast<uint16_t>(
+      (closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KI_MASK) >>
+      MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KI_SHIFT
+    );
+
+    ESP_LOGI(
+      TAG,
+      "MPET result: motor_res=%u motor_ind=%u motor_bemf_const=0x%02X speed_loop_kp_code=%u speed_loop_ki_code=%u",
+      static_cast<unsigned>(motor_res),
+      static_cast<unsigned>(motor_ind),
+      static_cast<unsigned>(motor_bemf_const),
+      static_cast<unsigned>(speed_loop_kp_code),
+      static_cast<unsigned>(speed_loop_ki_code)
+    );
+    ESP_LOGI(TAG, "MPET result: copy these keys into your YAML under mcf8329a:");
+    ESP_LOGI(TAG, "  motor_bemf_const: 0x%02X", static_cast<unsigned>(motor_bemf_const));
+    ESP_LOGI(TAG, "  speed_loop_kp_code: %u", static_cast<unsigned>(speed_loop_kp_code));
+    ESP_LOGI(TAG, "  speed_loop_ki_code: %u", static_cast<unsigned>(speed_loop_ki_code));
+  }
+
+  void process_mpet_characterization_(bool fault_active, uint32_t now) {
+    uint16_t algo_state = 0;
+    const bool algo_state_ok = this->read_algorithm_state_(algo_state);
+
+    if (algo_state_ok && algo_state == 0x0017u) {
+      this->mpet_characterization_active_ = false;
+      this->clear_runtime_speed_command_("mpet_done");
+      (void)this->parent_->clear_mpet_bits_("mpet_done");
+      ESP_LOGI(TAG, "MPET characterization completed successfully");
+      this->log_mpet_results_();
+      return;
+    }
+
+    const bool mpet_fault_state = algo_state_ok && algo_state == 0x0018u;
+    const bool motor_fault_state = algo_state_ok && algo_state == 0x000Eu;
+    if (mpet_fault_state || (fault_active && motor_fault_state)) {
+      this->mpet_characterization_active_ = false;
+      this->clear_runtime_speed_command_("mpet_fault");
+      (void)this->parent_->clear_mpet_bits_("mpet_fault");
+      this->parent_->pulse_clear_faults();
+      ESP_LOGW(
+        TAG,
+        "MPET characterization failed in state 0x%04X(%s)",
+        static_cast<unsigned>(algo_state),
+        algo_state_ok ? this->parent_->algorithm_state_to_string_(algo_state) : "unknown"
+      );
+      return;
+    }
+
+    if ((now - this->mpet_characterization_started_ms_) >= MPET_RUN_TIMEOUT_MS) {
+      this->mpet_characterization_active_ = false;
+      this->clear_runtime_speed_command_("mpet_timeout");
+      (void)this->parent_->clear_mpet_bits_("mpet_timeout");
+      this->parent_->pulse_clear_faults();
+      ESP_LOGW(
+        TAG,
+        "MPET characterization timed out after %us (last state: %s)",
+        MPET_RUN_TIMEOUT_MS / 1000u,
+        algo_state_ok ? this->parent_->algorithm_state_to_string_(algo_state) : "unavailable"
+      );
+    }
+  }
+
+  MCF8329AComponent* parent_{nullptr};
+  bool initial_tune_active_{false};
+  InitialTuneStage initial_tune_stage_{InitialTuneStage::IDLE};
+  uint8_t initial_tune_candidate_index_{0u};
+  uint32_t initial_tune_stage_started_ms_{0u};
+  bool initial_tune_closed_loop_seen_{false};
+  uint32_t initial_tune_closed_loop_seen_ms_{0u};
+  bool mpet_characterization_active_{false};
+  uint32_t mpet_characterization_started_ms_{0u};
+};
 
 void MCF8329ABrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -193,6 +733,32 @@ void MCF8329AWatchdogTickleButton::press_action() {
   }
 }
 
+void MCF8329ATuneInitialParamsButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->start_tune_initial_params();
+  }
+}
+
+void MCF8329ARunMPETButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->start_mpet_characterization();
+  }
+}
+
+void MCF8329AComponent::start_tune_initial_params() {
+  if (this->tuning_controller_ == nullptr) {
+    this->tuning_controller_ = std::make_unique<MCF8329ATuningController>(this);
+  }
+  this->tuning_controller_->start_initial_tune();
+}
+
+void MCF8329AComponent::start_mpet_characterization() {
+  if (this->tuning_controller_ == nullptr) {
+    this->tuning_controller_ = std::make_unique<MCF8329ATuningController>(this);
+  }
+  this->tuning_controller_->start_mpet_characterization();
+}
+
 void MCF8329AComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8329a");
   this->normal_operation_ready_ = false;
@@ -209,6 +775,10 @@ void MCF8329AComponent::setup() {
   this->start_boost_active_ = false;
   this->start_boost_until_ms_ = 0u;
   this->last_ramp_update_ms_ = 0u;
+  if (this->tuning_controller_ == nullptr) {
+    this->tuning_controller_ = std::make_unique<MCF8329ATuningController>(this);
+  }
+  this->tuning_controller_->reset();
 
   ESP_LOGW(
     TAG,
@@ -283,6 +853,10 @@ void MCF8329AComponent::update() {
     this->handle_fault_shutdown_(fault_active, controller_fault_status, controller_ok);
   } else {
     this->fault_latched_ = false;
+  }
+
+  if (this->tuning_controller_ != nullptr) {
+    this->tuning_controller_->update(this->normal_operation_ready_, fault_state_valid && fault_active);
   }
 
   if (!fault_active) {
@@ -924,6 +1498,10 @@ void MCF8329AComponent::process_deferred_startup_() {
 }
 
 void MCF8329AComponent::apply_post_comms_setup_() {
+  if (this->tuning_controller_ != nullptr) {
+    this->tuning_controller_->reset();
+  }
+
   if (this->speed_number_ != nullptr) {
     this->speed_number_->publish_state(0.0f);
   }

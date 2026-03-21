@@ -85,6 +85,7 @@ Component-scoped notes for `components/mcf8329a`.
   - Use monolith integration style: controls/telemetry are configured inline under `mcf8329a:` (for example
     `brake`, `direction`, `speed_percent`, `clear_faults`, sensors/text/binary entries), not in separate platform blocks.
 - Runtime behavior:
+  - Bring-up automation is implemented through a dedicated `MCF8329ATuningController` helper class (kept separate from the main hardware component flow) and triggered by button actions.
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
   - `set_speed_percent(...)` now logs `INFO` lines with caller reason (`number_control`, `motor_init`, `fault_shutdown`)
     and raw speed code for command-traceability.
@@ -96,6 +97,9 @@ Component-scoped notes for `components/mcf8329a`.
     Non-zero commands can be ramped internally before register writes.
   - Runtime now emits a 2Hz `INFO` speed diagnostic line while commanded speed is active:
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
+  - Optional monolith buttons for guided bring-up:
+    - `tune_initial_params`: sweeps guarded startup/handoff candidate sets to find one that reaches closed-loop; on success logs the exact YAML keys/values at `INFO` for manual copy.
+    - `run_mpet`: kicks off MPET (`CMD+KE+MECH+WRITE_SHADOW`) and on success logs extracted `motor_bemf_const`, `speed_loop_kp_code`, and `speed_loop_ki_code` for manual copy.
   - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
     algorithm-state transition logs and fault diagnostics for runtime visibility.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.

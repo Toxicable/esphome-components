@@ -3,7 +3,7 @@
 Manual ESPHome I2C component for TI MCF8329A (ESP32 + esp-idf).
 
 This component provides:
-- runtime control (`brake`, `direction`, `speed_percent`, `clear_faults`, `watchdog_tickle`)
+- runtime control (`brake`, `direction`, `speed_percent`, `clear_faults`, `watchdog_tickle`, `tune_initial_params`, `run_mpet`)
 - motor-config register apply at setup
 - fault summary text + runtime telemetry
 - optional handoff telemetry (`speed_fdbk_hz`, `speed_ref_open_loop_hz`, `fg_speed_fdbk_hz`)
@@ -103,6 +103,10 @@ mcf8329a:
     name: "Clear Faults"
   # watchdog_tickle:
   #   name: "Watchdog Tickle"
+  # tune_initial_params:
+  #   name: "Tune Initial Params"
+  # run_mpet:
+  #   name: "Run MPET"
 
   fault_active:
     name: "Fault Active"
@@ -135,6 +139,10 @@ Safety guardrails:
 - Set `allow_unsafe_current_limits: true` only for intentional overrides.
 - Severe current faults (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `BUS_CURRENT_LIMIT`) engage runtime lockout for non-zero speed commands until faults are actually cleared.
 
+Auto bring-up buttons:
+- `tune_initial_params` runs a guarded candidate sweep targeting closed-loop entry at `11%` command, then prints the winning values at `INFO` level for manual YAML copy.
+- `run_mpet` starts MPET (`CMD + KE + MECH + WRITE_SHADOW`) and on success logs extracted keys (`motor_bemf_const`, `speed_loop_kp_code`, `speed_loop_ki_code`) at `INFO` level for manual YAML copy.
+
 ## 5065 270KV 12-pole (6 pole-pair) baseline
 Use this as a safe starting point for no-load bench bring-up:
 - `motor_bemf_const: 0x5F`
@@ -161,3 +169,52 @@ Bring-up sequence:
 2. `clear_faults` before each run.
 3. Command `12% -> 16% -> 20%` in steps.
 4. Use `speed_ref_open_loop_hz`, `speed_fdbk_hz`, and `fg_speed_fdbk_hz` to watch open-loop to closed-loop handoff.
+
+
+Config that worked for 270kV
+```
+  motor_bemf_const: 0x5F
+  max_speed_hz: 900
+
+  mode: double_align
+  align_time: 300ms
+  brake_mode: recirculation
+
+  csa_gain_v_per_v: 40
+  base_current_amps: 10.0
+
+  open_loop_limit_source: ol_ilimit
+  open_loop_ilimit_percent: 20
+
+  lock_mode: retry
+
+  lock_abn_speed_threshold_percent: 200
+  abnormal_bemf_threshold_percent: 40
+  no_motor_threshold_percent: 10
+
+  speed_ramp_up_percent_per_s: 12
+  speed_ramp_down_percent_per_s: 20
+
+  lock_ilimit_deglitch_ms: 10.0
+  hw_lock_ilimit_deglitch_us: 7
+
+  phase_current_limit_percent: 40
+  lock_ilimit_percent: 40
+  hw_lock_ilimit_percent: 40
+
+  auto_handoff_enable: false
+
+
+  open_to_closed_handoff_percent: 14   # start here, then 16 if needed
+
+  theta_error_ramp_rate: 0.1
+  cl_slow_acc_hz_per_s: 5
+
+  open_loop_accel_hz_per_s: 5
+  open_loop_accel2_hz_per_s2: 0.0
+
+  start_boost_percent: 0
+  start_boost_hold_ms: 0
+
+  abn_bemf_lock_enable: false   # diagnostic pass only
+  ```
