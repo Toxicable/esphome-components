@@ -10,11 +10,11 @@ namespace mcf8329a {
 
 using namespace regs;
 
-static const char* const TAG = "mcf8329a";
+static const char* const CLIENT_TAG = "mcf8329a";
 static constexpr uint32_t WRITE_TRANSACTION_DELAY_US = 100u;
-static constexpr float VM_VOLTAGE_SCALE = 60.0f / 134217728.0f;  // 60 / 2^27
-static constexpr float SPEED_Q27_SCALE = 1.0f / 134217728.0f;    // 1 / 2^27
-static constexpr float OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[16] = {
+static constexpr float CLIENT_VM_VOLTAGE_SCALE = 60.0f / 134217728.0f;  // 60 / 2^27
+static constexpr float CLIENT_SPEED_Q27_SCALE = 1.0f / 134217728.0f;    // 1 / 2^27
+static constexpr float CLIENT_OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[16] = {
   0.01f,
   0.05f,
   1.0f,
@@ -32,7 +32,7 @@ static constexpr float OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[16] = {
   5000.0f,
   10000.0f,
 };
-static constexpr float OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[32] = {
+static constexpr float CLIENT_OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[32] = {
   1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
   12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 22.5f, 25.0f,
   27.5f, 30.0f, 32.5f, 35.0f, 37.5f, 40.0f, 42.5f, 45.0f, 47.5f, 50.0f,
@@ -42,7 +42,7 @@ bool MCF8329AClient::ensure_device_() const {
   if (this->device_ != nullptr) {
     return true;
   }
-  ESP_LOGW(TAG, "MCF8329A client not initialized: missing I2C device");
+  ESP_LOGW(CLIENT_TAG, "MCF8329A client not initialized: missing I2C device");
   return false;
 }
 
@@ -61,7 +61,7 @@ bool MCF8329AClient::read_reg32(uint16_t offset, uint32_t& value) const {
   uint8_t rx[4] = {0, 0, 0, 0};
   const i2c::ErrorCode err = this->device_->write_read(cw, sizeof(cw), rx, sizeof(rx));
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+    ESP_LOGW(CLIENT_TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
     return false;
   }
 
@@ -85,7 +85,7 @@ bool MCF8329AClient::read_reg16(uint16_t offset, uint16_t& value) const {
   uint8_t rx[2] = {0, 0};
   const i2c::ErrorCode err = this->device_->write_read(cw, sizeof(cw), rx, sizeof(rx));
   if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+    ESP_LOGW(CLIENT_TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
     return false;
   }
 
@@ -115,7 +115,7 @@ bool MCF8329AClient::write_reg32(uint16_t offset, uint32_t value) const {
   const i2c::ErrorCode err = this->device_->write(tx, sizeof(tx));
   if (err != i2c::ERROR_OK) {
     ESP_LOGW(
-      TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
+      CLIENT_TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
     );
     return false;
   }
@@ -137,7 +137,7 @@ bool MCF8329AClient::update_bits32(uint16_t offset, uint32_t mask, uint32_t valu
 }
 
 float MCF8329AClient::decode_vm_voltage(uint32_t raw) const {
-  return static_cast<float>(static_cast<double>(raw) * VM_VOLTAGE_SCALE);
+  return static_cast<float>(static_cast<double>(raw) * CLIENT_VM_VOLTAGE_SCALE);
 }
 
 float MCF8329AClient::decode_max_speed_hz(uint16_t code) const {
@@ -149,19 +149,19 @@ float MCF8329AClient::decode_max_speed_hz(uint16_t code) const {
 }
 
 float MCF8329AClient::decode_speed_hz(int32_t raw, float max_speed_hz) const {
-  return static_cast<float>(raw) * SPEED_Q27_SCALE * max_speed_hz;
+  return static_cast<float>(raw) * CLIENT_SPEED_Q27_SCALE * max_speed_hz;
 }
 
 float MCF8329AClient::decode_fg_speed_hz(uint32_t raw, float max_speed_hz) const {
-  return static_cast<float>(raw) * SPEED_Q27_SCALE * max_speed_hz;
+  return static_cast<float>(raw) * CLIENT_SPEED_Q27_SCALE * max_speed_hz;
 }
 
 float MCF8329AClient::decode_open_loop_accel_hz_per_s(uint8_t code) const {
-  return OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[code & 0x0Fu];
+  return CLIENT_OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[code & 0x0Fu];
 }
 
 float MCF8329AClient::decode_open_to_closed_handoff_percent(uint8_t code) const {
-  return OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[code & 0x1Fu];
+  return CLIENT_OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[code & 0x1Fu];
 }
 
 bool MCF8329AClient::set_brake_input(bool brake_on) const {

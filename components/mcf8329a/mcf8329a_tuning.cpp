@@ -19,8 +19,8 @@ namespace mcf8329a {
 
 using namespace regs;
 
-static const char* const TAG = "mcf8329a";
-static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
+static const char* const TUNING_TAG = "mcf8329a";
+static constexpr uint8_t TUNING_LOCK_ILIMIT_PERCENT_TABLE[16] = {
   5,
   10,
   15,
@@ -38,7 +38,7 @@ static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
   90,
   95,
 };
-static constexpr float OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
+static constexpr float TUNING_OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
   0.0f,
   0.05f,
   1.0f,
@@ -56,7 +56,7 @@ static constexpr float OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
   5000.0f,
   10000.0f,
 };
-static constexpr float THETA_ERROR_RAMP_RATE_TABLE[8] = {
+static constexpr float TUNING_THETA_ERROR_RAMP_RATE_TABLE[8] = {
   0.01f,
   0.05f,
   0.1f,
@@ -66,7 +66,7 @@ static constexpr float THETA_ERROR_RAMP_RATE_TABLE[8] = {
   1.0f,
   2.0f,
 };
-static constexpr float CL_SLOW_ACC_HZ_PER_S_TABLE[16] = {
+static constexpr float TUNING_CL_SLOW_ACC_HZ_PER_S_TABLE[16] = {
   0.1f,
   1.0f,
   2.0f,
@@ -84,7 +84,7 @@ static constexpr float CL_SLOW_ACC_HZ_PER_S_TABLE[16] = {
   1000.0f,
   2000.0f,
 };
-static constexpr float LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
+static constexpr float TUNING_LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
   0.0f,
   0.1f,
   0.2f,
@@ -102,16 +102,16 @@ static constexpr float LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
   500.0f,
   1000.0f,
 };
-static constexpr uint8_t HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[8] = {
+static constexpr uint8_t TUNING_HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[8] = {
   0, 1, 2, 3, 4, 5, 6, 7,
 };
-static constexpr uint8_t MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[8] = {
+static constexpr uint8_t TUNING_MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[8] = {
   10, 20, 30, 40, 50, 60, 70, 80,
 };
-static constexpr uint8_t MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[4] = {
+static constexpr uint8_t TUNING_MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[4] = {
   15, 25, 35, 50,
 };
-static constexpr float MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[8] = {
+static constexpr float TUNING_MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[8] = {
   0.1f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f,
 };
 struct InitialTuneCandidate {
@@ -130,7 +130,7 @@ struct InitialTuneCandidate {
   bool abn_bemf_lock_enable;
 };
 
-static const InitialTuneCandidate INITIAL_TUNE_CANDIDATES[] = {
+static const InitialTuneCandidate TUNING_INITIAL_TUNE_CANDIDATES[] = {
   // Baseline: manual handoff at 14%, higher OL accel (250Hz/s).
   {6u, 6u, 6u, 3u, 10u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
   // Faster OL accel variant (500Hz/s) at same handoff.
@@ -140,8 +140,8 @@ static const InitialTuneCandidate INITIAL_TUNE_CANDIDATES[] = {
   // Conservative fallback: lower accel with earlier handoff.
   {6u, 6u, 6u, 3u, 9u, 0u, 11u, 2u, 4u, 8u, 7u, false, false},
 };
-static constexpr size_t INITIAL_TUNE_CANDIDATE_COUNT =
-  sizeof(INITIAL_TUNE_CANDIDATES) / sizeof(INITIAL_TUNE_CANDIDATES[0]);
+static constexpr size_t TUNING_INITIAL_TUNE_CANDIDATE_COUNT =
+  sizeof(TUNING_INITIAL_TUNE_CANDIDATES) / sizeof(TUNING_INITIAL_TUNE_CANDIDATES[0]);
 
 struct MCF8329ATuningController::Impl {
  public:
@@ -181,11 +181,11 @@ struct MCF8329ATuningController::Impl {
 
   void start_initial_tune() {
     if (this->parent_ == nullptr || !this->parent_->normal_operation_ready_) {
-      ESP_LOGW(TAG, "Initial tune requested before communications are ready");
+      ESP_LOGW(TUNING_TAG, "Initial tune requested before communications are ready");
       return;
     }
     if (this->mpet_characterization_active_) {
-      ESP_LOGW(TAG, "Initial tune blocked while MPET characterization is active");
+      ESP_LOGW(TUNING_TAG, "Initial tune blocked while MPET characterization is active");
       return;
     }
 
@@ -193,7 +193,7 @@ struct MCF8329ATuningController::Impl {
     this->parent_->pulse_clear_faults();
     if (this->parent_->cfg_open_loop_limit_source_set_ && this->parent_->cfg_open_loop_limit_use_ilimit_) {
       ESP_LOGW(
-        TAG,
+        TUNING_TAG,
         "Initial tune warning: open_loop_limit_source=ilimit can increase open-loop current/heating; "
         "prefer ol_ilimit for discovery runs."
       );
@@ -224,25 +224,25 @@ struct MCF8329ATuningController::Impl {
     this->refinement_best_metrics_ = CandidateQualityMetrics{};
 
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "Initial tune started: %u discovery candidate(s), target speed %.1f%%",
-      static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
+      static_cast<unsigned>(TUNING_INITIAL_TUNE_CANDIDATE_COUNT),
       INITIAL_TUNE_SPEED_PERCENT
     );
-    ESP_LOGI(TAG, "Initial tune will run a refinement sweep after first success (manual-handoff candidates)");
+    ESP_LOGI(TUNING_TAG, "Initial tune will run a refinement sweep after first success (manual-handoff candidates)");
   }
 
   void start_mpet_characterization() {
     if (this->parent_ == nullptr || !this->parent_->normal_operation_ready_) {
-      ESP_LOGW(TAG, "MPET characterization requested before communications are ready");
+      ESP_LOGW(TUNING_TAG, "MPET characterization requested before communications are ready");
       return;
     }
     if (this->initial_tune_active_) {
-      ESP_LOGW(TAG, "MPET characterization blocked while initial tuning is active");
+      ESP_LOGW(TUNING_TAG, "MPET characterization blocked while initial tuning is active");
       return;
     }
     if (this->mpet_characterization_active_) {
-      ESP_LOGW(TAG, "MPET characterization is already running");
+      ESP_LOGW(TUNING_TAG, "MPET characterization is already running");
       return;
     }
 
@@ -251,7 +251,7 @@ struct MCF8329ATuningController::Impl {
     (void)this->parent_->clear_mpet_bits_("mpet_prepare");
 
     if (!this->parent_->set_brake_override(false)) {
-      ESP_LOGW(TAG, "MPET characterization aborted: failed to release brake");
+      ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to release brake");
       return;
     }
     if (this->parent_->brake_switch_ != nullptr) {
@@ -259,7 +259,7 @@ struct MCF8329ATuningController::Impl {
     }
 
     if (!this->parent_->comms_client_.set_mpet_characterization_bits()) {
-      ESP_LOGW(TAG, "MPET characterization aborted: failed to set MPET command bits");
+      ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to set MPET command bits");
       return;
     }
 
@@ -273,7 +273,7 @@ struct MCF8329ATuningController::Impl {
       this->parent_->mpet_timeout_ms_ > 0u ? this->parent_->mpet_timeout_ms_
                                            : DEFAULT_MPET_RUN_TIMEOUT_MS;
     ESP_LOGI(
-      TAG, "MPET characterization started (timeout %us)", static_cast<unsigned>(mpet_timeout_ms / 1000u)
+      TUNING_TAG, "MPET characterization started (timeout %us)", static_cast<unsigned>(mpet_timeout_ms / 1000u)
     );
     this->log_mpet_profile_("MPET start");
   }
@@ -440,70 +440,70 @@ struct MCF8329ATuningController::Impl {
   }
 
   void log_tune_candidate_(const InitialTuneCandidate& candidate, const char* prefix) const {
-    ESP_LOGI(TAG, "%s", prefix);
+    ESP_LOGI(TUNING_TAG, "%s", prefix);
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  phase_current_limit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.phase_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.phase_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  lock_ilimit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.lock_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.lock_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  hw_lock_ilimit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.hw_lock_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.hw_lock_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  open_loop_ilimit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.open_loop_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.open_loop_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  open_loop_accel_hz_per_s: %.2f",
       this->parent_ != nullptr
         ? this->parent_->comms_client_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code)
         : 0.0f
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  open_loop_accel2_hz_per_s2: %.2f",
-      OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[candidate.open_loop_accel_a2_code & 0x0Fu]
+      TUNING_OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[candidate.open_loop_accel_a2_code & 0x0Fu]
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  open_to_closed_handoff_percent: %.1f",
       this->parent_ != nullptr
         ? this->parent_->comms_client_.decode_open_to_closed_handoff_percent(candidate.handoff_code)
         : 0.0f
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  theta_error_ramp_rate: %.2f",
-      THETA_ERROR_RAMP_RATE_TABLE[candidate.theta_error_ramp_code & 0x07u]
+      TUNING_THETA_ERROR_RAMP_RATE_TABLE[candidate.theta_error_ramp_code & 0x07u]
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  cl_slow_acc_hz_per_s: %.1f",
-      CL_SLOW_ACC_HZ_PER_S_TABLE[candidate.cl_slow_acc_code & 0x0Fu]
+      TUNING_CL_SLOW_ACC_HZ_PER_S_TABLE[candidate.cl_slow_acc_code & 0x0Fu]
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  lock_ilimit_deglitch_ms: %.1f",
-      LOCK_ILIMIT_DEGLITCH_MS_TABLE[candidate.lock_ilimit_deglitch_code & 0x0Fu]
+      TUNING_LOCK_ILIMIT_DEGLITCH_MS_TABLE[candidate.lock_ilimit_deglitch_code & 0x0Fu]
     );
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "  hw_lock_ilimit_deglitch_us: %u",
       static_cast<unsigned>(
-        HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[candidate.hw_lock_ilimit_deglitch_code & 0x07u]
+        TUNING_HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[candidate.hw_lock_ilimit_deglitch_code & 0x07u]
       )
     );
-    ESP_LOGI(TAG, "  auto_handoff_enable: %s", candidate.auto_handoff_enable ? "true" : "false");
-    ESP_LOGI(TAG, "  abn_bemf_lock_enable: %s", candidate.abn_bemf_lock_enable ? "true" : "false");
+    ESP_LOGI(TUNING_TAG, "  auto_handoff_enable: %s", candidate.auto_handoff_enable ? "true" : "false");
+    ESP_LOGI(TUNING_TAG, "  abn_bemf_lock_enable: %s", candidate.abn_bemf_lock_enable ? "true" : "false");
   }
 
   bool candidates_equal_(const InitialTuneCandidate& a, const InitialTuneCandidate& b) const {
@@ -744,7 +744,7 @@ struct MCF8329ATuningController::Impl {
 
   uint8_t active_candidate_count_() const {
     return this->active_pass_is_refinement_() ? this->refinement_candidate_count_
-                                              : static_cast<uint8_t>(INITIAL_TUNE_CANDIDATE_COUNT);
+                                              : static_cast<uint8_t>(TUNING_INITIAL_TUNE_CANDIDATE_COUNT);
   }
 
   bool active_candidates_exhausted_() const {
@@ -755,7 +755,7 @@ struct MCF8329ATuningController::Impl {
     if (this->active_pass_is_refinement_()) {
       return this->refinement_candidates_[this->refinement_candidate_index_];
     }
-    return INITIAL_TUNE_CANDIDATES[this->initial_tune_candidate_index_];
+    return TUNING_INITIAL_TUNE_CANDIDATES[this->initial_tune_candidate_index_];
   }
 
   void advance_active_candidate_() {
@@ -812,7 +812,7 @@ struct MCF8329ATuningController::Impl {
     this->refinement_candidate_index_ = 0u;
 
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "Initial tune baseline reached closed-loop in %ums; starting refinement sweep (%u variant candidate(s))",
       static_cast<unsigned>(baseline_reach_ms),
       static_cast<unsigned>(this->refinement_candidate_count_ - 1u)
@@ -829,7 +829,7 @@ struct MCF8329ATuningController::Impl {
     const float avg_mismatch_hz = this->candidate_avg_mismatch_error_hz_(metrics);
     const int32_t score = this->score_candidate_(candidate, reach_ms, metrics);
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "Initial tune candidate success: reach=%ums score=%d accel=%.2fHz/s handoff=%.1f%% "
       "handoff_samples=%u avg_track=%.1fHz avg_mismatch=%.1fHz peak_ratio=%.2f",
       static_cast<unsigned>(reach_ms),
@@ -862,12 +862,12 @@ struct MCF8329ATuningController::Impl {
     this->current_candidate_metrics_ = CandidateQualityMetrics{};
 
     if (!this->refinement_best_candidate_valid_) {
-      ESP_LOGW(TAG, "Initial tune ended without a successful candidate result");
+      ESP_LOGW(TUNING_TAG, "Initial tune ended without a successful candidate result");
       return;
     }
 
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "Initial tune success: best candidate reach=%ums score=%d handoff_samples=%u avg_track=%.1fHz "
       "avg_mismatch=%.1fHz peak_ratio=%.2f",
       static_cast<unsigned>(this->refinement_best_reach_ms_),
@@ -886,7 +886,7 @@ struct MCF8329ATuningController::Impl {
   void fail_initial_tune_candidate_(const char* reason, uint32_t now) {
     const char* phase = this->active_pass_is_refinement_() ? "refinement" : "discovery";
     ESP_LOGW(
-      TAG,
+      TUNING_TAG,
       "Initial tune %s candidate %u/%u failed: %s",
       phase,
       static_cast<unsigned>(this->active_candidate_index_() + 1u),
@@ -917,7 +917,7 @@ struct MCF8329ATuningController::Impl {
     this->handoff_telemetry_miss_counter_ = 0u;
     this->current_candidate_metrics_ = CandidateQualityMetrics{};
     ESP_LOGW(
-      TAG,
+      TUNING_TAG,
       "Initial tune failed: no discovery candidate reached closed-loop at %.1f%% command",
       INITIAL_TUNE_SPEED_PERCENT
     );
@@ -939,7 +939,7 @@ struct MCF8329ATuningController::Impl {
     switch (this->initial_tune_stage_) {
       case InitialTuneStage::APPLY: {
         ESP_LOGI(
-          TAG,
+          TUNING_TAG,
           "Initial tune %s candidate %u/%u",
           phase,
           static_cast<unsigned>(this->active_candidate_index_() + 1u),
@@ -980,7 +980,7 @@ struct MCF8329ATuningController::Impl {
         this->handoff_telemetry_miss_counter_ = 0u;
         this->reset_candidate_quality_metrics_();
         ESP_LOGI(
-          TAG,
+          TUNING_TAG,
           "Initial tune %s candidate %u/%u monitor timeout=%ums open_loop_dwell_timeout=%ums",
           phase,
           static_cast<unsigned>(this->active_candidate_index_() + 1u),
@@ -1009,7 +1009,7 @@ struct MCF8329ATuningController::Impl {
             this->handoff_telemetry_miss_counter_ = 0u;
             this->reset_candidate_quality_metrics_();
             ESP_LOGI(
-              TAG,
+              TUNING_TAG,
               "Initial tune %s candidate %u/%u entered %s (reach=%ums)",
               phase,
               static_cast<unsigned>(this->active_candidate_index_() + 1u),
@@ -1041,7 +1041,7 @@ struct MCF8329ATuningController::Impl {
                 this->handoff_unstable_counter_++;
                 this->handoff_stable_counter_ = 0u;
                 ESP_LOGW(
-                  TAG,
+                  TUNING_TAG,
                   "Initial tune handoff guard: unstable sample %u/%u cmd=%.1fHz ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
                   static_cast<unsigned>(this->handoff_unstable_counter_),
                   static_cast<unsigned>(HANDOFF_UNSTABLE_REJECT_COUNT),
@@ -1062,7 +1062,7 @@ struct MCF8329ATuningController::Impl {
               }
               this->record_candidate_quality_telemetry_miss_();
               ESP_LOGW(
-                TAG,
+                TUNING_TAG,
                 "Initial tune handoff guard: speed telemetry unavailable sample %u/%u",
                 static_cast<unsigned>(this->handoff_telemetry_miss_counter_),
                 static_cast<unsigned>(HANDOFF_TELEMETRY_MISS_REJECT_COUNT)
@@ -1126,7 +1126,7 @@ struct MCF8329ATuningController::Impl {
           if (!this->initial_tune_waiting_fault_recovery_) {
             this->initial_tune_waiting_fault_recovery_ = true;
             ESP_LOGW(
-              TAG,
+              TUNING_TAG,
               "Initial tune waiting for fault recovery before retrying candidate: "
               "fault_active=%s lockout=%s",
               YESNO(fault_active),
@@ -1144,7 +1144,7 @@ struct MCF8329ATuningController::Impl {
           }
         }
         if (this->initial_tune_waiting_fault_recovery_) {
-          ESP_LOGI(TAG, "Initial tune fault recovery complete; resuming candidate sweep");
+          ESP_LOGI(TUNING_TAG, "Initial tune fault recovery complete; resuming candidate sweep");
           this->initial_tune_waiting_fault_recovery_ = false;
           this->initial_tune_last_fault_clear_ms_ = 0u;
         }
@@ -1176,7 +1176,7 @@ struct MCF8329ATuningController::Impl {
     if (!this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2) ||
         !this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
         !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
-      ESP_LOGW(TAG, "MPET finished but failed to read parameter registers");
+      ESP_LOGW(TUNING_TAG, "MPET finished but failed to read parameter registers");
       return;
     }
 
@@ -1203,7 +1203,7 @@ struct MCF8329ATuningController::Impl {
     );
 
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "MPET result: motor_res=%u motor_ind=%u motor_bemf_const=0x%02X speed_loop_kp_code=%u speed_loop_ki_code=%u",
       static_cast<unsigned>(motor_res),
       static_cast<unsigned>(motor_ind),
@@ -1211,10 +1211,10 @@ struct MCF8329ATuningController::Impl {
       static_cast<unsigned>(speed_loop_kp_code),
       static_cast<unsigned>(speed_loop_ki_code)
     );
-    ESP_LOGI(TAG, "MPET result: copy these keys into your YAML under mcf8329a:");
-    ESP_LOGI(TAG, "  motor_bemf_const: 0x%02X", static_cast<unsigned>(motor_bemf_const));
-    ESP_LOGI(TAG, "  speed_loop_kp_code: %u", static_cast<unsigned>(speed_loop_kp_code));
-    ESP_LOGI(TAG, "  speed_loop_ki_code: %u", static_cast<unsigned>(speed_loop_ki_code));
+    ESP_LOGI(TUNING_TAG, "MPET result: copy these keys into your YAML under mcf8329a:");
+    ESP_LOGI(TUNING_TAG, "  motor_bemf_const: 0x%02X", static_cast<unsigned>(motor_bemf_const));
+    ESP_LOGI(TUNING_TAG, "  speed_loop_kp_code: %u", static_cast<unsigned>(speed_loop_kp_code));
+    ESP_LOGI(TUNING_TAG, "  speed_loop_ki_code: %u", static_cast<unsigned>(speed_loop_ki_code));
   }
 
   void record_mpet_state_(bool algo_state_ok, uint16_t algo_state) {
@@ -1272,16 +1272,16 @@ struct MCF8329ATuningController::Impl {
       this->parent_->mpet_timeout_ms_ > 0u ? this->parent_->mpet_timeout_ms_
                                            : DEFAULT_MPET_RUN_TIMEOUT_MS;
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "%s profile: dedicated=%s curr_ref=%u(%u%%) speed_ref=%u(%u%%) slew=%u(%.1fHz/s) timeout=%us",
       prefix,
       YESNO(mpet_use_dedicated),
       static_cast<unsigned>(mpet_curr_code),
-      static_cast<unsigned>(MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[mpet_curr_code & 0x07u]),
+      static_cast<unsigned>(TUNING_MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[mpet_curr_code & 0x07u]),
       static_cast<unsigned>(mpet_speed_code),
-      static_cast<unsigned>(MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[mpet_speed_code & 0x03u]),
+      static_cast<unsigned>(TUNING_MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[mpet_speed_code & 0x03u]),
       static_cast<unsigned>(mpet_slew_code),
-      MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[mpet_slew_code & 0x07u],
+      TUNING_MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[mpet_slew_code & 0x07u],
       static_cast<unsigned>(mpet_timeout_ms / 1000u)
     );
   }
@@ -1320,7 +1320,7 @@ struct MCF8329ATuningController::Impl {
 
     if (speed_ok) {
       ESP_LOGI(
-        TAG,
+        TUNING_TAG,
         "MPET status: elapsed=%us state=0x%04X(%s) mpet_status=%s(0x%08X) "
         "ke=%s mech=%s pwm_freq_code=%u ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
         static_cast<unsigned>(elapsed_ms / 1000u),
@@ -1337,7 +1337,7 @@ struct MCF8329ATuningController::Impl {
       );
     } else {
       ESP_LOGI(
-        TAG,
+        TUNING_TAG,
         "MPET status: elapsed=%us state=0x%04X(%s) mpet_status=%s(0x%08X) "
         "ke=%s mech=%s pwm_freq_code=%u speed=unavailable",
         static_cast<unsigned>(elapsed_ms / 1000u),
@@ -1375,7 +1375,7 @@ struct MCF8329ATuningController::Impl {
                                          : 0u;
     const uint32_t elapsed_ms = now - this->mpet_characterization_started_ms_;
     ESP_LOGI(
-      TAG,
+      TUNING_TAG,
       "MPET summary[%s]: elapsed=%us states_mask=0x%08X last_state=0x%04X(%s) "
       "mpet_status=%s(0x%08X) ke=%s mech=%s pwm_freq_code=%u",
       outcome,
@@ -1403,7 +1403,7 @@ struct MCF8329ATuningController::Impl {
       this->clear_runtime_speed_command_("mpet_done");
       (void)this->parent_->clear_mpet_bits_("mpet_done");
       this->log_mpet_summary_("done", now, algo_state, algo_state_ok);
-      ESP_LOGI(TAG, "MPET characterization completed successfully");
+      ESP_LOGI(TUNING_TAG, "MPET characterization completed successfully");
       this->log_mpet_results_();
       return;
     }
@@ -1417,7 +1417,7 @@ struct MCF8329ATuningController::Impl {
       this->parent_->pulse_clear_faults();
       this->log_mpet_summary_("fault", now, algo_state, algo_state_ok);
       ESP_LOGW(
-        TAG,
+        TUNING_TAG,
         "MPET characterization failed in state 0x%04X(%s)",
         static_cast<unsigned>(algo_state),
         algo_state_ok ? this->parent_->algorithm_state_to_string_(algo_state) : "unknown"
@@ -1436,7 +1436,7 @@ struct MCF8329ATuningController::Impl {
       this->parent_->pulse_clear_faults();
       this->log_mpet_summary_("timeout", now, algo_state, algo_state_ok);
       ESP_LOGW(
-        TAG,
+        TUNING_TAG,
         "MPET characterization timed out after %us (last state: %s)",
         static_cast<unsigned>(mpet_timeout_ms / 1000u),
         algo_state_ok ? this->parent_->algorithm_state_to_string_(algo_state) : "unavailable"
