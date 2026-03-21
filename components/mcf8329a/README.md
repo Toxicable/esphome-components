@@ -19,6 +19,7 @@ external_components:
     refresh: 0s
     components: [ mcf8329a ]
 
+
 i2c:
   sda: GPIO21
   scl: GPIO22
