@@ -86,6 +86,7 @@ Component-scoped notes for `components/mcf8329a`.
     `brake`, `direction`, `speed_percent`, `clear_faults`, sensors/text/binary entries), not in separate platform blocks.
 - Runtime behavior:
   - Bring-up automation is implemented through a dedicated `MCF8329ATuningController` helper class (kept separate from the main hardware component flow) and triggered by button actions.
+  - `MCF8329ATuningController` ownership in `MCF8329AComponent` uses a raw pointer with out-of-line `delete` (not `std::unique_ptr`) to avoid incomplete-type `unique_ptr` destructor static-asserts with the ESPHome/toolchain build path.
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
   - `set_speed_percent(...)` now logs `INFO` lines with caller reason (`number_control`, `motor_init`, `fault_shutdown`)
     and raw speed code for command-traceability.

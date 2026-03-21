@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <string>
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
@@ -630,7 +629,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint16_t last_algorithm_state_{0xFFFFu};
   uint32_t startup_profile_last_check_ms_{0u};
   uint32_t startup_profile_last_recovery_ms_{0u};
-  std::unique_ptr<MCF8329ATuningController> tuning_controller_{nullptr};
+  MCF8329ATuningController* tuning_controller_{nullptr};
 
   MCF8329ABrakeSwitch* brake_switch_{nullptr};
   MCF8329ADirectionSelect* direction_select_{nullptr};

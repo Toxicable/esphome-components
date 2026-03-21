@@ -692,7 +692,10 @@ class MCF8329ATuningController {
   uint32_t mpet_characterization_started_ms_{0u};
 };
 
-MCF8329AComponent::~MCF8329AComponent() = default;
+MCF8329AComponent::~MCF8329AComponent() {
+  delete this->tuning_controller_;
+  this->tuning_controller_ = nullptr;
+}
 
 void MCF8329ABrakeSwitch::write_state(bool state) {
   if (this->parent_ == nullptr) {
@@ -749,14 +752,14 @@ void MCF8329ARunMPETButton::press_action() {
 
 void MCF8329AComponent::start_tune_initial_params() {
   if (this->tuning_controller_ == nullptr) {
-    this->tuning_controller_ = std::make_unique<MCF8329ATuningController>(this);
+    this->tuning_controller_ = new MCF8329ATuningController(this);
   }
   this->tuning_controller_->start_initial_tune();
 }
 
 void MCF8329AComponent::start_mpet_characterization() {
   if (this->tuning_controller_ == nullptr) {
-    this->tuning_controller_ = std::make_unique<MCF8329ATuningController>(this);
+    this->tuning_controller_ = new MCF8329ATuningController(this);
   }
   this->tuning_controller_->start_mpet_characterization();
 }
@@ -778,7 +781,7 @@ void MCF8329AComponent::setup() {
   this->start_boost_until_ms_ = 0u;
   this->last_ramp_update_ms_ = 0u;
   if (this->tuning_controller_ == nullptr) {
-    this->tuning_controller_ = std::make_unique<MCF8329ATuningController>(this);
+    this->tuning_controller_ = new MCF8329ATuningController(this);
   }
   this->tuning_controller_->reset();
 
