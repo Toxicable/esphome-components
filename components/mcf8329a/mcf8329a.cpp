@@ -194,6 +194,7 @@ class MCF8329ATuningController {
     this->initial_tune_closed_loop_seen_ms_ = 0u;
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->current_candidate_monitor_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
@@ -228,6 +229,7 @@ class MCF8329ATuningController {
     this->initial_tune_closed_loop_seen_ms_ = 0u;
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->current_candidate_monitor_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
@@ -316,6 +318,10 @@ class MCF8329ATuningController {
   static constexpr float INITIAL_TUNE_SPEED_PERCENT = 11.0f;
   static constexpr uint32_t INITIAL_TUNE_SETTLE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MS = 7000u;
+  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MIN_MS = 7000u;
+  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS = 45000u;
+  static constexpr float INITIAL_TUNE_MONITOR_TIMEOUT_SCALE = 1.6f;
+  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MARGIN_MS = 2500u;
   static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
   static constexpr uint32_t INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
@@ -589,6 +595,47 @@ class MCF8329ATuningController {
     return both_in_expected_band && pair_consistent;
   }
 
+  uint32_t candidate_monitor_timeout_ms_(const InitialTuneCandidate& candidate) const {
+    if (this->parent_ == nullptr) {
+      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    }
+
+    float max_speed_hz =
+      this->parent_->cfg_max_speed_set_ ? this->parent_->max_speed_code_to_hz_(this->parent_->cfg_max_speed_code_)
+                                        : 0.0f;
+    uint32_t closed_loop4 = 0;
+    if (this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
+      const uint16_t max_speed_code = static_cast<uint16_t>(
+        (closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_MASK) >>
+        MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_SHIFT
+      );
+      max_speed_hz = this->parent_->max_speed_code_to_hz_(max_speed_code);
+    }
+    if (max_speed_hz <= 0.0f) {
+      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    }
+
+    const float handoff_percent =
+      this->parent_->open_to_closed_handoff_code_to_percent_(candidate.handoff_code & 0x1Fu);
+    const float handoff_hz = max_speed_hz * handoff_percent / 100.0f;
+    const float ol_accel_hz_per_s =
+      OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu];
+    if (ol_accel_hz_per_s <= 0.0f) {
+      return INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS;
+    }
+
+    const float est_to_handoff_ms =
+      (handoff_hz / ol_accel_hz_per_s) * 1000.0f * INITIAL_TUNE_MONITOR_TIMEOUT_SCALE;
+    const float timeout_ms =
+      est_to_handoff_ms + static_cast<float>(INITIAL_TUNE_SUCCESS_HOLD_MS + INITIAL_TUNE_MONITOR_TIMEOUT_MARGIN_MS);
+    const float timeout_clamped_ms = std::clamp(
+      timeout_ms,
+      static_cast<float>(INITIAL_TUNE_MONITOR_TIMEOUT_MIN_MS),
+      static_cast<float>(INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS)
+    );
+    return static_cast<uint32_t>(timeout_clamped_ms + 0.5f);
+  }
+
   bool active_pass_is_refinement_() const {
     return this->refinement_active_;
   }
@@ -792,12 +839,21 @@ class MCF8329ATuningController {
         this->initial_tune_stage_ = InitialTuneStage::MONITOR;
         this->initial_tune_stage_started_ms_ = now;
         this->current_candidate_start_ms_ = now;
-        this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+        this->current_candidate_monitor_timeout_ms_ = this->candidate_monitor_timeout_ms_(candidate);
+        this->current_candidate_reach_ms_ = this->current_candidate_monitor_timeout_ms_;
         this->initial_tune_closed_loop_seen_ = false;
         this->initial_tune_closed_loop_seen_ms_ = 0u;
         this->handoff_unstable_counter_ = 0u;
         this->handoff_stable_counter_ = 0u;
         this->handoff_telemetry_miss_counter_ = 0u;
+        ESP_LOGI(
+          TAG,
+          "Initial tune %s candidate %u/%u monitor timeout set to %ums",
+          phase,
+          static_cast<unsigned>(this->active_candidate_index_() + 1u),
+          static_cast<unsigned>(this->active_candidate_count_()),
+          static_cast<unsigned>(this->current_candidate_monitor_timeout_ms_)
+        );
         return;
       }
 
@@ -908,7 +964,7 @@ class MCF8329ATuningController {
           this->handoff_telemetry_miss_counter_ = 0u;
         }
 
-        if ((now - this->initial_tune_stage_started_ms_) >= INITIAL_TUNE_MONITOR_TIMEOUT_MS) {
+        if ((now - this->initial_tune_stage_started_ms_) >= this->current_candidate_monitor_timeout_ms_) {
           this->fail_initial_tune_candidate_("timeout waiting for closed-loop", now);
           return;
         }
@@ -1040,6 +1096,7 @@ class MCF8329ATuningController {
   uint32_t initial_tune_closed_loop_seen_ms_{0u};
   uint32_t current_candidate_start_ms_{0u};
   uint32_t current_candidate_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
+  uint32_t current_candidate_monitor_timeout_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
   uint8_t handoff_unstable_counter_{0u};
   uint8_t handoff_stable_counter_{0u};
   uint8_t handoff_telemetry_miss_counter_{0u};
