@@ -73,6 +73,8 @@ Component-scoped notes for `components/mcf8329a`.
   - `sensor.fg_speed_fdbk_hz` (from `FG_SPEED_FDBK`, Q27 scaled by effective `MAX_SPEED`)
   - `text_sensor.current_fault` publishes decoded active faults (`none` or a comma-separated token list).
 - Breaking YAML change (intentional): legacy `startup_*` keys were removed and now raise migration errors pointing to the new non-prefixed key names.
+- Schema now enforces a hardware baseline before tuning (`tune_initial_params` or manual tuning keys):
+  `csa_gain_v_per_v`, `base_current_amps`, `phase_current_limit_percent`, `open_loop_limit_source`, and `lock_mode`.
 - README YAML layout preference:
   - Keep one example, but group optional motor-config knobs by purpose (direction/alignment, scaling, handoff, lock handling).
   - Omit default-valued keys from the example unless they materially aid bring-up.

@@ -567,6 +567,49 @@ def validate_safety_guardrails(config):
     return config
 
 
+def validate_tuning_prerequisites(config):
+    tuning_keys = (
+        CONF_TUNE_INITIAL_PARAMS,
+        CONF_OPEN_LOOP_ILIMIT_PERCENT,
+        CONF_OPEN_LOOP_ACCEL_HZ_PER_S,
+        CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2,
+        CONF_AUTO_HANDOFF_ENABLE,
+        CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT,
+        CONF_THETA_ERROR_RAMP_RATE,
+        CONF_CL_SLOW_ACC_HZ_PER_S,
+        CONF_LOCK_ILIMIT_PERCENT,
+        CONF_HW_LOCK_ILIMIT_PERCENT,
+        CONF_LOCK_ILIMIT_DEGLITCH_MS,
+        CONF_HW_LOCK_ILIMIT_DEGLITCH_US,
+        CONF_SPEED_LOOP_KP_CODE,
+        CONF_SPEED_LOOP_KI_CODE,
+    )
+    tuning_requested = any(key in config for key in tuning_keys)
+    if not tuning_requested:
+        return config
+
+    required_hardware_keys = (
+        CONF_CSA_GAIN_V_PER_V,
+        CONF_BASE_CURRENT_AMPS,
+        CONF_PHASE_CURRENT_LIMIT_PERCENT,
+        CONF_OPEN_LOOP_LIMIT_SOURCE,
+        CONF_LOCK_MODE_CFG,
+    )
+    missing = [key for key in required_hardware_keys if key not in config]
+    if missing:
+        raise cv.Invalid(
+            "tuning requires hardware baseline keys first; missing: " + ", ".join(missing)
+        )
+
+    if config.get(CONF_OPEN_LOOP_LIMIT_SOURCE) == OPEN_LOOP_LIMIT_SOURCE_OPTIONS["ol_ilimit"]:
+        if CONF_OPEN_LOOP_ILIMIT_PERCENT not in config and CONF_TUNE_INITIAL_PARAMS not in config:
+            raise cv.Invalid(
+                "open_loop_limit_source=ol_ilimit requires open_loop_ilimit_percent for tuning"
+            )
+
+    return config
+
+
 def encode_max_speed_hz(value_hz):
     if value_hz <= 1600:
         code = int(round(value_hz * 6.0))
@@ -711,6 +754,7 @@ CONFIG_SCHEMA = cv.All(
     )
     .extend(cv.polling_component_schema("250ms"))
     .extend(i2c.i2c_device_schema(default_address=0x01)),
+    validate_tuning_prerequisites,
     validate_safety_guardrails,
 )
 

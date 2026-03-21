@@ -41,16 +41,17 @@ mcf8329a:
   ## (kV * (4.2 * Bs) * (Rp / 2)) / 60
   max_speed_hz: 900
 
-  ## Optional motor shaping/scaling:
+  ## Hardware baseline (required before tuning / tune_initial_params):
   # align_time: 100ms
   # direction_mode: cw
-  # csa_gain_v_per_v: 40
-  # base_current_amps: 10.0
-  # phase_current_limit_percent: 30
+  csa_gain_v_per_v: 40
+  base_current_amps: 10.0
+  phase_current_limit_percent: 30
+  open_loop_limit_source: ol_ilimit   # ol_ilimit | ilimit
+  lock_mode: retry
   # align_or_slow_current_limit_percent: 20
 
   ## Optional open-loop/handoff tuning:
-  # open_loop_limit_source: ol_ilimit   # ol_ilimit | ilimit
   # open_loop_ilimit_percent: 20
   # open_loop_accel_hz_per_s: 75
   # open_loop_accel2_hz_per_s2: 100
@@ -61,7 +62,6 @@ mcf8329a:
 
   ## Optional lock/fault tuning:
   ## lock_mode options: latched | retry | disabled
-  # lock_mode: retry
   # lock_ilimit_percent: 40
   # hw_lock_ilimit_percent: 40
   # lock_retry_time: 2s
@@ -138,6 +138,8 @@ Safety guardrails:
   - `lock_mode: disabled`
 - Set `allow_unsafe_current_limits: true` only for intentional overrides.
 - Severe current faults (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `BUS_CURRENT_LIMIT`) engage runtime lockout for non-zero speed commands until faults are actually cleared.
+- Tuning entry (`tune_initial_params` or manual tuning keys) requires baseline hardware/current keys:
+  `csa_gain_v_per_v`, `base_current_amps`, `phase_current_limit_percent`, `open_loop_limit_source`, and `lock_mode`.
 
 Auto bring-up buttons:
 - `tune_initial_params` runs a guarded discovery sweep targeting closed-loop entry at `11%`, then a refinement sweep around the first successful set and prefers `auto_handoff_enable: true` when a stable candidate exists; it prints the best values at `INFO` level for manual YAML copy.
