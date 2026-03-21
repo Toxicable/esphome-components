@@ -175,8 +175,8 @@ static const InitialTuneCandidate INITIAL_TUNE_CANDIDATES[] = {
   {6u, 6u, 6u, 3u, 5u, 0u, 15u, 2u, 4u, 8u, 7u, false, false},
   // Slower open-loop ramp with manual handoff.
   {6u, 6u, 6u, 3u, 4u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
-  // Auto-handoff fallback.
-  {6u, 6u, 6u, 3u, 5u, 0u, 11u, 2u, 4u, 8u, 7u, true, false},
+  // Earlier manual handoff fallback.
+  {6u, 6u, 6u, 3u, 5u, 0u, 11u, 2u, 4u, 8u, 7u, false, false},
 };
 static constexpr size_t INITIAL_TUNE_CANDIDATE_COUNT =
   sizeof(INITIAL_TUNE_CANDIDATES) / sizeof(INITIAL_TUNE_CANDIDATES[0]);
@@ -244,7 +244,7 @@ class MCF8329ATuningController {
       static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
       INITIAL_TUNE_SPEED_PERCENT
     );
-    ESP_LOGI(TAG, "Initial tune will run a refinement sweep after first success and prefers auto_handoff_enable=true when stable");
+    ESP_LOGI(TAG, "Initial tune will run a refinement sweep after first success (manual-handoff candidates)");
   }
 
   void start_mpet_characterization() {
@@ -322,7 +322,6 @@ class MCF8329ATuningController {
   // Large low-kV motors can spend a long dwell in KE measurement.
   static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 120000u;
   static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
-  static constexpr int32_t AUTO_HANDOFF_BONUS_SCORE = 10000;
   static constexpr int32_t ACCEL_A1_BONUS_SCORE = 100;
   static constexpr uint8_t HANDOFF_UNSTABLE_REJECT_COUNT = 2u;
   static constexpr uint8_t HANDOFF_STABLE_ACCEPT_COUNT = 2u;
@@ -519,9 +518,6 @@ class MCF8329ATuningController {
 
   int32_t score_candidate_(const InitialTuneCandidate& candidate, uint32_t reach_ms) const {
     int32_t score = -static_cast<int32_t>(reach_ms);
-    if (candidate.auto_handoff_enable) {
-      score += AUTO_HANDOFF_BONUS_SCORE;
-    }
     score += static_cast<int32_t>(candidate.open_loop_accel_a1_code) * ACCEL_A1_BONUS_SCORE;
     return score;
   }
@@ -638,32 +634,26 @@ class MCF8329ATuningController {
     this->append_refined_candidate_(baseline);  // index 0 baseline marker (already known successful)
 
     InitialTuneCandidate candidate = baseline;
-    candidate.auto_handoff_enable = true;
-    this->append_refined_candidate_(candidate);
-
-    candidate = baseline;
-    candidate.auto_handoff_enable = true;
     candidate.open_loop_accel_a1_code =
       static_cast<uint8_t>(std::min<int>(15, static_cast<int>(baseline.open_loop_accel_a1_code) + 1));
     this->append_refined_candidate_(candidate);
 
     candidate = baseline;
-    candidate.auto_handoff_enable = true;
     candidate.handoff_code = static_cast<uint8_t>(
       std::min<int>(31, static_cast<int>(baseline.handoff_code) + 2)
     );
     this->append_refined_candidate_(candidate);
 
     candidate = baseline;
-    candidate.auto_handoff_enable = true;
     candidate.handoff_code =
       static_cast<uint8_t>(std::max<int>(0, static_cast<int>(baseline.handoff_code) - 2));
     this->append_refined_candidate_(candidate);
 
-    candidate = baseline;
-    candidate.open_loop_accel_a1_code =
-      static_cast<uint8_t>(std::min<int>(15, static_cast<int>(baseline.open_loop_accel_a1_code) + 1));
-    this->append_refined_candidate_(candidate);
+    if (baseline.open_loop_accel_a1_code > 0u) {
+      candidate = baseline;
+      candidate.open_loop_accel_a1_code = static_cast<uint8_t>(baseline.open_loop_accel_a1_code - 1u);
+      this->append_refined_candidate_(candidate);
+    }
 
     if (this->refinement_candidate_count_ <= 1u) {
       return false;
@@ -719,12 +709,6 @@ class MCF8329ATuningController {
       static_cast<unsigned>(this->refinement_best_reach_ms_),
       static_cast<int>(this->refinement_best_score_)
     );
-    if (!this->refinement_best_candidate_.auto_handoff_enable) {
-      ESP_LOGW(
-        TAG,
-        "Refinement did not find a stable auto-handoff candidate; keeping manual handoff for reliability"
-      );
-    }
     this->log_tune_candidate_(
       this->refinement_best_candidate_,
       "Initial tune success: copy these keys into your YAML under mcf8329a:"

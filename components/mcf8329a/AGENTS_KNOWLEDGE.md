@@ -101,7 +101,7 @@ Component-scoped notes for `components/mcf8329a`.
   - Runtime now emits a 2Hz `INFO` speed diagnostic line while commanded speed is active:
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
   - Optional monolith buttons for guided bring-up:
-    - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate and biases scoring toward `auto_handoff_enable=true`; logs the exact recommended YAML keys/values at `INFO` for manual copy.
+    - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate using manual-handoff variants by default; logs the exact recommended YAML keys/values at `INFO` for manual copy.
     - `tune_initial_params` handoff plausibility guard evaluates post-handoff feedback against commanded electrical speed (not `speed_ref_open_loop_hz`) to avoid false rejects when open-loop ref lags during transition.
     - The same guard rejects candidates when `speed_fdbk_hz` and `fg_speed_fdbk_hz` diverge too far (`abs(delta) > max(35Hz, 55% of higher value)`) for consecutive samples, which catches buzz/stall handoffs with implausible feedback.
     - Candidate success now also requires consecutive plausible handoff samples (`speed_fdbk_hz` and `fg_speed_fdbk_hz` within a commanded-speed band and mutually consistent); closed-loop state alone is no longer enough.

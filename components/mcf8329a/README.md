@@ -148,7 +148,7 @@ Safety guardrails:
   `csa_gain_v_per_v`, `base_current_amps`, `phase_current_limit_percent`, `open_loop_limit_source`, and `lock_mode`.
 
 Auto bring-up buttons:
-- `tune_initial_params` runs a guarded discovery sweep targeting closed-loop entry at `11%`, then a refinement sweep around the first successful set and prefers `auto_handoff_enable: true` when a stable candidate exists; it prints the best values at `INFO` level for manual YAML copy.
+- `tune_initial_params` runs a guarded discovery sweep targeting closed-loop entry at `11%`, then a refinement sweep around the first successful set using manual-handoff variants by default; it prints the best values at `INFO` level for manual YAML copy.
 - `run_mpet` starts MPET (`CMD + KE + MECH + WRITE_SHADOW`) and on success logs extracted keys (`motor_bemf_const`, `speed_loop_kp_code`, `speed_loop_ki_code`) at `INFO` level for manual YAML copy.
 
 ## 5065 270KV 12-pole (6 pole-pair) baseline
