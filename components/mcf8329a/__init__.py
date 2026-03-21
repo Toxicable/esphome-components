@@ -23,7 +23,6 @@ MCF8329AWatchdogTickleButton = mcf8329a_ns.class_("MCF8329AWatchdogTickleButton"
 MCF8329ATuneInitialParamsButton = mcf8329a_ns.class_("MCF8329ATuneInitialParamsButton", button.Button)
 MCF8329ARunMPETButton = mcf8329a_ns.class_("MCF8329ARunMPETButton", button.Button)
 
-CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
 CONF_CLEAR_MPET_ON_STARTUP = "clear_mpet_on_startup"
 CONF_ALLOW_UNSAFE_CURRENT_LIMITS = "allow_unsafe_current_limits"
@@ -709,7 +708,6 @@ CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(MCF8329AComponent),
-            cv.Optional(CONF_INTER_BYTE_DELAY_US, default=100): cv.positive_int,
             cv.Optional(CONF_AUTO_TICKLE_WATCHDOG, default=False): cv.boolean,
             cv.Optional(CONF_CLEAR_MPET_ON_STARTUP, default=True): cv.boolean,
             cv.Optional(CONF_SPEED_RAMP_UP_PERCENT_PER_S, default=0.0): cv.float_range(min=0.0),
@@ -837,8 +835,8 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
+    cg.add_build_flag("-DMCF8329A_EMBED_IMPL")
 
-    cg.add(var.set_inter_byte_delay_us(config[CONF_INTER_BYTE_DELAY_US]))
     cg.add(var.set_auto_tickle_watchdog(config[CONF_AUTO_TICKLE_WATCHDOG]))
     cg.add(var.set_clear_mpet_on_startup(config[CONF_CLEAR_MPET_ON_STARTUP]))
     cg.add(var.set_speed_ramp_up_percent_per_s(config[CONF_SPEED_RAMP_UP_PERCENT_PER_S]))

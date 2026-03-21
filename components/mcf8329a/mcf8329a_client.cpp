@@ -1,3 +1,5 @@
+#if !defined(MCF8329A_EMBED_IMPL) || defined(MCF8329A_EMBED_IMPL_INCLUDE)
+
 #include "mcf8329a_client.h"
 
 #include "esphome/core/hal.h"
@@ -9,6 +11,7 @@ namespace mcf8329a {
 using namespace regs;
 
 static const char* const TAG = "mcf8329a";
+static constexpr uint32_t WRITE_TRANSACTION_DELAY_US = 100u;
 static constexpr float VM_VOLTAGE_SCALE = 60.0f / 134217728.0f;  // 60 / 2^27
 static constexpr float SPEED_Q27_SCALE = 1.0f / 134217728.0f;    // 1 / 2^27
 static constexpr float OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[16] = {
@@ -117,9 +120,7 @@ bool MCF8329AClient::write_reg32(uint16_t offset, uint32_t value) const {
     return false;
   }
 
-  if (this->inter_byte_delay_us_ > 0u) {
-    delay_microseconds_safe(this->inter_byte_delay_us_);
-  }
+  delay_microseconds_safe(WRITE_TRANSACTION_DELAY_US);
   return true;
 }
 
@@ -275,3 +276,5 @@ uint32_t MCF8329AClient::build_control_word_(bool is_read, uint16_t offset, bool
 
 }  // namespace mcf8329a
 }  // namespace esphome
+
+#endif  // !MCF8329A_EMBED_IMPL || MCF8329A_EMBED_IMPL_INCLUDE

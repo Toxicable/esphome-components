@@ -195,9 +195,6 @@ class MCF8329AClient {
   void set_device(i2c::I2CDevice* device) {
     device_ = device;
   }
-  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) {
-    inter_byte_delay_us_ = inter_byte_delay_us;
-  }
 
   bool read_reg32(uint16_t offset, uint32_t& value) const;
   bool read_reg16(uint16_t offset, uint16_t& value) const;
@@ -226,7 +223,6 @@ class MCF8329AClient {
   uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
 
   i2c::I2CDevice* device_{nullptr};
-  uint32_t inter_byte_delay_us_{100u};
 };
 
 }  // namespace mcf8329a

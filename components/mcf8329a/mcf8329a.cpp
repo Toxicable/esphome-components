@@ -10,12 +10,20 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
+#ifdef MCF8329A_EMBED_IMPL
+#define MCF8329A_EMBED_IMPL_INCLUDE
+#include "mcf8329a_client.cpp"
+#include "mcf8329a_tuning.cpp"
+#undef MCF8329A_EMBED_IMPL_INCLUDE
+#endif
+
 namespace esphome {
 namespace mcf8329a {
 
 using namespace regs;
 
 static const char* const TAG = "mcf8329a";
+static constexpr uint32_t FIXED_INTER_BYTE_DELAY_US = 100u;
 static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
   5,
   10,
@@ -229,7 +237,6 @@ void MCF8329AComponent::setup() {
   this->start_boost_until_ms_ = 0u;
   this->last_ramp_update_ms_ = 0u;
   this->comms_client_.set_device(this);
-  this->comms_client_.set_inter_byte_delay_us(this->inter_byte_delay_us_);
   if (this->tuning_controller_ == nullptr) {
     this->tuning_controller_ = new MCF8329ATuningController(this);
   }
@@ -448,13 +455,13 @@ void MCF8329AComponent::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(
-    TAG, "  Inter-byte delay: %u us", static_cast<unsigned>(this->inter_byte_delay_us_)
+    TAG,
+    "  Inter-byte delay: %u us (fixed)",
+    static_cast<unsigned>(FIXED_INTER_BYTE_DELAY_US)
   );
-  if (this->inter_byte_delay_us_ > 0) {
-    ESP_LOGCONFIG(
-      TAG, "  Note: inter-byte delay is currently not applied with ESPHome I2C transactions"
-    );
-  }
+  ESP_LOGCONFIG(
+    TAG, "  Note: inter-byte delay is applied between write transactions (not byte-level spacing)"
+  );
   ESP_LOGW(
     TAG,
     "  MCx83xx I2C requirement: >=100us byte gap. Use i2c.frequency <=50kHz and verify comms."

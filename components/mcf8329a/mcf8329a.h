@@ -118,10 +118,6 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void start_tune_initial_params();
   void start_mpet_characterization();
 
-  void set_inter_byte_delay_us(uint32_t inter_byte_delay_us) {
-    inter_byte_delay_us_ = inter_byte_delay_us;
-    comms_client_.set_inter_byte_delay_us(inter_byte_delay_us);
-  }
   void set_auto_tickle_watchdog(bool auto_tickle_watchdog) {
     auto_tickle_watchdog_ = auto_tickle_watchdog;
   }
@@ -385,7 +381,6 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t I2C_SCAN_ADDRESS_MIN = 0x00u;
   static constexpr uint8_t I2C_SCAN_ADDRESS_MAX = 0x7Eu;
 
-  uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
   bool clear_mpet_on_startup_{true};
   bool cfg_mpet_use_dedicated_params_set_{false};
