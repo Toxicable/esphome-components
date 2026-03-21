@@ -520,13 +520,13 @@ class MCF8329ATuningController {
     return score;
   }
 
-  bool read_speed_triplet_hz_(float& ref_ol_hz, float& fdbk_hz, float& fg_hz) const {
+  bool read_speed_triplet_hz_(float& ref_ol_hz, float& fdbk_hz, float& fg_hz, float& max_speed_hz) const {
     if (this->parent_ == nullptr) {
       return false;
     }
 
     uint32_t closed_loop4 = 0;
-    float max_speed_hz =
+    max_speed_hz =
       this->parent_->cfg_max_speed_set_ ? this->parent_->max_speed_code_to_hz_(this->parent_->cfg_max_speed_code_)
                                         : 0.0f;
     if (this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
@@ -555,19 +555,19 @@ class MCF8329ATuningController {
     return true;
   }
 
-  bool handoff_feedback_unstable_(float ref_ol_hz, float fdbk_hz, float fg_hz) const {
-    const float ref_abs = std::fabs(ref_ol_hz);
+  bool handoff_feedback_unstable_(float commanded_hz, float fdbk_hz, float fg_hz) const {
+    const float commanded_abs = std::fabs(commanded_hz);
     const float fdbk_abs = std::fabs(fdbk_hz);
     const float fg_abs = std::fabs(fg_hz);
-    const float ref_basis = std::max(10.0f, ref_abs);
+    const float command_basis = std::max(20.0f, commanded_abs);
 
-    const bool fdbk_overshoot = fdbk_abs > std::max(30.0f, ref_basis * 2.5f);
+    const bool severe_overspeed = fdbk_abs > (command_basis * 2.2f) && fg_abs > (command_basis * 2.2f);
 
     const float pair_max = std::max(fdbk_abs, fg_abs);
     const bool fdbk_fg_mismatch =
-      pair_max > 20.0f && std::fabs(fdbk_abs - fg_abs) > std::max(35.0f, pair_max * 0.6f);
+      pair_max > 20.0f && std::fabs(fdbk_abs - fg_abs) > std::max(35.0f, pair_max * 0.55f);
 
-    return fdbk_overshoot || fdbk_fg_mismatch;
+    return severe_overspeed || fdbk_fg_mismatch;
   }
 
   bool active_pass_is_refinement_() const {
@@ -813,24 +813,29 @@ class MCF8329ATuningController {
             float ref_ol_hz = 0.0f;
             float fdbk_hz = 0.0f;
             float fg_hz = 0.0f;
-            if (this->read_speed_triplet_hz_(ref_ol_hz, fdbk_hz, fg_hz) &&
-                this->handoff_feedback_unstable_(ref_ol_hz, fdbk_hz, fg_hz)) {
-              this->handoff_unstable_counter_++;
-              ESP_LOGW(
-                TAG,
-                "Initial tune handoff guard: unstable sample %u/%u ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
-                static_cast<unsigned>(this->handoff_unstable_counter_),
-                static_cast<unsigned>(HANDOFF_UNSTABLE_REJECT_COUNT),
-                ref_ol_hz,
-                fdbk_hz,
-                fg_hz
-              );
-              if (this->handoff_unstable_counter_ >= HANDOFF_UNSTABLE_REJECT_COUNT) {
-                this->fail_initial_tune_candidate_("handoff feedback unstable", now);
-                return;
+            float max_speed_hz = 0.0f;
+            if (this->read_speed_triplet_hz_(ref_ol_hz, fdbk_hz, fg_hz, max_speed_hz)) {
+              const float commanded_hz =
+                (std::fabs(this->parent_->speed_applied_percent_) / 100.0f) * max_speed_hz;
+              if (!this->handoff_feedback_unstable_(commanded_hz, fdbk_hz, fg_hz)) {
+                this->handoff_unstable_counter_ = 0u;
+              } else {
+                this->handoff_unstable_counter_++;
+                ESP_LOGW(
+                  TAG,
+                  "Initial tune handoff guard: unstable sample %u/%u cmd=%.1fHz ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
+                  static_cast<unsigned>(this->handoff_unstable_counter_),
+                  static_cast<unsigned>(HANDOFF_UNSTABLE_REJECT_COUNT),
+                  commanded_hz,
+                  ref_ol_hz,
+                  fdbk_hz,
+                  fg_hz
+                );
+                if (this->handoff_unstable_counter_ >= HANDOFF_UNSTABLE_REJECT_COUNT) {
+                  this->fail_initial_tune_candidate_("handoff feedback unstable", now);
+                  return;
+                }
               }
-            } else {
-              this->handoff_unstable_counter_ = 0u;
             }
           }
 
