@@ -99,110 +99,150 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void set_clear_mpet_on_startup(bool clear_mpet_on_startup) {
     clear_mpet_on_startup_ = clear_mpet_on_startup;
   }
-  void set_startup_motor_bemf_const(uint8_t startup_motor_bemf_const) {
-    startup_motor_bemf_const_ = startup_motor_bemf_const;
-    startup_motor_bemf_const_set_ = true;
+  void set_cfg_motor_bemf_const(uint8_t cfg_motor_bemf_const) {
+    cfg_motor_bemf_const_ = cfg_motor_bemf_const;
+    cfg_motor_bemf_const_set_ = true;
   }
-  void set_startup_brake_mode(uint8_t startup_brake_mode) {
-    startup_brake_mode_ = startup_brake_mode;
-    startup_brake_mode_set_ = true;
+  void set_cfg_brake_mode(uint8_t cfg_brake_mode) {
+    cfg_brake_mode_ = cfg_brake_mode;
+    cfg_brake_mode_set_ = true;
   }
-  void set_startup_brake_time(uint8_t startup_brake_time) {
-    startup_brake_time_ = startup_brake_time;
-    startup_brake_time_set_ = true;
+  void set_cfg_brake_time(uint8_t cfg_brake_time) {
+    cfg_brake_time_ = cfg_brake_time;
+    cfg_brake_time_set_ = true;
   }
-  void set_startup_mode(uint8_t startup_mode) {
-    startup_mode_ = startup_mode;
-    startup_mode_set_ = true;
+  void set_cfg_mode(uint8_t cfg_mode) {
+    cfg_mode_ = cfg_mode;
+    cfg_mode_set_ = true;
   }
-  void set_startup_align_time(uint8_t startup_align_time) {
-    startup_align_time_ = startup_align_time;
-    startup_align_time_set_ = true;
+  void set_cfg_align_time(uint8_t cfg_align_time) {
+    cfg_align_time_ = cfg_align_time;
+    cfg_align_time_set_ = true;
   }
-  void set_startup_csa_gain(uint8_t startup_csa_gain) {
-    startup_csa_gain_ = startup_csa_gain & 0x03u;
-    startup_csa_gain_set_ = true;
+  void set_cfg_csa_gain(uint8_t cfg_csa_gain) {
+    cfg_csa_gain_ = cfg_csa_gain & 0x03u;
+    cfg_csa_gain_set_ = true;
   }
-  void set_startup_base_current_code(uint16_t startup_base_current_code) {
-    startup_base_current_code_ = startup_base_current_code & 0x7FFFu;
-    startup_base_current_set_ = true;
+  void set_cfg_base_current_code(uint16_t cfg_base_current_code) {
+    cfg_base_current_code_ = cfg_base_current_code & 0x7FFFu;
+    cfg_base_current_set_ = true;
   }
-  void set_startup_direction_mode(const std::string& startup_direction_mode) {
-    startup_direction_mode_ = startup_direction_mode;
-    startup_direction_mode_set_ = true;
+  void set_cfg_direction_mode(const std::string& cfg_direction_mode) {
+    cfg_direction_mode_ = cfg_direction_mode;
+    cfg_direction_mode_set_ = true;
   }
-  void set_startup_ilimit(uint8_t startup_ilimit) {
-    startup_ilimit_ = startup_ilimit;
-    startup_ilimit_set_ = true;
+  void set_cfg_ilimit(uint8_t cfg_ilimit) {
+    cfg_ilimit_ = cfg_ilimit;
+    cfg_ilimit_set_ = true;
   }
-  void set_startup_align_or_slow_current_ilimit(uint8_t startup_align_or_slow_current_ilimit) {
-    startup_align_or_slow_current_ilimit_ = startup_align_or_slow_current_ilimit;
-    startup_align_or_slow_current_ilimit_set_ = true;
+  void set_cfg_align_or_slow_current_ilimit(uint8_t cfg_align_or_slow_current_ilimit) {
+    cfg_align_or_slow_current_ilimit_ = cfg_align_or_slow_current_ilimit;
+    cfg_align_or_slow_current_ilimit_set_ = true;
   }
-  void set_startup_lock_mode(uint8_t startup_lock_mode) {
-    startup_lock_mode_ = startup_lock_mode;
-    startup_lock_mode_set_ = true;
+  void set_cfg_lock_mode(uint8_t cfg_lock_mode) {
+    cfg_lock_mode_ = cfg_lock_mode;
+    cfg_lock_mode_set_ = true;
   }
-  void set_startup_lock_ilimit(uint8_t startup_lock_ilimit) {
-    startup_lock_ilimit_ = startup_lock_ilimit;
-    startup_lock_ilimit_set_ = true;
+  void set_cfg_lock_ilimit(uint8_t cfg_lock_ilimit) {
+    cfg_lock_ilimit_ = cfg_lock_ilimit;
+    cfg_lock_ilimit_set_ = true;
   }
-  void set_startup_hw_lock_ilimit(uint8_t startup_hw_lock_ilimit) {
-    startup_hw_lock_ilimit_ = startup_hw_lock_ilimit;
-    startup_hw_lock_ilimit_set_ = true;
+  void set_cfg_hw_lock_ilimit(uint8_t cfg_hw_lock_ilimit) {
+    cfg_hw_lock_ilimit_ = cfg_hw_lock_ilimit;
+    cfg_hw_lock_ilimit_set_ = true;
   }
-  void set_startup_lock_retry_time(uint8_t startup_lock_retry_time) {
-    startup_lock_retry_time_ = startup_lock_retry_time;
-    startup_lock_retry_time_set_ = true;
+  void set_cfg_lock_retry_time(uint8_t cfg_lock_retry_time) {
+    cfg_lock_retry_time_ = cfg_lock_retry_time;
+    cfg_lock_retry_time_set_ = true;
   }
-  void set_startup_abn_speed_lock_enable(bool startup_abn_speed_lock_enable) {
-    startup_abn_speed_lock_enable_ = startup_abn_speed_lock_enable;
-    startup_abn_speed_lock_enable_set_ = true;
+  void set_cfg_abn_speed_lock_enable(bool cfg_abn_speed_lock_enable) {
+    cfg_abn_speed_lock_enable_ = cfg_abn_speed_lock_enable;
+    cfg_abn_speed_lock_enable_set_ = true;
   }
-  void set_startup_abn_bemf_lock_enable(bool startup_abn_bemf_lock_enable) {
-    startup_abn_bemf_lock_enable_ = startup_abn_bemf_lock_enable;
-    startup_abn_bemf_lock_enable_set_ = true;
+  void set_cfg_abn_bemf_lock_enable(bool cfg_abn_bemf_lock_enable) {
+    cfg_abn_bemf_lock_enable_ = cfg_abn_bemf_lock_enable;
+    cfg_abn_bemf_lock_enable_set_ = true;
   }
-  void set_startup_no_motor_lock_enable(bool startup_no_motor_lock_enable) {
-    startup_no_motor_lock_enable_ = startup_no_motor_lock_enable;
-    startup_no_motor_lock_enable_set_ = true;
+  void set_cfg_no_motor_lock_enable(bool cfg_no_motor_lock_enable) {
+    cfg_no_motor_lock_enable_ = cfg_no_motor_lock_enable;
+    cfg_no_motor_lock_enable_set_ = true;
   }
-  void set_startup_lock_abn_speed_threshold(uint8_t startup_lock_abn_speed_threshold) {
-    startup_lock_abn_speed_threshold_ = startup_lock_abn_speed_threshold;
-    startup_lock_abn_speed_threshold_set_ = true;
+  void set_cfg_lock_abn_speed_threshold(uint8_t cfg_lock_abn_speed_threshold) {
+    cfg_lock_abn_speed_threshold_ = cfg_lock_abn_speed_threshold;
+    cfg_lock_abn_speed_threshold_set_ = true;
   }
-  void set_startup_abnormal_bemf_threshold(uint8_t startup_abnormal_bemf_threshold) {
-    startup_abnormal_bemf_threshold_ = startup_abnormal_bemf_threshold;
-    startup_abnormal_bemf_threshold_set_ = true;
+  void set_cfg_abnormal_bemf_threshold(uint8_t cfg_abnormal_bemf_threshold) {
+    cfg_abnormal_bemf_threshold_ = cfg_abnormal_bemf_threshold;
+    cfg_abnormal_bemf_threshold_set_ = true;
   }
-  void set_startup_no_motor_threshold(uint8_t startup_no_motor_threshold) {
-    startup_no_motor_threshold_ = startup_no_motor_threshold;
-    startup_no_motor_threshold_set_ = true;
+  void set_cfg_no_motor_threshold(uint8_t cfg_no_motor_threshold) {
+    cfg_no_motor_threshold_ = cfg_no_motor_threshold;
+    cfg_no_motor_threshold_set_ = true;
   }
-  void set_startup_max_speed_code(uint16_t startup_max_speed_code) {
-    startup_max_speed_code_ = startup_max_speed_code & 0x3FFFu;
-    startup_max_speed_set_ = true;
+  void set_cfg_max_speed_code(uint16_t cfg_max_speed_code) {
+    cfg_max_speed_code_ = cfg_max_speed_code & 0x3FFFu;
+    cfg_max_speed_set_ = true;
   }
-  void set_startup_open_loop_ilimit(uint8_t startup_open_loop_ilimit) {
-    startup_open_loop_ilimit_ = startup_open_loop_ilimit;
-    startup_open_loop_ilimit_set_ = true;
+  void set_cfg_open_loop_ilimit(uint8_t cfg_open_loop_ilimit) {
+    cfg_open_loop_ilimit_ = cfg_open_loop_ilimit;
+    cfg_open_loop_ilimit_set_ = true;
   }
-  void set_startup_open_loop_limit_source(bool startup_open_loop_limit_use_ilimit) {
-    startup_open_loop_limit_use_ilimit_ = startup_open_loop_limit_use_ilimit;
-    startup_open_loop_limit_source_set_ = true;
+  void set_cfg_open_loop_limit_source(bool cfg_open_loop_limit_use_ilimit) {
+    cfg_open_loop_limit_use_ilimit_ = cfg_open_loop_limit_use_ilimit;
+    cfg_open_loop_limit_source_set_ = true;
   }
-  void set_startup_open_loop_accel(uint8_t startup_open_loop_accel) {
-    startup_open_loop_accel_ = startup_open_loop_accel;
-    startup_open_loop_accel_set_ = true;
+  void set_cfg_open_loop_accel(uint8_t cfg_open_loop_accel) {
+    cfg_open_loop_accel_ = cfg_open_loop_accel;
+    cfg_open_loop_accel_set_ = true;
   }
-  void set_startup_auto_handoff_enable(bool startup_auto_handoff_enable) {
-    startup_auto_handoff_enable_ = startup_auto_handoff_enable;
-    startup_auto_handoff_enable_set_ = true;
+  void set_cfg_open_loop_accel2(uint8_t cfg_open_loop_accel2) {
+    cfg_open_loop_accel2_ = cfg_open_loop_accel2 & 0x0Fu;
+    cfg_open_loop_accel2_set_ = true;
   }
-  void set_startup_open_to_closed_handoff_threshold(uint8_t startup_open_to_closed_handoff_threshold
+  void set_cfg_auto_handoff_enable(bool cfg_auto_handoff_enable) {
+    cfg_auto_handoff_enable_ = cfg_auto_handoff_enable;
+    cfg_auto_handoff_enable_set_ = true;
+  }
+  void set_cfg_open_to_closed_handoff_threshold(uint8_t cfg_open_to_closed_handoff_threshold
   ) {
-    startup_open_to_closed_handoff_threshold_ = startup_open_to_closed_handoff_threshold & 0x1Fu;
-    startup_open_to_closed_handoff_threshold_set_ = true;
+    cfg_open_to_closed_handoff_threshold_ = cfg_open_to_closed_handoff_threshold & 0x1Fu;
+    cfg_open_to_closed_handoff_threshold_set_ = true;
+  }
+  void set_cfg_theta_error_ramp_rate(uint8_t cfg_theta_error_ramp_rate) {
+    cfg_theta_error_ramp_rate_ = cfg_theta_error_ramp_rate & 0x07u;
+    cfg_theta_error_ramp_rate_set_ = true;
+  }
+  void set_cfg_cl_slow_acc(uint8_t cfg_cl_slow_acc) {
+    cfg_cl_slow_acc_ = cfg_cl_slow_acc & 0x0Fu;
+    cfg_cl_slow_acc_set_ = true;
+  }
+  void set_cfg_lock_ilimit_deglitch(uint8_t cfg_lock_ilimit_deglitch) {
+    cfg_lock_ilimit_deglitch_ = cfg_lock_ilimit_deglitch & 0x0Fu;
+    cfg_lock_ilimit_deglitch_set_ = true;
+  }
+  void set_cfg_hw_lock_ilimit_deglitch(uint8_t cfg_hw_lock_ilimit_deglitch) {
+    cfg_hw_lock_ilimit_deglitch_ = cfg_hw_lock_ilimit_deglitch & 0x07u;
+    cfg_hw_lock_ilimit_deglitch_set_ = true;
+  }
+  void set_cfg_speed_loop_kp_code(uint16_t cfg_speed_loop_kp_code) {
+    cfg_speed_loop_kp_code_ = cfg_speed_loop_kp_code & 0x03FFu;
+    cfg_speed_loop_kp_code_set_ = true;
+  }
+  void set_cfg_speed_loop_ki_code(uint16_t cfg_speed_loop_ki_code) {
+    cfg_speed_loop_ki_code_ = cfg_speed_loop_ki_code & 0x03FFu;
+    cfg_speed_loop_ki_code_set_ = true;
+  }
+  void set_speed_ramp_up_percent_per_s(float speed_ramp_up_percent_per_s) {
+    speed_ramp_up_percent_per_s_ = speed_ramp_up_percent_per_s;
+  }
+  void set_speed_ramp_down_percent_per_s(float speed_ramp_down_percent_per_s) {
+    speed_ramp_down_percent_per_s_ = speed_ramp_down_percent_per_s;
+  }
+  void set_start_boost_percent(float start_boost_percent) {
+    start_boost_percent_ = start_boost_percent;
+  }
+  void set_start_boost_hold_ms(uint32_t start_boost_hold_ms) {
+    start_boost_hold_ms_ = start_boost_hold_ms;
   }
 
   void set_brake_switch(MCF8329ABrakeSwitch* sw) {
@@ -232,6 +272,15 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void set_motor_bemf_constant_sensor(sensor::Sensor* s) {
     motor_bemf_constant_sensor_ = s;
   }
+  void set_speed_fdbk_hz_sensor(sensor::Sensor* s) {
+    speed_fdbk_hz_sensor_ = s;
+  }
+  void set_speed_ref_open_loop_hz_sensor(sensor::Sensor* s) {
+    speed_ref_open_loop_hz_sensor_ = s;
+  }
+  void set_fg_speed_fdbk_hz_sensor(sensor::Sensor* s) {
+    fg_speed_fdbk_hz_sensor_ = s;
+  }
   void set_current_fault_text_sensor(text_sensor::TextSensor* s) {
     current_fault_text_sensor_ = s;
   }
@@ -244,12 +293,12 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   void process_deferred_startup_();
   void apply_post_comms_setup_();
   void recover_from_mcf_reset_if_needed_();
-  bool apply_startup_motor_config_();
+  bool apply_motor_config_();
   const char* i2c_error_to_string_(i2c::ErrorCode error_code) const;
-  const char* startup_mode_to_string_(uint8_t mode) const;
-  const char* startup_align_time_to_string_(uint8_t code) const;
-  const char* startup_brake_mode_to_string_(uint8_t code) const;
-  const char* startup_brake_time_to_string_(uint8_t code) const;
+  const char* mode_to_string_(uint8_t mode) const;
+  const char* align_time_to_string_(uint8_t code) const;
+  const char* brake_mode_to_string_(uint8_t code) const;
+  const char* brake_time_to_string_(uint8_t code) const;
   float max_speed_code_to_hz_(uint16_t code) const;
   float open_loop_accel_code_to_hz_per_s_(uint8_t code) const;
   float open_to_closed_handoff_code_to_percent_(uint8_t code) const;
@@ -257,6 +306,10 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   const char* lock_mode_to_string_(uint8_t mode) const;
   const char* lock_retry_time_to_string_(uint8_t code) const;
   bool clear_mpet_bits_(const char* context);
+  bool apply_speed_command_(float speed_percent, const char* reason, bool publish_number = true);
+  void process_speed_command_ramp_();
+  float speed_raw_to_hz_(int32_t raw, float max_speed_hz) const;
+  float fg_speed_raw_to_hz_(uint32_t raw, float max_speed_hz) const;
   void log_mpet_bemf_diagnostics_();
   void log_hw_lock_diagnostics_();
 
@@ -301,7 +354,11 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint16_t REG_GD_CONFIG2 = 0x00AE;
   static constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
   static constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
+  static constexpr uint16_t REG_INT_ALGO_2 = 0x00A2;
   static constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
+  static constexpr uint16_t REG_FG_SPEED_FDBK = 0x019C;
+  static constexpr uint16_t REG_SPEED_REF_OPEN_LOOP = 0x0532;
+  static constexpr uint16_t REG_SPEED_FDBK = 0x076E;
 
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 2);
   static constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_BRAKE = (0x1u << 2);
@@ -345,9 +402,13 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t MOTOR_STARTUP2_OL_ILIMIT_SHIFT = 27;
   static constexpr uint32_t MOTOR_STARTUP2_OL_ACC_A1_MASK = (0xFu << 23);
   static constexpr uint32_t MOTOR_STARTUP2_OL_ACC_A1_SHIFT = 23;
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ACC_A2_MASK = (0xFu << 19);
+  static constexpr uint32_t MOTOR_STARTUP2_OL_ACC_A2_SHIFT = 19;
   static constexpr uint32_t MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK = (1u << 18);
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK = (0x1Fu << 13);
   static constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT = 13;
+  static constexpr uint32_t MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK = (0x7u << 0);
+  static constexpr uint32_t MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_SHIFT = 0;
 
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_MASK = (0x7u << 28);
   static constexpr uint32_t CLOSED_LOOP2_MTR_STOP_SHIFT = 28;
@@ -375,6 +436,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t GD_CONFIG1_CSA_GAIN_SHIFT = 0;
   static constexpr uint32_t GD_CONFIG2_BASE_CURRENT_MASK = 0x7FFFu;
   static constexpr uint32_t GD_CONFIG2_BASE_CURRENT_SHIFT = 0;
+  static constexpr uint32_t INT_ALGO_2_CL_SLOW_ACC_MASK = (0xFu << 6);
+  static constexpr uint32_t INT_ALGO_2_CL_SLOW_ACC_SHIFT = 6;
 
   static constexpr uint32_t FAULT_CONFIG1_ILIMIT_MASK = (0xFu << 27);
   static constexpr uint32_t FAULT_CONFIG1_ILIMIT_SHIFT = 27;
@@ -384,6 +447,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_SHIFT = 19;
   static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK = (0xFu << 15);
   static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT = 15;
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK = (0xFu << 11);
+  static constexpr uint32_t FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT = 11;
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_MASK = (0xFu << 7);
   static constexpr uint32_t FAULT_CONFIG1_LCK_RETRY_SHIFT = 7;
   static constexpr uint32_t FAULT_CONFIG1_MTR_LCK_MODE_MASK = (0xFu << 3);
@@ -400,6 +465,8 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_CONFIG2_NO_MTR_THR_SHIFT = 19;
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK = (0xFu << 15);
   static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT = 15;
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK = (0x7u << 12);
+  static constexpr uint32_t FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT = 12;
 
   static constexpr uint32_t GATE_DRIVER_FAULT_ACTIVE_MASK = (1u << 31);
   static constexpr uint32_t GATE_FAULT_OTS = (1u << 29);
@@ -427,6 +494,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t FAULT_WATCHDOG = (1u << 3);
 
   static constexpr float VM_VOLTAGE_SCALE = 60.0f / 134217728.0f;  // 60 / 2^27
+  static constexpr float SPEED_Q27_SCALE = 1.0f / 134217728.0f;     // 1 / 2^27
 
   static constexpr uint8_t STARTUP_COMMS_ATTEMPTS = 20u;
   static constexpr uint32_t STARTUP_COMMS_RETRY_DELAY_MS = 250u;
@@ -440,58 +508,82 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t inter_byte_delay_us_{100};
   bool auto_tickle_watchdog_{false};
   bool clear_mpet_on_startup_{true};
-  bool startup_motor_bemf_const_set_{false};
-  bool startup_brake_mode_set_{false};
-  bool startup_brake_time_set_{false};
-  bool startup_mode_set_{false};
-  bool startup_align_time_set_{false};
-  bool startup_csa_gain_set_{false};
-  bool startup_base_current_set_{false};
-  bool startup_direction_mode_set_{false};
-  bool startup_ilimit_set_{false};
-  bool startup_align_or_slow_current_ilimit_set_{false};
-  bool startup_lock_mode_set_{false};
-  bool startup_lock_ilimit_set_{false};
-  bool startup_hw_lock_ilimit_set_{false};
-  bool startup_lock_retry_time_set_{false};
-  bool startup_abn_speed_lock_enable_set_{false};
-  bool startup_abn_bemf_lock_enable_set_{false};
-  bool startup_no_motor_lock_enable_set_{false};
-  bool startup_lock_abn_speed_threshold_set_{false};
-  bool startup_abnormal_bemf_threshold_set_{false};
-  bool startup_no_motor_threshold_set_{false};
-  bool startup_max_speed_set_{false};
-  bool startup_open_loop_ilimit_set_{false};
-  bool startup_open_loop_limit_source_set_{false};
-  bool startup_open_loop_accel_set_{false};
-  bool startup_auto_handoff_enable_set_{false};
-  bool startup_open_to_closed_handoff_threshold_set_{false};
-  uint8_t startup_motor_bemf_const_{0};
-  uint8_t startup_brake_mode_{0};
-  uint8_t startup_brake_time_{0};
-  uint8_t startup_mode_{0};
-  uint8_t startup_align_time_{0};
-  uint8_t startup_csa_gain_{0};
-  uint16_t startup_base_current_code_{0};
-  uint8_t startup_ilimit_{0};
-  uint8_t startup_align_or_slow_current_ilimit_{0};
-  uint8_t startup_lock_mode_{0};
-  uint8_t startup_lock_ilimit_{0};
-  uint8_t startup_hw_lock_ilimit_{0};
-  uint8_t startup_lock_retry_time_{0};
-  bool startup_abn_speed_lock_enable_{false};
-  bool startup_abn_bemf_lock_enable_{false};
-  bool startup_no_motor_lock_enable_{false};
-  uint8_t startup_lock_abn_speed_threshold_{0};
-  uint8_t startup_abnormal_bemf_threshold_{0};
-  uint8_t startup_no_motor_threshold_{0};
-  uint16_t startup_max_speed_code_{0};
-  uint8_t startup_open_loop_ilimit_{0};
-  bool startup_open_loop_limit_use_ilimit_{false};
-  uint8_t startup_open_loop_accel_{0};
-  bool startup_auto_handoff_enable_{false};
-  uint8_t startup_open_to_closed_handoff_threshold_{0};
-  std::string startup_direction_mode_{"hardware"};
+  bool cfg_motor_bemf_const_set_{false};
+  bool cfg_brake_mode_set_{false};
+  bool cfg_brake_time_set_{false};
+  bool cfg_mode_set_{false};
+  bool cfg_align_time_set_{false};
+  bool cfg_csa_gain_set_{false};
+  bool cfg_base_current_set_{false};
+  bool cfg_direction_mode_set_{false};
+  bool cfg_ilimit_set_{false};
+  bool cfg_align_or_slow_current_ilimit_set_{false};
+  bool cfg_lock_mode_set_{false};
+  bool cfg_lock_ilimit_set_{false};
+  bool cfg_hw_lock_ilimit_set_{false};
+  bool cfg_lock_retry_time_set_{false};
+  bool cfg_abn_speed_lock_enable_set_{false};
+  bool cfg_abn_bemf_lock_enable_set_{false};
+  bool cfg_no_motor_lock_enable_set_{false};
+  bool cfg_lock_abn_speed_threshold_set_{false};
+  bool cfg_abnormal_bemf_threshold_set_{false};
+  bool cfg_no_motor_threshold_set_{false};
+  bool cfg_max_speed_set_{false};
+  bool cfg_open_loop_ilimit_set_{false};
+  bool cfg_open_loop_limit_source_set_{false};
+  bool cfg_open_loop_accel_set_{false};
+  bool cfg_open_loop_accel2_set_{false};
+  bool cfg_auto_handoff_enable_set_{false};
+  bool cfg_open_to_closed_handoff_threshold_set_{false};
+  bool cfg_theta_error_ramp_rate_set_{false};
+  bool cfg_cl_slow_acc_set_{false};
+  bool cfg_lock_ilimit_deglitch_set_{false};
+  bool cfg_hw_lock_ilimit_deglitch_set_{false};
+  bool cfg_speed_loop_kp_code_set_{false};
+  bool cfg_speed_loop_ki_code_set_{false};
+  uint8_t cfg_motor_bemf_const_{0};
+  uint8_t cfg_brake_mode_{0};
+  uint8_t cfg_brake_time_{0};
+  uint8_t cfg_mode_{0};
+  uint8_t cfg_align_time_{0};
+  uint8_t cfg_csa_gain_{0};
+  uint16_t cfg_base_current_code_{0};
+  uint8_t cfg_ilimit_{0};
+  uint8_t cfg_align_or_slow_current_ilimit_{0};
+  uint8_t cfg_lock_mode_{0};
+  uint8_t cfg_lock_ilimit_{0};
+  uint8_t cfg_hw_lock_ilimit_{0};
+  uint8_t cfg_lock_retry_time_{0};
+  bool cfg_abn_speed_lock_enable_{false};
+  bool cfg_abn_bemf_lock_enable_{false};
+  bool cfg_no_motor_lock_enable_{false};
+  uint8_t cfg_lock_abn_speed_threshold_{0};
+  uint8_t cfg_abnormal_bemf_threshold_{0};
+  uint8_t cfg_no_motor_threshold_{0};
+  uint16_t cfg_max_speed_code_{0};
+  uint8_t cfg_open_loop_ilimit_{0};
+  bool cfg_open_loop_limit_use_ilimit_{false};
+  uint8_t cfg_open_loop_accel_{0};
+  uint8_t cfg_open_loop_accel2_{0};
+  bool cfg_auto_handoff_enable_{false};
+  uint8_t cfg_open_to_closed_handoff_threshold_{0};
+  uint8_t cfg_theta_error_ramp_rate_{0};
+  uint8_t cfg_cl_slow_acc_{0};
+  uint8_t cfg_lock_ilimit_deglitch_{0};
+  uint8_t cfg_hw_lock_ilimit_deglitch_{0};
+  uint16_t cfg_speed_loop_kp_code_{0};
+  uint16_t cfg_speed_loop_ki_code_{0};
+  float speed_ramp_up_percent_per_s_{0.0f};
+  float speed_ramp_down_percent_per_s_{0.0f};
+  float start_boost_percent_{0.0f};
+  uint32_t start_boost_hold_ms_{0u};
+  float speed_target_percent_{0.0f};
+  float speed_applied_percent_{0.0f};
+  bool speed_target_active_{false};
+  bool start_boost_active_{false};
+  uint32_t start_boost_until_ms_{0u};
+  uint32_t last_ramp_update_ms_{0u};
+  std::string cfg_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
   bool fault_latched_{false};
@@ -499,7 +591,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t deferred_comms_last_retry_ms_{0};
   uint32_t deferred_comms_last_scan_ms_{0};
   std::string last_fault_summary_{"none"};
-  std::string startup_config_summary_{"default"};
+  std::string motor_config_summary_{"default"};
   bool mpet_bemf_fault_latched_{false};
   bool hw_lock_fault_latched_{false};
   bool severe_fault_speed_lockout_{false};
@@ -518,6 +610,9 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* duty_cmd_percent_sensor_{nullptr};
   sensor::Sensor* volt_mag_percent_sensor_{nullptr};
   sensor::Sensor* motor_bemf_constant_sensor_{nullptr};
+  sensor::Sensor* speed_fdbk_hz_sensor_{nullptr};
+  sensor::Sensor* speed_ref_open_loop_hz_sensor_{nullptr};
+  sensor::Sensor* fg_speed_fdbk_hz_sensor_{nullptr};
   text_sensor::TextSensor* current_fault_text_sensor_{nullptr};
 };
 

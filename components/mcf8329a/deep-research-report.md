@@ -63,22 +63,22 @@ This list focuses on **motor control path**, **commutation/handoff relevance**, 
 * `encode_max_speed_hz(value_hz)`: encodes electrical Hz into device “MAX_SPEED” code.
 * `encode_base_current_amps(value_amps)`: encodes BASE_CURRENT amps into register code via the device’s scaling convention.
 * Configuration keys that matter for handoff and HW_LOCK_LIMIT outcomes:
-  * `startup_max_speed_hz`
-  * `startup_open_loop_ilimit_percent`, `startup_open_loop_accel_hz_per_s`, `startup_open_to_closed_handoff_percent`, `startup_auto_handoff_enable`
-  * `phase_current_limit_percent`, `startup_lock_ilimit_percent`, `startup_hw_lock_ilimit_percent`
-  * `startup_lock_mode`, lock thresholds/enables
+  * `max_speed_hz`
+  * `open_loop_ilimit_percent`, `open_loop_accel_hz_per_s`, `open_to_closed_handoff_percent`, `auto_handoff_enable`
+  * `phase_current_limit_percent`, `lock_ilimit_percent`, `hw_lock_ilimit_percent`
+  * `lock_mode`, lock thresholds/enables
 
 **`components/mcf8329a/mcf8329a.cpp` (control, logging, fault handling)**
 * `MCF8329AComponent::apply_post_comms_setup_()`  
-  Sets initial speed/brake/direction, clears MPET bits (optional), calls `apply_startup_motor_config_()`.
-* `MCF8329AComponent::apply_startup_motor_config_()`  
+  Sets initial speed/brake/direction, clears MPET bits (optional), calls `apply_motor_config_()`.
+* `MCF8329AComponent::apply_motor_config_()`  
   The main “tuning write” routine: reads/modifies/writes multiple configuration registers related to:
   * CSA gain and BASE_CURRENT
   * ILIMIT, HW_LOCK_ILIMIT, LOCK_ILIMIT, lock modes, lock enables and thresholds
   * startup mode & alignment time
   * open-loop limits/accel/handoff threshold
   * BEMF constant and MAX_SPEED  
-  Then reads back and logs an extensive “Startup motor config” summary (very useful for auditability).
+  Then reads back and logs an extensive “Motor config” summary (very useful for auditability).
 * `MCF8329AComponent::set_speed_percent(...)`  
   Converts 0–100% to 0–32767 digital speed ref, clears MPET bits if configured, releases brake automatically, and writes speed reference override. **Notably: no ramping or slew-rate limiting**.
 * `MCF8329AComponent::handle_fault_shutdown_(...)`  
@@ -241,9 +241,9 @@ void request_speed(float new_target_percent) {
 
   // Optional: if starting from 0, enforce a minimum start percent for estimator robustness
   if (applied_speed_percent_ < 0.5f && target_speed_percent_ > 0.5f) {
-    startup_boost_active_ = true;
-    startup_boost_until_ms_ = millis() + min_start_hold_ms_;
-    startup_boost_percent_ = min_start_percent_;   // e.g., 12%
+    start_boost_active_ = true;
+    start_boost_until_ms_ = millis() + min_start_hold_ms_;
+    start_boost_percent_ = min_start_percent_;   // e.g., 12%
   }
 }
 
@@ -251,11 +251,11 @@ void request_speed(float new_target_percent) {
 void ramp_tick(float dt_s) {
   float desired = target_speed_percent_;
 
-  if (startup_boost_active_) {
-    if (millis() < startup_boost_until_ms_) {
-      desired = std::max(desired, startup_boost_percent_);
+  if (start_boost_active_) {
+    if (millis() < start_boost_until_ms_) {
+      desired = std::max(desired, start_boost_percent_);
     } else {
-      startup_boost_active_ = false;
+      start_boost_active_ = false;
     }
   }
 
@@ -309,11 +309,11 @@ if (hw_lock_fault_detected) {
   if (hw_lock_events_ >= 2) {
     // Automatically reduce aggressiveness knobs (if user enabled auto-derate mode)
     // Example: reduce open-loop accel, reduce handoff threshold, slow ramps
-    startup_open_loop_accel_code_ = max(startup_open_loop_accel_code_ - 1, MIN_ACCEL_CODE);
-    startup_open_to_closed_handoff_threshold_ = max(startup_open_to_closed_handoff_threshold_ - 1, MIN_HANDOFF_CODE);
+    open_loop_accel_code_ = max(open_loop_accel_code_ - 1, MIN_ACCEL_CODE);
+    open_to_closed_handoff_threshold_ = max(open_to_closed_handoff_threshold_ - 1, MIN_HANDOFF_CODE);
     ramp_up_pct_per_s_ = min(ramp_up_pct_per_s_, 5.0f);
 
-    apply_startup_motor_config_();  // re-apply
+    apply_motor_config_();  // re-apply
     set_speed_percent(0, "hw_lock_derate");
   }
 }
@@ -336,23 +336,23 @@ Suggested bring-up config (tuning-safe):
 * I²C:
   * start at **≤50 kHz** during tuning (to respect the 100 µs inter-byte requirement). citeturn7search24turn7search0
 * Startup:
-  * `startup_mode: double_align`
-  * `startup_align_time: 100ms`
-  * `startup_brake_mode: recirculation` (avoid aggressive braking/regen during experiments)
+  * `mode: double_align`
+  * `align_time: 100ms`
+  * `brake_mode: recirculation` (avoid aggressive braking/regen during experiments)
 * Scaling:
-  * `startup_csa_gain_v_per_v: 40`
-  * `startup_base_current_amps: 10.0` initially (tuning-safe).  
+  * `csa_gain_v_per_v: 40`
+  * `base_current_amps: 10.0` initially (tuning-safe).  
     After stable closed-loop handoff, move toward the “hardware-faithful” number (≈37.5 A) while keeping % limits low.
 * Current limits:
   * `phase_current_limit_percent: 10` (maps to 1.0 A if BASE_CURRENT=10 A)
-  * `startup_open_loop_limit_source: ol_ilimit`
-  * `startup_open_loop_ilimit_percent: 10`
-  * `startup_lock_ilimit_percent: 15`
-  * `startup_hw_lock_ilimit_percent: 15`
+  * `open_loop_limit_source: ol_ilimit`
+  * `open_loop_ilimit_percent: 10`
+  * `lock_ilimit_percent: 15`
+  * `hw_lock_ilimit_percent: 15`
 * Handoff:
-  * `startup_open_loop_accel_hz_per_s: 5`
-  * `startup_open_to_closed_handoff_percent: 15`
-  * Keep `startup_auto_handoff_enable: false` initially for repeatability; enable later if needed.
+  * `open_loop_accel_hz_per_s: 5`
+  * `open_to_closed_handoff_percent: 15`
+  * Keep `auto_handoff_enable: false` initially for repeatability; enable later if needed.
 
 If you still trip current limits before reaching closed-loop, do **not** jump straight to higher currents. Instead, first apply the handoff-smoothing parameter exposure described above (THETA_ERROR_RAMP_RATE etc.) because TI explicitly frames those as the key to smoothing transition current. citeturn6search45turn6search44
 
@@ -462,3 +462,55 @@ Secondary (useful but less “primary” than PDFs):
 Notes on missing/unspecified items:
 
 * The repo snapshot did not include full PCB design files (schematic/PCB layout). The netlist enables meaningful constraints analysis (RSENSE, external MOSFET topology, pin breakout), but **layout-dependent risks** (current-loop inductance, sense routing, gate loop ringing, Kelvin sense integrity, thermal pad/plane design) cannot be fully assessed without the layout files or fabrication outputs.
+
+## 2026-03-21 implementation update
+
+The component implementation now uses non-prefixed motor keys (breaking rename):
+- `motor_bemf_const`, `brake_mode`, `brake_time`, `mode`, `align_time`, `direction_mode`
+- `csa_gain_v_per_v`, `base_current_amps`, `align_or_slow_current_limit_percent`
+- `lock_mode`, `lock_ilimit_percent`, `hw_lock_ilimit_percent`, `lock_retry_time`
+- `abn_speed_lock_enable`, `abn_bemf_lock_enable`, `no_motor_lock_enable`
+- `lock_abn_speed_threshold_percent`, `abnormal_bemf_threshold_percent`, `no_motor_threshold_percent`
+- `max_speed_hz`, `open_loop_ilimit_percent`, `open_loop_limit_source`, `open_loop_accel_hz_per_s`,
+  `auto_handoff_enable`, `open_to_closed_handoff_percent`
+
+Additional exposed controls now available:
+- `open_loop_accel2_hz_per_s2`
+- `theta_error_ramp_rate`
+- `cl_slow_acc_hz_per_s`
+- `lock_ilimit_deglitch_ms`
+- `hw_lock_ilimit_deglitch_us`
+- `speed_loop_kp_code`, `speed_loop_ki_code` (`0` keeps auto behavior)
+- `speed_ramp_up_percent_per_s`, `speed_ramp_down_percent_per_s`
+- `start_boost_percent`, `start_boost_hold_ms`
+
+Additional telemetry now available:
+- `speed_fdbk_hz`
+- `speed_ref_open_loop_hz`
+- `fg_speed_fdbk_hz`
+
+### 5065 270KV 12-pole (6 pole-pair) baseline
+- `motor_bemf_const: 0x5F`
+- `max_speed_hz: 900`
+- `mode: double_align`
+- `brake_mode: recirculation`
+- `align_time: 100ms`
+- `csa_gain_v_per_v: 40`
+- `base_current_amps: 10.0`
+- `open_loop_ilimit_percent: 20`
+- `open_loop_accel_hz_per_s: 75`
+- `open_to_closed_handoff_percent: 20`
+- `lock_mode: retry`
+
+Recommended tuning order:
+1. `open_loop_ilimit_percent` + `open_loop_accel_hz_per_s`
+2. `open_to_closed_handoff_percent`
+3. `theta_error_ramp_rate` + `cl_slow_acc_hz_per_s`
+4. `lock_ilimit_deglitch_ms` + `hw_lock_ilimit_deglitch_us`
+5. `speed_loop_kp_code` + `speed_loop_ki_code`
+
+Safety procedure:
+1. No-load bench setup with supply current limit.
+2. `clear_faults` before each attempt.
+3. Increment speed commands `12% -> 16% -> 20%`.
+4. Track handoff with `speed_ref_open_loop_hz`, `speed_fdbk_hz`, and `fg_speed_fdbk_hz`.

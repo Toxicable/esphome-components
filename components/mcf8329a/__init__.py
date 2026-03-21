@@ -25,32 +25,43 @@ CONF_INTER_BYTE_DELAY_US = "inter_byte_delay_us"
 CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
 CONF_CLEAR_MPET_ON_STARTUP = "clear_mpet_on_startup"
 CONF_ALLOW_UNSAFE_CURRENT_LIMITS = "allow_unsafe_current_limits"
-CONF_STARTUP_MOTOR_BEMF_CONST = "startup_motor_bemf_const"
-CONF_STARTUP_BRAKE_MODE = "startup_brake_mode"
-CONF_STARTUP_BRAKE_TIME = "startup_brake_time"
-CONF_STARTUP_MODE = "startup_mode"
-CONF_STARTUP_ALIGN_TIME = "startup_align_time"
-CONF_STARTUP_DIRECTION_MODE = "startup_direction_mode"
-CONF_STARTUP_CSA_GAIN_V_PER_V = "startup_csa_gain_v_per_v"
-CONF_STARTUP_BASE_CURRENT_AMPS = "startup_base_current_amps"
+CONF_MOTOR_BEMF_CONST = "motor_bemf_const"
+CONF_BRAKE_MODE_CFG = "brake_mode"
+CONF_BRAKE_TIME_CFG = "brake_time"
+CONF_MODE_CFG = "mode"
+CONF_ALIGN_TIME = "align_time"
+CONF_DIRECTION_MODE_CFG = "direction_mode"
+CONF_CSA_GAIN_V_PER_V = "csa_gain_v_per_v"
+CONF_BASE_CURRENT_AMPS = "base_current_amps"
 CONF_PHASE_CURRENT_LIMIT_PERCENT = "phase_current_limit_percent"
-CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT = "startup_align_or_slow_current_limit_percent"
-CONF_STARTUP_LOCK_MODE = "startup_lock_mode"
-CONF_STARTUP_LOCK_ILIMIT_PERCENT = "startup_lock_ilimit_percent"
-CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT = "startup_hw_lock_ilimit_percent"
-CONF_STARTUP_LOCK_RETRY_TIME = "startup_lock_retry_time"
-CONF_STARTUP_ABN_SPEED_LOCK_ENABLE = "startup_abn_speed_lock_enable"
-CONF_STARTUP_ABN_BEMF_LOCK_ENABLE = "startup_abn_bemf_lock_enable"
-CONF_STARTUP_NO_MOTOR_LOCK_ENABLE = "startup_no_motor_lock_enable"
-CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT = "startup_lock_abn_speed_threshold_percent"
-CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT = "startup_abnormal_bemf_threshold_percent"
-CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT = "startup_no_motor_threshold_percent"
-CONF_STARTUP_MAX_SPEED_HZ = "startup_max_speed_hz"
-CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT = "startup_open_loop_ilimit_percent"
-CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE = "startup_open_loop_limit_source"
-CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S = "startup_open_loop_accel_hz_per_s"
-CONF_STARTUP_AUTO_HANDOFF_ENABLE = "startup_auto_handoff_enable"
-CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT = "startup_open_to_closed_handoff_percent"
+CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT = "align_or_slow_current_limit_percent"
+CONF_LOCK_MODE_CFG = "lock_mode"
+CONF_LOCK_ILIMIT_PERCENT = "lock_ilimit_percent"
+CONF_HW_LOCK_ILIMIT_PERCENT = "hw_lock_ilimit_percent"
+CONF_LOCK_RETRY_TIME = "lock_retry_time"
+CONF_ABN_SPEED_LOCK_ENABLE = "abn_speed_lock_enable"
+CONF_ABN_BEMF_LOCK_ENABLE = "abn_bemf_lock_enable"
+CONF_NO_MOTOR_LOCK_ENABLE = "no_motor_lock_enable"
+CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT = "lock_abn_speed_threshold_percent"
+CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT = "abnormal_bemf_threshold_percent"
+CONF_NO_MOTOR_THRESHOLD_PERCENT = "no_motor_threshold_percent"
+CONF_MAX_SPEED_HZ = "max_speed_hz"
+CONF_OPEN_LOOP_ILIMIT_PERCENT = "open_loop_ilimit_percent"
+CONF_OPEN_LOOP_LIMIT_SOURCE = "open_loop_limit_source"
+CONF_OPEN_LOOP_ACCEL_HZ_PER_S = "open_loop_accel_hz_per_s"
+CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2 = "open_loop_accel2_hz_per_s2"
+CONF_AUTO_HANDOFF_ENABLE = "auto_handoff_enable"
+CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT = "open_to_closed_handoff_percent"
+CONF_THETA_ERROR_RAMP_RATE = "theta_error_ramp_rate"
+CONF_CL_SLOW_ACC_HZ_PER_S = "cl_slow_acc_hz_per_s"
+CONF_LOCK_ILIMIT_DEGLITCH_MS = "lock_ilimit_deglitch_ms"
+CONF_HW_LOCK_ILIMIT_DEGLITCH_US = "hw_lock_ilimit_deglitch_us"
+CONF_SPEED_LOOP_KP_CODE = "speed_loop_kp_code"
+CONF_SPEED_LOOP_KI_CODE = "speed_loop_ki_code"
+CONF_SPEED_RAMP_UP_PERCENT_PER_S = "speed_ramp_up_percent_per_s"
+CONF_SPEED_RAMP_DOWN_PERCENT_PER_S = "speed_ramp_down_percent_per_s"
+CONF_START_BOOST_PERCENT = "start_boost_percent"
+CONF_START_BOOST_HOLD_MS = "start_boost_hold_ms"
 
 CONF_BRAKE = "brake"
 CONF_DIRECTION = "direction"
@@ -64,15 +75,18 @@ CONF_VM_VOLTAGE = "vm_voltage"
 CONF_DUTY_CMD_PERCENT = "duty_cmd_percent"
 CONF_VOLT_MAG_PERCENT = "volt_mag_percent"
 CONF_MOTOR_BEMF_CONSTANT = "motor_bemf_constant"
+CONF_SPEED_FDBK_HZ = "speed_fdbk_hz"
+CONF_SPEED_REF_OPEN_LOOP_HZ = "speed_ref_open_loop_hz"
+CONF_FG_SPEED_FDBK_HZ = "fg_speed_fdbk_hz"
 
-STARTUP_BRAKE_MODE_OPTIONS = {
+BRAKE_MODE_OPTIONS = {
     "hiz": 0,
     "recirculation": 1,
     "low_side_brake": 2,
     "active_spin_down": 4,
 }
 
-STARTUP_BRAKE_TIME_OPTIONS = {
+BRAKE_TIME_OPTIONS = {
     "1ms": 0,
     "5ms": 5,
     "10ms": 6,
@@ -87,14 +101,14 @@ STARTUP_BRAKE_TIME_OPTIONS = {
     "15000ms": 15,
 }
 
-STARTUP_MODE_OPTIONS = {
+MODE_OPTIONS = {
     "align": 0,
     "double_align": 1,
     "ipd": 2,
     "slow_first_cycle": 3,
 }
 
-STARTUP_ALIGN_TIME_OPTIONS = {
+ALIGN_TIME_OPTIONS = {
     "10ms": 0,
     "50ms": 1,
     "100ms": 2,
@@ -113,33 +127,33 @@ STARTUP_ALIGN_TIME_OPTIONS = {
     "10000ms": 15,
 }
 
-STARTUP_DIRECTION_MODE_OPTIONS = {
+DIRECTION_MODE_OPTIONS = {
     "hardware": "hardware",
     "cw": "cw",
     "ccw": "ccw",
 }
 
-STARTUP_CSA_GAIN_V_PER_V_TO_CODE = {
+CSA_GAIN_V_PER_V_TO_CODE = {
     5: 0,
     10: 1,
     20: 2,
     40: 3,
 }
 
-STARTUP_OPEN_LOOP_LIMIT_SOURCE_OPTIONS = {
+OPEN_LOOP_LIMIT_SOURCE_OPTIONS = {
     "ol_ilimit": 0,
     "ilimit": 1,
 }
 
 DIRECTION_OPTIONS = ["hardware", "cw", "ccw"]
 
-STARTUP_LOCK_MODE_OPTIONS = {
+LOCK_MODE_OPTIONS = {
     "latched": 0,
     "retry": 4,
     "disabled": 9,
 }
 
-STARTUP_LOCK_RETRY_TIME_OPTIONS = {
+LOCK_RETRY_TIME_OPTIONS = {
     "300ms": 0,
     "500ms": 1,
     "1s": 2,
@@ -229,6 +243,25 @@ OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE = {
     10000.0: 15,
 }
 
+OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE = {
+    0.0: 0,
+    0.05: 1,
+    1.0: 2,
+    2.5: 3,
+    5.0: 4,
+    10.0: 5,
+    25.0: 6,
+    50.0: 7,
+    75.0: 8,
+    100.0: 9,
+    250.0: 10,
+    500.0: 11,
+    750.0: 12,
+    1000.0: 13,
+    5000.0: 14,
+    10000.0: 15,
+}
+
 OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE = {
     1.0: 0,
     2.0: 1,
@@ -262,6 +295,94 @@ OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE = {
     45.0: 29,
     47.5: 30,
     50.0: 31,
+}
+
+THETA_ERROR_RAMP_RATE_TO_CODE = {
+    0.01: 0,
+    0.05: 1,
+    0.1: 2,
+    0.15: 3,
+    0.2: 4,
+    0.5: 5,
+    1.0: 6,
+    2.0: 7,
+}
+
+CL_SLOW_ACC_HZ_PER_S_TO_CODE = {
+    0.1: 0,
+    1.0: 1,
+    2.0: 2,
+    3.0: 3,
+    5.0: 4,
+    10.0: 5,
+    20.0: 6,
+    30.0: 7,
+    40.0: 8,
+    50.0: 9,
+    100.0: 10,
+    200.0: 11,
+    500.0: 12,
+    750.0: 13,
+    1000.0: 14,
+    2000.0: 15,
+}
+
+LOCK_ILIMIT_DEGLITCH_MS_TO_CODE = {
+    0.0: 0,
+    0.1: 1,
+    0.2: 2,
+    0.5: 3,
+    1.0: 4,
+    2.5: 5,
+    5.0: 6,
+    7.5: 7,
+    10.0: 8,
+    25.0: 9,
+    50.0: 10,
+    75.0: 11,
+    100.0: 12,
+    200.0: 13,
+    500.0: 14,
+    1000.0: 15,
+}
+
+HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE = {
+    0: 0,
+    1: 1,
+    2: 2,
+    3: 3,
+    4: 4,
+    5: 5,
+    6: 6,
+    7: 7,
+}
+
+LEGACY_STARTUP_KEY_MAP = {
+    "startup_motor_bemf_const": CONF_MOTOR_BEMF_CONST,
+    "startup_brake_mode": CONF_BRAKE_MODE_CFG,
+    "startup_brake_time": CONF_BRAKE_TIME_CFG,
+    "startup_mode": CONF_MODE_CFG,
+    "startup_align_time": CONF_ALIGN_TIME,
+    "startup_direction_mode": CONF_DIRECTION_MODE_CFG,
+    "startup_csa_gain_v_per_v": CONF_CSA_GAIN_V_PER_V,
+    "startup_base_current_amps": CONF_BASE_CURRENT_AMPS,
+    "startup_align_or_slow_current_limit_percent": CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT,
+    "startup_lock_mode": CONF_LOCK_MODE_CFG,
+    "startup_lock_ilimit_percent": CONF_LOCK_ILIMIT_PERCENT,
+    "startup_hw_lock_ilimit_percent": CONF_HW_LOCK_ILIMIT_PERCENT,
+    "startup_lock_retry_time": CONF_LOCK_RETRY_TIME,
+    "startup_abn_speed_lock_enable": CONF_ABN_SPEED_LOCK_ENABLE,
+    "startup_abn_bemf_lock_enable": CONF_ABN_BEMF_LOCK_ENABLE,
+    "startup_no_motor_lock_enable": CONF_NO_MOTOR_LOCK_ENABLE,
+    "startup_lock_abn_speed_threshold_percent": CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT,
+    "startup_abnormal_bemf_threshold_percent": CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT,
+    "startup_no_motor_threshold_percent": CONF_NO_MOTOR_THRESHOLD_PERCENT,
+    "startup_max_speed_hz": CONF_MAX_SPEED_HZ,
+    "startup_open_loop_ilimit_percent": CONF_OPEN_LOOP_ILIMIT_PERCENT,
+    "startup_open_loop_limit_source": CONF_OPEN_LOOP_LIMIT_SOURCE,
+    "startup_open_loop_accel_hz_per_s": CONF_OPEN_LOOP_ACCEL_HZ_PER_S,
+    "startup_auto_handoff_enable": CONF_AUTO_HANDOFF_ENABLE,
+    "startup_open_to_closed_handoff_percent": CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT,
 }
 
 
@@ -307,27 +428,27 @@ def validate_no_motor_threshold_percent(value):
     )
 
 
-def validate_startup_max_speed_hz(value):
+def validate_max_speed_hz(value):
     value = cv.int_(value)
     if value < 1 or value > 3295:
-        raise cv.Invalid("startup max speed must be in range 1..3295 Hz")
+        raise cv.Invalid("max speed must be in range 1..3295 Hz")
     return value
 
 
-def validate_startup_csa_gain_v_per_v(value):
+def validate_csa_gain_v_per_v(value):
     value = cv.int_(value)
-    if value not in STARTUP_CSA_GAIN_V_PER_V_TO_CODE:
+    if value not in CSA_GAIN_V_PER_V_TO_CODE:
         raise cv.Invalid(
-            "startup CSA gain must be one of: "
-            + ", ".join(str(v) for v in STARTUP_CSA_GAIN_V_PER_V_TO_CODE)
+            "CSA gain must be one of: "
+            + ", ".join(str(v) for v in CSA_GAIN_V_PER_V_TO_CODE)
         )
     return value
 
 
-def validate_startup_base_current_amps(value):
+def validate_base_current_amps(value):
     value = cv.float_(value)
     if value <= 0.0 or value > 1200.0:
-        raise cv.Invalid("startup base current must be in range (0, 1200] amps")
+        raise cv.Invalid("base current must be in range (0, 1200] amps")
     return value
 
 
@@ -342,6 +463,17 @@ def validate_open_loop_accel_hz_per_s(value):
     )
 
 
+def validate_open_loop_accel2_hz_per_s2(value):
+    value = cv.float_(value)
+    for allowed in OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "open-loop accel2 must be one of: "
+        + ", ".join(str(v) for v in OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE)
+    )
+
+
 def validate_open_to_closed_handoff_percent(value):
     value = cv.float_(value)
     for allowed in OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE:
@@ -353,6 +485,56 @@ def validate_open_to_closed_handoff_percent(value):
     )
 
 
+def validate_theta_error_ramp_rate(value):
+    value = cv.float_(value)
+    for allowed in THETA_ERROR_RAMP_RATE_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "theta_error_ramp_rate must be one of: "
+        + ", ".join(str(v) for v in THETA_ERROR_RAMP_RATE_TO_CODE)
+    )
+
+
+def validate_cl_slow_acc_hz_per_s(value):
+    value = cv.float_(value)
+    for allowed in CL_SLOW_ACC_HZ_PER_S_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "cl_slow_acc_hz_per_s must be one of: "
+        + ", ".join(str(v) for v in CL_SLOW_ACC_HZ_PER_S_TO_CODE)
+    )
+
+
+def validate_lock_ilimit_deglitch_ms(value):
+    value = cv.float_(value)
+    for allowed in LOCK_ILIMIT_DEGLITCH_MS_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "lock_ilimit_deglitch_ms must be one of: "
+        + ", ".join(str(v) for v in LOCK_ILIMIT_DEGLITCH_MS_TO_CODE)
+    )
+
+
+def validate_hw_lock_ilimit_deglitch_us(value):
+    value = cv.int_(value)
+    if value not in HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE:
+        raise cv.Invalid(
+            "hw_lock_ilimit_deglitch_us must be one of: "
+            + ", ".join(str(v) for v in HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE)
+        )
+    return value
+
+
+def validate_no_legacy_startup_keys(config):
+    for old_key, new_key in LEGACY_STARTUP_KEY_MAP.items():
+        if old_key in config:
+            raise cv.Invalid(f"`{old_key}` has been removed. Use `{new_key}` instead.")
+    return config
+
+
 def validate_safety_guardrails(config):
     if config.get(CONF_ALLOW_UNSAFE_CURRENT_LIMITS, False):
         return config
@@ -360,10 +542,10 @@ def validate_safety_guardrails(config):
     max_safe_percent = 50
     guarded_keys = (
         CONF_PHASE_CURRENT_LIMIT_PERCENT,
-        CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT,
-        CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT,
-        CONF_STARTUP_LOCK_ILIMIT_PERCENT,
-        CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT,
+        CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT,
+        CONF_OPEN_LOOP_ILIMIT_PERCENT,
+        CONF_LOCK_ILIMIT_PERCENT,
+        CONF_HW_LOCK_ILIMIT_PERCENT,
     )
     for key in guarded_keys:
         if key in config and config[key] > max_safe_percent:
@@ -372,9 +554,9 @@ def validate_safety_guardrails(config):
                 "Set allow_unsafe_current_limits: true to override intentionally."
             )
 
-    if config.get(CONF_STARTUP_LOCK_MODE) == "disabled":
+    if config.get(CONF_LOCK_MODE_CFG) == LOCK_MODE_OPTIONS["disabled"]:
         raise cv.Invalid(
-            "startup_lock_mode=disabled is blocked by safety guardrail. "
+            "lock_mode=disabled is blocked by safety guardrail. "
             "Set allow_unsafe_current_limits: true to override intentionally."
         )
 
@@ -407,41 +589,53 @@ def encode_base_current_amps(value_amps):
 
 
 CONFIG_SCHEMA = cv.All(
+    validate_no_legacy_startup_keys,
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(MCF8329AComponent),
             cv.Optional(CONF_INTER_BYTE_DELAY_US, default=100): cv.positive_int,
             cv.Optional(CONF_AUTO_TICKLE_WATCHDOG, default=False): cv.boolean,
             cv.Optional(CONF_CLEAR_MPET_ON_STARTUP, default=True): cv.boolean,
+            cv.Optional(CONF_SPEED_RAMP_UP_PERCENT_PER_S, default=0.0): cv.float_range(min=0.0),
+            cv.Optional(CONF_SPEED_RAMP_DOWN_PERCENT_PER_S, default=0.0): cv.float_range(min=0.0),
+            cv.Optional(CONF_START_BOOST_PERCENT, default=0.0): cv.float_range(min=0.0, max=100.0),
+            cv.Optional(CONF_START_BOOST_HOLD_MS, default=0): cv.int_range(min=0),
             cv.Optional(CONF_ALLOW_UNSAFE_CURRENT_LIMITS, default=False): cv.boolean,
-            cv.Required(CONF_STARTUP_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
-            cv.Required(CONF_STARTUP_BRAKE_MODE): cv.enum(STARTUP_BRAKE_MODE_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_BRAKE_TIME): cv.enum(STARTUP_BRAKE_TIME_OPTIONS, lower=True),
-            cv.Required(CONF_STARTUP_MODE): cv.enum(STARTUP_MODE_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_ALIGN_TIME): cv.enum(STARTUP_ALIGN_TIME_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_DIRECTION_MODE): cv.enum(STARTUP_DIRECTION_MODE_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_CSA_GAIN_V_PER_V): validate_startup_csa_gain_v_per_v,
-            cv.Optional(CONF_STARTUP_BASE_CURRENT_AMPS): validate_startup_base_current_amps,
+            cv.Required(CONF_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
+            cv.Required(CONF_BRAKE_MODE_CFG): cv.enum(BRAKE_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_BRAKE_TIME_CFG): cv.enum(BRAKE_TIME_OPTIONS, lower=True),
+            cv.Required(CONF_MODE_CFG): cv.enum(MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_ALIGN_TIME): cv.enum(ALIGN_TIME_OPTIONS, lower=True),
+            cv.Optional(CONF_DIRECTION_MODE_CFG): cv.enum(DIRECTION_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_CSA_GAIN_V_PER_V): validate_csa_gain_v_per_v,
+            cv.Optional(CONF_BASE_CURRENT_AMPS): validate_base_current_amps,
             cv.Optional(CONF_PHASE_CURRENT_LIMIT_PERCENT): validate_lock_ilimit_percent,
-            cv.Optional(CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT): validate_lock_ilimit_percent,
-            cv.Optional(CONF_STARTUP_LOCK_MODE): cv.enum(STARTUP_LOCK_MODE_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
-            cv.Optional(CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
-            cv.Optional(CONF_STARTUP_LOCK_RETRY_TIME): cv.enum(STARTUP_LOCK_RETRY_TIME_OPTIONS, lower=True),
-            cv.Optional(CONF_STARTUP_ABN_SPEED_LOCK_ENABLE): cv.boolean,
-            cv.Optional(CONF_STARTUP_ABN_BEMF_LOCK_ENABLE): cv.boolean,
-            cv.Optional(CONF_STARTUP_NO_MOTOR_LOCK_ENABLE): cv.boolean,
-            cv.Optional(CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT): validate_lock_abn_speed_threshold_percent,
-            cv.Optional(CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
-            cv.Optional(CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
-            cv.Required(CONF_STARTUP_MAX_SPEED_HZ): validate_startup_max_speed_hz,
-            cv.Optional(CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
-            cv.Optional(CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE): cv.enum(
-                STARTUP_OPEN_LOOP_LIMIT_SOURCE_OPTIONS, lower=True
+            cv.Optional(CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_LOCK_MODE_CFG): cv.enum(LOCK_MODE_OPTIONS, lower=True),
+            cv.Optional(CONF_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_HW_LOCK_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_LOCK_RETRY_TIME): cv.enum(LOCK_RETRY_TIME_OPTIONS, lower=True),
+            cv.Optional(CONF_ABN_SPEED_LOCK_ENABLE): cv.boolean,
+            cv.Optional(CONF_ABN_BEMF_LOCK_ENABLE): cv.boolean,
+            cv.Optional(CONF_NO_MOTOR_LOCK_ENABLE): cv.boolean,
+            cv.Optional(CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT): validate_lock_abn_speed_threshold_percent,
+            cv.Optional(CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
+            cv.Optional(CONF_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
+            cv.Required(CONF_MAX_SPEED_HZ): validate_max_speed_hz,
+            cv.Optional(CONF_OPEN_LOOP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
+            cv.Optional(CONF_OPEN_LOOP_LIMIT_SOURCE): cv.enum(
+                OPEN_LOOP_LIMIT_SOURCE_OPTIONS, lower=True
             ),
-            cv.Optional(CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S): validate_open_loop_accel_hz_per_s,
-            cv.Optional(CONF_STARTUP_AUTO_HANDOFF_ENABLE): cv.boolean,
-            cv.Optional(CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT): validate_open_to_closed_handoff_percent,
+            cv.Optional(CONF_OPEN_LOOP_ACCEL_HZ_PER_S): validate_open_loop_accel_hz_per_s,
+            cv.Optional(CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2): validate_open_loop_accel2_hz_per_s2,
+            cv.Optional(CONF_AUTO_HANDOFF_ENABLE): cv.boolean,
+            cv.Optional(CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT): validate_open_to_closed_handoff_percent,
+            cv.Optional(CONF_THETA_ERROR_RAMP_RATE): validate_theta_error_ramp_rate,
+            cv.Optional(CONF_CL_SLOW_ACC_HZ_PER_S): validate_cl_slow_acc_hz_per_s,
+            cv.Optional(CONF_LOCK_ILIMIT_DEGLITCH_MS): validate_lock_ilimit_deglitch_ms,
+            cv.Optional(CONF_HW_LOCK_ILIMIT_DEGLITCH_US): validate_hw_lock_ilimit_deglitch_us,
+            cv.Optional(CONF_SPEED_LOOP_KP_CODE): cv.int_range(min=0, max=1023),
+            cv.Optional(CONF_SPEED_LOOP_KI_CODE): cv.int_range(min=0, max=1023),
             cv.Optional(CONF_BRAKE): switch_.switch_schema(
                 MCF8329ABrakeSwitch,
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -486,6 +680,21 @@ CONFIG_SCHEMA = cv.All(
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
+            cv.Optional(CONF_SPEED_FDBK_HZ): sensor.sensor_schema(
+                unit_of_measurement="Hz",
+                accuracy_decimals=1,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_SPEED_REF_OPEN_LOOP_HZ): sensor.sensor_schema(
+                unit_of_measurement="Hz",
+                accuracy_decimals=1,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_FG_SPEED_FDBK_HZ): sensor.sensor_schema(
+                unit_of_measurement="Hz",
+                accuracy_decimals=1,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
         }
     )
     .extend(cv.polling_component_schema("250ms"))
@@ -502,75 +711,101 @@ async def to_code(config):
     cg.add(var.set_inter_byte_delay_us(config[CONF_INTER_BYTE_DELAY_US]))
     cg.add(var.set_auto_tickle_watchdog(config[CONF_AUTO_TICKLE_WATCHDOG]))
     cg.add(var.set_clear_mpet_on_startup(config[CONF_CLEAR_MPET_ON_STARTUP]))
+    cg.add(var.set_speed_ramp_up_percent_per_s(config[CONF_SPEED_RAMP_UP_PERCENT_PER_S]))
+    cg.add(var.set_speed_ramp_down_percent_per_s(config[CONF_SPEED_RAMP_DOWN_PERCENT_PER_S]))
+    cg.add(var.set_start_boost_percent(config[CONF_START_BOOST_PERCENT]))
+    cg.add(var.set_start_boost_hold_ms(config[CONF_START_BOOST_HOLD_MS]))
 
-    cg.add(var.set_startup_motor_bemf_const(config[CONF_STARTUP_MOTOR_BEMF_CONST]))
-    cg.add(var.set_startup_brake_mode(config[CONF_STARTUP_BRAKE_MODE]))
-    if CONF_STARTUP_BRAKE_TIME in config:
-        cg.add(var.set_startup_brake_time(config[CONF_STARTUP_BRAKE_TIME]))
-    cg.add(var.set_startup_mode(config[CONF_STARTUP_MODE]))
-    if CONF_STARTUP_ALIGN_TIME in config:
-        cg.add(var.set_startup_align_time(config[CONF_STARTUP_ALIGN_TIME]))
-    if CONF_STARTUP_DIRECTION_MODE in config:
-        cg.add(var.set_startup_direction_mode(config[CONF_STARTUP_DIRECTION_MODE]))
-    if CONF_STARTUP_CSA_GAIN_V_PER_V in config:
-        cg.add(var.set_startup_csa_gain(STARTUP_CSA_GAIN_V_PER_V_TO_CODE[config[CONF_STARTUP_CSA_GAIN_V_PER_V]]))
-    if CONF_STARTUP_BASE_CURRENT_AMPS in config:
-        cg.add(var.set_startup_base_current_code(encode_base_current_amps(config[CONF_STARTUP_BASE_CURRENT_AMPS])))
+    cg.add(var.set_cfg_motor_bemf_const(config[CONF_MOTOR_BEMF_CONST]))
+    cg.add(var.set_cfg_brake_mode(config[CONF_BRAKE_MODE_CFG]))
+    if CONF_BRAKE_TIME_CFG in config:
+        cg.add(var.set_cfg_brake_time(config[CONF_BRAKE_TIME_CFG]))
+    cg.add(var.set_cfg_mode(config[CONF_MODE_CFG]))
+    if CONF_ALIGN_TIME in config:
+        cg.add(var.set_cfg_align_time(config[CONF_ALIGN_TIME]))
+    if CONF_DIRECTION_MODE_CFG in config:
+        cg.add(var.set_cfg_direction_mode(config[CONF_DIRECTION_MODE_CFG]))
+    if CONF_CSA_GAIN_V_PER_V in config:
+        cg.add(var.set_cfg_csa_gain(CSA_GAIN_V_PER_V_TO_CODE[config[CONF_CSA_GAIN_V_PER_V]]))
+    if CONF_BASE_CURRENT_AMPS in config:
+        cg.add(var.set_cfg_base_current_code(encode_base_current_amps(config[CONF_BASE_CURRENT_AMPS])))
     if CONF_PHASE_CURRENT_LIMIT_PERCENT in config:
-        cg.add(var.set_startup_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_PHASE_CURRENT_LIMIT_PERCENT]]))
-    if CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT in config:
+        cg.add(var.set_cfg_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_PHASE_CURRENT_LIMIT_PERCENT]]))
+    if CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT in config:
         cg.add(
-            var.set_startup_align_or_slow_current_ilimit(
-                LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT]]
+            var.set_cfg_align_or_slow_current_ilimit(
+                LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT]]
             )
         )
-    if CONF_STARTUP_LOCK_MODE in config:
-        cg.add(var.set_startup_lock_mode(config[CONF_STARTUP_LOCK_MODE]))
-    if CONF_STARTUP_LOCK_ILIMIT_PERCENT in config:
-        cg.add(var.set_startup_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_LOCK_ILIMIT_PERCENT]]))
-    if CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT in config:
-        cg.add(var.set_startup_hw_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_HW_LOCK_ILIMIT_PERCENT]]))
-    if CONF_STARTUP_LOCK_RETRY_TIME in config:
-        cg.add(var.set_startup_lock_retry_time(config[CONF_STARTUP_LOCK_RETRY_TIME]))
-    if CONF_STARTUP_ABN_SPEED_LOCK_ENABLE in config:
-        cg.add(var.set_startup_abn_speed_lock_enable(config[CONF_STARTUP_ABN_SPEED_LOCK_ENABLE]))
-    if CONF_STARTUP_ABN_BEMF_LOCK_ENABLE in config:
-        cg.add(var.set_startup_abn_bemf_lock_enable(config[CONF_STARTUP_ABN_BEMF_LOCK_ENABLE]))
-    if CONF_STARTUP_NO_MOTOR_LOCK_ENABLE in config:
-        cg.add(var.set_startup_no_motor_lock_enable(config[CONF_STARTUP_NO_MOTOR_LOCK_ENABLE]))
-    if CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT in config:
+    if CONF_LOCK_MODE_CFG in config:
+        cg.add(var.set_cfg_lock_mode(config[CONF_LOCK_MODE_CFG]))
+    if CONF_LOCK_ILIMIT_PERCENT in config:
+        cg.add(var.set_cfg_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_LOCK_ILIMIT_PERCENT]]))
+    if CONF_HW_LOCK_ILIMIT_PERCENT in config:
+        cg.add(var.set_cfg_hw_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_HW_LOCK_ILIMIT_PERCENT]]))
+    if CONF_LOCK_RETRY_TIME in config:
+        cg.add(var.set_cfg_lock_retry_time(config[CONF_LOCK_RETRY_TIME]))
+    if CONF_ABN_SPEED_LOCK_ENABLE in config:
+        cg.add(var.set_cfg_abn_speed_lock_enable(config[CONF_ABN_SPEED_LOCK_ENABLE]))
+    if CONF_ABN_BEMF_LOCK_ENABLE in config:
+        cg.add(var.set_cfg_abn_bemf_lock_enable(config[CONF_ABN_BEMF_LOCK_ENABLE]))
+    if CONF_NO_MOTOR_LOCK_ENABLE in config:
+        cg.add(var.set_cfg_no_motor_lock_enable(config[CONF_NO_MOTOR_LOCK_ENABLE]))
+    if CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT in config:
         cg.add(
-            var.set_startup_lock_abn_speed_threshold(
-                LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_LOCK_ABN_SPEED_THRESHOLD_PERCENT]]
+            var.set_cfg_lock_abn_speed_threshold(
+                LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE[config[CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT]]
             )
         )
-    if CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT in config:
+    if CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT in config:
         cg.add(
-            var.set_startup_abnormal_bemf_threshold(
-                ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_ABNORMAL_BEMF_THRESHOLD_PERCENT]]
+            var.set_cfg_abnormal_bemf_threshold(
+                ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE[config[CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT]]
             )
         )
-    if CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT in config:
+    if CONF_NO_MOTOR_THRESHOLD_PERCENT in config:
         cg.add(
-            var.set_startup_no_motor_threshold(
-                NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[config[CONF_STARTUP_NO_MOTOR_THRESHOLD_PERCENT]]
+            var.set_cfg_no_motor_threshold(
+                NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[config[CONF_NO_MOTOR_THRESHOLD_PERCENT]]
             )
         )
-    cg.add(var.set_startup_max_speed_code(encode_max_speed_hz(config[CONF_STARTUP_MAX_SPEED_HZ])))
-    if CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT in config:
-        cg.add(var.set_startup_open_loop_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ILIMIT_PERCENT]]))
-    if CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE in config:
-        cg.add(var.set_startup_open_loop_limit_source(config[CONF_STARTUP_OPEN_LOOP_LIMIT_SOURCE] == 1))
-    if CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S in config:
-        cg.add(var.set_startup_open_loop_accel(OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE[config[CONF_STARTUP_OPEN_LOOP_ACCEL_HZ_PER_S]]))
-    if CONF_STARTUP_AUTO_HANDOFF_ENABLE in config:
-        cg.add(var.set_startup_auto_handoff_enable(config[CONF_STARTUP_AUTO_HANDOFF_ENABLE]))
-    if CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT in config:
+    cg.add(var.set_cfg_max_speed_code(encode_max_speed_hz(config[CONF_MAX_SPEED_HZ])))
+    if CONF_OPEN_LOOP_ILIMIT_PERCENT in config:
+        cg.add(var.set_cfg_open_loop_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_OPEN_LOOP_ILIMIT_PERCENT]]))
+    if CONF_OPEN_LOOP_LIMIT_SOURCE in config:
+        cg.add(var.set_cfg_open_loop_limit_source(config[CONF_OPEN_LOOP_LIMIT_SOURCE] == 1))
+    if CONF_OPEN_LOOP_ACCEL_HZ_PER_S in config:
+        cg.add(var.set_cfg_open_loop_accel(OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE[config[CONF_OPEN_LOOP_ACCEL_HZ_PER_S]]))
+    if CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2 in config:
         cg.add(
-            var.set_startup_open_to_closed_handoff_threshold(
-                OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE[config[CONF_STARTUP_OPEN_TO_CLOSED_HANDOFF_PERCENT]]
+            var.set_cfg_open_loop_accel2(
+                OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE[config[CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2]]
             )
         )
+    if CONF_AUTO_HANDOFF_ENABLE in config:
+        cg.add(var.set_cfg_auto_handoff_enable(config[CONF_AUTO_HANDOFF_ENABLE]))
+    if CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT in config:
+        cg.add(
+            var.set_cfg_open_to_closed_handoff_threshold(
+                OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE[config[CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT]]
+            )
+        )
+    if CONF_THETA_ERROR_RAMP_RATE in config:
+        cg.add(var.set_cfg_theta_error_ramp_rate(THETA_ERROR_RAMP_RATE_TO_CODE[config[CONF_THETA_ERROR_RAMP_RATE]]))
+    if CONF_CL_SLOW_ACC_HZ_PER_S in config:
+        cg.add(var.set_cfg_cl_slow_acc(CL_SLOW_ACC_HZ_PER_S_TO_CODE[config[CONF_CL_SLOW_ACC_HZ_PER_S]]))
+    if CONF_LOCK_ILIMIT_DEGLITCH_MS in config:
+        cg.add(var.set_cfg_lock_ilimit_deglitch(LOCK_ILIMIT_DEGLITCH_MS_TO_CODE[config[CONF_LOCK_ILIMIT_DEGLITCH_MS]]))
+    if CONF_HW_LOCK_ILIMIT_DEGLITCH_US in config:
+        cg.add(
+            var.set_cfg_hw_lock_ilimit_deglitch(
+                HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE[config[CONF_HW_LOCK_ILIMIT_DEGLITCH_US]]
+            )
+        )
+    if CONF_SPEED_LOOP_KP_CODE in config:
+        cg.add(var.set_cfg_speed_loop_kp_code(config[CONF_SPEED_LOOP_KP_CODE]))
+    if CONF_SPEED_LOOP_KI_CODE in config:
+        cg.add(var.set_cfg_speed_loop_ki_code(config[CONF_SPEED_LOOP_KI_CODE]))
 
     if CONF_BRAKE in config:
         sw = await switch_.new_switch(config[CONF_BRAKE])
@@ -627,3 +862,12 @@ async def to_code(config):
     if CONF_MOTOR_BEMF_CONSTANT in config:
         sens = await sensor.new_sensor(config[CONF_MOTOR_BEMF_CONSTANT])
         cg.add(var.set_motor_bemf_constant_sensor(sens))
+    if CONF_SPEED_FDBK_HZ in config:
+        sens = await sensor.new_sensor(config[CONF_SPEED_FDBK_HZ])
+        cg.add(var.set_speed_fdbk_hz_sensor(sens))
+    if CONF_SPEED_REF_OPEN_LOOP_HZ in config:
+        sens = await sensor.new_sensor(config[CONF_SPEED_REF_OPEN_LOOP_HZ])
+        cg.add(var.set_speed_ref_open_loop_hz_sensor(sens))
+    if CONF_FG_SPEED_FDBK_HZ in config:
+        sens = await sensor.new_sensor(config[CONF_FG_SPEED_FDBK_HZ])
+        cg.add(var.set_fg_speed_fdbk_hz_sensor(sens))
