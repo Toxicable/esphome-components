@@ -195,6 +195,7 @@ class MCF8329ATuningController {
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->current_candidate_monitor_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->current_candidate_open_loop_dwell_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
@@ -204,6 +205,8 @@ class MCF8329ATuningController {
     this->refinement_best_candidate_valid_ = false;
     this->refinement_best_score_ = std::numeric_limits<int32_t>::min();
     this->refinement_best_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->current_candidate_metrics_ = CandidateQualityMetrics{};
+    this->refinement_best_metrics_ = CandidateQualityMetrics{};
     this->mpet_characterization_active_ = false;
     this->mpet_characterization_started_ms_ = 0u;
   }
@@ -220,6 +223,13 @@ class MCF8329ATuningController {
 
     this->clear_runtime_speed_command_("initial_tune_prepare");
     this->parent_->pulse_clear_faults();
+    if (this->parent_->cfg_open_loop_limit_source_set_ && this->parent_->cfg_open_loop_limit_use_ilimit_) {
+      ESP_LOGW(
+        TAG,
+        "Initial tune warning: open_loop_limit_source=ilimit can increase open-loop current/heating; "
+        "prefer ol_ilimit for discovery runs."
+      );
+    }
 
     this->initial_tune_active_ = true;
     this->initial_tune_stage_ = InitialTuneStage::APPLY;
@@ -230,6 +240,7 @@ class MCF8329ATuningController {
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->current_candidate_monitor_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->current_candidate_open_loop_dwell_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
@@ -239,6 +250,8 @@ class MCF8329ATuningController {
     this->refinement_best_candidate_valid_ = false;
     this->refinement_best_score_ = std::numeric_limits<int32_t>::min();
     this->refinement_best_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->current_candidate_metrics_ = CandidateQualityMetrics{};
+    this->refinement_best_metrics_ = CandidateQualityMetrics{};
 
     ESP_LOGI(
       TAG,
@@ -315,6 +328,15 @@ class MCF8329ATuningController {
     COOLDOWN = 4,
   };
 
+  struct CandidateQualityMetrics {
+    uint16_t sample_count{0u};
+    uint16_t telemetry_miss_count{0u};
+    uint16_t unstable_count{0u};
+    float tracking_error_sum_hz{0.0f};
+    float mismatch_error_sum_hz{0.0f};
+    float peak_speed_ratio{0.0f};
+  };
+
   static constexpr float INITIAL_TUNE_SPEED_PERCENT = 11.0f;
   static constexpr uint32_t INITIAL_TUNE_SETTLE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MS = 7000u;
@@ -322,13 +344,23 @@ class MCF8329ATuningController {
   static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS = 45000u;
   static constexpr float INITIAL_TUNE_MONITOR_TIMEOUT_SCALE = 1.6f;
   static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MARGIN_MS = 2500u;
+  static constexpr uint32_t INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MIN_MS = 2000u;
+  static constexpr uint32_t INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MAX_MS = 12000u;
+  static constexpr float INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_SCALE = 1.3f;
+  static constexpr uint32_t INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MARGIN_MS = 1200u;
   static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
   static constexpr uint32_t INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
   // Large low-kV motors can spend a long dwell in KE measurement.
   static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 120000u;
   static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
-  static constexpr int32_t ACCEL_A1_BONUS_SCORE = 100;
+  static constexpr int32_t ACCEL_A1_BONUS_SCORE = 40;
+  static constexpr float SCORE_TRACKING_ERROR_WEIGHT = 90.0f;
+  static constexpr float SCORE_MISMATCH_ERROR_WEIGHT = 120.0f;
+  static constexpr float SCORE_OVERSPEED_RATIO_WEIGHT = 4500.0f;
+  static constexpr int32_t SCORE_UNSTABLE_SAMPLE_PENALTY = 1800;
+  static constexpr int32_t SCORE_TELEMETRY_MISS_PENALTY = 700;
+  static constexpr int32_t SCORE_NO_SAMPLE_PENALTY = 25000;
   static constexpr uint8_t HANDOFF_UNSTABLE_REJECT_COUNT = 2u;
   static constexpr uint8_t HANDOFF_STABLE_ACCEPT_COUNT = 2u;
   static constexpr uint8_t HANDOFF_TELEMETRY_MISS_REJECT_COUNT = 3u;
@@ -522,8 +554,70 @@ class MCF8329ATuningController {
     this->refinement_candidates_[this->refinement_candidate_count_++] = candidate;
   }
 
-  int32_t score_candidate_(const InitialTuneCandidate& candidate, uint32_t reach_ms) const {
+  float candidate_avg_tracking_error_hz_(const CandidateQualityMetrics& metrics) const {
+    if (metrics.sample_count == 0u) {
+      return 999.0f;
+    }
+    return metrics.tracking_error_sum_hz / static_cast<float>(metrics.sample_count);
+  }
+
+  float candidate_avg_mismatch_error_hz_(const CandidateQualityMetrics& metrics) const {
+    if (metrics.sample_count == 0u) {
+      return 999.0f;
+    }
+    return metrics.mismatch_error_sum_hz / static_cast<float>(metrics.sample_count);
+  }
+
+  void reset_candidate_quality_metrics_() {
+    this->current_candidate_metrics_ = CandidateQualityMetrics{};
+  }
+
+  void record_candidate_quality_sample_(float commanded_hz, float fdbk_hz, float fg_hz, bool unstable) {
+    const float commanded_abs = std::fabs(commanded_hz);
+    const float fdbk_abs = std::fabs(fdbk_hz);
+    const float fg_abs = std::fabs(fg_hz);
+    const float command_basis = std::max(20.0f, commanded_abs);
+    const float pair_avg = (fdbk_abs + fg_abs) * 0.5f;
+    const float pair_max = std::max(fdbk_abs, fg_abs);
+
+    if (this->current_candidate_metrics_.sample_count < std::numeric_limits<uint16_t>::max()) {
+      this->current_candidate_metrics_.sample_count++;
+    }
+    this->current_candidate_metrics_.tracking_error_sum_hz += std::fabs(pair_avg - command_basis);
+    this->current_candidate_metrics_.mismatch_error_sum_hz += std::fabs(fdbk_abs - fg_abs);
+
+    const float speed_ratio = pair_max / command_basis;
+    if (speed_ratio > this->current_candidate_metrics_.peak_speed_ratio) {
+      this->current_candidate_metrics_.peak_speed_ratio = speed_ratio;
+    }
+    if (unstable && this->current_candidate_metrics_.unstable_count < std::numeric_limits<uint16_t>::max()) {
+      this->current_candidate_metrics_.unstable_count++;
+    }
+  }
+
+  void record_candidate_quality_telemetry_miss_() {
+    if (this->current_candidate_metrics_.telemetry_miss_count < std::numeric_limits<uint16_t>::max()) {
+      this->current_candidate_metrics_.telemetry_miss_count++;
+    }
+  }
+
+  int32_t score_candidate_(
+    const InitialTuneCandidate& candidate, uint32_t reach_ms, const CandidateQualityMetrics& metrics
+  ) const {
+    const float avg_tracking_hz = this->candidate_avg_tracking_error_hz_(metrics);
+    const float avg_mismatch_hz = this->candidate_avg_mismatch_error_hz_(metrics);
+    const float overspeed_ratio = std::max(0.0f, metrics.peak_speed_ratio - 1.10f);
+    const float quality_penalty = (avg_tracking_hz * SCORE_TRACKING_ERROR_WEIGHT) +
+                                  (avg_mismatch_hz * SCORE_MISMATCH_ERROR_WEIGHT) +
+                                  (overspeed_ratio * SCORE_OVERSPEED_RATIO_WEIGHT);
+
     int32_t score = -static_cast<int32_t>(reach_ms);
+    score -= static_cast<int32_t>(quality_penalty + 0.5f);
+    score -= static_cast<int32_t>(metrics.unstable_count) * SCORE_UNSTABLE_SAMPLE_PENALTY;
+    score -= static_cast<int32_t>(metrics.telemetry_miss_count) * SCORE_TELEMETRY_MISS_PENALTY;
+    if (metrics.sample_count == 0u) {
+      score -= SCORE_NO_SAMPLE_PENALTY;
+    }
     score += static_cast<int32_t>(candidate.open_loop_accel_a1_code) * ACCEL_A1_BONUS_SCORE;
     return score;
   }
@@ -595,9 +689,10 @@ class MCF8329ATuningController {
     return both_in_expected_band && pair_consistent;
   }
 
-  uint32_t candidate_monitor_timeout_ms_(const InitialTuneCandidate& candidate) const {
+  bool estimate_handoff_time_ms_(const InitialTuneCandidate& candidate, float& est_handoff_ms) const {
+    est_handoff_ms = 0.0f;
     if (this->parent_ == nullptr) {
-      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+      return false;
     }
 
     float max_speed_hz =
@@ -612,7 +707,7 @@ class MCF8329ATuningController {
       max_speed_hz = this->parent_->max_speed_code_to_hz_(max_speed_code);
     }
     if (max_speed_hz <= 0.0f) {
-      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+      return false;
     }
 
     const float handoff_percent =
@@ -621,11 +716,35 @@ class MCF8329ATuningController {
     const float ol_accel_hz_per_s =
       OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu];
     if (ol_accel_hz_per_s <= 0.0f) {
-      return INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS;
+      return false;
     }
 
-    const float est_to_handoff_ms =
-      (handoff_hz / ol_accel_hz_per_s) * 1000.0f * INITIAL_TUNE_MONITOR_TIMEOUT_SCALE;
+    est_handoff_ms = (handoff_hz / ol_accel_hz_per_s) * 1000.0f;
+    return std::isfinite(est_handoff_ms) && est_handoff_ms >= 0.0f;
+  }
+
+  uint32_t candidate_open_loop_dwell_timeout_ms_(const InitialTuneCandidate& candidate) const {
+    float est_handoff_ms = 0.0f;
+    if (!this->estimate_handoff_time_ms_(candidate, est_handoff_ms)) {
+      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    }
+    const float timeout_ms = est_handoff_ms * INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_SCALE +
+                             static_cast<float>(INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MARGIN_MS);
+    const float timeout_clamped_ms = std::clamp(
+      timeout_ms,
+      static_cast<float>(INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MIN_MS),
+      static_cast<float>(INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MAX_MS)
+    );
+    return static_cast<uint32_t>(timeout_clamped_ms + 0.5f);
+  }
+
+  uint32_t candidate_monitor_timeout_ms_(const InitialTuneCandidate& candidate) const {
+    float est_handoff_ms = 0.0f;
+    if (!this->estimate_handoff_time_ms_(candidate, est_handoff_ms)) {
+      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    }
+
+    const float est_to_handoff_ms = est_handoff_ms * INITIAL_TUNE_MONITOR_TIMEOUT_SCALE;
     const float timeout_ms =
       est_to_handoff_ms + static_cast<float>(INITIAL_TUNE_SUCCESS_HOLD_MS + INITIAL_TUNE_MONITOR_TIMEOUT_MARGIN_MS);
     const float timeout_clamped_ms = std::clamp(
@@ -669,14 +788,19 @@ class MCF8329ATuningController {
     }
   }
 
-  bool begin_refinement_(const InitialTuneCandidate& baseline, uint32_t baseline_reach_ms) {
+  bool begin_refinement_(
+    const InitialTuneCandidate& baseline,
+    uint32_t baseline_reach_ms,
+    const CandidateQualityMetrics& baseline_metrics
+  ) {
     this->refinement_active_ = false;
     this->refinement_candidate_index_ = 0u;
     this->refinement_candidate_count_ = 0u;
     this->refinement_best_candidate_valid_ = true;
     this->refinement_best_candidate_ = baseline;
     this->refinement_best_reach_ms_ = baseline_reach_ms;
-    this->refinement_best_score_ = this->score_candidate_(baseline, baseline_reach_ms);
+    this->refinement_best_metrics_ = baseline_metrics;
+    this->refinement_best_score_ = this->score_candidate_(baseline, baseline_reach_ms, baseline_metrics);
 
     this->append_refined_candidate_(baseline);  // index 0 baseline marker (already known successful)
 
@@ -718,22 +842,33 @@ class MCF8329ATuningController {
     return true;
   }
 
-  void record_successful_candidate_(const InitialTuneCandidate& candidate, uint32_t reach_ms) {
-    const int32_t score = this->score_candidate_(candidate, reach_ms);
+  void record_successful_candidate_(
+    const InitialTuneCandidate& candidate,
+    uint32_t reach_ms,
+    const CandidateQualityMetrics& metrics
+  ) {
+    const float avg_tracking_hz = this->candidate_avg_tracking_error_hz_(metrics);
+    const float avg_mismatch_hz = this->candidate_avg_mismatch_error_hz_(metrics);
+    const int32_t score = this->score_candidate_(candidate, reach_ms, metrics);
     ESP_LOGI(
       TAG,
-      "Initial tune candidate success: reach=%ums score=%d auto_handoff=%s accel=%.2fHz/s handoff=%.1f%%",
+      "Initial tune candidate success: reach=%ums score=%d accel=%.2fHz/s handoff=%.1f%% "
+      "handoff_samples=%u avg_track=%.1fHz avg_mismatch=%.1fHz peak_ratio=%.2f",
       static_cast<unsigned>(reach_ms),
       static_cast<int>(score),
-      candidate.auto_handoff_enable ? "true" : "false",
       OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu],
-      OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[candidate.handoff_code & 0x1Fu]
+      OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[candidate.handoff_code & 0x1Fu],
+      static_cast<unsigned>(metrics.sample_count),
+      avg_tracking_hz,
+      avg_mismatch_hz,
+      metrics.peak_speed_ratio
     );
     if (!this->refinement_best_candidate_valid_ || score > this->refinement_best_score_) {
       this->refinement_best_candidate_valid_ = true;
       this->refinement_best_candidate_ = candidate;
       this->refinement_best_reach_ms_ = reach_ms;
       this->refinement_best_score_ = score;
+      this->refinement_best_metrics_ = metrics;
     }
   }
 
@@ -744,6 +879,7 @@ class MCF8329ATuningController {
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
+    this->current_candidate_metrics_ = CandidateQualityMetrics{};
 
     if (!this->refinement_best_candidate_valid_) {
       ESP_LOGW(TAG, "Initial tune ended without a successful candidate result");
@@ -752,9 +888,14 @@ class MCF8329ATuningController {
 
     ESP_LOGI(
       TAG,
-      "Initial tune success: best candidate reach=%ums score=%d",
+      "Initial tune success: best candidate reach=%ums score=%d handoff_samples=%u avg_track=%.1fHz "
+      "avg_mismatch=%.1fHz peak_ratio=%.2f",
       static_cast<unsigned>(this->refinement_best_reach_ms_),
-      static_cast<int>(this->refinement_best_score_)
+      static_cast<int>(this->refinement_best_score_),
+      static_cast<unsigned>(this->refinement_best_metrics_.sample_count),
+      this->candidate_avg_tracking_error_hz_(this->refinement_best_metrics_),
+      this->candidate_avg_mismatch_error_hz_(this->refinement_best_metrics_),
+      this->refinement_best_metrics_.peak_speed_ratio
     );
     this->log_tune_candidate_(
       this->refinement_best_candidate_,
@@ -778,6 +919,7 @@ class MCF8329ATuningController {
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
+    this->current_candidate_metrics_ = CandidateQualityMetrics{};
     this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
     this->initial_tune_stage_started_ms_ = now;
   }
@@ -789,6 +931,7 @@ class MCF8329ATuningController {
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
     this->handoff_telemetry_miss_counter_ = 0u;
+    this->current_candidate_metrics_ = CandidateQualityMetrics{};
     ESP_LOGW(
       TAG,
       "Initial tune failed: no discovery candidate reached closed-loop at %.1f%% command",
@@ -839,20 +982,27 @@ class MCF8329ATuningController {
         this->initial_tune_stage_ = InitialTuneStage::MONITOR;
         this->initial_tune_stage_started_ms_ = now;
         this->current_candidate_start_ms_ = now;
-        this->current_candidate_monitor_timeout_ms_ = this->candidate_monitor_timeout_ms_(candidate);
+        this->current_candidate_open_loop_dwell_timeout_ms_ =
+          this->candidate_open_loop_dwell_timeout_ms_(candidate);
+        this->current_candidate_monitor_timeout_ms_ = std::max(
+          this->candidate_monitor_timeout_ms_(candidate),
+          this->current_candidate_open_loop_dwell_timeout_ms_ + INITIAL_TUNE_SUCCESS_HOLD_MS + 1000u
+        );
         this->current_candidate_reach_ms_ = this->current_candidate_monitor_timeout_ms_;
         this->initial_tune_closed_loop_seen_ = false;
         this->initial_tune_closed_loop_seen_ms_ = 0u;
         this->handoff_unstable_counter_ = 0u;
         this->handoff_stable_counter_ = 0u;
         this->handoff_telemetry_miss_counter_ = 0u;
+        this->reset_candidate_quality_metrics_();
         ESP_LOGI(
           TAG,
-          "Initial tune %s candidate %u/%u monitor timeout set to %ums",
+          "Initial tune %s candidate %u/%u monitor timeout=%ums open_loop_dwell_timeout=%ums",
           phase,
           static_cast<unsigned>(this->active_candidate_index_() + 1u),
           static_cast<unsigned>(this->active_candidate_count_()),
-          static_cast<unsigned>(this->current_candidate_monitor_timeout_ms_)
+          static_cast<unsigned>(this->current_candidate_monitor_timeout_ms_),
+          static_cast<unsigned>(this->current_candidate_open_loop_dwell_timeout_ms_)
         );
         return;
       }
@@ -873,6 +1023,7 @@ class MCF8329ATuningController {
             this->handoff_unstable_counter_ = 0u;
             this->handoff_stable_counter_ = 0u;
             this->handoff_telemetry_miss_counter_ = 0u;
+            this->reset_candidate_quality_metrics_();
             ESP_LOGI(
               TAG,
               "Initial tune %s candidate %u/%u entered %s (reach=%ums)",
@@ -891,7 +1042,9 @@ class MCF8329ATuningController {
               this->handoff_telemetry_miss_counter_ = 0u;
               const float commanded_hz =
                 (std::fabs(this->parent_->speed_applied_percent_) / 100.0f) * max_speed_hz;
-              if (!this->handoff_feedback_unstable_(commanded_hz, fdbk_hz, fg_hz)) {
+              const bool handoff_unstable = this->handoff_feedback_unstable_(commanded_hz, fdbk_hz, fg_hz);
+              this->record_candidate_quality_sample_(commanded_hz, fdbk_hz, fg_hz, handoff_unstable);
+              if (!handoff_unstable) {
                 this->handoff_unstable_counter_ = 0u;
                 if (this->handoff_feedback_stable_(commanded_hz, fdbk_hz, fg_hz)) {
                   if (this->handoff_stable_counter_ < 0xFFu) {
@@ -923,6 +1076,7 @@ class MCF8329ATuningController {
               if (this->handoff_telemetry_miss_counter_ < 0xFFu) {
                 this->handoff_telemetry_miss_counter_++;
               }
+              this->record_candidate_quality_telemetry_miss_();
               ESP_LOGW(
                 TAG,
                 "Initial tune handoff guard: speed telemetry unavailable sample %u/%u",
@@ -940,11 +1094,13 @@ class MCF8329ATuningController {
             if (this->handoff_stable_counter_ < HANDOFF_STABLE_ACCEPT_COUNT) {
               return;
             }
+            const CandidateQualityMetrics candidate_metrics = this->current_candidate_metrics_;
             this->clear_runtime_speed_command_("initial_tune_success");
-            this->record_successful_candidate_(candidate, this->current_candidate_reach_ms_);
+            this->record_successful_candidate_(candidate, this->current_candidate_reach_ms_, candidate_metrics);
 
             if (!this->active_pass_is_refinement_()) {
-              const bool has_refinement = this->begin_refinement_(candidate, this->current_candidate_reach_ms_);
+              const bool has_refinement =
+                this->begin_refinement_(candidate, this->current_candidate_reach_ms_, candidate_metrics);
               if (!has_refinement) {
                 this->finalize_initial_tune_success_();
                 return;
@@ -962,6 +1118,13 @@ class MCF8329ATuningController {
           this->handoff_unstable_counter_ = 0u;
           this->handoff_stable_counter_ = 0u;
           this->handoff_telemetry_miss_counter_ = 0u;
+          this->reset_candidate_quality_metrics_();
+        }
+
+        if (!this->initial_tune_closed_loop_seen_ &&
+            (now - this->current_candidate_start_ms_) >= this->current_candidate_open_loop_dwell_timeout_ms_) {
+          this->fail_initial_tune_candidate_("open-loop dwell timeout (heating guard)", now);
+          return;
         }
 
         if ((now - this->initial_tune_stage_started_ms_) >= this->current_candidate_monitor_timeout_ms_) {
@@ -1097,15 +1260,18 @@ class MCF8329ATuningController {
   uint32_t current_candidate_start_ms_{0u};
   uint32_t current_candidate_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
   uint32_t current_candidate_monitor_timeout_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
+  uint32_t current_candidate_open_loop_dwell_timeout_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
   uint8_t handoff_unstable_counter_{0u};
   uint8_t handoff_stable_counter_{0u};
   uint8_t handoff_telemetry_miss_counter_{0u};
+  CandidateQualityMetrics current_candidate_metrics_{};
   bool refinement_active_{false};
   uint8_t refinement_candidate_index_{0u};
   uint8_t refinement_candidate_count_{0u};
   InitialTuneCandidate refinement_candidates_[MAX_REFINED_CANDIDATES]{};
   bool refinement_best_candidate_valid_{false};
   InitialTuneCandidate refinement_best_candidate_{};
+  CandidateQualityMetrics refinement_best_metrics_{};
   int32_t refinement_best_score_{std::numeric_limits<int32_t>::min()};
   uint32_t refinement_best_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
   bool mpet_characterization_active_{false};

@@ -102,8 +102,11 @@ Component-scoped notes for `components/mcf8329a`.
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
   - Optional monolith buttons for guided bring-up:
     - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate using manual-handoff variants by default; logs the exact recommended YAML keys/values at `INFO` for manual copy.
+    - Refinement still evaluates a discrete candidate set (iterative sweep), but candidate ranking now uses measured handoff quality math (`reach_ms`, average tracking error to commanded speed, `speed_fdbk_hz`/`fg_speed_fdbk_hz` mismatch, peak overspeed ratio, unstable/missing telemetry penalties) rather than reach-time-only bias.
     - Discovery candidates are now mid/high open-loop accel first (`250/500Hz/s` class, with conservative fallback) rather than low-accel-first, based on field data where both 270kV and 750kV motors remained stable at much higher accel.
     - `tune_initial_params` computes a per-candidate monitor timeout from `max_speed_hz`, handoff %, and open-loop accel so high-kV/high-voltage setups are not prematurely failed by the legacy fixed 7s window.
+    - `tune_initial_params` now enforces a separate open-loop dwell timeout (heating guard) derived from the same handoff estimate; candidates are failed early if they linger in open-loop too long.
+    - If `open_loop_limit_source=ilimit`, `tune_initial_params` logs a warning because open-loop current/heating can be significantly higher than with `ol_ilimit`.
     - `tune_initial_params` handoff plausibility guard evaluates post-handoff feedback against commanded electrical speed (not `speed_ref_open_loop_hz`) to avoid false rejects when open-loop ref lags during transition.
     - The same guard rejects candidates when `speed_fdbk_hz` and `fg_speed_fdbk_hz` diverge too far (`abs(delta) > max(35Hz, 55% of higher value)`) for consecutive samples, which catches buzz/stall handoffs with implausible feedback.
     - Candidate success now also requires consecutive plausible handoff samples (`speed_fdbk_hz` and `fg_speed_fdbk_hz` within a commanded-speed band and mutually consistent); closed-loop state alone is no longer enough.
