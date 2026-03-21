@@ -312,7 +312,8 @@ class MCF8329ATuningController {
   static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MS = 7000u;
   static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
-  static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 30000u;
+  // Large low-kV motors can spend a long dwell in KE measurement.
+  static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 120000u;
   static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
   static constexpr int32_t AUTO_HANDOFF_BONUS_SCORE = 10000;
   static constexpr int32_t ACCEL_A1_BONUS_SCORE = 100;
