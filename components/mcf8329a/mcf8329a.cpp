@@ -195,6 +195,8 @@ class MCF8329ATuningController {
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->handoff_unstable_counter_ = 0u;
+    this->handoff_stable_counter_ = 0u;
+    this->handoff_telemetry_miss_counter_ = 0u;
     this->refinement_active_ = false;
     this->refinement_candidate_index_ = 0u;
     this->refinement_candidate_count_ = 0u;
@@ -227,6 +229,8 @@ class MCF8329ATuningController {
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->handoff_unstable_counter_ = 0u;
+    this->handoff_stable_counter_ = 0u;
+    this->handoff_telemetry_miss_counter_ = 0u;
     this->refinement_active_ = false;
     this->refinement_candidate_index_ = 0u;
     this->refinement_candidate_count_ = 0u;
@@ -321,6 +325,8 @@ class MCF8329ATuningController {
   static constexpr int32_t AUTO_HANDOFF_BONUS_SCORE = 10000;
   static constexpr int32_t ACCEL_A1_BONUS_SCORE = 100;
   static constexpr uint8_t HANDOFF_UNSTABLE_REJECT_COUNT = 2u;
+  static constexpr uint8_t HANDOFF_STABLE_ACCEPT_COUNT = 2u;
+  static constexpr uint8_t HANDOFF_TELEMETRY_MISS_REJECT_COUNT = 3u;
 
   bool is_closed_loop_state_(uint16_t algo_state) const {
     return algo_state == 0x0008u || algo_state == 0x0009u;
@@ -570,6 +576,23 @@ class MCF8329ATuningController {
     return severe_overspeed || fdbk_fg_mismatch;
   }
 
+  bool handoff_feedback_stable_(float commanded_hz, float fdbk_hz, float fg_hz) const {
+    const float commanded_abs = std::fabs(commanded_hz);
+    const float fdbk_abs = std::fabs(fdbk_hz);
+    const float fg_abs = std::fabs(fg_hz);
+    const float command_basis = std::max(20.0f, commanded_abs);
+
+    const float min_expected = command_basis * 0.2f;
+    const float max_expected = command_basis * 1.9f;
+    const bool both_in_expected_band = fdbk_abs >= min_expected && fg_abs >= min_expected &&
+                                       fdbk_abs <= max_expected && fg_abs <= max_expected;
+
+    const float pair_max = std::max(fdbk_abs, fg_abs);
+    const bool pair_consistent = pair_max <= 20.0f || std::fabs(fdbk_abs - fg_abs) <= std::max(25.0f, pair_max * 0.45f);
+
+    return both_in_expected_band && pair_consistent;
+  }
+
   bool active_pass_is_refinement_() const {
     return this->refinement_active_;
   }
@@ -682,6 +705,8 @@ class MCF8329ATuningController {
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
     this->initial_tune_closed_loop_seen_ = false;
     this->handoff_unstable_counter_ = 0u;
+    this->handoff_stable_counter_ = 0u;
+    this->handoff_telemetry_miss_counter_ = 0u;
 
     if (!this->refinement_best_candidate_valid_) {
       ESP_LOGW(TAG, "Initial tune ended without a successful candidate result");
@@ -720,6 +745,8 @@ class MCF8329ATuningController {
     this->parent_->pulse_clear_faults();
     this->initial_tune_closed_loop_seen_ = false;
     this->handoff_unstable_counter_ = 0u;
+    this->handoff_stable_counter_ = 0u;
+    this->handoff_telemetry_miss_counter_ = 0u;
     this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
     this->initial_tune_stage_started_ms_ = now;
   }
@@ -729,6 +756,8 @@ class MCF8329ATuningController {
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
     this->initial_tune_closed_loop_seen_ = false;
     this->handoff_unstable_counter_ = 0u;
+    this->handoff_stable_counter_ = 0u;
+    this->handoff_telemetry_miss_counter_ = 0u;
     ESP_LOGW(
       TAG,
       "Initial tune failed: no discovery candidate reached closed-loop at %.1f%% command",
@@ -783,6 +812,8 @@ class MCF8329ATuningController {
         this->initial_tune_closed_loop_seen_ = false;
         this->initial_tune_closed_loop_seen_ms_ = 0u;
         this->handoff_unstable_counter_ = 0u;
+        this->handoff_stable_counter_ = 0u;
+        this->handoff_telemetry_miss_counter_ = 0u;
         return;
       }
 
@@ -800,6 +831,8 @@ class MCF8329ATuningController {
             this->current_candidate_reach_ms_ =
               now >= this->current_candidate_start_ms_ ? (now - this->current_candidate_start_ms_) : 0u;
             this->handoff_unstable_counter_ = 0u;
+            this->handoff_stable_counter_ = 0u;
+            this->handoff_telemetry_miss_counter_ = 0u;
             ESP_LOGI(
               TAG,
               "Initial tune %s candidate %u/%u entered %s (reach=%ums)",
@@ -815,12 +848,21 @@ class MCF8329ATuningController {
             float fg_hz = 0.0f;
             float max_speed_hz = 0.0f;
             if (this->read_speed_triplet_hz_(ref_ol_hz, fdbk_hz, fg_hz, max_speed_hz)) {
+              this->handoff_telemetry_miss_counter_ = 0u;
               const float commanded_hz =
                 (std::fabs(this->parent_->speed_applied_percent_) / 100.0f) * max_speed_hz;
               if (!this->handoff_feedback_unstable_(commanded_hz, fdbk_hz, fg_hz)) {
                 this->handoff_unstable_counter_ = 0u;
+                if (this->handoff_feedback_stable_(commanded_hz, fdbk_hz, fg_hz)) {
+                  if (this->handoff_stable_counter_ < 0xFFu) {
+                    this->handoff_stable_counter_++;
+                  }
+                } else {
+                  this->handoff_stable_counter_ = 0u;
+                }
               } else {
                 this->handoff_unstable_counter_++;
+                this->handoff_stable_counter_ = 0u;
                 ESP_LOGW(
                   TAG,
                   "Initial tune handoff guard: unstable sample %u/%u cmd=%.1fHz ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
@@ -836,10 +878,28 @@ class MCF8329ATuningController {
                   return;
                 }
               }
+            } else {
+              this->handoff_stable_counter_ = 0u;
+              if (this->handoff_telemetry_miss_counter_ < 0xFFu) {
+                this->handoff_telemetry_miss_counter_++;
+              }
+              ESP_LOGW(
+                TAG,
+                "Initial tune handoff guard: speed telemetry unavailable sample %u/%u",
+                static_cast<unsigned>(this->handoff_telemetry_miss_counter_),
+                static_cast<unsigned>(HANDOFF_TELEMETRY_MISS_REJECT_COUNT)
+              );
+              if (this->handoff_telemetry_miss_counter_ >= HANDOFF_TELEMETRY_MISS_REJECT_COUNT) {
+                this->fail_initial_tune_candidate_("handoff telemetry unavailable", now);
+                return;
+              }
             }
           }
 
           if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_SUCCESS_HOLD_MS) {
+            if (this->handoff_stable_counter_ < HANDOFF_STABLE_ACCEPT_COUNT) {
+              return;
+            }
             this->clear_runtime_speed_command_("initial_tune_success");
             this->record_successful_candidate_(candidate, this->current_candidate_reach_ms_);
 
@@ -860,6 +920,8 @@ class MCF8329ATuningController {
           this->initial_tune_closed_loop_seen_ = false;
           this->initial_tune_closed_loop_seen_ms_ = 0u;
           this->handoff_unstable_counter_ = 0u;
+          this->handoff_stable_counter_ = 0u;
+          this->handoff_telemetry_miss_counter_ = 0u;
         }
 
         if ((now - this->initial_tune_stage_started_ms_) >= INITIAL_TUNE_MONITOR_TIMEOUT_MS) {
@@ -995,6 +1057,8 @@ class MCF8329ATuningController {
   uint32_t current_candidate_start_ms_{0u};
   uint32_t current_candidate_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
   uint8_t handoff_unstable_counter_{0u};
+  uint8_t handoff_stable_counter_{0u};
+  uint8_t handoff_telemetry_miss_counter_{0u};
   bool refinement_active_{false};
   uint8_t refinement_candidate_index_{0u};
   uint8_t refinement_candidate_count_{0u};
