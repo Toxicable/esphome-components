@@ -140,7 +140,7 @@ Safety guardrails:
 - Severe current faults (`HW_LOCK_LIMIT`, `LOCK_LIMIT`, `BUS_CURRENT_LIMIT`) engage runtime lockout for non-zero speed commands until faults are actually cleared.
 
 Auto bring-up buttons:
-- `tune_initial_params` runs a guarded candidate sweep targeting closed-loop entry at `11%` command, then prints the winning values at `INFO` level for manual YAML copy.
+- `tune_initial_params` runs a guarded discovery sweep targeting closed-loop entry at `11%`, then a refinement sweep around the first successful set and prefers `auto_handoff_enable: true` when a stable candidate exists; it prints the best values at `INFO` level for manual YAML copy.
 - `run_mpet` starts MPET (`CMD + KE + MECH + WRITE_SHADOW`) and on success logs extracted keys (`motor_bemf_const`, `speed_loop_kp_code`, `speed_loop_ki_code`) at `INFO` level for manual YAML copy.
 
 ## 5065 270KV 12-pole (6 pole-pair) baseline

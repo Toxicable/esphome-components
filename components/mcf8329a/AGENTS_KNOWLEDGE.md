@@ -99,7 +99,7 @@ Component-scoped notes for `components/mcf8329a`.
   - Runtime now emits a 2Hz `INFO` speed diagnostic line while commanded speed is active:
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
   - Optional monolith buttons for guided bring-up:
-    - `tune_initial_params`: sweeps guarded startup/handoff candidate sets to find one that reaches closed-loop; on success logs the exact YAML keys/values at `INFO` for manual copy.
+    - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate and biases scoring toward `auto_handoff_enable=true`; logs the exact recommended YAML keys/values at `INFO` for manual copy.
     - `run_mpet`: kicks off MPET (`CMD+KE+MECH+WRITE_SHADOW`) and on success logs extracted `motor_bemf_const`, `speed_loop_kp_code`, and `speed_loop_ki_code` for manual copy.
   - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
     algorithm-state transition logs and fault diagnostics for runtime visibility.

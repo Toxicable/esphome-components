@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "esphome/core/hal.h"
@@ -191,6 +192,14 @@ class MCF8329ATuningController {
     this->initial_tune_stage_started_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->initial_tune_closed_loop_seen_ms_ = 0u;
+    this->current_candidate_start_ms_ = 0u;
+    this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->refinement_active_ = false;
+    this->refinement_candidate_index_ = 0u;
+    this->refinement_candidate_count_ = 0u;
+    this->refinement_best_candidate_valid_ = false;
+    this->refinement_best_score_ = std::numeric_limits<int32_t>::min();
+    this->refinement_best_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
     this->mpet_characterization_active_ = false;
     this->mpet_characterization_started_ms_ = 0u;
   }
@@ -214,13 +223,22 @@ class MCF8329ATuningController {
     this->initial_tune_stage_started_ms_ = millis();
     this->initial_tune_closed_loop_seen_ = false;
     this->initial_tune_closed_loop_seen_ms_ = 0u;
+    this->current_candidate_start_ms_ = 0u;
+    this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->refinement_active_ = false;
+    this->refinement_candidate_index_ = 0u;
+    this->refinement_candidate_count_ = 0u;
+    this->refinement_best_candidate_valid_ = false;
+    this->refinement_best_score_ = std::numeric_limits<int32_t>::min();
+    this->refinement_best_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
 
     ESP_LOGI(
       TAG,
-      "Initial tune started: %u candidate(s), target speed %.1f%%",
+      "Initial tune started: %u discovery candidate(s), target speed %.1f%%",
       static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
       INITIAL_TUNE_SPEED_PERCENT
     );
+    ESP_LOGI(TAG, "Initial tune will run a refinement sweep after first success and prefers auto_handoff_enable=true when stable");
   }
 
   void start_mpet_characterization() {
@@ -295,6 +313,9 @@ class MCF8329ATuningController {
   static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
   static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 30000u;
+  static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
+  static constexpr int32_t AUTO_HANDOFF_BONUS_SCORE = 10000;
+  static constexpr int32_t ACCEL_A1_BONUS_SCORE = 100;
 
   bool is_closed_loop_state_(uint16_t algo_state) const {
     return algo_state == 0x0008u || algo_state == 0x0009u;
@@ -459,12 +480,184 @@ class MCF8329ATuningController {
     ESP_LOGI(TAG, "  abn_bemf_lock_enable: %s", candidate.abn_bemf_lock_enable ? "true" : "false");
   }
 
+  bool candidates_equal_(const InitialTuneCandidate& a, const InitialTuneCandidate& b) const {
+    return a.phase_ilimit_code == b.phase_ilimit_code && a.lock_ilimit_code == b.lock_ilimit_code &&
+           a.hw_lock_ilimit_code == b.hw_lock_ilimit_code &&
+           a.open_loop_ilimit_code == b.open_loop_ilimit_code &&
+           a.open_loop_accel_a1_code == b.open_loop_accel_a1_code &&
+           a.open_loop_accel_a2_code == b.open_loop_accel_a2_code && a.handoff_code == b.handoff_code &&
+           a.theta_error_ramp_code == b.theta_error_ramp_code &&
+           a.cl_slow_acc_code == b.cl_slow_acc_code &&
+           a.lock_ilimit_deglitch_code == b.lock_ilimit_deglitch_code &&
+           a.hw_lock_ilimit_deglitch_code == b.hw_lock_ilimit_deglitch_code &&
+           a.auto_handoff_enable == b.auto_handoff_enable &&
+           a.abn_bemf_lock_enable == b.abn_bemf_lock_enable;
+  }
+
+  void append_refined_candidate_(const InitialTuneCandidate& candidate) {
+    if (this->refinement_candidate_count_ >= MAX_REFINED_CANDIDATES) {
+      return;
+    }
+    for (uint8_t i = 0u; i < this->refinement_candidate_count_; i++) {
+      if (this->candidates_equal_(this->refinement_candidates_[i], candidate)) {
+        return;
+      }
+    }
+    this->refinement_candidates_[this->refinement_candidate_count_++] = candidate;
+  }
+
+  int32_t score_candidate_(const InitialTuneCandidate& candidate, uint32_t reach_ms) const {
+    int32_t score = -static_cast<int32_t>(reach_ms);
+    if (candidate.auto_handoff_enable) {
+      score += AUTO_HANDOFF_BONUS_SCORE;
+    }
+    score += static_cast<int32_t>(candidate.open_loop_accel_a1_code) * ACCEL_A1_BONUS_SCORE;
+    return score;
+  }
+
+  bool active_pass_is_refinement_() const {
+    return this->refinement_active_;
+  }
+
+  uint8_t active_candidate_index_() const {
+    return this->active_pass_is_refinement_() ? this->refinement_candidate_index_
+                                              : this->initial_tune_candidate_index_;
+  }
+
+  uint8_t active_candidate_count_() const {
+    return this->active_pass_is_refinement_() ? this->refinement_candidate_count_
+                                              : static_cast<uint8_t>(INITIAL_TUNE_CANDIDATE_COUNT);
+  }
+
+  bool active_candidates_exhausted_() const {
+    return this->active_candidate_index_() >= this->active_candidate_count_();
+  }
+
+  const InitialTuneCandidate& active_candidate_() const {
+    if (this->active_pass_is_refinement_()) {
+      return this->refinement_candidates_[this->refinement_candidate_index_];
+    }
+    return INITIAL_TUNE_CANDIDATES[this->initial_tune_candidate_index_];
+  }
+
+  void advance_active_candidate_() {
+    if (this->active_pass_is_refinement_()) {
+      this->refinement_candidate_index_++;
+    } else {
+      this->initial_tune_candidate_index_++;
+    }
+  }
+
+  bool begin_refinement_(const InitialTuneCandidate& baseline, uint32_t baseline_reach_ms) {
+    this->refinement_active_ = false;
+    this->refinement_candidate_index_ = 0u;
+    this->refinement_candidate_count_ = 0u;
+    this->refinement_best_candidate_valid_ = true;
+    this->refinement_best_candidate_ = baseline;
+    this->refinement_best_reach_ms_ = baseline_reach_ms;
+    this->refinement_best_score_ = this->score_candidate_(baseline, baseline_reach_ms);
+
+    this->append_refined_candidate_(baseline);  // index 0 baseline marker (already known successful)
+
+    InitialTuneCandidate candidate = baseline;
+    candidate.auto_handoff_enable = true;
+    this->append_refined_candidate_(candidate);
+
+    candidate = baseline;
+    candidate.auto_handoff_enable = true;
+    candidate.open_loop_accel_a1_code =
+      static_cast<uint8_t>(std::min<int>(15, static_cast<int>(baseline.open_loop_accel_a1_code) + 1));
+    this->append_refined_candidate_(candidate);
+
+    candidate = baseline;
+    candidate.auto_handoff_enable = true;
+    candidate.handoff_code = static_cast<uint8_t>(
+      std::min<int>(31, static_cast<int>(baseline.handoff_code) + 2)
+    );
+    this->append_refined_candidate_(candidate);
+
+    candidate = baseline;
+    candidate.auto_handoff_enable = true;
+    candidate.handoff_code =
+      static_cast<uint8_t>(std::max<int>(0, static_cast<int>(baseline.handoff_code) - 2));
+    this->append_refined_candidate_(candidate);
+
+    candidate = baseline;
+    candidate.open_loop_accel_a1_code =
+      static_cast<uint8_t>(std::min<int>(15, static_cast<int>(baseline.open_loop_accel_a1_code) + 1));
+    this->append_refined_candidate_(candidate);
+
+    if (this->refinement_candidate_count_ <= 1u) {
+      return false;
+    }
+
+    this->refinement_active_ = true;
+    this->refinement_candidate_index_ = 0u;
+
+    ESP_LOGI(
+      TAG,
+      "Initial tune baseline reached closed-loop in %ums; starting refinement sweep (%u variant candidate(s))",
+      static_cast<unsigned>(baseline_reach_ms),
+      static_cast<unsigned>(this->refinement_candidate_count_ - 1u)
+    );
+    return true;
+  }
+
+  void record_successful_candidate_(const InitialTuneCandidate& candidate, uint32_t reach_ms) {
+    const int32_t score = this->score_candidate_(candidate, reach_ms);
+    ESP_LOGI(
+      TAG,
+      "Initial tune candidate success: reach=%ums score=%d auto_handoff=%s accel=%.2fHz/s handoff=%.1f%%",
+      static_cast<unsigned>(reach_ms),
+      static_cast<int>(score),
+      candidate.auto_handoff_enable ? "true" : "false",
+      OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu],
+      OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[candidate.handoff_code & 0x1Fu]
+    );
+    if (!this->refinement_best_candidate_valid_ || score > this->refinement_best_score_) {
+      this->refinement_best_candidate_valid_ = true;
+      this->refinement_best_candidate_ = candidate;
+      this->refinement_best_reach_ms_ = reach_ms;
+      this->refinement_best_score_ = score;
+    }
+  }
+
+  void finalize_initial_tune_success_() {
+    this->initial_tune_active_ = false;
+    this->initial_tune_stage_ = InitialTuneStage::IDLE;
+    this->initial_tune_closed_loop_seen_ = false;
+
+    if (!this->refinement_best_candidate_valid_) {
+      ESP_LOGW(TAG, "Initial tune ended without a successful candidate result");
+      return;
+    }
+
+    ESP_LOGI(
+      TAG,
+      "Initial tune success: best candidate reach=%ums score=%d",
+      static_cast<unsigned>(this->refinement_best_reach_ms_),
+      static_cast<int>(this->refinement_best_score_)
+    );
+    if (!this->refinement_best_candidate_.auto_handoff_enable) {
+      ESP_LOGW(
+        TAG,
+        "Refinement did not find a stable auto-handoff candidate; keeping manual handoff for reliability"
+      );
+    }
+    this->log_tune_candidate_(
+      this->refinement_best_candidate_,
+      "Initial tune success: copy these keys into your YAML under mcf8329a:"
+    );
+  }
+
   void fail_initial_tune_candidate_(const char* reason, uint32_t now) {
+    const char* phase = this->active_pass_is_refinement_() ? "refinement" : "discovery";
     ESP_LOGW(
       TAG,
-      "Initial tune candidate %u/%u failed: %s",
-      static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
-      static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
+      "Initial tune %s candidate %u/%u failed: %s",
+      phase,
+      static_cast<unsigned>(this->active_candidate_index_() + 1u),
+      static_cast<unsigned>(this->active_candidate_count_()),
       reason
     );
     this->clear_runtime_speed_command_("initial_tune_fail");
@@ -474,29 +667,38 @@ class MCF8329ATuningController {
     this->initial_tune_stage_started_ms_ = now;
   }
 
-  void finish_initial_tune_failure_() {
+  void finalize_initial_tune_failure_() {
     this->initial_tune_active_ = false;
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
     this->initial_tune_closed_loop_seen_ = false;
     ESP_LOGW(
-      TAG, "Initial tune failed: no candidate reached closed-loop at %.1f%% command", INITIAL_TUNE_SPEED_PERCENT
+      TAG,
+      "Initial tune failed: no discovery candidate reached closed-loop at %.1f%% command",
+      INITIAL_TUNE_SPEED_PERCENT
     );
   }
 
   void process_initial_tune_(bool fault_active, uint32_t now) {
-    if (this->initial_tune_candidate_index_ >= INITIAL_TUNE_CANDIDATE_COUNT) {
-      this->finish_initial_tune_failure_();
+    if (this->active_candidates_exhausted_()) {
+      if (this->active_pass_is_refinement_()) {
+        this->finalize_initial_tune_success_();
+      } else {
+        this->finalize_initial_tune_failure_();
+      }
       return;
     }
-    const InitialTuneCandidate& candidate = INITIAL_TUNE_CANDIDATES[this->initial_tune_candidate_index_];
+
+    const InitialTuneCandidate& candidate = this->active_candidate_();
+    const char* phase = this->active_pass_is_refinement_() ? "refinement" : "discovery";
 
     switch (this->initial_tune_stage_) {
       case InitialTuneStage::APPLY: {
         ESP_LOGI(
           TAG,
-          "Initial tune trying candidate %u/%u",
-          static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
-          static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT)
+          "Initial tune %s candidate %u/%u",
+          phase,
+          static_cast<unsigned>(this->active_candidate_index_() + 1u),
+          static_cast<unsigned>(this->active_candidate_count_())
         );
         if (!this->apply_tune_candidate_(candidate)) {
           this->fail_initial_tune_candidate_("register write failed", now);
@@ -518,6 +720,8 @@ class MCF8329ATuningController {
         }
         this->initial_tune_stage_ = InitialTuneStage::MONITOR;
         this->initial_tune_stage_started_ms_ = now;
+        this->current_candidate_start_ms_ = now;
+        this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
         this->initial_tune_closed_loop_seen_ = false;
         this->initial_tune_closed_loop_seen_ms_ = 0u;
         return;
@@ -534,27 +738,32 @@ class MCF8329ATuningController {
           if (!this->initial_tune_closed_loop_seen_) {
             this->initial_tune_closed_loop_seen_ = true;
             this->initial_tune_closed_loop_seen_ms_ = now;
+            this->current_candidate_reach_ms_ =
+              now >= this->current_candidate_start_ms_ ? (now - this->current_candidate_start_ms_) : 0u;
             ESP_LOGI(
               TAG,
-              "Initial tune candidate %u/%u entered %s",
-              static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
-              static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
-              this->parent_->algorithm_state_to_string_(algo_state)
+              "Initial tune %s candidate %u/%u entered %s (reach=%ums)",
+              phase,
+              static_cast<unsigned>(this->active_candidate_index_() + 1u),
+              static_cast<unsigned>(this->active_candidate_count_()),
+              this->parent_->algorithm_state_to_string_(algo_state),
+              static_cast<unsigned>(this->current_candidate_reach_ms_)
             );
           } else if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_SUCCESS_HOLD_MS) {
             this->clear_runtime_speed_command_("initial_tune_success");
-            this->initial_tune_active_ = false;
-            this->initial_tune_stage_ = InitialTuneStage::IDLE;
-            ESP_LOGI(
-              TAG,
-              "Initial tune success with candidate %u/%u",
-              static_cast<unsigned>(this->initial_tune_candidate_index_ + 1u),
-              static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT)
-            );
-            this->log_tune_candidate_(
-              candidate,
-              "Initial tune success: copy these keys into your YAML under mcf8329a:"
-            );
+            this->record_successful_candidate_(candidate, this->current_candidate_reach_ms_);
+
+            if (!this->active_pass_is_refinement_()) {
+              const bool has_refinement = this->begin_refinement_(candidate, this->current_candidate_reach_ms_);
+              if (!has_refinement) {
+                this->finalize_initial_tune_success_();
+                return;
+              }
+            }
+
+            this->initial_tune_closed_loop_seen_ = false;
+            this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
+            this->initial_tune_stage_started_ms_ = now;
             return;
           }
         } else {
@@ -573,9 +782,13 @@ class MCF8329ATuningController {
         if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_COOLDOWN_MS) {
           return;
         }
-        this->initial_tune_candidate_index_++;
-        if (this->initial_tune_candidate_index_ >= INITIAL_TUNE_CANDIDATE_COUNT) {
-          this->finish_initial_tune_failure_();
+        this->advance_active_candidate_();
+        if (this->active_candidates_exhausted_()) {
+          if (this->active_pass_is_refinement_()) {
+            this->finalize_initial_tune_success_();
+          } else {
+            this->finalize_initial_tune_failure_();
+          }
           return;
         }
         this->initial_tune_stage_ = InitialTuneStage::APPLY;
@@ -688,6 +901,16 @@ class MCF8329ATuningController {
   uint32_t initial_tune_stage_started_ms_{0u};
   bool initial_tune_closed_loop_seen_{false};
   uint32_t initial_tune_closed_loop_seen_ms_{0u};
+  uint32_t current_candidate_start_ms_{0u};
+  uint32_t current_candidate_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
+  bool refinement_active_{false};
+  uint8_t refinement_candidate_index_{0u};
+  uint8_t refinement_candidate_count_{0u};
+  InitialTuneCandidate refinement_candidates_[MAX_REFINED_CANDIDATES]{};
+  bool refinement_best_candidate_valid_{false};
+  InitialTuneCandidate refinement_best_candidate_{};
+  int32_t refinement_best_score_{std::numeric_limits<int32_t>::min()};
+  uint32_t refinement_best_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
   bool mpet_characterization_active_{false};
   uint32_t mpet_characterization_started_ms_{0u};
 };
