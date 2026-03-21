@@ -169,14 +169,14 @@ struct InitialTuneCandidate {
 };
 
 static const InitialTuneCandidate INITIAL_TUNE_CANDIDATES[] = {
-  // Baseline: manual handoff at 14%, moderate OL accel.
-  {6u, 6u, 6u, 3u, 5u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
-  // Slightly later handoff.
-  {6u, 6u, 6u, 3u, 5u, 0u, 15u, 2u, 4u, 8u, 7u, false, false},
-  // Slower open-loop ramp with manual handoff.
-  {6u, 6u, 6u, 3u, 4u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
-  // Earlier manual handoff fallback.
-  {6u, 6u, 6u, 3u, 5u, 0u, 11u, 2u, 4u, 8u, 7u, false, false},
+  // Baseline: manual handoff at 14%, higher OL accel (250Hz/s).
+  {6u, 6u, 6u, 3u, 10u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
+  // Faster OL accel variant (500Hz/s) at same handoff.
+  {6u, 6u, 6u, 3u, 11u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
+  // Slightly later handoff with baseline accel.
+  {6u, 6u, 6u, 3u, 10u, 0u, 15u, 2u, 4u, 8u, 7u, false, false},
+  // Conservative fallback: lower accel with earlier handoff.
+  {6u, 6u, 6u, 3u, 9u, 0u, 11u, 2u, 4u, 8u, 7u, false, false},
 };
 static constexpr size_t INITIAL_TUNE_CANDIDATE_COUNT =
   sizeof(INITIAL_TUNE_CANDIDATES) / sizeof(INITIAL_TUNE_CANDIDATES[0]);

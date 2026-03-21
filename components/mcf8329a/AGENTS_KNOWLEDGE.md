@@ -102,6 +102,7 @@ Component-scoped notes for `components/mcf8329a`.
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
   - Optional monolith buttons for guided bring-up:
     - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate using manual-handoff variants by default; logs the exact recommended YAML keys/values at `INFO` for manual copy.
+    - Discovery candidates are now mid/high open-loop accel first (`250/500Hz/s` class, with conservative fallback) rather than low-accel-first, based on field data where both 270kV and 750kV motors remained stable at much higher accel.
     - `tune_initial_params` computes a per-candidate monitor timeout from `max_speed_hz`, handoff %, and open-loop accel so high-kV/high-voltage setups are not prematurely failed by the legacy fixed 7s window.
     - `tune_initial_params` handoff plausibility guard evaluates post-handoff feedback against commanded electrical speed (not `speed_ref_open_loop_hz`) to avoid false rejects when open-loop ref lags during transition.
     - The same guard rejects candidates when `speed_fdbk_hz` and `fg_speed_fdbk_hz` diverge too far (`abs(delta) > max(35Hz, 55% of higher value)`) for consecutive samples, which catches buzz/stall handoffs with implausible feedback.
@@ -143,7 +144,7 @@ Component-scoped notes for `components/mcf8329a`.
   - `clear_faults` button path also clears MPET bits before pulsing `CLR_FLT`, preventing immediate MPET_BEMF relatch.
   - If `MPET_BEMF_FAULT` is still present immediately after setup, component pulses `CLR_FLT` once automatically.
 - Boot/runtime warns that MCx83xx requires ~100us byte-gap timing and recommends `i2c.frequency <= 50kHz` for safer bring-up.
-- Bring-up troubleshooting insight from field logs:
+  - Bring-up troubleshooting insight from field logs:
   - Field baseline: this motor/system previously started successfully using `mcf8316d_manual` with the GUI-style
     startup tune flow (`apply_motor_tune`). Treat that as a known-good hardware baseline when diagnosing
     `mcf8329a` startup faults; if `mcf8329a` still trips `HW_LOCK_LIMIT`, prioritize register/config parity and
@@ -155,6 +156,7 @@ Component-scoped notes for `components/mcf8329a`.
     verify `CLOSED_LOOP4.MAX_SPEED`; too-low max speed for a high-kV motor can make the speed loop back off voltage and coast.
   - If startup overshoots hard right after `MOTOR_OPEN_LOOP -> MOTOR_CLOSED_LOOP_ALIGNED`, tune `MOTOR_STARTUP2`
     (`OL_ACC_A1`, `OL_ILIMIT`, `AUTO_HANDOFF_EN`, `OPN_CL_HANDOFF_THR`) before changing steady-state loop gains.
+  - For high-kV/high-voltage setups (for example `750kV` on `16S`), fixed 7s initial-tune monitor windows can fail late candidates even when startup behavior is otherwise acceptable; adaptive timeout from `MAX_SPEED`, handoff threshold, and open-loop accel resolves this class of false timeout.
   - Back-voltage/regen stress is most sensitive to stop and current/accel settings: aggressive `brake_mode`
     (especially `active_spin_down`), long `brake_time`, high `phase_current_limit_percent`/`open_loop_ilimit_percent`,
     and aggressive open-loop handoff tuning can all raise VM transients.
