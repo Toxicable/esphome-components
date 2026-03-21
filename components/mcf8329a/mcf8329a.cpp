@@ -190,6 +190,8 @@ class MCF8329ATuningController {
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
     this->initial_tune_candidate_index_ = 0u;
     this->initial_tune_stage_started_ms_ = 0u;
+    this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->initial_tune_closed_loop_seen_ms_ = 0u;
     this->current_candidate_start_ms_ = 0u;
@@ -235,6 +237,8 @@ class MCF8329ATuningController {
     this->initial_tune_stage_ = InitialTuneStage::APPLY;
     this->initial_tune_candidate_index_ = 0u;
     this->initial_tune_stage_started_ms_ = millis();
+    this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->initial_tune_closed_loop_seen_ms_ = 0u;
     this->current_candidate_start_ms_ = 0u;
@@ -351,6 +355,7 @@ class MCF8329ATuningController {
   static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
   static constexpr uint32_t INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
+  static constexpr uint32_t INITIAL_TUNE_FAULT_RECOVERY_PULSE_INTERVAL_MS = 500u;
   // Large low-kV motors can spend a long dwell in KE measurement.
   static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 120000u;
   static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
@@ -875,6 +880,8 @@ class MCF8329ATuningController {
   void finalize_initial_tune_success_() {
     this->initial_tune_active_ = false;
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
+    this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
@@ -915,6 +922,8 @@ class MCF8329ATuningController {
     );
     this->clear_runtime_speed_command_("initial_tune_fail");
     this->parent_->pulse_clear_faults();
+    this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
@@ -927,6 +936,8 @@ class MCF8329ATuningController {
   void finalize_initial_tune_failure_() {
     this->initial_tune_active_ = false;
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
+    this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->handoff_unstable_counter_ = 0u;
     this->handoff_stable_counter_ = 0u;
@@ -1138,6 +1149,32 @@ class MCF8329ATuningController {
         if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_COOLDOWN_MS) {
           return;
         }
+        if (this->parent_ != nullptr && (fault_active || this->parent_->severe_fault_speed_lockout_)) {
+          if (!this->initial_tune_waiting_fault_recovery_) {
+            this->initial_tune_waiting_fault_recovery_ = true;
+            ESP_LOGW(
+              TAG,
+              "Initial tune waiting for fault recovery before retrying candidate: "
+              "fault_active=%s lockout=%s",
+              YESNO(fault_active),
+              YESNO(this->parent_->severe_fault_speed_lockout_)
+            );
+          }
+          if (this->initial_tune_last_fault_clear_ms_ == 0u ||
+              (now - this->initial_tune_last_fault_clear_ms_) >=
+                INITIAL_TUNE_FAULT_RECOVERY_PULSE_INTERVAL_MS) {
+            this->parent_->pulse_clear_faults();
+            this->initial_tune_last_fault_clear_ms_ = now;
+          }
+          if (fault_active || this->parent_->severe_fault_speed_lockout_) {
+            return;
+          }
+        }
+        if (this->initial_tune_waiting_fault_recovery_) {
+          ESP_LOGI(TAG, "Initial tune fault recovery complete; resuming candidate sweep");
+          this->initial_tune_waiting_fault_recovery_ = false;
+          this->initial_tune_last_fault_clear_ms_ = 0u;
+        }
         this->advance_active_candidate_();
         if (this->active_candidates_exhausted_()) {
           if (this->active_pass_is_refinement_()) {
@@ -1255,6 +1292,8 @@ class MCF8329ATuningController {
   InitialTuneStage initial_tune_stage_{InitialTuneStage::IDLE};
   uint8_t initial_tune_candidate_index_{0u};
   uint32_t initial_tune_stage_started_ms_{0u};
+  bool initial_tune_waiting_fault_recovery_{false};
+  uint32_t initial_tune_last_fault_clear_ms_{0u};
   bool initial_tune_closed_loop_seen_{false};
   uint32_t initial_tune_closed_loop_seen_ms_{0u};
   uint32_t current_candidate_start_ms_{0u};
