@@ -102,6 +102,7 @@ Component-scoped notes for `components/mcf8329a`.
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
   - Optional monolith buttons for guided bring-up:
     - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate and biases scoring toward `auto_handoff_enable=true`; logs the exact recommended YAML keys/values at `INFO` for manual copy.
+    - `tune_initial_params` now includes a handoff plausibility guard: if post-handoff feedback is implausible (for example, speed feedback overshoot or large `speed_fdbk_hz` vs `fg_speed_fdbk_hz` mismatch) for consecutive samples, the candidate is rejected as unstable instead of being accepted.
     - `run_mpet`: kicks off MPET (`CMD+KE+MECH+WRITE_SHADOW`) and on success logs extracted `motor_bemf_const`, `speed_loop_kp_code`, and `speed_loop_ki_code` for manual copy. MPET timeout is 120s to accommodate long `MOTOR_MPET_KE_MEASURE` dwell on larger motors.
   - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
     algorithm-state transition logs and fault diagnostics for runtime visibility.
@@ -156,3 +157,4 @@ Component-scoped notes for `components/mcf8329a`.
   - For the 270kV 5065 test motor at ~27V, `max_speed_hz: 900` produced correct steady-state scaling
     (e.g. 15% command settling around ~135 Hz electrical), but overshoot still originated at open-loop handoff; this
     separates steady-state scaling (`MAX_SPEED`) from transient handoff tuning (`MOTOR_STARTUP2`).
+  - MPET can dwell in `MOTOR_MPET_KE_MEASURE (0x0014)` for long periods while spinning and without faults; this is a convergence/measurement stall pattern (not an immediate protection trip). Prioritize MPET-specific parameter path (`MPET_KE_MEAS_PARAMETER_SELECT` and MPET open-loop speed/current/slew fields) and `ALGO_STATUS_MPET` visibility before moving to hardware scope debug.

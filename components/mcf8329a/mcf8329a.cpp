@@ -194,6 +194,7 @@ class MCF8329ATuningController {
     this->initial_tune_closed_loop_seen_ms_ = 0u;
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->handoff_unstable_counter_ = 0u;
     this->refinement_active_ = false;
     this->refinement_candidate_index_ = 0u;
     this->refinement_candidate_count_ = 0u;
@@ -225,6 +226,7 @@ class MCF8329ATuningController {
     this->initial_tune_closed_loop_seen_ms_ = 0u;
     this->current_candidate_start_ms_ = 0u;
     this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
+    this->handoff_unstable_counter_ = 0u;
     this->refinement_active_ = false;
     this->refinement_candidate_index_ = 0u;
     this->refinement_candidate_count_ = 0u;
@@ -311,12 +313,14 @@ class MCF8329ATuningController {
   static constexpr uint32_t INITIAL_TUNE_SETTLE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MS = 7000u;
   static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
+  static constexpr uint32_t INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
   // Large low-kV motors can spend a long dwell in KE measurement.
   static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 120000u;
   static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
   static constexpr int32_t AUTO_HANDOFF_BONUS_SCORE = 10000;
   static constexpr int32_t ACCEL_A1_BONUS_SCORE = 100;
+  static constexpr uint8_t HANDOFF_UNSTABLE_REJECT_COUNT = 2u;
 
   bool is_closed_loop_state_(uint16_t algo_state) const {
     return algo_state == 0x0008u || algo_state == 0x0009u;
@@ -516,6 +520,56 @@ class MCF8329ATuningController {
     return score;
   }
 
+  bool read_speed_triplet_hz_(float& ref_ol_hz, float& fdbk_hz, float& fg_hz) const {
+    if (this->parent_ == nullptr) {
+      return false;
+    }
+
+    uint32_t closed_loop4 = 0;
+    float max_speed_hz =
+      this->parent_->cfg_max_speed_set_ ? this->parent_->max_speed_code_to_hz_(this->parent_->cfg_max_speed_code_)
+                                        : 0.0f;
+    if (this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
+      const uint16_t max_speed_code = static_cast<uint16_t>(
+        (closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_MASK) >>
+        MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_SHIFT
+      );
+      max_speed_hz = this->parent_->max_speed_code_to_hz_(max_speed_code);
+    }
+    if (max_speed_hz <= 0.0f) {
+      return false;
+    }
+
+    uint32_t raw_ref = 0;
+    uint32_t raw_fdbk = 0;
+    uint32_t raw_fg = 0;
+    if (!this->parent_->read_reg32(MCF8329AComponent::REG_SPEED_REF_OPEN_LOOP, raw_ref) ||
+        !this->parent_->read_reg32(MCF8329AComponent::REG_SPEED_FDBK, raw_fdbk) ||
+        !this->parent_->read_reg32(MCF8329AComponent::REG_FG_SPEED_FDBK, raw_fg)) {
+      return false;
+    }
+
+    ref_ol_hz = this->parent_->speed_raw_to_hz_(static_cast<int32_t>(raw_ref), max_speed_hz);
+    fdbk_hz = this->parent_->speed_raw_to_hz_(static_cast<int32_t>(raw_fdbk), max_speed_hz);
+    fg_hz = this->parent_->fg_speed_raw_to_hz_(raw_fg, max_speed_hz);
+    return true;
+  }
+
+  bool handoff_feedback_unstable_(float ref_ol_hz, float fdbk_hz, float fg_hz) const {
+    const float ref_abs = std::fabs(ref_ol_hz);
+    const float fdbk_abs = std::fabs(fdbk_hz);
+    const float fg_abs = std::fabs(fg_hz);
+    const float ref_basis = std::max(10.0f, ref_abs);
+
+    const bool fdbk_overshoot = fdbk_abs > std::max(30.0f, ref_basis * 2.5f);
+
+    const float pair_max = std::max(fdbk_abs, fg_abs);
+    const bool fdbk_fg_mismatch =
+      pair_max > 20.0f && std::fabs(fdbk_abs - fg_abs) > std::max(35.0f, pair_max * 0.6f);
+
+    return fdbk_overshoot || fdbk_fg_mismatch;
+  }
+
   bool active_pass_is_refinement_() const {
     return this->refinement_active_;
   }
@@ -627,6 +681,7 @@ class MCF8329ATuningController {
     this->initial_tune_active_ = false;
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
     this->initial_tune_closed_loop_seen_ = false;
+    this->handoff_unstable_counter_ = 0u;
 
     if (!this->refinement_best_candidate_valid_) {
       ESP_LOGW(TAG, "Initial tune ended without a successful candidate result");
@@ -664,6 +719,7 @@ class MCF8329ATuningController {
     this->clear_runtime_speed_command_("initial_tune_fail");
     this->parent_->pulse_clear_faults();
     this->initial_tune_closed_loop_seen_ = false;
+    this->handoff_unstable_counter_ = 0u;
     this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
     this->initial_tune_stage_started_ms_ = now;
   }
@@ -672,6 +728,7 @@ class MCF8329ATuningController {
     this->initial_tune_active_ = false;
     this->initial_tune_stage_ = InitialTuneStage::IDLE;
     this->initial_tune_closed_loop_seen_ = false;
+    this->handoff_unstable_counter_ = 0u;
     ESP_LOGW(
       TAG,
       "Initial tune failed: no discovery candidate reached closed-loop at %.1f%% command",
@@ -725,6 +782,7 @@ class MCF8329ATuningController {
         this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
         this->initial_tune_closed_loop_seen_ = false;
         this->initial_tune_closed_loop_seen_ms_ = 0u;
+        this->handoff_unstable_counter_ = 0u;
         return;
       }
 
@@ -741,6 +799,7 @@ class MCF8329ATuningController {
             this->initial_tune_closed_loop_seen_ms_ = now;
             this->current_candidate_reach_ms_ =
               now >= this->current_candidate_start_ms_ ? (now - this->current_candidate_start_ms_) : 0u;
+            this->handoff_unstable_counter_ = 0u;
             ESP_LOGI(
               TAG,
               "Initial tune %s candidate %u/%u entered %s (reach=%ums)",
@@ -750,7 +809,32 @@ class MCF8329ATuningController {
               this->parent_->algorithm_state_to_string_(algo_state),
               static_cast<unsigned>(this->current_candidate_reach_ms_)
             );
-          } else if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_SUCCESS_HOLD_MS) {
+          } else if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS) {
+            float ref_ol_hz = 0.0f;
+            float fdbk_hz = 0.0f;
+            float fg_hz = 0.0f;
+            if (this->read_speed_triplet_hz_(ref_ol_hz, fdbk_hz, fg_hz) &&
+                this->handoff_feedback_unstable_(ref_ol_hz, fdbk_hz, fg_hz)) {
+              this->handoff_unstable_counter_++;
+              ESP_LOGW(
+                TAG,
+                "Initial tune handoff guard: unstable sample %u/%u ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
+                static_cast<unsigned>(this->handoff_unstable_counter_),
+                static_cast<unsigned>(HANDOFF_UNSTABLE_REJECT_COUNT),
+                ref_ol_hz,
+                fdbk_hz,
+                fg_hz
+              );
+              if (this->handoff_unstable_counter_ >= HANDOFF_UNSTABLE_REJECT_COUNT) {
+                this->fail_initial_tune_candidate_("handoff feedback unstable", now);
+                return;
+              }
+            } else {
+              this->handoff_unstable_counter_ = 0u;
+            }
+          }
+
+          if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_SUCCESS_HOLD_MS) {
             this->clear_runtime_speed_command_("initial_tune_success");
             this->record_successful_candidate_(candidate, this->current_candidate_reach_ms_);
 
@@ -770,6 +854,7 @@ class MCF8329ATuningController {
         } else {
           this->initial_tune_closed_loop_seen_ = false;
           this->initial_tune_closed_loop_seen_ms_ = 0u;
+          this->handoff_unstable_counter_ = 0u;
         }
 
         if ((now - this->initial_tune_stage_started_ms_) >= INITIAL_TUNE_MONITOR_TIMEOUT_MS) {
@@ -904,6 +989,7 @@ class MCF8329ATuningController {
   uint32_t initial_tune_closed_loop_seen_ms_{0u};
   uint32_t current_candidate_start_ms_{0u};
   uint32_t current_candidate_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
+  uint8_t handoff_unstable_counter_{0u};
   bool refinement_active_{false};
   uint8_t refinement_candidate_index_{0u};
   uint8_t refinement_candidate_count_{0u};

@@ -41,6 +41,10 @@ mcf8329a:
   ## (kV * (4.2 * Bs) * (Rp / 2)) / 60
   max_speed_hz: 900
 
+  # 750kV, 12 pole, 4S
+  # motor_bemf_const: 0x39
+  # max_speed_hz: 1260 (for 4S full charge, 16.8V)
+
   ## Hardware baseline (required before tuning / tune_initial_params):
   # align_time: 100ms
   # direction_mode: cw
@@ -50,6 +54,8 @@ mcf8329a:
   open_loop_limit_source: ol_ilimit   # ol_ilimit | ilimit
   lock_mode: retry
   # align_or_slow_current_limit_percent: 20
+
+
 
   ## Optional open-loop/handoff tuning:
   # open_loop_ilimit_percent: 20
