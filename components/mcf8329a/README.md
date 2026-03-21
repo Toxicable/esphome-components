@@ -55,6 +55,7 @@ mcf8329a:
   # startup_max_speed_hz: 1260
 
   ## Optional bring-up helpers:
+  # TODO: why are we clearing MPET, isn't that helpful to us?
   # clear_mpet_on_startup: true
   # auto_tickle_watchdog: false
   ## Safety guardrail override (default false):
@@ -188,3 +189,10 @@ Back-voltage/regen risk knobs:
 - `phase_current_limit_percent` and `startup_open_loop_ilimit_percent`: high values increase transient current and bus stress.
 - `startup_open_loop_accel_hz_per_s` and low `startup_open_to_closed_handoff_percent`: aggressive handoff can overshoot and ring the bus.
  delete this line
+
+
+
+
+ TODO: 
+ - Use MPET
+ - READ through tuning sheet
