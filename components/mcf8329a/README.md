@@ -95,6 +95,16 @@ mcf8329a:
   # auto_tickle_watchdog: false
   # allow_unsafe_current_limits: false
 
+  ## Optional MPET profile (used when mpet_use_dedicated_params: true):
+  ## mpet_open_loop_curr_ref_percent options: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80
+  ## mpet_open_loop_speed_ref_percent options: 15 | 25 | 35 | 50
+  ## mpet_open_loop_slew_hz_per_s options: 0.1 | 0.5 | 1 | 2 | 3 | 5 | 10 | 20
+  # mpet_use_dedicated_params: true
+  # mpet_open_loop_curr_ref_percent: 40
+  # mpet_open_loop_speed_ref_percent: 35
+  # mpet_open_loop_slew_hz_per_s: 3.0
+  # mpet_timeout_ms: 180000
+
   ## Optional stop timing:
   # brake_time: 100ms
 
@@ -149,7 +159,7 @@ Safety guardrails:
 
 Auto bring-up buttons:
 - `tune_initial_params` runs a guarded discovery sweep targeting closed-loop entry at `11%`, then a refinement sweep around the first successful set using manual-handoff variants by default; discovery now starts with mid/high open-loop accel candidates (with fallback), uses adaptive per-candidate timeout plus an open-loop dwell heating guard, and ranks candidates by measured handoff quality (fast closed-loop entry, low overspeed, low feedback mismatch) before printing best values at `INFO` level for manual YAML copy.
-- `run_mpet` starts MPET (`CMD + KE + MECH + WRITE_SHADOW`) and on success logs extracted keys (`motor_bemf_const`, `speed_loop_kp_code`, `speed_loop_ki_code`) at `INFO` level for manual YAML copy.
+- `run_mpet` starts MPET (`CMD + KE + MECH + WRITE_SHADOW`), logs 1Hz MPET status (`ALGO_STATUS_MPET`, algorithm state, speed triplet), and prints a one-shot summary (elapsed time, visited-state mask, status bits, active MPET profile) on done/fault/timeout; on success it also logs extracted keys (`motor_bemf_const`, `speed_loop_kp_code`, `speed_loop_ki_code`) for manual YAML copy.
 
 ## 5065 270KV 12-pole (6 pole-pair) baseline
 Use this as a safe starting point for no-load bench bring-up:

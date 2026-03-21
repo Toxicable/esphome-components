@@ -36,6 +36,11 @@ Component-scoped notes for `components/mcf8329a`.
     - `open_loop_accel2_hz_per_s2` -> `MOTOR_STARTUP2.OL_ACC_A2[22:19]`
     - `theta_error_ramp_rate` -> `MOTOR_STARTUP2.THETA_ERROR_RAMP_RATE[2:0]`
     - `cl_slow_acc_hz_per_s` -> `INT_ALGO_2.CL_SLOW_ACC[9:6]`
+    - `mpet_use_dedicated_params` -> `INT_ALGO_2.MPET_KE_MEAS_PARAMETER_SELECT[1]`
+    - `mpet_open_loop_curr_ref_percent` -> `INT_ALGO_1.MPET_OPEN_LOOP_CURR_REF[10:8]`
+    - `mpet_open_loop_speed_ref_percent` -> `INT_ALGO_1.MPET_OPEN_LOOP_SPEED_REF[7:6]`
+    - `mpet_open_loop_slew_hz_per_s` -> `INT_ALGO_1.MPET_OPEN_LOOP_SLEW_RATE[5:3]`
+    - `mpet_timeout_ms` -> runtime timeout override for `run_mpet`
     - `lock_ilimit_deglitch_ms` -> `FAULT_CONFIG1.LOCK_ILIMIT_DEG[14:11]`
     - `hw_lock_ilimit_deglitch_us` -> `FAULT_CONFIG2.HW_LOCK_ILIMIT_DEG[14:12]`
   - Speed-loop override knobs:
@@ -89,6 +94,11 @@ Component-scoped notes for `components/mcf8329a`.
 - Runtime behavior:
   - Bring-up automation is implemented through a dedicated `MCF8329ATuningController` helper class (kept separate from the main hardware component flow) and triggered by button actions.
   - `MCF8329ATuningController` ownership in `MCF8329AComponent` uses a raw pointer with out-of-line `delete` (not `std::unique_ptr`) to avoid incomplete-type `unique_ptr` destructor static-asserts with the ESPHome/toolchain build path.
+  - Tuning implementation is split into `mcf8329a_tuning.cpp`/`mcf8329a_tuning.h`; the component keeps only orchestration calls (`start_tune_initial_params`, `start_mpet_characterization`, update hook).
+  - Hardware register/bitfield constants are centralized in `mcf8329a_client.h` (`namespace regs`) so `MCF8329AComponent` stays focused on orchestration/HA bindings and does not own mask/shift definitions.
+  - Low-level register transport is split into `mcf8329a_client.cpp`/`mcf8329a_client.h`; `MCF8329AComponent::read_reg32/read_reg16/write_reg32/update_bits32` delegate to `MCF8329AClient`.
+  - `MCF8329AClient` now owns key runtime field-masking APIs (`set_brake_input`, `set_direction_input`, `write_speed_command_raw`, `set_mpet_characterization_bits`, `pulse_clear_faults`, `pulse_watchdog_tickle`, `clear_mpet_bits`), and component control paths call these instead of open-coded `update_bits32` masks.
+  - Decode helpers moved to `MCF8329AClient`: max-speed code -> Hz, speed/FG Q27 -> Hz, open-loop accel code -> Hz/s, handoff code -> %, and VM raw -> volts; component/tuning now call client decode APIs instead of local decode methods.
   - Non-zero speed commands auto-release brake (`PIN_CONFIG.BRAKE_INPUT=no_brake`) before writing speed.
   - `set_speed_percent(...)` now logs `INFO` lines with caller reason (`number_control`, `motor_init`, `fault_shutdown`)
     and raw speed code for command-traceability.
@@ -100,6 +110,13 @@ Component-scoped notes for `components/mcf8329a`.
     Non-zero commands can be ramped internally before register writes.
   - Runtime now emits a 2Hz `INFO` speed diagnostic line while commanded speed is active:
     `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
+  - Idle telemetry guard: if `speed_cmd` is effectively zero and `fg_speed_fdbk_hz` is implausibly high
+    (`>150%` of `max_speed_hz`) while signed `speed_fdbk_hz` is near zero/unavailable, firmware now publishes
+    `fg_speed_fdbk_hz=0` to suppress stale FG feedback spikes at idle.
+  - Idle speed telemetry now applies a stronger stale/noise guard:
+    - values under `20Hz` are snapped to `0Hz` when speed command is idle.
+    - if speed registers fail to read while idle, speed entities are actively published as `0Hz` (no stale hold).
+    - `speed_ref_open_loop_hz` is also forced to `0Hz` at idle when feedback is idle/unavailable.
   - Optional monolith buttons for guided bring-up:
     - `tune_initial_params`: runs a discovery sweep to reach closed-loop, then runs a refinement sweep around the first successful candidate using manual-handoff variants by default; logs the exact recommended YAML keys/values at `INFO` for manual copy.
     - Refinement still evaluates a discrete candidate set (iterative sweep), but candidate ranking now uses measured handoff quality math (`reach_ms`, average tracking error to commanded speed, `speed_fdbk_hz`/`fg_speed_fdbk_hz` mismatch, peak overspeed ratio, unstable/missing telemetry penalties) rather than reach-time-only bias.
@@ -112,7 +129,8 @@ Component-scoped notes for `components/mcf8329a`.
     - The same guard rejects candidates when `speed_fdbk_hz` and `fg_speed_fdbk_hz` diverge too far (`abs(delta) > max(35Hz, 55% of higher value)`) for consecutive samples, which catches buzz/stall handoffs with implausible feedback.
     - Candidate success now also requires consecutive plausible handoff samples (`speed_fdbk_hz` and `fg_speed_fdbk_hz` within a commanded-speed band and mutually consistent); closed-loop state alone is no longer enough.
     - If handoff telemetry reads are repeatedly unavailable during the guard window, the candidate is failed as `handoff telemetry unavailable` instead of being silently accepted.
-    - `run_mpet`: kicks off MPET (`CMD+KE+MECH+WRITE_SHADOW`) and on success logs extracted `motor_bemf_const`, `speed_loop_kp_code`, and `speed_loop_ki_code` for manual copy. MPET timeout is 120s to accommodate long `MOTOR_MPET_KE_MEASURE` dwell on larger motors.
+    - `run_mpet`: kicks off MPET (`CMD+KE+MECH+WRITE_SHADOW`), logs 1Hz MPET runtime diagnostics (`ALGO_STATUS_MPET`, `ALGORITHM_STATE`, speed triplet), and emits a one-shot summary (elapsed time, visited-state bitmask, status bits, active MPET profile) on done/fault/timeout.
+    - MPET timeout is configurable via `mpet_timeout_ms` (default 120s); startup log and summary include active timeout/profile values.
   - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
     algorithm-state transition logs and fault diagnostics for runtime visibility.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.

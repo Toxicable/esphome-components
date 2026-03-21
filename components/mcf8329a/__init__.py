@@ -56,6 +56,11 @@ CONF_AUTO_HANDOFF_ENABLE = "auto_handoff_enable"
 CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT = "open_to_closed_handoff_percent"
 CONF_THETA_ERROR_RAMP_RATE = "theta_error_ramp_rate"
 CONF_CL_SLOW_ACC_HZ_PER_S = "cl_slow_acc_hz_per_s"
+CONF_MPET_USE_DEDICATED_PARAMS = "mpet_use_dedicated_params"
+CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT = "mpet_open_loop_curr_ref_percent"
+CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT = "mpet_open_loop_speed_ref_percent"
+CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S = "mpet_open_loop_slew_hz_per_s"
+CONF_MPET_TIMEOUT_MS = "mpet_timeout_ms"
 CONF_LOCK_ILIMIT_DEGLITCH_MS = "lock_ilimit_deglitch_ms"
 CONF_HW_LOCK_ILIMIT_DEGLITCH_US = "hw_lock_ilimit_deglitch_us"
 CONF_SPEED_LOOP_KP_CODE = "speed_loop_kp_code"
@@ -331,6 +336,35 @@ CL_SLOW_ACC_HZ_PER_S_TO_CODE = {
     2000.0: 15,
 }
 
+MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE = {
+    10: 0,
+    20: 1,
+    30: 2,
+    40: 3,
+    50: 4,
+    60: 5,
+    70: 6,
+    80: 7,
+}
+
+MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE = {
+    15: 0,
+    25: 1,
+    35: 2,
+    50: 3,
+}
+
+MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE = {
+    0.1: 0,
+    0.5: 1,
+    1.0: 2,
+    2.0: 3,
+    3.0: 4,
+    5.0: 5,
+    10.0: 6,
+    20.0: 7,
+}
+
 LOCK_ILIMIT_DEGLITCH_MS_TO_CODE = {
     0.0: 0,
     0.1: 1,
@@ -511,6 +545,37 @@ def validate_cl_slow_acc_hz_per_s(value):
     )
 
 
+def validate_mpet_open_loop_curr_ref_percent(value):
+    value = cv.int_(value)
+    if value not in MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE:
+        raise cv.Invalid(
+            "mpet_open_loop_curr_ref_percent must be one of: "
+            + ", ".join(str(v) for v in MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE)
+        )
+    return value
+
+
+def validate_mpet_open_loop_speed_ref_percent(value):
+    value = cv.int_(value)
+    if value not in MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE:
+        raise cv.Invalid(
+            "mpet_open_loop_speed_ref_percent must be one of: "
+            + ", ".join(str(v) for v in MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE)
+        )
+    return value
+
+
+def validate_mpet_open_loop_slew_hz_per_s(value):
+    value = cv.float_(value)
+    for allowed in MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE:
+        if abs(value - allowed) < 1e-6:
+            return allowed
+    raise cv.Invalid(
+        "mpet_open_loop_slew_hz_per_s must be one of: "
+        + ", ".join(str(v) for v in MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE)
+    )
+
+
 def validate_lock_ilimit_deglitch_ms(value):
     value = cv.float_(value)
     for allowed in LOCK_ILIMIT_DEGLITCH_MS_TO_CODE:
@@ -577,6 +642,10 @@ def validate_tuning_prerequisites(config):
         CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT,
         CONF_THETA_ERROR_RAMP_RATE,
         CONF_CL_SLOW_ACC_HZ_PER_S,
+        CONF_MPET_USE_DEDICATED_PARAMS,
+        CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT,
+        CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT,
+        CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S,
         CONF_LOCK_ILIMIT_PERCENT,
         CONF_HW_LOCK_ILIMIT_PERCENT,
         CONF_LOCK_ILIMIT_DEGLITCH_MS,
@@ -679,6 +748,11 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT): validate_open_to_closed_handoff_percent,
             cv.Optional(CONF_THETA_ERROR_RAMP_RATE): validate_theta_error_ramp_rate,
             cv.Optional(CONF_CL_SLOW_ACC_HZ_PER_S): validate_cl_slow_acc_hz_per_s,
+            cv.Optional(CONF_MPET_USE_DEDICATED_PARAMS): cv.boolean,
+            cv.Optional(CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT): validate_mpet_open_loop_curr_ref_percent,
+            cv.Optional(CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT): validate_mpet_open_loop_speed_ref_percent,
+            cv.Optional(CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S): validate_mpet_open_loop_slew_hz_per_s,
+            cv.Optional(CONF_MPET_TIMEOUT_MS): cv.int_range(min=1000, max=600000),
             cv.Optional(CONF_LOCK_ILIMIT_DEGLITCH_MS): validate_lock_ilimit_deglitch_ms,
             cv.Optional(CONF_HW_LOCK_ILIMIT_DEGLITCH_US): validate_hw_lock_ilimit_deglitch_us,
             cv.Optional(CONF_SPEED_LOOP_KP_CODE): cv.int_range(min=0, max=1023),
@@ -850,6 +924,28 @@ async def to_code(config):
         cg.add(var.set_cfg_theta_error_ramp_rate(THETA_ERROR_RAMP_RATE_TO_CODE[config[CONF_THETA_ERROR_RAMP_RATE]]))
     if CONF_CL_SLOW_ACC_HZ_PER_S in config:
         cg.add(var.set_cfg_cl_slow_acc(CL_SLOW_ACC_HZ_PER_S_TO_CODE[config[CONF_CL_SLOW_ACC_HZ_PER_S]]))
+    if CONF_MPET_USE_DEDICATED_PARAMS in config:
+        cg.add(var.set_cfg_mpet_use_dedicated_params(config[CONF_MPET_USE_DEDICATED_PARAMS]))
+    if CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT in config:
+        cg.add(
+            var.set_cfg_mpet_open_loop_curr_ref(
+                MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE[config[CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT]]
+            )
+        )
+    if CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT in config:
+        cg.add(
+            var.set_cfg_mpet_open_loop_speed_ref(
+                MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE[config[CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT]]
+            )
+        )
+    if CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S in config:
+        cg.add(
+            var.set_cfg_mpet_open_loop_slew(
+                MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE[config[CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S]]
+            )
+        )
+    if CONF_MPET_TIMEOUT_MS in config:
+        cg.add(var.set_mpet_timeout_ms(config[CONF_MPET_TIMEOUT_MS]))
     if CONF_LOCK_ILIMIT_DEGLITCH_MS in config:
         cg.add(var.set_cfg_lock_ilimit_deglitch(LOCK_ILIMIT_DEGLITCH_MS_TO_CODE[config[CONF_LOCK_ILIMIT_DEGLITCH_MS]]))
     if CONF_HW_LOCK_ILIMIT_DEGLITCH_US in config:

@@ -1,10 +1,10 @@
 #include "mcf8329a.h"
+#include "mcf8329a_tuning.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <limits>
 #include <vector>
 
 #include "esphome/core/hal.h"
@@ -12,6 +12,8 @@
 
 namespace esphome {
 namespace mcf8329a {
+
+using namespace regs;
 
 static const char* const TAG = "mcf8329a";
 static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
@@ -62,24 +64,6 @@ static const char* const NO_MOTOR_THRESHOLD_LABELS[8] = {
   "10%",
   "20%",
 };
-static constexpr float OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[16] = {
-  0.01f,
-  0.05f,
-  1.0f,
-  2.5f,
-  5.0f,
-  10.0f,
-  25.0f,
-  50.0f,
-  75.0f,
-  100.0f,
-  250.0f,
-  500.0f,
-  750.0f,
-  1000.0f,
-  5000.0f,
-  10000.0f,
-};
 static constexpr float OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
   0.0f,
   0.05f,
@@ -97,11 +81,6 @@ static constexpr float OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
   1000.0f,
   5000.0f,
   10000.0f,
-};
-static constexpr float OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[32] = {
-  1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,  10.0f, 11.0f,
-  12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f, 19.0f, 20.0f, 22.5f, 25.0f,
-  27.5f, 30.0f, 32.5f, 35.0f, 37.5f, 40.0f, 42.5f, 45.0f, 47.5f, 50.0f,
 };
 static constexpr float THETA_ERROR_RAMP_RATE_TABLE[8] = {
   0.01f,
@@ -152,1171 +131,15 @@ static constexpr float LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
 static constexpr uint8_t HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[8] = {
   0, 1, 2, 3, 4, 5, 6, 7,
 };
-struct InitialTuneCandidate {
-  uint8_t phase_ilimit_code;
-  uint8_t lock_ilimit_code;
-  uint8_t hw_lock_ilimit_code;
-  uint8_t open_loop_ilimit_code;
-  uint8_t open_loop_accel_a1_code;
-  uint8_t open_loop_accel_a2_code;
-  uint8_t handoff_code;
-  uint8_t theta_error_ramp_code;
-  uint8_t cl_slow_acc_code;
-  uint8_t lock_ilimit_deglitch_code;
-  uint8_t hw_lock_ilimit_deglitch_code;
-  bool auto_handoff_enable;
-  bool abn_bemf_lock_enable;
+static constexpr uint8_t MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[8] = {
+  10, 20, 30, 40, 50, 60, 70, 80,
 };
-
-static const InitialTuneCandidate INITIAL_TUNE_CANDIDATES[] = {
-  // Baseline: manual handoff at 14%, higher OL accel (250Hz/s).
-  {6u, 6u, 6u, 3u, 10u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
-  // Faster OL accel variant (500Hz/s) at same handoff.
-  {6u, 6u, 6u, 3u, 11u, 0u, 13u, 2u, 4u, 8u, 7u, false, false},
-  // Slightly later handoff with baseline accel.
-  {6u, 6u, 6u, 3u, 10u, 0u, 15u, 2u, 4u, 8u, 7u, false, false},
-  // Conservative fallback: lower accel with earlier handoff.
-  {6u, 6u, 6u, 3u, 9u, 0u, 11u, 2u, 4u, 8u, 7u, false, false},
+static constexpr uint8_t MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[4] = {
+  15, 25, 35, 50,
 };
-static constexpr size_t INITIAL_TUNE_CANDIDATE_COUNT =
-  sizeof(INITIAL_TUNE_CANDIDATES) / sizeof(INITIAL_TUNE_CANDIDATES[0]);
-
-class MCF8329ATuningController {
- public:
-  explicit MCF8329ATuningController(MCF8329AComponent* parent) : parent_(parent) {}
-
-  void reset() {
-    this->initial_tune_active_ = false;
-    this->initial_tune_stage_ = InitialTuneStage::IDLE;
-    this->initial_tune_candidate_index_ = 0u;
-    this->initial_tune_stage_started_ms_ = 0u;
-    this->initial_tune_waiting_fault_recovery_ = false;
-    this->initial_tune_last_fault_clear_ms_ = 0u;
-    this->initial_tune_closed_loop_seen_ = false;
-    this->initial_tune_closed_loop_seen_ms_ = 0u;
-    this->current_candidate_start_ms_ = 0u;
-    this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->current_candidate_monitor_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->current_candidate_open_loop_dwell_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->handoff_unstable_counter_ = 0u;
-    this->handoff_stable_counter_ = 0u;
-    this->handoff_telemetry_miss_counter_ = 0u;
-    this->refinement_active_ = false;
-    this->refinement_candidate_index_ = 0u;
-    this->refinement_candidate_count_ = 0u;
-    this->refinement_best_candidate_valid_ = false;
-    this->refinement_best_score_ = std::numeric_limits<int32_t>::min();
-    this->refinement_best_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->current_candidate_metrics_ = CandidateQualityMetrics{};
-    this->refinement_best_metrics_ = CandidateQualityMetrics{};
-    this->mpet_characterization_active_ = false;
-    this->mpet_characterization_started_ms_ = 0u;
-  }
-
-  void start_initial_tune() {
-    if (this->parent_ == nullptr || !this->parent_->normal_operation_ready_) {
-      ESP_LOGW(TAG, "Initial tune requested before communications are ready");
-      return;
-    }
-    if (this->mpet_characterization_active_) {
-      ESP_LOGW(TAG, "Initial tune blocked while MPET characterization is active");
-      return;
-    }
-
-    this->clear_runtime_speed_command_("initial_tune_prepare");
-    this->parent_->pulse_clear_faults();
-    if (this->parent_->cfg_open_loop_limit_source_set_ && this->parent_->cfg_open_loop_limit_use_ilimit_) {
-      ESP_LOGW(
-        TAG,
-        "Initial tune warning: open_loop_limit_source=ilimit can increase open-loop current/heating; "
-        "prefer ol_ilimit for discovery runs."
-      );
-    }
-
-    this->initial_tune_active_ = true;
-    this->initial_tune_stage_ = InitialTuneStage::APPLY;
-    this->initial_tune_candidate_index_ = 0u;
-    this->initial_tune_stage_started_ms_ = millis();
-    this->initial_tune_waiting_fault_recovery_ = false;
-    this->initial_tune_last_fault_clear_ms_ = 0u;
-    this->initial_tune_closed_loop_seen_ = false;
-    this->initial_tune_closed_loop_seen_ms_ = 0u;
-    this->current_candidate_start_ms_ = 0u;
-    this->current_candidate_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->current_candidate_monitor_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->current_candidate_open_loop_dwell_timeout_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->handoff_unstable_counter_ = 0u;
-    this->handoff_stable_counter_ = 0u;
-    this->handoff_telemetry_miss_counter_ = 0u;
-    this->refinement_active_ = false;
-    this->refinement_candidate_index_ = 0u;
-    this->refinement_candidate_count_ = 0u;
-    this->refinement_best_candidate_valid_ = false;
-    this->refinement_best_score_ = std::numeric_limits<int32_t>::min();
-    this->refinement_best_reach_ms_ = INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    this->current_candidate_metrics_ = CandidateQualityMetrics{};
-    this->refinement_best_metrics_ = CandidateQualityMetrics{};
-
-    ESP_LOGI(
-      TAG,
-      "Initial tune started: %u discovery candidate(s), target speed %.1f%%",
-      static_cast<unsigned>(INITIAL_TUNE_CANDIDATE_COUNT),
-      INITIAL_TUNE_SPEED_PERCENT
-    );
-    ESP_LOGI(TAG, "Initial tune will run a refinement sweep after first success (manual-handoff candidates)");
-  }
-
-  void start_mpet_characterization() {
-    if (this->parent_ == nullptr || !this->parent_->normal_operation_ready_) {
-      ESP_LOGW(TAG, "MPET characterization requested before communications are ready");
-      return;
-    }
-    if (this->initial_tune_active_) {
-      ESP_LOGW(TAG, "MPET characterization blocked while initial tuning is active");
-      return;
-    }
-    if (this->mpet_characterization_active_) {
-      ESP_LOGW(TAG, "MPET characterization is already running");
-      return;
-    }
-
-    this->clear_runtime_speed_command_("mpet_prepare");
-    this->parent_->pulse_clear_faults();
-    (void)this->parent_->clear_mpet_bits_("mpet_prepare");
-
-    if (!this->parent_->set_brake_override(false)) {
-      ESP_LOGW(TAG, "MPET characterization aborted: failed to release brake");
-      return;
-    }
-    if (this->parent_->brake_switch_ != nullptr) {
-      this->parent_->brake_switch_->publish_state(false);
-    }
-
-    const uint32_t mpet_bits = MCF8329AComponent::ALGO_DEBUG2_MPET_CMD_MASK |
-                               MCF8329AComponent::ALGO_DEBUG2_MPET_KE_MASK |
-                               MCF8329AComponent::ALGO_DEBUG2_MPET_MECH_MASK |
-                               MCF8329AComponent::ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
-    if (!this->parent_->update_bits32(
-          MCF8329AComponent::REG_ALGO_DEBUG2,
-          MCF8329AComponent::ALGO_DEBUG2_MPET_ALL_MASK,
-          mpet_bits
-        )) {
-      ESP_LOGW(TAG, "MPET characterization aborted: failed to set MPET command bits");
-      return;
-    }
-
-    this->mpet_characterization_active_ = true;
-    this->mpet_characterization_started_ms_ = millis();
-    ESP_LOGI(TAG, "MPET characterization started (timeout %us)", MPET_RUN_TIMEOUT_MS / 1000u);
-  }
-
-  void update(bool normal_operation_ready, bool fault_active) {
-    if (!normal_operation_ready) {
-      return;
-    }
-    const uint32_t now = millis();
-    if (this->initial_tune_active_) {
-      this->process_initial_tune_(fault_active, now);
-    }
-    if (this->mpet_characterization_active_) {
-      this->process_mpet_characterization_(fault_active, now);
-    }
-  }
-
- private:
-  enum class InitialTuneStage : uint8_t {
-    IDLE = 0,
-    APPLY = 1,
-    START = 2,
-    MONITOR = 3,
-    COOLDOWN = 4,
-  };
-
-  struct CandidateQualityMetrics {
-    uint16_t sample_count{0u};
-    uint16_t telemetry_miss_count{0u};
-    uint16_t unstable_count{0u};
-    float tracking_error_sum_hz{0.0f};
-    float mismatch_error_sum_hz{0.0f};
-    float peak_speed_ratio{0.0f};
-  };
-
-  static constexpr float INITIAL_TUNE_SPEED_PERCENT = 11.0f;
-  static constexpr uint32_t INITIAL_TUNE_SETTLE_MS = 250u;
-  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MS = 7000u;
-  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MIN_MS = 7000u;
-  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS = 45000u;
-  static constexpr float INITIAL_TUNE_MONITOR_TIMEOUT_SCALE = 1.6f;
-  static constexpr uint32_t INITIAL_TUNE_MONITOR_TIMEOUT_MARGIN_MS = 2500u;
-  static constexpr uint32_t INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MIN_MS = 2000u;
-  static constexpr uint32_t INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MAX_MS = 12000u;
-  static constexpr float INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_SCALE = 1.3f;
-  static constexpr uint32_t INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MARGIN_MS = 1200u;
-  static constexpr uint32_t INITIAL_TUNE_SUCCESS_HOLD_MS = 800u;
-  static constexpr uint32_t INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS = 250u;
-  static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
-  static constexpr uint32_t INITIAL_TUNE_FAULT_RECOVERY_PULSE_INTERVAL_MS = 500u;
-  // Large low-kV motors can spend a long dwell in KE measurement.
-  static constexpr uint32_t MPET_RUN_TIMEOUT_MS = 120000u;
-  static constexpr uint8_t MAX_REFINED_CANDIDATES = 6u;
-  static constexpr int32_t ACCEL_A1_BONUS_SCORE = 40;
-  static constexpr float SCORE_TRACKING_ERROR_WEIGHT = 90.0f;
-  static constexpr float SCORE_MISMATCH_ERROR_WEIGHT = 120.0f;
-  static constexpr float SCORE_OVERSPEED_RATIO_WEIGHT = 4500.0f;
-  static constexpr int32_t SCORE_UNSTABLE_SAMPLE_PENALTY = 1800;
-  static constexpr int32_t SCORE_TELEMETRY_MISS_PENALTY = 700;
-  static constexpr int32_t SCORE_NO_SAMPLE_PENALTY = 25000;
-  static constexpr uint8_t HANDOFF_UNSTABLE_REJECT_COUNT = 2u;
-  static constexpr uint8_t HANDOFF_STABLE_ACCEPT_COUNT = 2u;
-  static constexpr uint8_t HANDOFF_TELEMETRY_MISS_REJECT_COUNT = 3u;
-
-  bool is_closed_loop_state_(uint16_t algo_state) const {
-    return algo_state == 0x0008u || algo_state == 0x0009u;
-  }
-
-  bool read_algorithm_state_(uint16_t& algo_state) const {
-    if (this->parent_ == nullptr) {
-      return false;
-    }
-    return this->parent_->read_reg16(MCF8329AComponent::REG_ALGORITHM_STATE, algo_state);
-  }
-
-  void clear_runtime_speed_command_(const char* reason) {
-    if (this->parent_ == nullptr) {
-      return;
-    }
-    this->parent_->speed_target_percent_ = 0.0f;
-    this->parent_->speed_target_active_ = false;
-    this->parent_->start_boost_active_ = false;
-    this->parent_->start_boost_until_ms_ = 0u;
-    this->parent_->last_ramp_update_ms_ = 0u;
-    (void)this->parent_->apply_speed_command_(0.0f, reason, true);
-  }
-
-  bool apply_tune_candidate_(const InitialTuneCandidate& candidate) {
-    if (this->parent_ == nullptr) {
-      return false;
-    }
-
-    const uint32_t fault_cfg1_mask = MCF8329AComponent::FAULT_CONFIG1_ILIMIT_MASK |
-                                     MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_MASK |
-                                     MCF8329AComponent::FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK |
-                                     MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK;
-    const uint32_t fault_cfg1_value =
-      ((static_cast<uint32_t>(candidate.phase_ilimit_code) << MCF8329AComponent::FAULT_CONFIG1_ILIMIT_SHIFT) &
-       MCF8329AComponent::FAULT_CONFIG1_ILIMIT_MASK) |
-      ((static_cast<uint32_t>(candidate.lock_ilimit_code) <<
-        MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_SHIFT) &
-       MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_MASK) |
-      ((static_cast<uint32_t>(candidate.hw_lock_ilimit_code) <<
-        MCF8329AComponent::FAULT_CONFIG1_HW_LOCK_ILIMIT_SHIFT) &
-       MCF8329AComponent::FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK) |
-      ((static_cast<uint32_t>(candidate.lock_ilimit_deglitch_code) <<
-        MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) &
-       MCF8329AComponent::FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK);
-    if (!this->parent_->update_bits32(MCF8329AComponent::REG_FAULT_CONFIG1, fault_cfg1_mask, fault_cfg1_value)) {
-      return false;
-    }
-
-    const uint32_t fault_cfg2_mask = MCF8329AComponent::FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK |
-                                     MCF8329AComponent::FAULT_CONFIG2_LOCK2_EN_MASK;
-    uint32_t fault_cfg2_value =
-      ((static_cast<uint32_t>(candidate.hw_lock_ilimit_deglitch_code) <<
-        MCF8329AComponent::FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) &
-       MCF8329AComponent::FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK);
-    if (candidate.abn_bemf_lock_enable) {
-      fault_cfg2_value |= MCF8329AComponent::FAULT_CONFIG2_LOCK2_EN_MASK;
-    }
-    if (!this->parent_->update_bits32(MCF8329AComponent::REG_FAULT_CONFIG2, fault_cfg2_mask, fault_cfg2_value)) {
-      return false;
-    }
-
-    const uint32_t startup2_mask = MCF8329AComponent::MOTOR_STARTUP2_OL_ILIMIT_MASK |
-                                   MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A1_MASK |
-                                   MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A2_MASK |
-                                   MCF8329AComponent::MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK |
-                                   MCF8329AComponent::MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK |
-                                   MCF8329AComponent::MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK;
-    uint32_t startup2_value =
-      ((static_cast<uint32_t>(candidate.open_loop_ilimit_code) <<
-        MCF8329AComponent::MOTOR_STARTUP2_OL_ILIMIT_SHIFT) &
-       MCF8329AComponent::MOTOR_STARTUP2_OL_ILIMIT_MASK) |
-      ((static_cast<uint32_t>(candidate.open_loop_accel_a1_code) <<
-        MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A1_SHIFT) &
-       MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A1_MASK) |
-      ((static_cast<uint32_t>(candidate.open_loop_accel_a2_code) <<
-        MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A2_SHIFT) &
-       MCF8329AComponent::MOTOR_STARTUP2_OL_ACC_A2_MASK) |
-      ((static_cast<uint32_t>(candidate.handoff_code) <<
-        MCF8329AComponent::MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT) &
-       MCF8329AComponent::MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK) |
-      ((static_cast<uint32_t>(candidate.theta_error_ramp_code) <<
-        MCF8329AComponent::MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_SHIFT) &
-       MCF8329AComponent::MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK);
-    if (candidate.auto_handoff_enable) {
-      startup2_value |= MCF8329AComponent::MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
-    }
-    if (!this->parent_->update_bits32(MCF8329AComponent::REG_MOTOR_STARTUP2, startup2_mask, startup2_value)) {
-      return false;
-    }
-
-    const uint32_t int_algo2_value =
-      (static_cast<uint32_t>(candidate.cl_slow_acc_code) << MCF8329AComponent::INT_ALGO_2_CL_SLOW_ACC_SHIFT) &
-      MCF8329AComponent::INT_ALGO_2_CL_SLOW_ACC_MASK;
-    return this->parent_->update_bits32(
-      MCF8329AComponent::REG_INT_ALGO_2,
-      MCF8329AComponent::INT_ALGO_2_CL_SLOW_ACC_MASK,
-      int_algo2_value
-    );
-  }
-
-  void log_tune_candidate_(const InitialTuneCandidate& candidate, const char* prefix) const {
-    ESP_LOGI(TAG, "%s", prefix);
-    ESP_LOGI(
-      TAG,
-      "  phase_current_limit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.phase_ilimit_code & 0x0Fu])
-    );
-    ESP_LOGI(
-      TAG,
-      "  lock_ilimit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.lock_ilimit_code & 0x0Fu])
-    );
-    ESP_LOGI(
-      TAG,
-      "  hw_lock_ilimit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.hw_lock_ilimit_code & 0x0Fu])
-    );
-    ESP_LOGI(
-      TAG,
-      "  open_loop_ilimit_percent: %u",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[candidate.open_loop_ilimit_code & 0x0Fu])
-    );
-    ESP_LOGI(
-      TAG,
-      "  open_loop_accel_hz_per_s: %.2f",
-      OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu]
-    );
-    ESP_LOGI(
-      TAG,
-      "  open_loop_accel2_hz_per_s2: %.2f",
-      OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[candidate.open_loop_accel_a2_code & 0x0Fu]
-    );
-    ESP_LOGI(
-      TAG,
-      "  open_to_closed_handoff_percent: %.1f",
-      OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[candidate.handoff_code & 0x1Fu]
-    );
-    ESP_LOGI(
-      TAG,
-      "  theta_error_ramp_rate: %.2f",
-      THETA_ERROR_RAMP_RATE_TABLE[candidate.theta_error_ramp_code & 0x07u]
-    );
-    ESP_LOGI(
-      TAG,
-      "  cl_slow_acc_hz_per_s: %.1f",
-      CL_SLOW_ACC_HZ_PER_S_TABLE[candidate.cl_slow_acc_code & 0x0Fu]
-    );
-    ESP_LOGI(
-      TAG,
-      "  lock_ilimit_deglitch_ms: %.1f",
-      LOCK_ILIMIT_DEGLITCH_MS_TABLE[candidate.lock_ilimit_deglitch_code & 0x0Fu]
-    );
-    ESP_LOGI(
-      TAG,
-      "  hw_lock_ilimit_deglitch_us: %u",
-      static_cast<unsigned>(
-        HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[candidate.hw_lock_ilimit_deglitch_code & 0x07u]
-      )
-    );
-    ESP_LOGI(TAG, "  auto_handoff_enable: %s", candidate.auto_handoff_enable ? "true" : "false");
-    ESP_LOGI(TAG, "  abn_bemf_lock_enable: %s", candidate.abn_bemf_lock_enable ? "true" : "false");
-  }
-
-  bool candidates_equal_(const InitialTuneCandidate& a, const InitialTuneCandidate& b) const {
-    return a.phase_ilimit_code == b.phase_ilimit_code && a.lock_ilimit_code == b.lock_ilimit_code &&
-           a.hw_lock_ilimit_code == b.hw_lock_ilimit_code &&
-           a.open_loop_ilimit_code == b.open_loop_ilimit_code &&
-           a.open_loop_accel_a1_code == b.open_loop_accel_a1_code &&
-           a.open_loop_accel_a2_code == b.open_loop_accel_a2_code && a.handoff_code == b.handoff_code &&
-           a.theta_error_ramp_code == b.theta_error_ramp_code &&
-           a.cl_slow_acc_code == b.cl_slow_acc_code &&
-           a.lock_ilimit_deglitch_code == b.lock_ilimit_deglitch_code &&
-           a.hw_lock_ilimit_deglitch_code == b.hw_lock_ilimit_deglitch_code &&
-           a.auto_handoff_enable == b.auto_handoff_enable &&
-           a.abn_bemf_lock_enable == b.abn_bemf_lock_enable;
-  }
-
-  void append_refined_candidate_(const InitialTuneCandidate& candidate) {
-    if (this->refinement_candidate_count_ >= MAX_REFINED_CANDIDATES) {
-      return;
-    }
-    for (uint8_t i = 0u; i < this->refinement_candidate_count_; i++) {
-      if (this->candidates_equal_(this->refinement_candidates_[i], candidate)) {
-        return;
-      }
-    }
-    this->refinement_candidates_[this->refinement_candidate_count_++] = candidate;
-  }
-
-  float candidate_avg_tracking_error_hz_(const CandidateQualityMetrics& metrics) const {
-    if (metrics.sample_count == 0u) {
-      return 999.0f;
-    }
-    return metrics.tracking_error_sum_hz / static_cast<float>(metrics.sample_count);
-  }
-
-  float candidate_avg_mismatch_error_hz_(const CandidateQualityMetrics& metrics) const {
-    if (metrics.sample_count == 0u) {
-      return 999.0f;
-    }
-    return metrics.mismatch_error_sum_hz / static_cast<float>(metrics.sample_count);
-  }
-
-  void reset_candidate_quality_metrics_() {
-    this->current_candidate_metrics_ = CandidateQualityMetrics{};
-  }
-
-  void record_candidate_quality_sample_(float commanded_hz, float fdbk_hz, float fg_hz, bool unstable) {
-    const float commanded_abs = std::fabs(commanded_hz);
-    const float fdbk_abs = std::fabs(fdbk_hz);
-    const float fg_abs = std::fabs(fg_hz);
-    const float command_basis = std::max(20.0f, commanded_abs);
-    const float pair_avg = (fdbk_abs + fg_abs) * 0.5f;
-    const float pair_max = std::max(fdbk_abs, fg_abs);
-
-    if (this->current_candidate_metrics_.sample_count < std::numeric_limits<uint16_t>::max()) {
-      this->current_candidate_metrics_.sample_count++;
-    }
-    this->current_candidate_metrics_.tracking_error_sum_hz += std::fabs(pair_avg - command_basis);
-    this->current_candidate_metrics_.mismatch_error_sum_hz += std::fabs(fdbk_abs - fg_abs);
-
-    const float speed_ratio = pair_max / command_basis;
-    if (speed_ratio > this->current_candidate_metrics_.peak_speed_ratio) {
-      this->current_candidate_metrics_.peak_speed_ratio = speed_ratio;
-    }
-    if (unstable && this->current_candidate_metrics_.unstable_count < std::numeric_limits<uint16_t>::max()) {
-      this->current_candidate_metrics_.unstable_count++;
-    }
-  }
-
-  void record_candidate_quality_telemetry_miss_() {
-    if (this->current_candidate_metrics_.telemetry_miss_count < std::numeric_limits<uint16_t>::max()) {
-      this->current_candidate_metrics_.telemetry_miss_count++;
-    }
-  }
-
-  int32_t score_candidate_(
-    const InitialTuneCandidate& candidate, uint32_t reach_ms, const CandidateQualityMetrics& metrics
-  ) const {
-    const float avg_tracking_hz = this->candidate_avg_tracking_error_hz_(metrics);
-    const float avg_mismatch_hz = this->candidate_avg_mismatch_error_hz_(metrics);
-    const float overspeed_ratio = std::max(0.0f, metrics.peak_speed_ratio - 1.10f);
-    const float quality_penalty = (avg_tracking_hz * SCORE_TRACKING_ERROR_WEIGHT) +
-                                  (avg_mismatch_hz * SCORE_MISMATCH_ERROR_WEIGHT) +
-                                  (overspeed_ratio * SCORE_OVERSPEED_RATIO_WEIGHT);
-
-    int32_t score = -static_cast<int32_t>(reach_ms);
-    score -= static_cast<int32_t>(quality_penalty + 0.5f);
-    score -= static_cast<int32_t>(metrics.unstable_count) * SCORE_UNSTABLE_SAMPLE_PENALTY;
-    score -= static_cast<int32_t>(metrics.telemetry_miss_count) * SCORE_TELEMETRY_MISS_PENALTY;
-    if (metrics.sample_count == 0u) {
-      score -= SCORE_NO_SAMPLE_PENALTY;
-    }
-    score += static_cast<int32_t>(candidate.open_loop_accel_a1_code) * ACCEL_A1_BONUS_SCORE;
-    return score;
-  }
-
-  bool read_speed_triplet_hz_(float& ref_ol_hz, float& fdbk_hz, float& fg_hz, float& max_speed_hz) const {
-    if (this->parent_ == nullptr) {
-      return false;
-    }
-
-    uint32_t closed_loop4 = 0;
-    max_speed_hz =
-      this->parent_->cfg_max_speed_set_ ? this->parent_->max_speed_code_to_hz_(this->parent_->cfg_max_speed_code_)
-                                        : 0.0f;
-    if (this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
-      const uint16_t max_speed_code = static_cast<uint16_t>(
-        (closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_MASK) >>
-        MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_SHIFT
-      );
-      max_speed_hz = this->parent_->max_speed_code_to_hz_(max_speed_code);
-    }
-    if (max_speed_hz <= 0.0f) {
-      return false;
-    }
-
-    uint32_t raw_ref = 0;
-    uint32_t raw_fdbk = 0;
-    uint32_t raw_fg = 0;
-    if (!this->parent_->read_reg32(MCF8329AComponent::REG_SPEED_REF_OPEN_LOOP, raw_ref) ||
-        !this->parent_->read_reg32(MCF8329AComponent::REG_SPEED_FDBK, raw_fdbk) ||
-        !this->parent_->read_reg32(MCF8329AComponent::REG_FG_SPEED_FDBK, raw_fg)) {
-      return false;
-    }
-
-    ref_ol_hz = this->parent_->speed_raw_to_hz_(static_cast<int32_t>(raw_ref), max_speed_hz);
-    fdbk_hz = this->parent_->speed_raw_to_hz_(static_cast<int32_t>(raw_fdbk), max_speed_hz);
-    fg_hz = this->parent_->fg_speed_raw_to_hz_(raw_fg, max_speed_hz);
-    return true;
-  }
-
-  bool handoff_feedback_unstable_(float commanded_hz, float fdbk_hz, float fg_hz) const {
-    const float commanded_abs = std::fabs(commanded_hz);
-    const float fdbk_abs = std::fabs(fdbk_hz);
-    const float fg_abs = std::fabs(fg_hz);
-    const float command_basis = std::max(20.0f, commanded_abs);
-
-    const bool severe_overspeed = fdbk_abs > (command_basis * 2.2f) && fg_abs > (command_basis * 2.2f);
-
-    const float pair_max = std::max(fdbk_abs, fg_abs);
-    const bool fdbk_fg_mismatch =
-      pair_max > 20.0f && std::fabs(fdbk_abs - fg_abs) > std::max(35.0f, pair_max * 0.55f);
-
-    return severe_overspeed || fdbk_fg_mismatch;
-  }
-
-  bool handoff_feedback_stable_(float commanded_hz, float fdbk_hz, float fg_hz) const {
-    const float commanded_abs = std::fabs(commanded_hz);
-    const float fdbk_abs = std::fabs(fdbk_hz);
-    const float fg_abs = std::fabs(fg_hz);
-    const float command_basis = std::max(20.0f, commanded_abs);
-
-    const float min_expected = command_basis * 0.2f;
-    const float max_expected = command_basis * 1.9f;
-    const bool both_in_expected_band = fdbk_abs >= min_expected && fg_abs >= min_expected &&
-                                       fdbk_abs <= max_expected && fg_abs <= max_expected;
-
-    const float pair_max = std::max(fdbk_abs, fg_abs);
-    const bool pair_consistent = pair_max <= 20.0f || std::fabs(fdbk_abs - fg_abs) <= std::max(25.0f, pair_max * 0.45f);
-
-    return both_in_expected_band && pair_consistent;
-  }
-
-  bool estimate_handoff_time_ms_(const InitialTuneCandidate& candidate, float& est_handoff_ms) const {
-    est_handoff_ms = 0.0f;
-    if (this->parent_ == nullptr) {
-      return false;
-    }
-
-    float max_speed_hz =
-      this->parent_->cfg_max_speed_set_ ? this->parent_->max_speed_code_to_hz_(this->parent_->cfg_max_speed_code_)
-                                        : 0.0f;
-    uint32_t closed_loop4 = 0;
-    if (this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
-      const uint16_t max_speed_code = static_cast<uint16_t>(
-        (closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_MASK) >>
-        MCF8329AComponent::CLOSED_LOOP4_MAX_SPEED_SHIFT
-      );
-      max_speed_hz = this->parent_->max_speed_code_to_hz_(max_speed_code);
-    }
-    if (max_speed_hz <= 0.0f) {
-      return false;
-    }
-
-    const float handoff_percent =
-      this->parent_->open_to_closed_handoff_code_to_percent_(candidate.handoff_code & 0x1Fu);
-    const float handoff_hz = max_speed_hz * handoff_percent / 100.0f;
-    const float ol_accel_hz_per_s =
-      OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu];
-    if (ol_accel_hz_per_s <= 0.0f) {
-      return false;
-    }
-
-    est_handoff_ms = (handoff_hz / ol_accel_hz_per_s) * 1000.0f;
-    return std::isfinite(est_handoff_ms) && est_handoff_ms >= 0.0f;
-  }
-
-  uint32_t candidate_open_loop_dwell_timeout_ms_(const InitialTuneCandidate& candidate) const {
-    float est_handoff_ms = 0.0f;
-    if (!this->estimate_handoff_time_ms_(candidate, est_handoff_ms)) {
-      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    }
-    const float timeout_ms = est_handoff_ms * INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_SCALE +
-                             static_cast<float>(INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MARGIN_MS);
-    const float timeout_clamped_ms = std::clamp(
-      timeout_ms,
-      static_cast<float>(INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MIN_MS),
-      static_cast<float>(INITIAL_TUNE_OPEN_LOOP_DWELL_TIMEOUT_MAX_MS)
-    );
-    return static_cast<uint32_t>(timeout_clamped_ms + 0.5f);
-  }
-
-  uint32_t candidate_monitor_timeout_ms_(const InitialTuneCandidate& candidate) const {
-    float est_handoff_ms = 0.0f;
-    if (!this->estimate_handoff_time_ms_(candidate, est_handoff_ms)) {
-      return INITIAL_TUNE_MONITOR_TIMEOUT_MS;
-    }
-
-    const float est_to_handoff_ms = est_handoff_ms * INITIAL_TUNE_MONITOR_TIMEOUT_SCALE;
-    const float timeout_ms =
-      est_to_handoff_ms + static_cast<float>(INITIAL_TUNE_SUCCESS_HOLD_MS + INITIAL_TUNE_MONITOR_TIMEOUT_MARGIN_MS);
-    const float timeout_clamped_ms = std::clamp(
-      timeout_ms,
-      static_cast<float>(INITIAL_TUNE_MONITOR_TIMEOUT_MIN_MS),
-      static_cast<float>(INITIAL_TUNE_MONITOR_TIMEOUT_MAX_MS)
-    );
-    return static_cast<uint32_t>(timeout_clamped_ms + 0.5f);
-  }
-
-  bool active_pass_is_refinement_() const {
-    return this->refinement_active_;
-  }
-
-  uint8_t active_candidate_index_() const {
-    return this->active_pass_is_refinement_() ? this->refinement_candidate_index_
-                                              : this->initial_tune_candidate_index_;
-  }
-
-  uint8_t active_candidate_count_() const {
-    return this->active_pass_is_refinement_() ? this->refinement_candidate_count_
-                                              : static_cast<uint8_t>(INITIAL_TUNE_CANDIDATE_COUNT);
-  }
-
-  bool active_candidates_exhausted_() const {
-    return this->active_candidate_index_() >= this->active_candidate_count_();
-  }
-
-  const InitialTuneCandidate& active_candidate_() const {
-    if (this->active_pass_is_refinement_()) {
-      return this->refinement_candidates_[this->refinement_candidate_index_];
-    }
-    return INITIAL_TUNE_CANDIDATES[this->initial_tune_candidate_index_];
-  }
-
-  void advance_active_candidate_() {
-    if (this->active_pass_is_refinement_()) {
-      this->refinement_candidate_index_++;
-    } else {
-      this->initial_tune_candidate_index_++;
-    }
-  }
-
-  bool begin_refinement_(
-    const InitialTuneCandidate& baseline,
-    uint32_t baseline_reach_ms,
-    const CandidateQualityMetrics& baseline_metrics
-  ) {
-    this->refinement_active_ = false;
-    this->refinement_candidate_index_ = 0u;
-    this->refinement_candidate_count_ = 0u;
-    this->refinement_best_candidate_valid_ = true;
-    this->refinement_best_candidate_ = baseline;
-    this->refinement_best_reach_ms_ = baseline_reach_ms;
-    this->refinement_best_metrics_ = baseline_metrics;
-    this->refinement_best_score_ = this->score_candidate_(baseline, baseline_reach_ms, baseline_metrics);
-
-    this->append_refined_candidate_(baseline);  // index 0 baseline marker (already known successful)
-
-    InitialTuneCandidate candidate = baseline;
-    candidate.open_loop_accel_a1_code =
-      static_cast<uint8_t>(std::min<int>(15, static_cast<int>(baseline.open_loop_accel_a1_code) + 1));
-    this->append_refined_candidate_(candidate);
-
-    candidate = baseline;
-    candidate.handoff_code = static_cast<uint8_t>(
-      std::min<int>(31, static_cast<int>(baseline.handoff_code) + 2)
-    );
-    this->append_refined_candidate_(candidate);
-
-    candidate = baseline;
-    candidate.handoff_code =
-      static_cast<uint8_t>(std::max<int>(0, static_cast<int>(baseline.handoff_code) - 2));
-    this->append_refined_candidate_(candidate);
-
-    if (baseline.open_loop_accel_a1_code > 0u) {
-      candidate = baseline;
-      candidate.open_loop_accel_a1_code = static_cast<uint8_t>(baseline.open_loop_accel_a1_code - 1u);
-      this->append_refined_candidate_(candidate);
-    }
-
-    if (this->refinement_candidate_count_ <= 1u) {
-      return false;
-    }
-
-    this->refinement_active_ = true;
-    this->refinement_candidate_index_ = 0u;
-
-    ESP_LOGI(
-      TAG,
-      "Initial tune baseline reached closed-loop in %ums; starting refinement sweep (%u variant candidate(s))",
-      static_cast<unsigned>(baseline_reach_ms),
-      static_cast<unsigned>(this->refinement_candidate_count_ - 1u)
-    );
-    return true;
-  }
-
-  void record_successful_candidate_(
-    const InitialTuneCandidate& candidate,
-    uint32_t reach_ms,
-    const CandidateQualityMetrics& metrics
-  ) {
-    const float avg_tracking_hz = this->candidate_avg_tracking_error_hz_(metrics);
-    const float avg_mismatch_hz = this->candidate_avg_mismatch_error_hz_(metrics);
-    const int32_t score = this->score_candidate_(candidate, reach_ms, metrics);
-    ESP_LOGI(
-      TAG,
-      "Initial tune candidate success: reach=%ums score=%d accel=%.2fHz/s handoff=%.1f%% "
-      "handoff_samples=%u avg_track=%.1fHz avg_mismatch=%.1fHz peak_ratio=%.2f",
-      static_cast<unsigned>(reach_ms),
-      static_cast<int>(score),
-      OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[candidate.open_loop_accel_a1_code & 0x0Fu],
-      OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[candidate.handoff_code & 0x1Fu],
-      static_cast<unsigned>(metrics.sample_count),
-      avg_tracking_hz,
-      avg_mismatch_hz,
-      metrics.peak_speed_ratio
-    );
-    if (!this->refinement_best_candidate_valid_ || score > this->refinement_best_score_) {
-      this->refinement_best_candidate_valid_ = true;
-      this->refinement_best_candidate_ = candidate;
-      this->refinement_best_reach_ms_ = reach_ms;
-      this->refinement_best_score_ = score;
-      this->refinement_best_metrics_ = metrics;
-    }
-  }
-
-  void finalize_initial_tune_success_() {
-    this->initial_tune_active_ = false;
-    this->initial_tune_stage_ = InitialTuneStage::IDLE;
-    this->initial_tune_waiting_fault_recovery_ = false;
-    this->initial_tune_last_fault_clear_ms_ = 0u;
-    this->initial_tune_closed_loop_seen_ = false;
-    this->handoff_unstable_counter_ = 0u;
-    this->handoff_stable_counter_ = 0u;
-    this->handoff_telemetry_miss_counter_ = 0u;
-    this->current_candidate_metrics_ = CandidateQualityMetrics{};
-
-    if (!this->refinement_best_candidate_valid_) {
-      ESP_LOGW(TAG, "Initial tune ended without a successful candidate result");
-      return;
-    }
-
-    ESP_LOGI(
-      TAG,
-      "Initial tune success: best candidate reach=%ums score=%d handoff_samples=%u avg_track=%.1fHz "
-      "avg_mismatch=%.1fHz peak_ratio=%.2f",
-      static_cast<unsigned>(this->refinement_best_reach_ms_),
-      static_cast<int>(this->refinement_best_score_),
-      static_cast<unsigned>(this->refinement_best_metrics_.sample_count),
-      this->candidate_avg_tracking_error_hz_(this->refinement_best_metrics_),
-      this->candidate_avg_mismatch_error_hz_(this->refinement_best_metrics_),
-      this->refinement_best_metrics_.peak_speed_ratio
-    );
-    this->log_tune_candidate_(
-      this->refinement_best_candidate_,
-      "Initial tune success: copy these keys into your YAML under mcf8329a:"
-    );
-  }
-
-  void fail_initial_tune_candidate_(const char* reason, uint32_t now) {
-    const char* phase = this->active_pass_is_refinement_() ? "refinement" : "discovery";
-    ESP_LOGW(
-      TAG,
-      "Initial tune %s candidate %u/%u failed: %s",
-      phase,
-      static_cast<unsigned>(this->active_candidate_index_() + 1u),
-      static_cast<unsigned>(this->active_candidate_count_()),
-      reason
-    );
-    this->clear_runtime_speed_command_("initial_tune_fail");
-    this->parent_->pulse_clear_faults();
-    this->initial_tune_waiting_fault_recovery_ = false;
-    this->initial_tune_last_fault_clear_ms_ = 0u;
-    this->initial_tune_closed_loop_seen_ = false;
-    this->handoff_unstable_counter_ = 0u;
-    this->handoff_stable_counter_ = 0u;
-    this->handoff_telemetry_miss_counter_ = 0u;
-    this->current_candidate_metrics_ = CandidateQualityMetrics{};
-    this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
-    this->initial_tune_stage_started_ms_ = now;
-  }
-
-  void finalize_initial_tune_failure_() {
-    this->initial_tune_active_ = false;
-    this->initial_tune_stage_ = InitialTuneStage::IDLE;
-    this->initial_tune_waiting_fault_recovery_ = false;
-    this->initial_tune_last_fault_clear_ms_ = 0u;
-    this->initial_tune_closed_loop_seen_ = false;
-    this->handoff_unstable_counter_ = 0u;
-    this->handoff_stable_counter_ = 0u;
-    this->handoff_telemetry_miss_counter_ = 0u;
-    this->current_candidate_metrics_ = CandidateQualityMetrics{};
-    ESP_LOGW(
-      TAG,
-      "Initial tune failed: no discovery candidate reached closed-loop at %.1f%% command",
-      INITIAL_TUNE_SPEED_PERCENT
-    );
-  }
-
-  void process_initial_tune_(bool fault_active, uint32_t now) {
-    if (this->active_candidates_exhausted_()) {
-      if (this->active_pass_is_refinement_()) {
-        this->finalize_initial_tune_success_();
-      } else {
-        this->finalize_initial_tune_failure_();
-      }
-      return;
-    }
-
-    const InitialTuneCandidate& candidate = this->active_candidate_();
-    const char* phase = this->active_pass_is_refinement_() ? "refinement" : "discovery";
-
-    switch (this->initial_tune_stage_) {
-      case InitialTuneStage::APPLY: {
-        ESP_LOGI(
-          TAG,
-          "Initial tune %s candidate %u/%u",
-          phase,
-          static_cast<unsigned>(this->active_candidate_index_() + 1u),
-          static_cast<unsigned>(this->active_candidate_count_())
-        );
-        if (!this->apply_tune_candidate_(candidate)) {
-          this->fail_initial_tune_candidate_("register write failed", now);
-          return;
-        }
-        this->log_tune_candidate_(candidate, "Initial tune candidate values:");
-        this->initial_tune_stage_ = InitialTuneStage::START;
-        this->initial_tune_stage_started_ms_ = now;
-        return;
-      }
-
-      case InitialTuneStage::START: {
-        if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_SETTLE_MS) {
-          return;
-        }
-        if (!this->parent_->apply_speed_command_(INITIAL_TUNE_SPEED_PERCENT, "initial_tune_start", true)) {
-          this->fail_initial_tune_candidate_("speed command failed", now);
-          return;
-        }
-        this->initial_tune_stage_ = InitialTuneStage::MONITOR;
-        this->initial_tune_stage_started_ms_ = now;
-        this->current_candidate_start_ms_ = now;
-        this->current_candidate_open_loop_dwell_timeout_ms_ =
-          this->candidate_open_loop_dwell_timeout_ms_(candidate);
-        this->current_candidate_monitor_timeout_ms_ = std::max(
-          this->candidate_monitor_timeout_ms_(candidate),
-          this->current_candidate_open_loop_dwell_timeout_ms_ + INITIAL_TUNE_SUCCESS_HOLD_MS + 1000u
-        );
-        this->current_candidate_reach_ms_ = this->current_candidate_monitor_timeout_ms_;
-        this->initial_tune_closed_loop_seen_ = false;
-        this->initial_tune_closed_loop_seen_ms_ = 0u;
-        this->handoff_unstable_counter_ = 0u;
-        this->handoff_stable_counter_ = 0u;
-        this->handoff_telemetry_miss_counter_ = 0u;
-        this->reset_candidate_quality_metrics_();
-        ESP_LOGI(
-          TAG,
-          "Initial tune %s candidate %u/%u monitor timeout=%ums open_loop_dwell_timeout=%ums",
-          phase,
-          static_cast<unsigned>(this->active_candidate_index_() + 1u),
-          static_cast<unsigned>(this->active_candidate_count_()),
-          static_cast<unsigned>(this->current_candidate_monitor_timeout_ms_),
-          static_cast<unsigned>(this->current_candidate_open_loop_dwell_timeout_ms_)
-        );
-        return;
-      }
-
-      case InitialTuneStage::MONITOR: {
-        if (fault_active) {
-          this->fail_initial_tune_candidate_("fault asserted", now);
-          return;
-        }
-
-        uint16_t algo_state = 0;
-        if (this->read_algorithm_state_(algo_state) && this->is_closed_loop_state_(algo_state)) {
-          if (!this->initial_tune_closed_loop_seen_) {
-            this->initial_tune_closed_loop_seen_ = true;
-            this->initial_tune_closed_loop_seen_ms_ = now;
-            this->current_candidate_reach_ms_ =
-              now >= this->current_candidate_start_ms_ ? (now - this->current_candidate_start_ms_) : 0u;
-            this->handoff_unstable_counter_ = 0u;
-            this->handoff_stable_counter_ = 0u;
-            this->handoff_telemetry_miss_counter_ = 0u;
-            this->reset_candidate_quality_metrics_();
-            ESP_LOGI(
-              TAG,
-              "Initial tune %s candidate %u/%u entered %s (reach=%ums)",
-              phase,
-              static_cast<unsigned>(this->active_candidate_index_() + 1u),
-              static_cast<unsigned>(this->active_candidate_count_()),
-              this->parent_->algorithm_state_to_string_(algo_state),
-              static_cast<unsigned>(this->current_candidate_reach_ms_)
-            );
-          } else if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS) {
-            float ref_ol_hz = 0.0f;
-            float fdbk_hz = 0.0f;
-            float fg_hz = 0.0f;
-            float max_speed_hz = 0.0f;
-            if (this->read_speed_triplet_hz_(ref_ol_hz, fdbk_hz, fg_hz, max_speed_hz)) {
-              this->handoff_telemetry_miss_counter_ = 0u;
-              const float commanded_hz =
-                (std::fabs(this->parent_->speed_applied_percent_) / 100.0f) * max_speed_hz;
-              const bool handoff_unstable = this->handoff_feedback_unstable_(commanded_hz, fdbk_hz, fg_hz);
-              this->record_candidate_quality_sample_(commanded_hz, fdbk_hz, fg_hz, handoff_unstable);
-              if (!handoff_unstable) {
-                this->handoff_unstable_counter_ = 0u;
-                if (this->handoff_feedback_stable_(commanded_hz, fdbk_hz, fg_hz)) {
-                  if (this->handoff_stable_counter_ < 0xFFu) {
-                    this->handoff_stable_counter_++;
-                  }
-                } else {
-                  this->handoff_stable_counter_ = 0u;
-                }
-              } else {
-                this->handoff_unstable_counter_++;
-                this->handoff_stable_counter_ = 0u;
-                ESP_LOGW(
-                  TAG,
-                  "Initial tune handoff guard: unstable sample %u/%u cmd=%.1fHz ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz",
-                  static_cast<unsigned>(this->handoff_unstable_counter_),
-                  static_cast<unsigned>(HANDOFF_UNSTABLE_REJECT_COUNT),
-                  commanded_hz,
-                  ref_ol_hz,
-                  fdbk_hz,
-                  fg_hz
-                );
-                if (this->handoff_unstable_counter_ >= HANDOFF_UNSTABLE_REJECT_COUNT) {
-                  this->fail_initial_tune_candidate_("handoff feedback unstable", now);
-                  return;
-                }
-              }
-            } else {
-              this->handoff_stable_counter_ = 0u;
-              if (this->handoff_telemetry_miss_counter_ < 0xFFu) {
-                this->handoff_telemetry_miss_counter_++;
-              }
-              this->record_candidate_quality_telemetry_miss_();
-              ESP_LOGW(
-                TAG,
-                "Initial tune handoff guard: speed telemetry unavailable sample %u/%u",
-                static_cast<unsigned>(this->handoff_telemetry_miss_counter_),
-                static_cast<unsigned>(HANDOFF_TELEMETRY_MISS_REJECT_COUNT)
-              );
-              if (this->handoff_telemetry_miss_counter_ >= HANDOFF_TELEMETRY_MISS_REJECT_COUNT) {
-                this->fail_initial_tune_candidate_("handoff telemetry unavailable", now);
-                return;
-              }
-            }
-          }
-
-          if ((now - this->initial_tune_closed_loop_seen_ms_) >= INITIAL_TUNE_SUCCESS_HOLD_MS) {
-            if (this->handoff_stable_counter_ < HANDOFF_STABLE_ACCEPT_COUNT) {
-              return;
-            }
-            const CandidateQualityMetrics candidate_metrics = this->current_candidate_metrics_;
-            this->clear_runtime_speed_command_("initial_tune_success");
-            this->record_successful_candidate_(candidate, this->current_candidate_reach_ms_, candidate_metrics);
-
-            if (!this->active_pass_is_refinement_()) {
-              const bool has_refinement =
-                this->begin_refinement_(candidate, this->current_candidate_reach_ms_, candidate_metrics);
-              if (!has_refinement) {
-                this->finalize_initial_tune_success_();
-                return;
-              }
-            }
-
-            this->initial_tune_closed_loop_seen_ = false;
-            this->initial_tune_stage_ = InitialTuneStage::COOLDOWN;
-            this->initial_tune_stage_started_ms_ = now;
-            return;
-          }
-        } else {
-          this->initial_tune_closed_loop_seen_ = false;
-          this->initial_tune_closed_loop_seen_ms_ = 0u;
-          this->handoff_unstable_counter_ = 0u;
-          this->handoff_stable_counter_ = 0u;
-          this->handoff_telemetry_miss_counter_ = 0u;
-          this->reset_candidate_quality_metrics_();
-        }
-
-        if (!this->initial_tune_closed_loop_seen_ &&
-            (now - this->current_candidate_start_ms_) >= this->current_candidate_open_loop_dwell_timeout_ms_) {
-          this->fail_initial_tune_candidate_("open-loop dwell timeout (heating guard)", now);
-          return;
-        }
-
-        if ((now - this->initial_tune_stage_started_ms_) >= this->current_candidate_monitor_timeout_ms_) {
-          this->fail_initial_tune_candidate_("timeout waiting for closed-loop", now);
-          return;
-        }
-        return;
-      }
-
-      case InitialTuneStage::COOLDOWN: {
-        if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_COOLDOWN_MS) {
-          return;
-        }
-        if (this->parent_ != nullptr && (fault_active || this->parent_->severe_fault_speed_lockout_)) {
-          if (!this->initial_tune_waiting_fault_recovery_) {
-            this->initial_tune_waiting_fault_recovery_ = true;
-            ESP_LOGW(
-              TAG,
-              "Initial tune waiting for fault recovery before retrying candidate: "
-              "fault_active=%s lockout=%s",
-              YESNO(fault_active),
-              YESNO(this->parent_->severe_fault_speed_lockout_)
-            );
-          }
-          if (this->initial_tune_last_fault_clear_ms_ == 0u ||
-              (now - this->initial_tune_last_fault_clear_ms_) >=
-                INITIAL_TUNE_FAULT_RECOVERY_PULSE_INTERVAL_MS) {
-            this->parent_->pulse_clear_faults();
-            this->initial_tune_last_fault_clear_ms_ = now;
-          }
-          if (fault_active || this->parent_->severe_fault_speed_lockout_) {
-            return;
-          }
-        }
-        if (this->initial_tune_waiting_fault_recovery_) {
-          ESP_LOGI(TAG, "Initial tune fault recovery complete; resuming candidate sweep");
-          this->initial_tune_waiting_fault_recovery_ = false;
-          this->initial_tune_last_fault_clear_ms_ = 0u;
-        }
-        this->advance_active_candidate_();
-        if (this->active_candidates_exhausted_()) {
-          if (this->active_pass_is_refinement_()) {
-            this->finalize_initial_tune_success_();
-          } else {
-            this->finalize_initial_tune_failure_();
-          }
-          return;
-        }
-        this->initial_tune_stage_ = InitialTuneStage::APPLY;
-        this->initial_tune_stage_started_ms_ = now;
-        return;
-      }
-
-      case InitialTuneStage::IDLE:
-      default:
-        this->initial_tune_active_ = false;
-        return;
-    }
-  }
-
-  void log_mpet_results_() const {
-    uint32_t closed_loop2 = 0;
-    uint32_t closed_loop3 = 0;
-    uint32_t closed_loop4 = 0;
-    if (!this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP2, closed_loop2) ||
-        !this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP3, closed_loop3) ||
-        !this->parent_->read_reg32(MCF8329AComponent::REG_CLOSED_LOOP4, closed_loop4)) {
-      ESP_LOGW(TAG, "MPET finished but failed to read parameter registers");
-      return;
-    }
-
-    const uint8_t motor_res = static_cast<uint8_t>(
-      (closed_loop2 & MCF8329AComponent::CLOSED_LOOP2_MOTOR_RES_MASK) >> MCF8329AComponent::CLOSED_LOOP2_MOTOR_RES_SHIFT
-    );
-    const uint8_t motor_ind = static_cast<uint8_t>(
-      (closed_loop2 & MCF8329AComponent::CLOSED_LOOP2_MOTOR_IND_MASK) >> MCF8329AComponent::CLOSED_LOOP2_MOTOR_IND_SHIFT
-    );
-    const uint8_t motor_bemf_const = static_cast<uint8_t>(
-      (closed_loop3 & MCF8329AComponent::CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >>
-      MCF8329AComponent::CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT
-    );
-    const uint16_t speed_loop_kp_code = static_cast<uint16_t>(
-      (((closed_loop3 & MCF8329AComponent::CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >>
-        MCF8329AComponent::CLOSED_LOOP3_SPD_LOOP_KP_MSB_SHIFT)
-       << 7) |
-      ((closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK) >>
-       MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KP_LSB_SHIFT)
-    );
-    const uint16_t speed_loop_ki_code = static_cast<uint16_t>(
-      (closed_loop4 & MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KI_MASK) >>
-      MCF8329AComponent::CLOSED_LOOP4_SPD_LOOP_KI_SHIFT
-    );
-
-    ESP_LOGI(
-      TAG,
-      "MPET result: motor_res=%u motor_ind=%u motor_bemf_const=0x%02X speed_loop_kp_code=%u speed_loop_ki_code=%u",
-      static_cast<unsigned>(motor_res),
-      static_cast<unsigned>(motor_ind),
-      static_cast<unsigned>(motor_bemf_const),
-      static_cast<unsigned>(speed_loop_kp_code),
-      static_cast<unsigned>(speed_loop_ki_code)
-    );
-    ESP_LOGI(TAG, "MPET result: copy these keys into your YAML under mcf8329a:");
-    ESP_LOGI(TAG, "  motor_bemf_const: 0x%02X", static_cast<unsigned>(motor_bemf_const));
-    ESP_LOGI(TAG, "  speed_loop_kp_code: %u", static_cast<unsigned>(speed_loop_kp_code));
-    ESP_LOGI(TAG, "  speed_loop_ki_code: %u", static_cast<unsigned>(speed_loop_ki_code));
-  }
-
-  void process_mpet_characterization_(bool fault_active, uint32_t now) {
-    uint16_t algo_state = 0;
-    const bool algo_state_ok = this->read_algorithm_state_(algo_state);
-
-    if (algo_state_ok && algo_state == 0x0017u) {
-      this->mpet_characterization_active_ = false;
-      this->clear_runtime_speed_command_("mpet_done");
-      (void)this->parent_->clear_mpet_bits_("mpet_done");
-      ESP_LOGI(TAG, "MPET characterization completed successfully");
-      this->log_mpet_results_();
-      return;
-    }
-
-    const bool mpet_fault_state = algo_state_ok && algo_state == 0x0018u;
-    const bool motor_fault_state = algo_state_ok && algo_state == 0x000Eu;
-    if (mpet_fault_state || (fault_active && motor_fault_state)) {
-      this->mpet_characterization_active_ = false;
-      this->clear_runtime_speed_command_("mpet_fault");
-      (void)this->parent_->clear_mpet_bits_("mpet_fault");
-      this->parent_->pulse_clear_faults();
-      ESP_LOGW(
-        TAG,
-        "MPET characterization failed in state 0x%04X(%s)",
-        static_cast<unsigned>(algo_state),
-        algo_state_ok ? this->parent_->algorithm_state_to_string_(algo_state) : "unknown"
-      );
-      return;
-    }
-
-    if ((now - this->mpet_characterization_started_ms_) >= MPET_RUN_TIMEOUT_MS) {
-      this->mpet_characterization_active_ = false;
-      this->clear_runtime_speed_command_("mpet_timeout");
-      (void)this->parent_->clear_mpet_bits_("mpet_timeout");
-      this->parent_->pulse_clear_faults();
-      ESP_LOGW(
-        TAG,
-        "MPET characterization timed out after %us (last state: %s)",
-        MPET_RUN_TIMEOUT_MS / 1000u,
-        algo_state_ok ? this->parent_->algorithm_state_to_string_(algo_state) : "unavailable"
-      );
-    }
-  }
-
-  MCF8329AComponent* parent_{nullptr};
-  bool initial_tune_active_{false};
-  InitialTuneStage initial_tune_stage_{InitialTuneStage::IDLE};
-  uint8_t initial_tune_candidate_index_{0u};
-  uint32_t initial_tune_stage_started_ms_{0u};
-  bool initial_tune_waiting_fault_recovery_{false};
-  uint32_t initial_tune_last_fault_clear_ms_{0u};
-  bool initial_tune_closed_loop_seen_{false};
-  uint32_t initial_tune_closed_loop_seen_ms_{0u};
-  uint32_t current_candidate_start_ms_{0u};
-  uint32_t current_candidate_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
-  uint32_t current_candidate_monitor_timeout_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
-  uint32_t current_candidate_open_loop_dwell_timeout_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
-  uint8_t handoff_unstable_counter_{0u};
-  uint8_t handoff_stable_counter_{0u};
-  uint8_t handoff_telemetry_miss_counter_{0u};
-  CandidateQualityMetrics current_candidate_metrics_{};
-  bool refinement_active_{false};
-  uint8_t refinement_candidate_index_{0u};
-  uint8_t refinement_candidate_count_{0u};
-  InitialTuneCandidate refinement_candidates_[MAX_REFINED_CANDIDATES]{};
-  bool refinement_best_candidate_valid_{false};
-  InitialTuneCandidate refinement_best_candidate_{};
-  CandidateQualityMetrics refinement_best_metrics_{};
-  int32_t refinement_best_score_{std::numeric_limits<int32_t>::min()};
-  uint32_t refinement_best_reach_ms_{INITIAL_TUNE_MONITOR_TIMEOUT_MS};
-  bool mpet_characterization_active_{false};
-  uint32_t mpet_characterization_started_ms_{0u};
+static constexpr float MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[8] = {
+  0.1f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f,
 };
-
 MCF8329AComponent::~MCF8329AComponent() {
   delete this->tuning_controller_;
   this->tuning_controller_ = nullptr;
@@ -1405,16 +228,12 @@ void MCF8329AComponent::setup() {
   this->start_boost_active_ = false;
   this->start_boost_until_ms_ = 0u;
   this->last_ramp_update_ms_ = 0u;
+  this->comms_client_.set_device(this);
+  this->comms_client_.set_inter_byte_delay_us(this->inter_byte_delay_us_);
   if (this->tuning_controller_ == nullptr) {
     this->tuning_controller_ = new MCF8329ATuningController(this);
   }
   this->tuning_controller_->reset();
-
-  ESP_LOGW(
-    TAG,
-    "MCx83xx I2C note: datasheet requires >=100us inter-byte gap. ESPHome I2C cannot enforce "
-    "byte-level gaps; keep bus at <=50kHz and verify communication stability."
-  );
 
   if (!this->scan_i2c_bus_()) {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
@@ -1508,12 +327,13 @@ void MCF8329AComponent::update() {
   if (this->speed_fdbk_hz_sensor_ != nullptr || this->speed_ref_open_loop_hz_sensor_ != nullptr ||
       this->fg_speed_fdbk_hz_sensor_ != nullptr || speed_diag_due) {
     uint32_t closed_loop4 = 0;
-    float max_speed_hz = this->cfg_max_speed_set_ ? this->max_speed_code_to_hz_(this->cfg_max_speed_code_) : 0.0f;
+    float max_speed_hz =
+      this->cfg_max_speed_set_ ? this->comms_client_.decode_max_speed_hz(this->cfg_max_speed_code_) : 0.0f;
     if (this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
       const uint16_t max_speed_code = static_cast<uint16_t>(
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
       );
-      max_speed_hz = this->max_speed_code_to_hz_(max_speed_code);
+      max_speed_hz = this->comms_client_.decode_max_speed_hz(max_speed_code);
     }
 
     if (max_speed_hz > 0.0f) {
@@ -1526,29 +346,66 @@ void MCF8329AComponent::update() {
       bool speed_fdbk_ok = false;
       bool speed_ref_open_loop_ok = false;
       bool fg_speed_fdbk_ok = false;
+      const bool idle_speed_command =
+        (this->speed_applied_percent_ <= 0.1f) && !this->speed_target_active_;
+      static constexpr float IDLE_SPEED_NOISE_HZ = 20.0f;
 
       if (this->read_reg32(REG_SPEED_FDBK, raw_speed_fdbk)) {
-        speed_fdbk_hz = this->speed_raw_to_hz_(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz);
+        speed_fdbk_hz =
+          this->comms_client_.decode_speed_hz(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz);
         speed_fdbk_ok = true;
-        if (this->speed_fdbk_hz_sensor_ != nullptr) {
-          this->speed_fdbk_hz_sensor_->publish_state(speed_fdbk_hz);
-        }
       }
 
       if (this->read_reg32(REG_SPEED_REF_OPEN_LOOP, raw_speed_ref_open_loop)) {
         speed_ref_open_loop_hz =
-          this->speed_raw_to_hz_(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz);
+          this->comms_client_.decode_speed_hz(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz);
         speed_ref_open_loop_ok = true;
-        if (this->speed_ref_open_loop_hz_sensor_ != nullptr) {
-          this->speed_ref_open_loop_hz_sensor_->publish_state(speed_ref_open_loop_hz);
-        }
       }
 
       if (this->read_reg32(REG_FG_SPEED_FDBK, raw_fg_speed_fdbk)) {
-        fg_speed_fdbk_hz = this->fg_speed_raw_to_hz_(raw_fg_speed_fdbk, max_speed_hz);
+        fg_speed_fdbk_hz = this->comms_client_.decode_fg_speed_hz(raw_fg_speed_fdbk, max_speed_hz);
         fg_speed_fdbk_ok = true;
-        if (this->fg_speed_fdbk_hz_sensor_ != nullptr) {
+      }
+
+      const bool speed_feedback_idle_or_unavailable =
+        !speed_fdbk_ok || std::fabs(speed_fdbk_hz) < IDLE_SPEED_NOISE_HZ;
+      if (idle_speed_command) {
+        if (speed_fdbk_ok && std::fabs(speed_fdbk_hz) < IDLE_SPEED_NOISE_HZ) {
+          speed_fdbk_hz = 0.0f;
+        }
+        if (speed_ref_open_loop_ok && speed_feedback_idle_or_unavailable) {
+          speed_ref_open_loop_hz = 0.0f;
+        }
+        if (fg_speed_fdbk_ok) {
+          const bool fg_implausible_at_idle = fg_speed_fdbk_hz > (max_speed_hz * 1.5f);
+          if ((fg_implausible_at_idle && speed_feedback_idle_or_unavailable) ||
+              std::fabs(fg_speed_fdbk_hz) < IDLE_SPEED_NOISE_HZ) {
+            fg_speed_fdbk_hz = 0.0f;
+          }
+        }
+      }
+
+      if (this->speed_fdbk_hz_sensor_ != nullptr) {
+        if (speed_fdbk_ok) {
+          this->speed_fdbk_hz_sensor_->publish_state(speed_fdbk_hz);
+        } else if (idle_speed_command) {
+          this->speed_fdbk_hz_sensor_->publish_state(0.0f);
+        }
+      }
+
+      if (this->speed_ref_open_loop_hz_sensor_ != nullptr) {
+        if (speed_ref_open_loop_ok) {
+          this->speed_ref_open_loop_hz_sensor_->publish_state(speed_ref_open_loop_hz);
+        } else if (idle_speed_command && speed_feedback_idle_or_unavailable) {
+          this->speed_ref_open_loop_hz_sensor_->publish_state(0.0f);
+        }
+      }
+
+      if (this->fg_speed_fdbk_hz_sensor_ != nullptr) {
+        if (fg_speed_fdbk_ok) {
           this->fg_speed_fdbk_hz_sensor_->publish_state(fg_speed_fdbk_hz);
+        } else if (idle_speed_command && speed_feedback_idle_or_unavailable) {
+          this->fg_speed_fdbk_hz_sensor_->publish_state(0.0f);
         }
       }
 
@@ -1571,8 +428,7 @@ void MCF8329AComponent::update() {
   }
 
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw)) {
-    const float vm_voltage =
-      static_cast<float>(static_cast<double>(vm_voltage_raw) * VM_VOLTAGE_SCALE);
+    const float vm_voltage = this->comms_client_.decode_vm_voltage(vm_voltage_raw);
     if (this->vm_voltage_sensor_ != nullptr) {
       this->vm_voltage_sensor_->publish_state(vm_voltage);
     }
@@ -1605,6 +461,9 @@ void MCF8329AComponent::dump_config() {
   );
   ESP_LOGCONFIG(TAG, "  Auto tickle watchdog: %s", YESNO(this->auto_tickle_watchdog_));
   ESP_LOGCONFIG(TAG, "  Clear MPET bits on startup: %s", YESNO(this->clear_mpet_on_startup_));
+  ESP_LOGCONFIG(
+    TAG, "  MPET timeout override: %us", static_cast<unsigned>(this->mpet_timeout_ms_ / 1000u)
+  );
   if (this->cfg_motor_bemf_const_set_) {
     ESP_LOGCONFIG(TAG, "  Motor BEMF const: 0x%02X", this->cfg_motor_bemf_const_);
   } else {
@@ -1814,7 +673,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config max speed: %.1f Hz electrical (code=%u)",
-      this->max_speed_code_to_hz_(this->cfg_max_speed_code_),
+      this->comms_client_.decode_max_speed_hz(this->cfg_max_speed_code_),
       static_cast<unsigned>(this->cfg_max_speed_code_)
     );
   } else {
@@ -1856,7 +715,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config open-loop accel A1: %.2f Hz/s (code=%u)",
-      this->open_loop_accel_code_to_hz_per_s_(this->cfg_open_loop_accel_),
+      this->comms_client_.decode_open_loop_accel_hz_per_s(this->cfg_open_loop_accel_),
       static_cast<unsigned>(this->cfg_open_loop_accel_)
     );
   } else {
@@ -1882,7 +741,8 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config open->closed handoff threshold: %.1f%% MAX_SPEED (code=%u)",
-      this->open_to_closed_handoff_code_to_percent_(this->cfg_open_to_closed_handoff_threshold_
+      this->comms_client_.decode_open_to_closed_handoff_percent(
+        this->cfg_open_to_closed_handoff_threshold_
       ),
       static_cast<unsigned>(this->cfg_open_to_closed_handoff_threshold_)
     );
@@ -1908,6 +768,45 @@ void MCF8329AComponent::dump_config() {
     );
   } else {
     ESP_LOGCONFIG(TAG, "  Motor config CL slow accel: (unchanged)");
+  }
+  if (this->cfg_mpet_use_dedicated_params_set_) {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Motor config MPET profile source: %s",
+      this->cfg_mpet_use_dedicated_params_ ? "dedicated_mpet_params" : "startup_params"
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Motor config MPET profile source: (unchanged)");
+  }
+  if (this->cfg_mpet_open_loop_curr_ref_set_) {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Motor config MPET open-loop current ref: %u%% BASE_CURRENT (code=%u)",
+      static_cast<unsigned>(MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[this->cfg_mpet_open_loop_curr_ref_ & 0x07u]),
+      static_cast<unsigned>(this->cfg_mpet_open_loop_curr_ref_)
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Motor config MPET open-loop current ref: (unchanged)");
+  }
+  if (this->cfg_mpet_open_loop_speed_ref_set_) {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Motor config MPET open-loop speed ref: %u%% MAX_SPEED (code=%u)",
+      static_cast<unsigned>(MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[this->cfg_mpet_open_loop_speed_ref_ & 0x03u]),
+      static_cast<unsigned>(this->cfg_mpet_open_loop_speed_ref_)
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Motor config MPET open-loop speed ref: (unchanged)");
+  }
+  if (this->cfg_mpet_open_loop_slew_set_) {
+    ESP_LOGCONFIG(
+      TAG,
+      "  Motor config MPET open-loop slew: %.1f Hz/s (code=%u)",
+      MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[this->cfg_mpet_open_loop_slew_ & 0x07u],
+      static_cast<unsigned>(this->cfg_mpet_open_loop_slew_)
+    );
+  } else {
+    ESP_LOGCONFIG(TAG, "  Motor config MPET open-loop slew: (unchanged)");
   }
   if (this->cfg_lock_ilimit_deglitch_set_) {
     ESP_LOGCONFIG(
@@ -2431,6 +1330,38 @@ bool MCF8329AComponent::apply_motor_config_() {
     ESP_LOGI(TAG, "CLOSED_LOOP2 motor cfg: 0x%08X -> 0x%08X", closed_loop2, closed_loop2_next);
   }
 
+  uint32_t int_algo1 = 0;
+  if (!this->read_reg32(REG_INT_ALGO_1, int_algo1)) {
+    ESP_LOGW(TAG, "Failed to read INT_ALGO_1 for motor config");
+    this->motor_config_summary_ = "read_error";
+    return false;
+  }
+  uint32_t int_algo1_next = int_algo1;
+  if (this->cfg_mpet_open_loop_curr_ref_set_) {
+    int_algo1_next =
+      (int_algo1_next & ~INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_MASK) |
+      ((static_cast<uint32_t>(this->cfg_mpet_open_loop_curr_ref_) <<
+        INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_SHIFT) &
+       INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_MASK);
+  }
+  if (this->cfg_mpet_open_loop_speed_ref_set_) {
+    int_algo1_next =
+      (int_algo1_next & ~INT_ALGO_1_MPET_OPEN_LOOP_SPEED_REF_MASK) |
+      ((static_cast<uint32_t>(this->cfg_mpet_open_loop_speed_ref_) <<
+        INT_ALGO_1_MPET_OPEN_LOOP_SPEED_REF_SHIFT) &
+       INT_ALGO_1_MPET_OPEN_LOOP_SPEED_REF_MASK);
+  }
+  if (this->cfg_mpet_open_loop_slew_set_) {
+    int_algo1_next = (int_algo1_next & ~INT_ALGO_1_MPET_OPEN_LOOP_SLEW_RATE_MASK) |
+                     ((static_cast<uint32_t>(this->cfg_mpet_open_loop_slew_)
+                       << INT_ALGO_1_MPET_OPEN_LOOP_SLEW_RATE_SHIFT) &
+                      INT_ALGO_1_MPET_OPEN_LOOP_SLEW_RATE_MASK);
+  }
+  if (int_algo1_next != int_algo1) {
+    ok &= this->write_reg32(REG_INT_ALGO_1, int_algo1_next);
+    ESP_LOGI(TAG, "INT_ALGO_1 motor cfg: 0x%08X -> 0x%08X", int_algo1, int_algo1_next);
+  }
+
   uint32_t int_algo2 = 0;
   if (!this->read_reg32(REG_INT_ALGO_2, int_algo2)) {
     ESP_LOGW(TAG, "Failed to read INT_ALGO_2 for motor config");
@@ -2443,6 +1374,13 @@ bool MCF8329AComponent::apply_motor_config_() {
       (int_algo2_next & ~INT_ALGO_2_CL_SLOW_ACC_MASK) |
       ((static_cast<uint32_t>(this->cfg_cl_slow_acc_) << INT_ALGO_2_CL_SLOW_ACC_SHIFT) &
        INT_ALGO_2_CL_SLOW_ACC_MASK);
+  }
+  if (this->cfg_mpet_use_dedicated_params_set_) {
+    if (this->cfg_mpet_use_dedicated_params_) {
+      int_algo2_next |= INT_ALGO_2_MPET_KE_MEAS_PARAMETER_SELECT_MASK;
+    } else {
+      int_algo2_next &= ~INT_ALGO_2_MPET_KE_MEAS_PARAMETER_SELECT_MASK;
+    }
   }
   if (int_algo2_next != int_algo2) {
     ok &= this->write_reg32(REG_INT_ALGO_2, int_algo2_next);
@@ -2634,6 +1572,10 @@ bool MCF8329AComponent::apply_motor_config_() {
     ESP_LOGW(TAG, "Failed to read back FAULT_CONFIG2 after motor config apply");
   }
 
+  uint32_t int_algo1_effective = int_algo1_next;
+  if (!this->read_reg32(REG_INT_ALGO_1, int_algo1_effective)) {
+    ESP_LOGW(TAG, "Failed to read back INT_ALGO_1 after motor config apply");
+  }
   uint32_t int_algo2_effective = int_algo2_next;
   if (!this->read_reg32(REG_INT_ALGO_2, int_algo2_effective)) {
     ESP_LOGW(TAG, "Failed to read back INT_ALGO_2 after motor config apply");
@@ -2718,7 +1660,7 @@ bool MCF8329AComponent::apply_motor_config_() {
   const uint16_t effective_max_speed_code = static_cast<uint16_t>(
     (closed_loop4_effective & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
   );
-  const float effective_max_speed_hz = this->max_speed_code_to_hz_(effective_max_speed_code);
+  const float effective_max_speed_hz = this->comms_client_.decode_max_speed_hz(effective_max_speed_code);
   const uint8_t effective_ilimit = static_cast<uint8_t>(
     (fault_config1_effective & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT
   );
@@ -2774,11 +1716,25 @@ bool MCF8329AComponent::apply_motor_config_() {
   const uint8_t effective_cl_slow_acc = static_cast<uint8_t>(
     (int_algo2_effective & INT_ALGO_2_CL_SLOW_ACC_MASK) >> INT_ALGO_2_CL_SLOW_ACC_SHIFT
   );
+  const bool effective_mpet_use_dedicated_params =
+    (int_algo2_effective & INT_ALGO_2_MPET_KE_MEAS_PARAMETER_SELECT_MASK) != 0u;
+  const uint8_t effective_mpet_curr_ref = static_cast<uint8_t>(
+    (int_algo1_effective & INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_MASK) >>
+    INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_SHIFT
+  );
+  const uint8_t effective_mpet_speed_ref = static_cast<uint8_t>(
+    (int_algo1_effective & INT_ALGO_1_MPET_OPEN_LOOP_SPEED_REF_MASK) >>
+    INT_ALGO_1_MPET_OPEN_LOOP_SPEED_REF_SHIFT
+  );
+  const uint8_t effective_mpet_slew = static_cast<uint8_t>(
+    (int_algo1_effective & INT_ALGO_1_MPET_OPEN_LOOP_SLEW_RATE_MASK) >>
+    INT_ALGO_1_MPET_OPEN_LOOP_SLEW_RATE_SHIFT
+  );
   static constexpr float CSA_GAIN_VV_TABLE[4] = {5.0f, 10.0f, 20.0f, 40.0f};
   const float effective_csa_gain_vv = CSA_GAIN_VV_TABLE[effective_csa_gain_code & 0x3u];
   const float effective_base_current_amps =
     (static_cast<float>(effective_base_current_code) * 1200.0f) / 32768.0f;
-  char summary[1280];
+  char summary[1536];
   std::snprintf(
     summary,
     sizeof(summary),
@@ -2787,7 +1743,8 @@ bool MCF8329AComponent::apply_motor_config_() {
     "max_speed=%.1fHz(code=%u) "
     "mode=%s align=%s align_ilimit=%u(%u%%) ol_limit_src=%s ol_ilimit=%u(%u%%) "
     "ol_acc_a1=%.2fHz/s ol_acc_a2=%.2fHz/s2 auto_handoff=%s handoff=%.1f%% theta_ramp=%.2f "
-    "cl_slow_acc=%.1fHz/s "
+    "cl_slow_acc=%.1fHz/s mpet_profile=%s mpet_curr_ref=%u(%u%%) "
+    "mpet_speed_ref=%u(%u%%) mpet_slew=%u(%.1fHz/s) "
     "stop=%s stop_brake=%s ilimit=%u(%u%%) lock_ilimit=%u(%u%%) hw_lock_ilimit=%u(%u%%) "
     "lock_mode=%s mtr_lock_mode=%s hw_lock_mode=%s lck_retry=%s lock_deg=%.1fms hw_lock_deg=%uus "
     "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
@@ -2810,12 +1767,19 @@ bool MCF8329AComponent::apply_motor_config_() {
     effective_open_loop_limit_use_ilimit ? "ilimit" : "ol_ilimit",
     static_cast<unsigned>(effective_ol_ilimit),
     static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ol_ilimit & 0x0Fu]),
-    this->open_loop_accel_code_to_hz_per_s_(effective_ol_accel),
+    this->comms_client_.decode_open_loop_accel_hz_per_s(effective_ol_accel),
     OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[effective_ol_accel2 & 0x0Fu],
     YESNO(effective_auto_handoff),
-    this->open_to_closed_handoff_code_to_percent_(effective_handoff_threshold),
+    this->comms_client_.decode_open_to_closed_handoff_percent(effective_handoff_threshold),
     THETA_ERROR_RAMP_RATE_TABLE[effective_theta_error_ramp_rate & 0x07u],
     CL_SLOW_ACC_HZ_PER_S_TABLE[effective_cl_slow_acc & 0x0Fu],
+    effective_mpet_use_dedicated_params ? "dedicated" : "startup",
+    static_cast<unsigned>(effective_mpet_curr_ref),
+    static_cast<unsigned>(MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[effective_mpet_curr_ref & 0x07u]),
+    static_cast<unsigned>(effective_mpet_speed_ref),
+    static_cast<unsigned>(MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[effective_mpet_speed_ref & 0x03u]),
+    static_cast<unsigned>(effective_mpet_slew),
+    MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[effective_mpet_slew & 0x07u],
     this->brake_mode_to_string_(effective_brake_mode),
     this->brake_time_to_string_(effective_brake_time),
     static_cast<unsigned>(effective_ilimit),
@@ -2843,43 +1807,32 @@ bool MCF8329AComponent::apply_motor_config_() {
 }
 
 bool MCF8329AComponent::read_reg32(uint16_t offset, uint32_t& value) {
-  return this->perform_read_(offset, value);
+  return this->comms_client_.read_reg32(offset, value);
 }
 
 bool MCF8329AComponent::read_reg16(uint16_t offset, uint16_t& value) {
-  return this->perform_read16_(offset, value);
+  return this->comms_client_.read_reg16(offset, value);
 }
 
 bool MCF8329AComponent::write_reg32(uint16_t offset, uint32_t value) {
-  return this->perform_write_(offset, value);
+  return this->comms_client_.write_reg32(offset, value);
 }
 
 bool MCF8329AComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
-  uint32_t current = 0;
-  if (!this->read_reg32(offset, current)) {
-    return false;
-  }
-  const uint32_t next = (current & ~mask) | (value & mask);
-  if (next == current) {
-    return true;
-  }
-  return this->write_reg32(offset, next);
+  return this->comms_client_.update_bits32(offset, mask, value);
 }
 
 bool MCF8329AComponent::set_brake_override(bool brake_on) {
-  const uint32_t value = brake_on ? PIN_CONFIG_BRAKE_INPUT_BRAKE : PIN_CONFIG_BRAKE_INPUT_NO_BRAKE;
-  if (!this->update_bits32(REG_PIN_CONFIG, PIN_CONFIG_BRAKE_INPUT_MASK, value)) {
+  if (!this->comms_client_.set_brake_input(brake_on)) {
     return false;
   }
 
-  uint32_t pin_config = 0;
-  if (this->read_reg32(REG_PIN_CONFIG, pin_config)) {
-    const uint32_t brake_input_value = (pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 2;
+  uint8_t brake_input_value = 0u;
+  if (this->comms_client_.read_brake_input(brake_input_value)) {
     ESP_LOGI(
       TAG,
-      "Brake override write: request=%s pin_cfg=0x%08X brake_input=%u(%s)",
+      "Brake override write: request=%s brake_input=%u(%s)",
       brake_on ? "ON" : "OFF",
-      pin_config,
       static_cast<unsigned>(brake_input_value),
       this->brake_input_to_string_(brake_input_value)
     );
@@ -2888,25 +1841,23 @@ bool MCF8329AComponent::set_brake_override(bool brake_on) {
 }
 
 bool MCF8329AComponent::set_direction_mode(const std::string& direction_mode) {
-  uint32_t value = PERI_CONFIG1_DIR_INPUT_HARDWARE;
+  MCF8329AClient::DirectionInputMode mode = MCF8329AClient::DirectionInputMode::HARDWARE;
   if (direction_mode == "cw") {
-    value = PERI_CONFIG1_DIR_INPUT_CW;
+    mode = MCF8329AClient::DirectionInputMode::CW;
   } else if (direction_mode == "ccw") {
-    value = PERI_CONFIG1_DIR_INPUT_CCW;
+    mode = MCF8329AClient::DirectionInputMode::CCW;
   }
 
-  if (!this->update_bits32(REG_PERI_CONFIG1, PERI_CONFIG1_DIR_INPUT_MASK, value)) {
+  if (!this->comms_client_.set_direction_input(mode)) {
     return false;
   }
 
-  uint32_t peri_config1 = 0;
-  if (this->read_reg32(REG_PERI_CONFIG1, peri_config1)) {
-    const uint32_t direction_input_value = (peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK) >> 19;
+  uint8_t direction_input_value = 0u;
+  if (this->comms_client_.read_direction_input(direction_input_value)) {
     ESP_LOGI(
       TAG,
-      "Direction write: request=%s peri_cfg1=0x%08X dir_input=%u(%s)",
+      "Direction write: request=%s dir_input=%u(%s)",
       direction_mode.c_str(),
-      peri_config1,
       static_cast<unsigned>(direction_input_value),
       this->direction_input_to_string_(direction_input_value)
     );
@@ -2950,12 +1901,7 @@ bool MCF8329AComponent::apply_speed_command_(float speed_percent, const char* re
     }
   }
 
-  uint32_t value = ALGO_DEBUG1_OVERRIDE_MASK;
-  value |= (static_cast<uint32_t>(digital_speed_ctrl) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK;
-
-  if (!this->update_bits32(
-        REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
-      )) {
+  if (!this->comms_client_.write_speed_command_raw(digital_speed_ctrl)) {
     return false;
   }
 
@@ -3100,14 +2046,6 @@ bool MCF8329AComponent::set_speed_percent(float speed_percent, const char* reaso
   return true;
 }
 
-float MCF8329AComponent::speed_raw_to_hz_(int32_t raw, float max_speed_hz) const {
-  return static_cast<float>(raw) * SPEED_Q27_SCALE * max_speed_hz;
-}
-
-float MCF8329AComponent::fg_speed_raw_to_hz_(uint32_t raw, float max_speed_hz) const {
-  return static_cast<float>(raw) * SPEED_Q27_SCALE * max_speed_hz;
-}
-
 void MCF8329AComponent::pulse_clear_faults() {
   ESP_LOGI(TAG, "Pulsing clear faults");
 
@@ -3121,15 +2059,10 @@ void MCF8329AComponent::pulse_clear_faults() {
   // MPET_BEMF fault condition can remain true while MPET bits are set.
   (void)this->clear_mpet_bits_("clear_faults");
 
-  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
-    ESP_LOGW(TAG, "Failed to assert CLR_FLT");
+  if (!this->comms_client_.pulse_clear_faults()) {
+    ESP_LOGW(TAG, "Failed to pulse CLR_FLT");
     return;
   }
-  delay_microseconds_safe(2000);
-  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 0)) {
-    ESP_LOGW(TAG, "Failed to deassert CLR_FLT");
-  }
-  delay_microseconds_safe(2000);
 
   const bool gate_after_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_after);
   const bool ctrl_after_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_after);
@@ -3167,10 +2100,8 @@ void MCF8329AComponent::pulse_clear_faults() {
 
 void MCF8329AComponent::pulse_watchdog_tickle() {
   ESP_LOGD(TAG, "Pulsing watchdog tickle");
-  if (this->update_bits32(
-        REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK
-      )) {
-    (void)this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0);
+  if (!this->comms_client_.pulse_watchdog_tickle()) {
+    ESP_LOGW(TAG, "Failed to pulse watchdog tickle");
   }
   this->last_watchdog_tickle_ms_ = millis();
 }
@@ -3214,99 +2145,22 @@ bool MCF8329AComponent::read_probe_and_publish_() {
 }
 
 bool MCF8329AComponent::clear_mpet_bits_(const char* context) {
-  uint32_t algo_debug2 = 0;
-  if (!this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
-    ESP_LOGW(TAG, "[%s] Failed to read ALGO_DEBUG2 for MPET clear", context);
+  bool changed = false;
+  uint32_t before = 0;
+  uint32_t after = 0;
+  if (!this->comms_client_.clear_mpet_bits(&changed, &before, &after)) {
+    ESP_LOGW(TAG, "[%s] Failed to clear MPET bits via client", context);
     return false;
   }
 
-  const uint32_t mpet_bits = algo_debug2 & ALGO_DEBUG2_MPET_ALL_MASK;
-  if (mpet_bits == 0u) {
+  if (!changed) {
     return true;
   }
 
-  const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
-  if (!this->write_reg32(REG_ALGO_DEBUG2, next)) {
-    ESP_LOGW(TAG, "[%s] Failed to clear MPET bits in ALGO_DEBUG2", context);
-    return false;
-  }
-
   ESP_LOGI(
-    TAG, "[%s] Cleared MPET bits in ALGO_DEBUG2: 0x%08X -> 0x%08X", context, algo_debug2, next
+    TAG, "[%s] Cleared MPET bits in ALGO_DEBUG2: 0x%08X -> 0x%08X", context, before, after
   );
   return true;
-}
-
-bool MCF8329AComponent::perform_read_(uint16_t offset, uint32_t& value) {
-  const uint32_t control_word = this->build_control_word_(true, offset, true);
-  const uint8_t cw[3] = {
-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
-    static_cast<uint8_t>(control_word & 0xFF),
-  };
-
-  uint8_t rx[4] = {0, 0, 0, 0};
-
-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
-  if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
-    return false;
-  }
-
-  value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) |
-          (static_cast<uint32_t>(rx[2]) << 16) | (static_cast<uint32_t>(rx[3]) << 24);
-  return true;
-}
-
-bool MCF8329AComponent::perform_read16_(uint16_t offset, uint16_t& value) {
-  const uint32_t control_word = this->build_control_word_(true, offset, false);
-  const uint8_t cw[3] = {
-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
-    static_cast<uint8_t>(control_word & 0xFF),
-  };
-
-  uint8_t rx[2] = {0, 0};
-
-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
-  if (err != i2c::ERROR_OK) {
-    ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
-    return false;
-  }
-
-  value = static_cast<uint16_t>(rx[0]) | (static_cast<uint16_t>(rx[1]) << 8);
-  return true;
-}
-
-bool MCF8329AComponent::perform_write_(uint16_t offset, uint32_t value) {
-  const uint32_t control_word = this->build_control_word_(false, offset, true);
-  const uint8_t cw[3] = {
-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
-    static_cast<uint8_t>(control_word & 0xFF),
-  };
-  const uint8_t payload[4] = {
-    static_cast<uint8_t>(value & 0xFF),
-    static_cast<uint8_t>((value >> 8) & 0xFF),
-    static_cast<uint8_t>((value >> 16) & 0xFF),
-    static_cast<uint8_t>((value >> 24) & 0xFF),
-  };
-
-  const uint8_t tx[7] = {cw[0], cw[1], cw[2], payload[0], payload[1], payload[2], payload[3]};
-  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
-  if (err != i2c::ERROR_OK) {
-    ESP_LOGW(
-      TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
-    );
-    return false;
-  }
-  return true;
-}
-
-uint32_t MCF8329AComponent::build_control_word_(bool is_read, uint16_t offset, bool is_32bit)
-  const {
-  const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
-  return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
 }
 
 void MCF8329AComponent::publish_faults_(
@@ -3475,7 +2329,7 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
                         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
                       )
                     : 0u;
-  const float configured_max_speed_hz = this->max_speed_code_to_hz_(configured_max_speed_code);
+  const float configured_max_speed_hz = this->comms_client_.decode_max_speed_hz(configured_max_speed_code);
 
   if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && closed_loop2_ok && mtr_params_ok && closed_loop3_ok && closed_loop4_ok) {
     ESP_LOGW(
@@ -3708,22 +2562,6 @@ const char* MCF8329AComponent::brake_time_to_string_(uint8_t code) const {
     "15000ms",
   };
   return kBrakeTimeLabels[code & 0x0Fu];
-}
-
-float MCF8329AComponent::max_speed_code_to_hz_(uint16_t code) const {
-  const uint16_t clamped = code & 0x3FFFu;
-  if (clamped <= 9600u) {
-    return static_cast<float>(clamped) / 6.0f;
-  }
-  return (static_cast<float>(clamped) / 4.0f) - 800.0f;
-}
-
-float MCF8329AComponent::open_loop_accel_code_to_hz_per_s_(uint8_t code) const {
-  return OPEN_LOOP_ACCEL_HZ_PER_S_TABLE[code & 0x0Fu];
-}
-
-float MCF8329AComponent::open_to_closed_handoff_code_to_percent_(uint8_t code) const {
-  return OPEN_TO_CLOSED_HANDOFF_PERCENT_TABLE[code & 0x1Fu];
 }
 
 const char* MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const {
