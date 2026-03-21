@@ -244,6 +244,7 @@ void MCF8329AComponent::update() {
     return;
   }
 
+  const uint32_t now = millis();
   uint32_t gate_fault_status = 0;
   uint32_t algo_status = 0;
   uint32_t controller_fault_status = 0;
@@ -297,8 +298,11 @@ void MCF8329AComponent::update() {
     }
   }
 
+  const bool speed_diag_due =
+    (now - this->last_speed_diag_log_ms_ >= 500U) &&
+    (this->speed_applied_percent_ > 0.1f || this->speed_target_active_);
   if (this->speed_fdbk_hz_sensor_ != nullptr || this->speed_ref_open_loop_hz_sensor_ != nullptr ||
-      this->fg_speed_fdbk_hz_sensor_ != nullptr) {
+      this->fg_speed_fdbk_hz_sensor_ != nullptr || speed_diag_due) {
     uint32_t closed_loop4 = 0;
     float max_speed_hz = this->cfg_max_speed_set_ ? this->max_speed_code_to_hz_(this->cfg_max_speed_code_) : 0.0f;
     if (this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
@@ -310,26 +314,54 @@ void MCF8329AComponent::update() {
 
     if (max_speed_hz > 0.0f) {
       uint32_t raw_speed_fdbk = 0;
-      if (this->speed_fdbk_hz_sensor_ != nullptr && this->read_reg32(REG_SPEED_FDBK, raw_speed_fdbk)) {
-        this->speed_fdbk_hz_sensor_->publish_state(
-          this->speed_raw_to_hz_(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz)
-        );
-      }
-
       uint32_t raw_speed_ref_open_loop = 0;
-      if (this->speed_ref_open_loop_hz_sensor_ != nullptr &&
-          this->read_reg32(REG_SPEED_REF_OPEN_LOOP, raw_speed_ref_open_loop)) {
-        this->speed_ref_open_loop_hz_sensor_->publish_state(
-          this->speed_raw_to_hz_(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz)
-        );
+      uint32_t raw_fg_speed_fdbk = 0;
+      float speed_fdbk_hz = NAN;
+      float speed_ref_open_loop_hz = NAN;
+      float fg_speed_fdbk_hz = NAN;
+      bool speed_fdbk_ok = false;
+      bool speed_ref_open_loop_ok = false;
+      bool fg_speed_fdbk_ok = false;
+
+      if (this->read_reg32(REG_SPEED_FDBK, raw_speed_fdbk)) {
+        speed_fdbk_hz = this->speed_raw_to_hz_(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz);
+        speed_fdbk_ok = true;
+        if (this->speed_fdbk_hz_sensor_ != nullptr) {
+          this->speed_fdbk_hz_sensor_->publish_state(speed_fdbk_hz);
+        }
       }
 
-      uint32_t raw_fg_speed_fdbk = 0;
-      if (this->fg_speed_fdbk_hz_sensor_ != nullptr &&
-          this->read_reg32(REG_FG_SPEED_FDBK, raw_fg_speed_fdbk)) {
-        this->fg_speed_fdbk_hz_sensor_->publish_state(
-          this->fg_speed_raw_to_hz_(raw_fg_speed_fdbk, max_speed_hz)
+      if (this->read_reg32(REG_SPEED_REF_OPEN_LOOP, raw_speed_ref_open_loop)) {
+        speed_ref_open_loop_hz =
+          this->speed_raw_to_hz_(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz);
+        speed_ref_open_loop_ok = true;
+        if (this->speed_ref_open_loop_hz_sensor_ != nullptr) {
+          this->speed_ref_open_loop_hz_sensor_->publish_state(speed_ref_open_loop_hz);
+        }
+      }
+
+      if (this->read_reg32(REG_FG_SPEED_FDBK, raw_fg_speed_fdbk)) {
+        fg_speed_fdbk_hz = this->fg_speed_raw_to_hz_(raw_fg_speed_fdbk, max_speed_hz);
+        fg_speed_fdbk_ok = true;
+        if (this->fg_speed_fdbk_hz_sensor_ != nullptr) {
+          this->fg_speed_fdbk_hz_sensor_->publish_state(fg_speed_fdbk_hz);
+        }
+      }
+
+      if (speed_diag_due) {
+        ESP_LOGI(
+          TAG,
+          "Speed diag: cmd=%.1f%% ref_ol=%.1fHz fdbk=%.1fHz fg=%.1fHz max=%.1fHz read_ok(ref=%s fdbk=%s fg=%s)",
+          this->speed_applied_percent_,
+          speed_ref_open_loop_hz,
+          speed_fdbk_hz,
+          fg_speed_fdbk_hz,
+          max_speed_hz,
+          YESNO(speed_ref_open_loop_ok),
+          YESNO(speed_fdbk_ok),
+          YESNO(fg_speed_fdbk_ok)
         );
+        this->last_speed_diag_log_ms_ = now;
       }
     }
   }
@@ -340,13 +372,13 @@ void MCF8329AComponent::update() {
     if (this->vm_voltage_sensor_ != nullptr) {
       this->vm_voltage_sensor_->publish_state(vm_voltage);
     }
-    if ((millis() - this->last_vm_diag_log_ms_) >= 5000U) {
+    if ((now - this->last_vm_diag_log_ms_) >= 5000U) {
       ESP_LOGD(TAG, "VM decode: raw=0x%08X -> %.2fV", vm_voltage_raw, vm_voltage);
-      this->last_vm_diag_log_ms_ = millis();
+      this->last_vm_diag_log_ms_ = now;
     }
   }
 
-  if (this->auto_tickle_watchdog_ && (millis() - this->last_watchdog_tickle_ms_ >= 500U)) {
+  if (this->auto_tickle_watchdog_ && (now - this->last_watchdog_tickle_ms_ >= 500U)) {
     this->pulse_watchdog_tickle();
   }
 }

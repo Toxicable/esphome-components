@@ -586,6 +586,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   std::string cfg_direction_mode_{"hardware"};
   uint32_t last_watchdog_tickle_ms_{0};
   uint32_t last_vm_diag_log_ms_{0};
+  uint32_t last_speed_diag_log_ms_{0};
   bool fault_latched_{false};
   bool normal_operation_ready_{false};
   uint32_t deferred_comms_last_retry_ms_{0};

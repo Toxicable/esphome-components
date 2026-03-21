@@ -94,6 +94,8 @@ Component-scoped notes for `components/mcf8329a`.
     - `start_boost_percent`
     - `start_boost_hold_ms`
     Non-zero commands can be ramped internally before register writes.
+  - Runtime now emits a 2Hz `INFO` speed diagnostic line while commanded speed is active:
+    `cmd`, `speed_ref_open_loop_hz`, `speed_fdbk_hz`, `fg_speed_fdbk_hz`, `max_speed_hz`, and read-valid flags.
   - Experimental speed-command reassertion and 1Hz `Run diag` bring-up logging were removed after tuning; use
     algorithm-state transition logs and fault diagnostics for runtime visibility.
   - On detected active faults, firmware forces speed command to `0%` once per fault episode as a safety guard.
