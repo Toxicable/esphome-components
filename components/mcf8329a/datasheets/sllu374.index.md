@@ -1,0 +1,177 @@
+# Datasheet Index: `sllu374.pdf`
+
+## Generated Artifacts
+- Canonical source: `sllu374.pdf`
+- Compact source: `sllu374.compact.txt`
+- Compact line map: `sllu374.compact.map.tsv`
+
+## Normalization
+- Source text is extracted from the PDF in memory during processing.
+- Compact output removes only known page boilerplate/footer lines and collapses repeated blank lines.
+- Canonical lines are line numbers in the extracted text stream used for indexing, not a stored transcript.
+- Canonical lines: 591; compact lines: 536
+
+## Removed Boilerplate Summary
+- Removed lines: 55
+- copyright: 28
+- revision_tag: 14
+- website: 13
+
+## Section Headings (Canonical Line Numbers)
+- L67: 1 Introduction
+- L82: 2 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L85: 2 Hardware Design and Setup
+- L88: 2.1 Board Design
+- L91: 2.1.1 External MOSFET Selection
+- L95: 2.1.2 Gate Resistor Selection
+- L103: 2.1.3 Bootstrap and GVDD Capacitor Selection
+- L109: 2.1.4 Current Shunt Resistor Selection
+- L114: 2.1.5 VREG MOSFET Selection
+- L119: 2.1.6 Additional External Power Stage Components
+- L129: 3 Connecting to the GUI
+- L144: 4 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L147: 4 Spinning Into Closed Loop
+- L153: 4.1 Essential Configuration
+- L154: 4.1.1 Loading Recommended Default Values
+- L165: 4.1.2 Setting Base Current
+- L176: 6 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L179: 4.1.3 Setting Current Limits
+- L198: 4.1.4 Setting Voltage Limits
+- L208: 8 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L211: 4.1.5 Input the Motor's Phase Resistance and Inductance
+- L216: 4.1.6 Maximum Electrical Speed (Hz)
+- L241: 4.1.7 Run MPET to Identify Motor Parameters
+- L254: 10 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L257: 4.1.7.1 Skipping MPET Measurements
+- L273: 4.2 Testing for Successful Startup Into Closed Loop
+- L291: 12 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L294: 5 Basic Controls
+- L299: 5.1 Speed Input Mode
+- L316: 5.2 Preventing Back Spin of Rotor During Startup
+- L330: 14 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L337: 5.3 Faster Startup Timing
+- L395: 16 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L398: 5.4 Improving Speed Regulation
+- L428: 5.5 Limiting and Regulating Supply Power
+- L444: 18 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L447: 5.6 MTPA Tuning
+- L467: 5.7 Motor Studio Optimization Wizards
+- L473: 20 MCF8329A Tuning Guide SLLU374 – NOVEMBER 2024
+- L476: 6 Fault Handling
+- L485: 6.1 MPET BEMF FAULT [MPET_BEMF_FAULT]
+- L502: 6.2 Abnormal BEMF Fault [ABN_BEMF]
+- L516: 6.3 Lock Current Limit [LOCK_LIMIT]
+- L527: 6.4 Hardware Lock Current Limit [HW_LOCK_LIMIT]
+- L541: 6.5 No Motor Fault [NO_MTR]
+- L557: 6.6 Abnormal Speed [ABN_SPEED]
+
+## Register Offsets (Canonical Line Numbers)
+- No register offsets detected with default pattern.
+
+## Quick Token References (Canonical Line Numbers)
+- Selection mode: `auto`; profile: `none`; tokens: 17
+- `ABN_SPEED`:
+  - L28: 6.6 Abnormal Speed [ABN_SPEED]......................................................................................................................................27
+  - L64: Figure 6-7. ABN_SPEED...........................................................................................................................................................27
+  - L365: If Abnormal speed fault [ABN_SPEED] gets triggered, it is recommended to decrease open loop
+  - L387: If Abnormal speed fault [ABN_SPEED] or Loss of sync [LOSS_OF_SYNC] fault gets triggered, it is
+  - L557: 6.6 Abnormal Speed [ABN_SPEED]
+  - L558: This fault gets triggered when motor speed exceeds abnormal speed threshold [LOCK_ABN_SPEED]. When
+  - L565: Figure 6-7. ABN_SPEED
+- `LOCK_LIMIT`:
+  - L25: 6.3 Lock Current Limit [LOCK_LIMIT].................................................................................................................................... 24
+  - L26: 6.4 Hardware Lock Current Limit [HW_LOCK_LIMIT]........................................................................................................... 25
+  - L62: Figure 6-5. HW_LOCK_LIMIT................................................................................................................................................... 25
+  - L351: A2 [OL_ACC_A2] might trigger LOCK_LIMIT fault. If this happens, reduce A1 and A2 until
+  - L352: LOCK_LIMIT fault no longer triggers.
+  - L370: LOCK_LIMIT fault handling:
+  - L373: Increasing closed loop acceleration rate [CL_ACC] might trigger LOCK_LIMIT. If this happens, reduce
+  - L516: 6.3 Lock Current Limit [LOCK_LIMIT]
+  - L527: 6.4 Hardware Lock Current Limit [HW_LOCK_LIMIT]
+  - L535: Figure 6-5. HW_LOCK_LIMIT
+- `MPET_BEMF_FAULT`:
+  - L23: 6.1 MPET BEMF FAULT [MPET_BEMF_FAULT].................................................................................................................. 22
+  - L59: Figure 6-2. MPET_BEMF_FAULT..............................................................................................................................................22
+  - L485: 6.1 MPET BEMF FAULT [MPET_BEMF_FAULT]
+  - L486: A MPET_BEMF_FAULT gets reported when the meased BEMF is less than the threshold set in
+  - L496: Figure 6-2. MPET_BEMF_FAULT
+- `LOCK_ILIMIT`:
+  - L61: Figure 6-4. LOCK_ILIMIT.......................................................................................................................................................... 24
+  - L183: HW_LOCK_ILIMIT and LOCK_ILIMIT are configurable current limits intended to protect the system from
+  - L349: [LOCK_ILIMIT]. Open loop current can be measured using oscilloscope.
+  - L372: detection current threshold [LOCK_ILIMIT]. Closed loop current can be measured using oscilloscope.
+  - L517: This fault gets triggered when the phase current exceeds the LOCK_ILIMIT threshold. If this fault is triggered,
+  - L520: and increase the value of LOCK_ILIMIT.
+  - L521: Figure 6-4. LOCK_ILIMIT
+  - L528: This fault gets triggered when the phase current exceeds the HW_LOCK_ILIMIT threshold. If this fault is
+- `HW_LOCK_LIMIT`:
+  - L26: 6.4 Hardware Lock Current Limit [HW_LOCK_LIMIT]........................................................................................................... 25
+  - L62: Figure 6-5. HW_LOCK_LIMIT................................................................................................................................................... 25
+  - L527: 6.4 Hardware Lock Current Limit [HW_LOCK_LIMIT]
+  - L535: Figure 6-5. HW_LOCK_LIMIT
+- `NO_MTR`:
+  - L27: 6.5 No Motor Fault [NO_MTR]............................................................................................................................................... 26
+  - L63: Figure 6-6. NO_MTR................................................................................................................................................................. 26
+  - L541: 6.5 No Motor Fault [NO_MTR]
+  - L546: 2. If the fault persists, set the no motor lock current threshold [NO_MTR_THR] to 5%.
+  - L548: Figure 6-6. NO_MTR
+- `IPD_CURR_THR`:
+  - L37: Figure 4-5. OL_ILIMIT, ALIGN_OR_SLOW_CURRENT_ILIMIT, and IPD_CURR_THR Current Limits..................................... 7
+  - L188: ILIMIT, OL_ILIMIT, ALIGN_OR_SLOW_CURRENT_ILIMIT, and IPD_CURR_THR are the max current that are
+  - L191: Figure 4-5. OL_ILIMIT, ALIGN_OR_SLOW_CURRENT_ILIMIT, and IPD_CURR_THR Current Limits
+  - L340: 2. Increase IPD current threshold (A) [IPD_CURR_THR] to the rated current of the motor.
+  - L367: current threshold [IPD_CURR_THR] and IPD repeat times [IPD_REPEAT].
+  - L561: increase the IPD current threshold [IPD_CURR_THR] and IPD repeat times [IPD_REPEAT] depending on
+- `BASE_CURRENT`:
+  - L35: Figure 4-3. BASE_CURRENT Bit Field....................................................................................................................................... 6
+  - L171: After converting the result from Equation 1 into a hexadecimal value, input the result into the BASE_CURRENT
+  - L173: Figure 4-3. BASE_CURRENT Bit Field
+  - L181: BASE_CURRENT bit field. For example, if BASE_CURRENT is set to 37.5A and ILIMIT is set to 50%, then
+- `CL_ACC`:
+  - L368: 9. Increase Closed loop acceleration rate [CL_ACC].
+  - L371: Closed loop acceleration rate [CL_ACC] can be increased until closed loop current reaches Lock
+  - L373: Increasing closed loop acceleration rate [CL_ACC] might trigger LOCK_LIMIT. If this happens, reduce
+  - L374: closed loop acceleration rate [CL_ACC] until no longer triggers.
+  - L564: 3. Decrease closed loop acceleration [CL_ACC].
+- `CTRL_MODE`:
+  - L407: 1. Set the control mode [CTRL_MODE] to modulation index control (11b).
+  - L411: 4. Stop the motor and set the control mode [CTRL_MODE] to current control.
+  - L419: 8. Stop the motor and set the control mode [CTRL_MODE] to speed control.
+  - L433: 1. Configure CTRL_MODE to power control (1b).
+  - L457: 2. Set the CTRL_MODE to Current Control mode
+- `SPD_LOOP_KI`:
+  - L400: [SPD_LOOP_KP] and [SPD_LOOP_KI]. Kp coefficient of speed loop [SPD_LOOP_KP] controls the settling time
+  - L401: and speed overshoots. Ki coefficient of Speed loop [SPD_LOOP_KI] controls speed overshoot and ensures
+  - L405: [SPD_LOOP_KI] are set to zero.
+  - L417: 7. Speed loop Ki [SPD_LOOP_KI] is calculated using Equation 3.
+  - L530: 1. Using the fields circled in Figure 6-5, set SPD_LOOP_KP, SPD_LOOP_KI, CURR_LOOP_KP, and
+- `SPD_LOOP_KP`:
+  - L400: [SPD_LOOP_KP] and [SPD_LOOP_KI]. Kp coefficient of speed loop [SPD_LOOP_KP] controls the settling time
+  - L404: Auto Tuning: MCF8329A auto calculates the Speed loop PI controller gains when [SPD_LOOP_KP] and
+  - L414: 6. Speed loop Kp [SPD_LOOP_KP] is calculated using Equation 2.
+  - L530: 1. Using the fields circled in Figure 6-5, set SPD_LOOP_KP, SPD_LOOP_KI, CURR_LOOP_KP, and
+- `ABN_BEMF`:
+  - L24: 6.2 Abnormal BEMF Fault [ABN_BEMF]............................................................................................................................... 23
+  - L502: 6.2 Abnormal BEMF Fault [ABN_BEMF]
+- `ALIGN_OR_SLOW_CURRENT_ILIMIT`:
+  - L37: Figure 4-5. OL_ILIMIT, ALIGN_OR_SLOW_CURRENT_ILIMIT, and IPD_CURR_THR Current Limits..................................... 7
+  - L188: ILIMIT, OL_ILIMIT, ALIGN_OR_SLOW_CURRENT_ILIMIT, and IPD_CURR_THR are the max current that are
+  - L191: Figure 4-5. OL_ILIMIT, ALIGN_OR_SLOW_CURRENT_ILIMIT, and IPD_CURR_THR Current Limits
+  - L391: 3. Configure align current threshold [ALIGN_OR_SLOW_CURRENT_ILIMIT] to 50% of ILIMIT.
+- `OL_ACC_A1`:
+  - L345: 6. Increase Open loop acceleration coefficient A1 [OL_ACC_A1] and Open loop acceleration coefficient A2
+  - L350: Increasing Open loop acceleration coefficient A1 [OL_ACC_A1] and Open loop acceleration coefficient
+  - L366: acceleration constants [OL_ACC_A1] and [OL_ACC_A2] and also retune IPD by increasing the IPD
+  - L563: 2. Decrease open loop acceleration A1 [OL_ACC_A1] and open loop acceleration A2 [OL_ACC_A2].
+- `OL_ACC_A2`:
+  - L346: [OL_ACC_A2].
+  - L351: A2 [OL_ACC_A2] might trigger LOCK_LIMIT fault. If this happens, reduce A1 and A2 until
+  - L366: acceleration constants [OL_ACC_A1] and [OL_ACC_A2] and also retune IPD by increasing the IPD
+  - L563: 2. Decrease open loop acceleration A1 [OL_ACC_A1] and open loop acceleration A2 [OL_ACC_A2].
+- `SALIENCY_PERCENTAGE`:
+  - L450: SALIENCY_PERCENTAGE to a non-zero value by setting the Lq and Ld values if they are provided in the
+  - L454: If the motors Ld or saliency percentage is not known, the approximate SALIENCY_PERCENTAGE
+  - L456: 1. Set the SALIENCY_PERCENTAGE to 0x1h
+  - L459: 4. While the motor is spinning, increment the SALIENCY_PERCENTAGE value by 1h until the motors speed
+
+Regenerate with: `./tools/datasheet_prepare.py components/mcf8329a/datasheets/sllu374.pdf`

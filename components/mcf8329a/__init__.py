@@ -423,45 +423,22 @@ LEGACY_STARTUP_KEY_MAP = {
 }
 
 
-def validate_lock_ilimit_percent(value):
+def validate_int_from_map(value, value_map, label):
     value = cv.int_(value)
-    if value not in LOCK_ILIMIT_PERCENT_TO_CODE:
+    if value not in value_map:
         raise cv.Invalid(
-            "lock current-limit percent must be one of: "
-            + ", ".join(str(v) for v in LOCK_ILIMIT_PERCENT_TO_CODE)
+            f"{label} must be one of: " + ", ".join(str(v) for v in value_map)
         )
     return value
 
 
-def validate_lock_abn_speed_threshold_percent(value):
-    value = cv.int_(value)
-    if value not in LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE:
-        raise cv.Invalid(
-            "abnormal speed threshold percent must be one of: "
-            + ", ".join(str(v) for v in LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE)
-        )
-    return value
-
-
-def validate_abnormal_bemf_threshold_percent(value):
+def validate_float_from_map(value, value_map, label):
     value = cv.float_(value)
-    for allowed in ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE:
+    for allowed in value_map:
         if abs(value - allowed) < 1e-6:
             return allowed
     raise cv.Invalid(
-        "abnormal BEMF threshold percent must be one of: "
-        + ", ".join(str(v) for v in ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE)
-    )
-
-
-def validate_no_motor_threshold_percent(value):
-    value = cv.float_(value)
-    for allowed in NO_MOTOR_THRESHOLD_PERCENT_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "no-motor threshold percent must be one of: "
-        + ", ".join(str(v) for v in NO_MOTOR_THRESHOLD_PERCENT_TO_CODE)
+        f"{label} must be one of: " + ", ".join(str(v) for v in value_map)
     )
 
 
@@ -473,13 +450,7 @@ def validate_max_speed_hz(value):
 
 
 def validate_csa_gain_v_per_v(value):
-    value = cv.int_(value)
-    if value not in CSA_GAIN_V_PER_V_TO_CODE:
-        raise cv.Invalid(
-            "CSA gain must be one of: "
-            + ", ".join(str(v) for v in CSA_GAIN_V_PER_V_TO_CODE)
-        )
-    return value
+    return validate_int_from_map(value, CSA_GAIN_V_PER_V_TO_CODE, "CSA gain")
 
 
 def validate_base_current_amps(value):
@@ -490,110 +461,113 @@ def validate_base_current_amps(value):
 
 
 def validate_open_loop_accel_hz_per_s(value):
-    value = cv.float_(value)
-    for allowed in OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "open-loop accel must be one of: "
-        + ", ".join(str(v) for v in OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE)
+    return validate_float_from_map(
+        value,
+        OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE,
+        "open-loop accel",
     )
 
 
 def validate_open_loop_accel2_hz_per_s2(value):
-    value = cv.float_(value)
-    for allowed in OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "open-loop accel2 must be one of: "
-        + ", ".join(str(v) for v in OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE)
+    return validate_float_from_map(
+        value,
+        OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE,
+        "open-loop accel2",
     )
 
 
 def validate_open_to_closed_handoff_percent(value):
-    value = cv.float_(value)
-    for allowed in OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "open-to-closed handoff percent must be one of: "
-        + ", ".join(str(v) for v in OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE)
+    return validate_float_from_map(
+        value,
+        OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE,
+        "open-to-closed handoff percent",
     )
 
 
 def validate_theta_error_ramp_rate(value):
-    value = cv.float_(value)
-    for allowed in THETA_ERROR_RAMP_RATE_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "theta_error_ramp_rate must be one of: "
-        + ", ".join(str(v) for v in THETA_ERROR_RAMP_RATE_TO_CODE)
+    return validate_float_from_map(
+        value,
+        THETA_ERROR_RAMP_RATE_TO_CODE,
+        "theta_error_ramp_rate",
     )
 
 
 def validate_cl_slow_acc_hz_per_s(value):
-    value = cv.float_(value)
-    for allowed in CL_SLOW_ACC_HZ_PER_S_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "cl_slow_acc_hz_per_s must be one of: "
-        + ", ".join(str(v) for v in CL_SLOW_ACC_HZ_PER_S_TO_CODE)
+    return validate_float_from_map(
+        value,
+        CL_SLOW_ACC_HZ_PER_S_TO_CODE,
+        "cl_slow_acc_hz_per_s",
     )
 
 
 def validate_mpet_open_loop_curr_ref_percent(value):
-    value = cv.int_(value)
-    if value not in MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE:
-        raise cv.Invalid(
-            "mpet_open_loop_curr_ref_percent must be one of: "
-            + ", ".join(str(v) for v in MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE)
-        )
-    return value
+    return validate_int_from_map(
+        value,
+        MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE,
+        "mpet_open_loop_curr_ref_percent",
+    )
 
 
 def validate_mpet_open_loop_speed_ref_percent(value):
-    value = cv.int_(value)
-    if value not in MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE:
-        raise cv.Invalid(
-            "mpet_open_loop_speed_ref_percent must be one of: "
-            + ", ".join(str(v) for v in MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE)
-        )
-    return value
+    return validate_int_from_map(
+        value,
+        MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE,
+        "mpet_open_loop_speed_ref_percent",
+    )
 
 
 def validate_mpet_open_loop_slew_hz_per_s(value):
-    value = cv.float_(value)
-    for allowed in MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "mpet_open_loop_slew_hz_per_s must be one of: "
-        + ", ".join(str(v) for v in MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE)
+    return validate_float_from_map(
+        value,
+        MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE,
+        "mpet_open_loop_slew_hz_per_s",
     )
 
 
 def validate_lock_ilimit_deglitch_ms(value):
-    value = cv.float_(value)
-    for allowed in LOCK_ILIMIT_DEGLITCH_MS_TO_CODE:
-        if abs(value - allowed) < 1e-6:
-            return allowed
-    raise cv.Invalid(
-        "lock_ilimit_deglitch_ms must be one of: "
-        + ", ".join(str(v) for v in LOCK_ILIMIT_DEGLITCH_MS_TO_CODE)
+    return validate_float_from_map(
+        value,
+        LOCK_ILIMIT_DEGLITCH_MS_TO_CODE,
+        "lock_ilimit_deglitch_ms",
     )
 
 
 def validate_hw_lock_ilimit_deglitch_us(value):
-    value = cv.int_(value)
-    if value not in HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE:
-        raise cv.Invalid(
-            "hw_lock_ilimit_deglitch_us must be one of: "
-            + ", ".join(str(v) for v in HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE)
-        )
-    return value
+    return validate_int_from_map(
+        value,
+        HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE,
+        "hw_lock_ilimit_deglitch_us",
+    )
+
+
+def validate_lock_ilimit_percent(value):
+    return validate_int_from_map(
+        value, LOCK_ILIMIT_PERCENT_TO_CODE, "lock current-limit percent"
+    )
+
+
+def validate_lock_abn_speed_threshold_percent(value):
+    return validate_int_from_map(
+        value,
+        LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE,
+        "abnormal speed threshold percent",
+    )
+
+
+def validate_abnormal_bemf_threshold_percent(value):
+    return validate_float_from_map(
+        value,
+        ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE,
+        "abnormal BEMF threshold percent",
+    )
+
+
+def validate_no_motor_threshold_percent(value):
+    return validate_float_from_map(
+        value,
+        NO_MOTOR_THRESHOLD_PERCENT_TO_CODE,
+        "no-motor threshold percent",
+    )
 
 
 def validate_no_legacy_startup_keys(config):
@@ -701,6 +675,152 @@ def encode_base_current_amps(value_amps):
     if code > 0x7FFF:
         code = 0x7FFF
     return code
+
+
+def encode_open_loop_limit_source(value):
+    return value == OPEN_LOOP_LIMIT_SOURCE_OPTIONS["ilimit"]
+
+
+RUNTIME_SETTER_SPECS = (
+    (CONF_AUTO_TICKLE_WATCHDOG, "set_auto_tickle_watchdog", None),
+    (CONF_CLEAR_MPET_ON_STARTUP, "set_clear_mpet_on_startup", None),
+    (CONF_SPEED_RAMP_UP_PERCENT_PER_S, "set_speed_ramp_up_percent_per_s", None),
+    (CONF_SPEED_RAMP_DOWN_PERCENT_PER_S, "set_speed_ramp_down_percent_per_s", None),
+    (CONF_START_BOOST_PERCENT, "set_start_boost_percent", None),
+    (CONF_START_BOOST_HOLD_MS, "set_start_boost_hold_ms", None),
+)
+
+REQUIRED_MOTOR_SETTER_SPECS = (
+    (CONF_MOTOR_BEMF_CONST, "set_cfg_motor_bemf_const", None),
+    (CONF_BRAKE_MODE_CFG, "set_cfg_brake_mode", None),
+    (CONF_MODE_CFG, "set_cfg_mode", None),
+    (CONF_MAX_SPEED_HZ, "set_cfg_max_speed_code", encode_max_speed_hz),
+)
+
+OPTIONAL_MOTOR_SETTER_SPECS = (
+    (CONF_BRAKE_TIME_CFG, "set_cfg_brake_time", None),
+    (CONF_ALIGN_TIME, "set_cfg_align_time", None),
+    (CONF_DIRECTION_MODE_CFG, "set_cfg_direction_mode", None),
+    (CONF_CSA_GAIN_V_PER_V, "set_cfg_csa_gain", lambda value: CSA_GAIN_V_PER_V_TO_CODE[value]),
+    (CONF_BASE_CURRENT_AMPS, "set_cfg_base_current_code", encode_base_current_amps),
+    (CONF_PHASE_CURRENT_LIMIT_PERCENT, "set_cfg_ilimit", lambda value: LOCK_ILIMIT_PERCENT_TO_CODE[value]),
+    (
+        CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT,
+        "set_cfg_align_or_slow_current_ilimit",
+        lambda value: LOCK_ILIMIT_PERCENT_TO_CODE[value],
+    ),
+    (CONF_LOCK_MODE_CFG, "set_cfg_lock_mode", None),
+    (CONF_LOCK_ILIMIT_PERCENT, "set_cfg_lock_ilimit", lambda value: LOCK_ILIMIT_PERCENT_TO_CODE[value]),
+    (CONF_HW_LOCK_ILIMIT_PERCENT, "set_cfg_hw_lock_ilimit", lambda value: LOCK_ILIMIT_PERCENT_TO_CODE[value]),
+    (CONF_LOCK_RETRY_TIME, "set_cfg_lock_retry_time", None),
+    (CONF_ABN_SPEED_LOCK_ENABLE, "set_cfg_abn_speed_lock_enable", None),
+    (CONF_ABN_BEMF_LOCK_ENABLE, "set_cfg_abn_bemf_lock_enable", None),
+    (CONF_NO_MOTOR_LOCK_ENABLE, "set_cfg_no_motor_lock_enable", None),
+    (
+        CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT,
+        "set_cfg_lock_abn_speed_threshold",
+        lambda value: LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE[value],
+    ),
+    (
+        CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT,
+        "set_cfg_abnormal_bemf_threshold",
+        lambda value: ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE[value],
+    ),
+    (
+        CONF_NO_MOTOR_THRESHOLD_PERCENT,
+        "set_cfg_no_motor_threshold",
+        lambda value: NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[value],
+    ),
+    (CONF_OPEN_LOOP_ILIMIT_PERCENT, "set_cfg_open_loop_ilimit", lambda value: LOCK_ILIMIT_PERCENT_TO_CODE[value]),
+    (CONF_OPEN_LOOP_LIMIT_SOURCE, "set_cfg_open_loop_limit_source", encode_open_loop_limit_source),
+    (CONF_OPEN_LOOP_ACCEL_HZ_PER_S, "set_cfg_open_loop_accel", lambda value: OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE[value]),
+    (
+        CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2,
+        "set_cfg_open_loop_accel2",
+        lambda value: OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE[value],
+    ),
+    (CONF_AUTO_HANDOFF_ENABLE, "set_cfg_auto_handoff_enable", None),
+    (
+        CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT,
+        "set_cfg_open_to_closed_handoff_threshold",
+        lambda value: OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE[value],
+    ),
+    (CONF_THETA_ERROR_RAMP_RATE, "set_cfg_theta_error_ramp_rate", lambda value: THETA_ERROR_RAMP_RATE_TO_CODE[value]),
+    (CONF_CL_SLOW_ACC_HZ_PER_S, "set_cfg_cl_slow_acc", lambda value: CL_SLOW_ACC_HZ_PER_S_TO_CODE[value]),
+    (CONF_MPET_USE_DEDICATED_PARAMS, "set_cfg_mpet_use_dedicated_params", None),
+    (
+        CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT,
+        "set_cfg_mpet_open_loop_curr_ref",
+        lambda value: MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE[value],
+    ),
+    (
+        CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT,
+        "set_cfg_mpet_open_loop_speed_ref",
+        lambda value: MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE[value],
+    ),
+    (
+        CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S,
+        "set_cfg_mpet_open_loop_slew",
+        lambda value: MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE[value],
+    ),
+    (CONF_MPET_TIMEOUT_MS, "set_mpet_timeout_ms", None),
+    (
+        CONF_LOCK_ILIMIT_DEGLITCH_MS,
+        "set_cfg_lock_ilimit_deglitch",
+        lambda value: LOCK_ILIMIT_DEGLITCH_MS_TO_CODE[value],
+    ),
+    (
+        CONF_HW_LOCK_ILIMIT_DEGLITCH_US,
+        "set_cfg_hw_lock_ilimit_deglitch",
+        lambda value: HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE[value],
+    ),
+    (CONF_SPEED_LOOP_KP_CODE, "set_cfg_speed_loop_kp_code", None),
+    (CONF_SPEED_LOOP_KI_CODE, "set_cfg_speed_loop_ki_code", None),
+)
+
+BUTTON_CONFIG_KEYS = (
+    CONF_CLEAR_FAULTS,
+    CONF_WATCHDOG_TICKLE,
+    CONF_TUNE_INITIAL_PARAMS,
+    CONF_RUN_MPET,
+)
+
+BINARY_SENSOR_SETTER_SPECS = (
+    (CONF_FAULT_ACTIVE, "set_fault_active_binary_sensor"),
+    (CONF_SYS_ENABLE, "set_sys_enable_binary_sensor"),
+)
+
+TEXT_SENSOR_SETTER_SPECS = (
+    (CONF_CURRENT_FAULT, "set_current_fault_text_sensor"),
+)
+
+SENSOR_SETTER_SPECS = (
+    (CONF_VM_VOLTAGE, "set_vm_voltage_sensor"),
+    (CONF_DUTY_CMD_PERCENT, "set_duty_cmd_percent_sensor"),
+    (CONF_VOLT_MAG_PERCENT, "set_volt_mag_percent_sensor"),
+    (CONF_MOTOR_BEMF_CONSTANT, "set_motor_bemf_constant_sensor"),
+    (CONF_SPEED_FDBK_HZ, "set_speed_fdbk_hz_sensor"),
+    (CONF_SPEED_REF_OPEN_LOOP_HZ, "set_speed_ref_open_loop_hz_sensor"),
+    (CONF_FG_SPEED_FDBK_HZ, "set_fg_speed_fdbk_hz_sensor"),
+)
+
+
+def apply_codegen_setters(var, config, setter_specs, optional):
+    for conf_key, setter_name, transform in setter_specs:
+        if optional and conf_key not in config:
+            continue
+        value = config[conf_key]
+        if transform is not None:
+            value = transform(value)
+        cg.add(getattr(var, setter_name)(value))
+
+
+async def attach_optional_entities(var, config, entity_specs, factory):
+    for conf_key, setter_name in entity_specs:
+        if conf_key not in config:
+            continue
+        entity = await factory(config[conf_key])
+        cg.add(getattr(var, setter_name)(entity))
 
 
 CONFIG_SCHEMA = cv.All(
@@ -837,125 +957,9 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
     cg.add_build_flag("-DMCF8329A_EMBED_IMPL")
 
-    cg.add(var.set_auto_tickle_watchdog(config[CONF_AUTO_TICKLE_WATCHDOG]))
-    cg.add(var.set_clear_mpet_on_startup(config[CONF_CLEAR_MPET_ON_STARTUP]))
-    cg.add(var.set_speed_ramp_up_percent_per_s(config[CONF_SPEED_RAMP_UP_PERCENT_PER_S]))
-    cg.add(var.set_speed_ramp_down_percent_per_s(config[CONF_SPEED_RAMP_DOWN_PERCENT_PER_S]))
-    cg.add(var.set_start_boost_percent(config[CONF_START_BOOST_PERCENT]))
-    cg.add(var.set_start_boost_hold_ms(config[CONF_START_BOOST_HOLD_MS]))
-
-    cg.add(var.set_cfg_motor_bemf_const(config[CONF_MOTOR_BEMF_CONST]))
-    cg.add(var.set_cfg_brake_mode(config[CONF_BRAKE_MODE_CFG]))
-    if CONF_BRAKE_TIME_CFG in config:
-        cg.add(var.set_cfg_brake_time(config[CONF_BRAKE_TIME_CFG]))
-    cg.add(var.set_cfg_mode(config[CONF_MODE_CFG]))
-    if CONF_ALIGN_TIME in config:
-        cg.add(var.set_cfg_align_time(config[CONF_ALIGN_TIME]))
-    if CONF_DIRECTION_MODE_CFG in config:
-        cg.add(var.set_cfg_direction_mode(config[CONF_DIRECTION_MODE_CFG]))
-    if CONF_CSA_GAIN_V_PER_V in config:
-        cg.add(var.set_cfg_csa_gain(CSA_GAIN_V_PER_V_TO_CODE[config[CONF_CSA_GAIN_V_PER_V]]))
-    if CONF_BASE_CURRENT_AMPS in config:
-        cg.add(var.set_cfg_base_current_code(encode_base_current_amps(config[CONF_BASE_CURRENT_AMPS])))
-    if CONF_PHASE_CURRENT_LIMIT_PERCENT in config:
-        cg.add(var.set_cfg_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_PHASE_CURRENT_LIMIT_PERCENT]]))
-    if CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT in config:
-        cg.add(
-            var.set_cfg_align_or_slow_current_ilimit(
-                LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_ALIGN_OR_SLOW_CURRENT_LIMIT_PERCENT]]
-            )
-        )
-    if CONF_LOCK_MODE_CFG in config:
-        cg.add(var.set_cfg_lock_mode(config[CONF_LOCK_MODE_CFG]))
-    if CONF_LOCK_ILIMIT_PERCENT in config:
-        cg.add(var.set_cfg_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_LOCK_ILIMIT_PERCENT]]))
-    if CONF_HW_LOCK_ILIMIT_PERCENT in config:
-        cg.add(var.set_cfg_hw_lock_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_HW_LOCK_ILIMIT_PERCENT]]))
-    if CONF_LOCK_RETRY_TIME in config:
-        cg.add(var.set_cfg_lock_retry_time(config[CONF_LOCK_RETRY_TIME]))
-    if CONF_ABN_SPEED_LOCK_ENABLE in config:
-        cg.add(var.set_cfg_abn_speed_lock_enable(config[CONF_ABN_SPEED_LOCK_ENABLE]))
-    if CONF_ABN_BEMF_LOCK_ENABLE in config:
-        cg.add(var.set_cfg_abn_bemf_lock_enable(config[CONF_ABN_BEMF_LOCK_ENABLE]))
-    if CONF_NO_MOTOR_LOCK_ENABLE in config:
-        cg.add(var.set_cfg_no_motor_lock_enable(config[CONF_NO_MOTOR_LOCK_ENABLE]))
-    if CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT in config:
-        cg.add(
-            var.set_cfg_lock_abn_speed_threshold(
-                LOCK_ABN_SPEED_THRESHOLD_PERCENT_TO_CODE[config[CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT]]
-            )
-        )
-    if CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT in config:
-        cg.add(
-            var.set_cfg_abnormal_bemf_threshold(
-                ABNORMAL_BEMF_THRESHOLD_PERCENT_TO_CODE[config[CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT]]
-            )
-        )
-    if CONF_NO_MOTOR_THRESHOLD_PERCENT in config:
-        cg.add(
-            var.set_cfg_no_motor_threshold(
-                NO_MOTOR_THRESHOLD_PERCENT_TO_CODE[config[CONF_NO_MOTOR_THRESHOLD_PERCENT]]
-            )
-        )
-    cg.add(var.set_cfg_max_speed_code(encode_max_speed_hz(config[CONF_MAX_SPEED_HZ])))
-    if CONF_OPEN_LOOP_ILIMIT_PERCENT in config:
-        cg.add(var.set_cfg_open_loop_ilimit(LOCK_ILIMIT_PERCENT_TO_CODE[config[CONF_OPEN_LOOP_ILIMIT_PERCENT]]))
-    if CONF_OPEN_LOOP_LIMIT_SOURCE in config:
-        cg.add(var.set_cfg_open_loop_limit_source(config[CONF_OPEN_LOOP_LIMIT_SOURCE] == 1))
-    if CONF_OPEN_LOOP_ACCEL_HZ_PER_S in config:
-        cg.add(var.set_cfg_open_loop_accel(OPEN_LOOP_ACCEL_HZ_PER_S_TO_CODE[config[CONF_OPEN_LOOP_ACCEL_HZ_PER_S]]))
-    if CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2 in config:
-        cg.add(
-            var.set_cfg_open_loop_accel2(
-                OPEN_LOOP_ACCEL2_HZ_PER_S2_TO_CODE[config[CONF_OPEN_LOOP_ACCEL2_HZ_PER_S2]]
-            )
-        )
-    if CONF_AUTO_HANDOFF_ENABLE in config:
-        cg.add(var.set_cfg_auto_handoff_enable(config[CONF_AUTO_HANDOFF_ENABLE]))
-    if CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT in config:
-        cg.add(
-            var.set_cfg_open_to_closed_handoff_threshold(
-                OPEN_TO_CLOSED_HANDOFF_PERCENT_TO_CODE[config[CONF_OPEN_TO_CLOSED_HANDOFF_PERCENT]]
-            )
-        )
-    if CONF_THETA_ERROR_RAMP_RATE in config:
-        cg.add(var.set_cfg_theta_error_ramp_rate(THETA_ERROR_RAMP_RATE_TO_CODE[config[CONF_THETA_ERROR_RAMP_RATE]]))
-    if CONF_CL_SLOW_ACC_HZ_PER_S in config:
-        cg.add(var.set_cfg_cl_slow_acc(CL_SLOW_ACC_HZ_PER_S_TO_CODE[config[CONF_CL_SLOW_ACC_HZ_PER_S]]))
-    if CONF_MPET_USE_DEDICATED_PARAMS in config:
-        cg.add(var.set_cfg_mpet_use_dedicated_params(config[CONF_MPET_USE_DEDICATED_PARAMS]))
-    if CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT in config:
-        cg.add(
-            var.set_cfg_mpet_open_loop_curr_ref(
-                MPET_OPEN_LOOP_CURR_REF_PERCENT_TO_CODE[config[CONF_MPET_OPEN_LOOP_CURR_REF_PERCENT]]
-            )
-        )
-    if CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT in config:
-        cg.add(
-            var.set_cfg_mpet_open_loop_speed_ref(
-                MPET_OPEN_LOOP_SPEED_REF_PERCENT_TO_CODE[config[CONF_MPET_OPEN_LOOP_SPEED_REF_PERCENT]]
-            )
-        )
-    if CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S in config:
-        cg.add(
-            var.set_cfg_mpet_open_loop_slew(
-                MPET_OPEN_LOOP_SLEW_HZ_PER_S_TO_CODE[config[CONF_MPET_OPEN_LOOP_SLEW_HZ_PER_S]]
-            )
-        )
-    if CONF_MPET_TIMEOUT_MS in config:
-        cg.add(var.set_mpet_timeout_ms(config[CONF_MPET_TIMEOUT_MS]))
-    if CONF_LOCK_ILIMIT_DEGLITCH_MS in config:
-        cg.add(var.set_cfg_lock_ilimit_deglitch(LOCK_ILIMIT_DEGLITCH_MS_TO_CODE[config[CONF_LOCK_ILIMIT_DEGLITCH_MS]]))
-    if CONF_HW_LOCK_ILIMIT_DEGLITCH_US in config:
-        cg.add(
-            var.set_cfg_hw_lock_ilimit_deglitch(
-                HW_LOCK_ILIMIT_DEGLITCH_US_TO_CODE[config[CONF_HW_LOCK_ILIMIT_DEGLITCH_US]]
-            )
-        )
-    if CONF_SPEED_LOOP_KP_CODE in config:
-        cg.add(var.set_cfg_speed_loop_kp_code(config[CONF_SPEED_LOOP_KP_CODE]))
-    if CONF_SPEED_LOOP_KI_CODE in config:
-        cg.add(var.set_cfg_speed_loop_ki_code(config[CONF_SPEED_LOOP_KI_CODE]))
+    apply_codegen_setters(var, config, RUNTIME_SETTER_SPECS, optional=False)
+    apply_codegen_setters(var, config, REQUIRED_MOTOR_SETTER_SPECS, optional=False)
+    apply_codegen_setters(var, config, OPTIONAL_MOTOR_SETTER_SPECS, optional=True)
 
     if CONF_BRAKE in config:
         sw = await switch_.new_switch(config[CONF_BRAKE])
@@ -977,55 +981,27 @@ async def to_code(config):
         cg.add(num.set_parent(var))
         cg.add(var.set_speed_number(num))
 
-    if CONF_CLEAR_FAULTS in config:
-        clear_faults = await button.new_button(config[CONF_CLEAR_FAULTS])
-        cg.add(clear_faults.set_parent(var))
+    for conf_key in BUTTON_CONFIG_KEYS:
+        if conf_key not in config:
+            continue
+        btn = await button.new_button(config[conf_key])
+        cg.add(btn.set_parent(var))
 
-    if CONF_WATCHDOG_TICKLE in config:
-        watchdog_tickle = await button.new_button(config[CONF_WATCHDOG_TICKLE])
-        cg.add(watchdog_tickle.set_parent(var))
-
-    if CONF_TUNE_INITIAL_PARAMS in config:
-        tune_initial_params = await button.new_button(config[CONF_TUNE_INITIAL_PARAMS])
-        cg.add(tune_initial_params.set_parent(var))
-
-    if CONF_RUN_MPET in config:
-        run_mpet = await button.new_button(config[CONF_RUN_MPET])
-        cg.add(run_mpet.set_parent(var))
-
-    if CONF_FAULT_ACTIVE in config:
-        sens = await binary_sensor.new_binary_sensor(config[CONF_FAULT_ACTIVE])
-        cg.add(var.set_fault_active_binary_sensor(sens))
-
-    if CONF_SYS_ENABLE in config:
-        sens = await binary_sensor.new_binary_sensor(config[CONF_SYS_ENABLE])
-        cg.add(var.set_sys_enable_binary_sensor(sens))
-
-    if CONF_CURRENT_FAULT in config:
-        sens = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULT])
-        cg.add(var.set_current_fault_text_sensor(sens))
-
-    if CONF_VM_VOLTAGE in config:
-        sens = await sensor.new_sensor(config[CONF_VM_VOLTAGE])
-        cg.add(var.set_vm_voltage_sensor(sens))
-
-    if CONF_DUTY_CMD_PERCENT in config:
-        sens = await sensor.new_sensor(config[CONF_DUTY_CMD_PERCENT])
-        cg.add(var.set_duty_cmd_percent_sensor(sens))
-
-    if CONF_VOLT_MAG_PERCENT in config:
-        sens = await sensor.new_sensor(config[CONF_VOLT_MAG_PERCENT])
-        cg.add(var.set_volt_mag_percent_sensor(sens))
-
-    if CONF_MOTOR_BEMF_CONSTANT in config:
-        sens = await sensor.new_sensor(config[CONF_MOTOR_BEMF_CONSTANT])
-        cg.add(var.set_motor_bemf_constant_sensor(sens))
-    if CONF_SPEED_FDBK_HZ in config:
-        sens = await sensor.new_sensor(config[CONF_SPEED_FDBK_HZ])
-        cg.add(var.set_speed_fdbk_hz_sensor(sens))
-    if CONF_SPEED_REF_OPEN_LOOP_HZ in config:
-        sens = await sensor.new_sensor(config[CONF_SPEED_REF_OPEN_LOOP_HZ])
-        cg.add(var.set_speed_ref_open_loop_hz_sensor(sens))
-    if CONF_FG_SPEED_FDBK_HZ in config:
-        sens = await sensor.new_sensor(config[CONF_FG_SPEED_FDBK_HZ])
-        cg.add(var.set_fg_speed_fdbk_hz_sensor(sens))
+    await attach_optional_entities(
+        var,
+        config,
+        BINARY_SENSOR_SETTER_SPECS,
+        binary_sensor.new_binary_sensor,
+    )
+    await attach_optional_entities(
+        var,
+        config,
+        TEXT_SENSOR_SETTER_SPECS,
+        text_sensor.new_text_sensor,
+    )
+    await attach_optional_entities(
+        var,
+        config,
+        SENSOR_SETTER_SPECS,
+        sensor.new_sensor,
+    )

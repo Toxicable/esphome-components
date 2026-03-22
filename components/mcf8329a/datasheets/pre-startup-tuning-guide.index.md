@@ -1,0 +1,267 @@
+# Datasheet Index: `pre-startup-tuning-guide.pdf`
+
+## Generated Artifacts
+- Canonical source: `pre-startup-tuning-guide.pdf`
+- Compact source: `pre-startup-tuning-guide.compact.txt`
+- Compact line map: `pre-startup-tuning-guide.compact.map.tsv`
+
+## Normalization
+- Source text is extracted from the PDF in memory during processing.
+- Compact output removes only known page boilerplate/footer lines and collapses repeated blank lines.
+- Canonical lines are line numbers in the extracted text stream used for indexing, not a stored transcript.
+- Canonical lines: 927; compact lines: 884
+
+## Removed Boilerplate Summary
+- Removed lines: 43
+- copyright: 22
+- revision_tag: 11
+- website: 10
+
+## Section Headings (Canonical Line Numbers)
+- L57: 1 Introduction
+- L67: 2 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L152: 4 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L155: 2 End Application Configuration Recommendation
+- L182: 2.1 Resynchronization
+- L197: 2.2 Reverse Drive
+- L212: 2.3 Coasting (Hi-Z)
+- L223: 2.4 Startup Brake
+- L229: 2.5 Direction Change Mode
+- L244: 6 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L247: 3 Tuning Guidance
+- L251: 3.1 Initial Speed Detection Module
+- L308: 3.1.1 Initial Speed Detection
+- L322: 3.1.2 ISD Times
+- L330: 8 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L344: 3.1.3 Stationary Detect Threshold
+- L355: 3.2 Resynchronization
+- L385: 3.2.1 Forward Drive Resync Threshold
+- L394: 3.2.2 Reverse Drive
+- L413: 10 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L471: 3.2.3 Reverse Acceleration Parameters
+- L484: 3.2.4 Reverse Drive Current Limits
+- L493: 3.2.5 Reverse Drive Handoff Threshold
+- L503: 3.2.6 Reverse Drive Open Loop Deceleration (REV_DRV_OPEN_LOOP _DEC)
+- L507: 12 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L514: 3.3 Coasting (Hi-Z)
+- L535: 3.4 Brake
+- L596: 3.4.1 Brake Config (BRK_CONFIG)
+- L609: 14 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L621: 4 Feature Availability of MCx Devices
+- L623: 4.1 FOC Family (MCF83xx devices)
+- L642: 4.2 TRAP Family (MCT83xx devices)
+- L664: 16 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L789: 18 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L888: 20 Motor Pre-Startup Tuning for MCx83xx SLLA663 – MARCH 2025
+- L891: 5 Summary
+- L897: 6 References
+
+## Register Offsets (Canonical Line Numbers)
+- No register offsets detected with default pattern.
+
+## Quick Token References (Canonical Line Numbers)
+- Selection mode: `auto`; profile: `none`; tokens: 20
+- `BRK_CONFIG`:
+  - L552: BRK_CONFIG Allows user to choose between brake time
+  - L596: 3.4.1 Brake Config (BRK_CONFIG)
+  - L629: 2. BRK_CONFIG
+  - L639: 3. BRK_CONFIG as current based brake
+  - L659: 13. BRK_CONFIG
+  - L694: 13. BRK_CONFIG
+  - L848: BRK_CONFIG Time based brake applies brake for a fixed
+  - L856: BRK_TIME If BRK_CONFIG = 0b, then device applies
+  - L857: brake for BRK_TIME. If BRK_CONFIG = 1b,
+  - L863: BRK_CURR_THR If BRK_CONFIG = 1b, device applies
+  - L867: • BRK_CONFIG = 1b
+  - L883: • BRK_CONFIG = 1b
+- `BRK_CURR_THR`:
+  - L574: fall below BRK_CURR_THR. For time-based
+  - L579: BRK_CURR_THR Current threshold till which the motor
+  - L584: BRK_CURR_THR is low enough that motor
+  - L604: In Figure 3-22, brake is released when brake current falls below BRK_CURR_THR as the brake timeout is set to
+  - L606: higher than BRK_CURR_THR.
+  - L630: 3. BRK_CURR_THR
+  - L640: 4. BRK_CURR_THR
+  - L660: 14. BRK_CURR_THR
+  - L695: 14. BRK_CURR_THR
+  - L852: falling below BRK_CURR_THR.
+  - L855: • BRK_CURR_THR
+  - L859: BRK_CURR_THR and BRK_TIME acts as
+- `ISD_RUN_TIME`:
+  - L275: ISD_RUN_TIME Persistence time for declaring motor is
+  - L282: direction especially with high ISD_RUN_TIME settings
+  - L323: The ISD_STOP_TIME and ISD_RUN_TIME are persistence times provided to increase robustness of motor
+  - L325: Figure 3-3. ISD_RUN_TIME Impact: Speed at Resync > FW_DRV_RESYN_THR after ISD_RUN_TIME
+  - L326: Figure 3-4. ISD_RUN_TIME Impact: Speed at Resync < FW_DRV_RESYN_THR After ISD_RUN_TIME After
+  - L327: ISD_RUN_TIME
+  - L333: Figure 3-5. ISD_RUN_TIME of 100ms Leads to BEMF Fall Below STAT_DETECT_THR and Results in
+  - L649: 3. ISD_RUN_TIME
+  - L671: 3. ISD_RUN_TIME
+  - L684: 3. ISD_RUN_TIME
+  - L716: ISD_RUN_TIME
+- `ISD_BEMF_FILT_ENABLE`:
+  - L284: ISD_BEMF_FILT_ENABLE Enable BEMF Filter during ISD Keep BEMF filtering enabled for reliable speed and
+  - L632: MCF8316C FOC 1. ISD_BEMF_FILT_ENABLE
+  - L633: MCF8315C-Q1 FOC 1. ISD_BEMF_FILT_ENABLE
+  - L634: MCF8315A FOC 1. ISD_BEMF_FILT_ENABLE
+  - L635: MCF8315C FOC 1. ISD_BEMF_FILT_ENABLE
+  - L636: MCF8315C-Q1 FOC 1. ISD_BEMF_FILT_ENABLE
+  - L637: MCF8329A FOC 1. ISD_BEMF_FILT_ENABLE
+  - L651: 5. ISD_BEMF_FILT_ENABLE
+  - L673: 5. ISD_BEMF_FILT_ENABLE
+  - L686: 5. ISD_BEMF_FILT_ENABLE
+  - L730: ISD_BEMF_FILT_ENABLE Smoothens the sensed BEMF to maintain
+- `DIR_CHANGE_MODE`:
+  - L140: • Absence of DIR_CHANGE_MODE: If RVS_DR_EN is set, state machine tries to reverse spin direction by
+  - L231: depending upon DIR_CHANGE_MODE configuration.
+  - L233: • In end applications where direction change is expected during operation, DIR_CHANGE_MODE is set to 1b.
+  - L235: – Example: In massage chair motors that frequently change direction, DIR_CHANGE_MODE to 1b.
+  - L240: • When RVS_DR_EN is set to 1b and reverse drive is tuned, DIR_CHANGE_MODE can be set to 0b as
+  - L299: DIR_CHANGE_MODE Dictates the flow when a direction change
+  - L652: 6. DIR_CHANGE_MODE
+  - L674: 6. DIR_CHANGE_MODE
+  - L687: 6. DIR_CHANGE_MODE
+  - L754: DIR_CHANGE_MODE If set to 1b, direction is changed through
+- `REV_DRV_CONFIG`:
+  - L418: REV_DRV_CONFIG Decides between reverse drive specific
+  - L429: by setting REV_DRV_CONFIG as 1b.
+  - L653: 7. REV_DRV_CONFIG
+  - L675: 7. REV_DRV_CONFIG
+  - L688: 7. REV_DRV_CONFIG
+  - L768: REV_DRV_CONFIG If REV_DRV_CONFIG = 1b, the motor
+  - L786: • REV_DRV_CONFIG = 1b
+  - L802: • REV_DRV_CONFIG = 1b
+  - L815: • REV_DRV_CONFIG = 1b
+- `REV_DRV_HANDOFF_THR`:
+  - L430: REV_DRV_HANDOFF_THR Threshold to handoff from reverse closed
+  - L432: REV_DRV_HANDOFF_THR is kept to be
+  - L434: REV_DRV_HANDOFF_THR kept too low,
+  - L496: Figure 3-16. Too High REV_DRV_HANDOFF_THR
+  - L499: Figure 3-17. Too low REV_DRV_HANDOFF_THR
+  - L502: Figure 3-18. Successful Direction Reversal With Proper REV_DRV_HANDOFF_THR
+  - L654: 8. REV_DRV_HANDOFF_THR
+  - L676: 8. REV_DRV_HANDOFF_THR
+  - L689: 8. REV_DRV_HANDOFF_THR
+  - L775: REV_DRV_HANDOFF_THR TRADEOFF:
+- `STAT_DETECT_THR`:
+  - L83: STAT_DETECT_THR
+  - L287: STAT_DETECT_THR Sets the BEMF threshold below which motor
+  - L289: Set STAT_DETECT_THR with some margin to allow some
+  - L294: STAT_DETECT_THR with BEMF constant.
+  - L333: Figure 3-5. ISD_RUN_TIME of 100ms Leads to BEMF Fall Below STAT_DETECT_THR and Results in
+  - L339: to Stop Motor as Speed Below STAT_DETECT_THR
+  - L345: The effect of Stationary Detect Threshold (STAT_DETECT_THR) is shown in Figure 3-8 and Figure 3-9.
+  - L346: Figure 3-8. BEMF > STAT_DETECT_THR(1000mV) -
+  - L348: Figure 3-9. BEMF < STAT_DETECT_THR(1000mV) -
+  - L733: STAT_DETECT_THR TRADEOFF:
+- `ISD_EN`:
+  - L61: ISD_EN to 1b. If the motor is coasting and sufficient back EMF is available to be sensed, the motor can be
+  - L63: ISD can be disabled by setting ISD_EN to 0b. If ISD is disabled, the MCx83xx does not perform the initial speed
+  - L72: ISD_EN
+  - L256: ISD_EN Enables initial motor speed and direction
+  - L261: FAST_ISD_EN Enable fast speed detection during ISD. To be enabled when fast startup time of less than 100ms
+  - L309: Initial Speed Detection (ISD_EN) decides if speed detection is required to resynchronize if the motor is spinning
+  - L317: Figure 3-1. ISD_EN = 0b
+  - L318: Figure 3-2. ISD_EN = 1b
+  - L647: MCT8316A TRAP 1. FAST_ISD_EN
+  - L669: MCT8315A TRAP 1. FAST_ISD_EN
+  - L682: MCT8329A TRAP 1. FAST_ISD_EN
+  - L701: ISD_EN Reliable and fast motor startup based on the
+- `BRAKE_EN`:
+  - L84: BRAKE_EN
+  - L539: BRAKE_EN Enables brake to make the motor stationary
+  - L835: BRAKE_EN Makes sure motor is stationary before motor
+  - L847: • BRAKE_EN = 1b
+  - L853: • BRAKE_EN = 1b
+  - L862: • BRAKE_EN = 1b
+  - L866: • BRAKE_EN = 1b
+  - L882: • BRAKE_EN = 1b
+- `BRK_TIME`:
+  - L570: BRK_TIME The maximum amount of time for which the
+  - L572: BRK_TIME is the maximum brake time in
+  - L575: brake, BRK_TIME defines the fixed time to
+  - L854: • BRK_TIME
+  - L856: BRK_TIME If BRK_CONFIG = 0b, then device applies
+  - L857: brake for BRK_TIME. If BRK_CONFIG = 1b,
+  - L859: BRK_CURR_THR and BRK_TIME acts as
+  - L861: BRK_CURR_THR before BRK_TIME.
+- `FWD_DRV_RESYN_THR`:
+  - L185: If speed is greater than FWD_DRV_RESYN_THR such that sufficient BEMF is being produced, then drive
+  - L366: FWD_DRV_RESYN_THR If motor speed > FWD_DRV_RESYN_THR,
+  - L371: FWD_DRV_RESYN_THR needs to be the
+  - L383: at FWD_DRV_RESYN_THR as per motor
+  - L386: The effect of Forward Drive Resync Threshold (FWD_DRV_RESYN_THR) is shown in Figure 3-10 and Figure
+  - L389: FWD_DRV_RESYN_THR so Resync to Open Loop
+  - L392: FWD_DRV_RESYN_THR so Resync to Closed
+- `ISD_STOP_TIME`:
+  - L266: ISD_STOP_TIME Persistence time for declaring motor has
+  - L323: The ISD_STOP_TIME and ISD_RUN_TIME are persistence times provided to increase robustness of motor
+  - L338: Figure 3-6. ISD_STOP_TIME Impact: Brake Applied
+  - L340: for ISD_STOP_TIME
+  - L648: 2. ISD_STOP_TIME
+  - L670: 2. ISD_STOP_TIME
+  - L683: 2. ISD_STOP_TIME
+  - L710: ISD_STOP_TIME TRADEOFF:
+- `ISD_TIMEOUT`:
+  - L277: ISD_TIMEOUT Timeout in case ISD is unable to reliably
+  - L341: Figure 3-7. ISD_TIMEOUT: Brake Applied as Motor
+  - L343: ISD_TIMEOUT
+  - L588: ISD_TIMEOUT due to noise. Try with lowest
+  - L650: 4. ISD_TIMEOUT
+  - L672: 4. ISD_TIMEOUT
+  - L685: 4. ISD_TIMEOUT
+  - L724: ISD_TIMEOUT TRADEOFF:
+- `RVS_DRV_EN`:
+  - L762: RVS_DRV_EN Fastest possible start-up time in a controlled
+  - L774: • RVS_DRV_EN = 1b
+  - L785: • RVS_DRV_EN = 1b
+  - L801: • RVS_DRV_EN = 1b
+  - L814: • RVS_DRV_EN = 1b
+  - L821: • RVS_DRV_EN = 1b
+  - L826: • (RVS_DRV_EN = 1b or RESYNC_EN =
+  - L832: • (RVS_DRV_EN = 1b or RESYNC_EN =
+- `REV_DRV_OPEN_LOOP`:
+  - L440: REV_DRV_OPEN_LOOP_ACCEL_A1 The acceleration rate for reverse drive open
+  - L442: as REV_DRV_OPEN_LOOP _DEC times
+  - L443: REV_DRV_OPEN_LOOP_ACCEL_A1 /
+  - L444: REV_DRV_OPEN_LOOP_ACCEL_A2.
+  - L452: REV_DRV_OPEN_LOOP_ACCEL_A2
+  - L453: REV_DRV_OPEN_LOOP_CURRENT The reverse drive open loop current limit. Start at OL current limit but in case some
+  - L461: REV_DRV_OPEN_LOOP _DEC Factor between deceleration rate and
+  - L466: accelerate, tune REV_DRV_OPEN_LOOP
+  - L487: REV_DRV_OPEN_LOOP_CURRENT = 1.5A Leading
+  - L491: REV_DRV_OPEN_LOOP_CURRENT = 2.5A Works
+  - L503: 3.2.6 Reverse Drive Open Loop Deceleration (REV_DRV_OPEN_LOOP _DEC)
+  - L655: 9. REV_DRV_OPEN_LOOP_ACCEL_A1
+- `BRAKE_CURRENT_PERSIST`:
+  - L591: BRAKE_CURRENT_PERSIST Persistence time for current below threshold
+  - L631: 4. BRAKE_CURRENT_PERSIST
+  - L641: 5. BRAKE_CURRENT_PERSIST
+  - L661: 15. BRAKE_CURRENT_PERSIST
+  - L681: 13. BRAKE_CURRENT_PERSIST
+  - L696: 15. BRAKE_CURRENT_PERSIST
+  - L876: BRAKE_CURRENT_PERSIST TRADEOFF:
+- `REV_DRV_OPEN_LOOP_CURRENT`:
+  - L453: REV_DRV_OPEN_LOOP_CURRENT The reverse drive open loop current limit. Start at OL current limit but in case some
+  - L487: REV_DRV_OPEN_LOOP_CURRENT = 1.5A Leading
+  - L491: REV_DRV_OPEN_LOOP_CURRENT = 2.5A Works
+  - L657: 11. REV_DRV_OPEN_LOOP_CURRENT
+  - L679: 11. REV_DRV_OPEN_LOOP_CURRENT
+  - L692: 11. REV_DRV_OPEN_LOOP_CURRENT
+  - L804: REV_DRV_OPEN_LOOP_CURRENT TRADEOFF:
+- `RESYNC_EN`:
+  - L87: RESYNC_EN
+  - L360: RESYNC_EN If the motor is spinning forward (same
+  - L741: RESYNC_EN = 1b Fastest possible start-up time if motor
+  - L753: • RESYNC_EN = 1b
+  - L826: • (RVS_DRV_EN = 1b or RESYNC_EN =
+  - L832: • (RVS_DRV_EN = 1b or RESYNC_EN =
+- `REV_DRV_OPEN_LOOP_ACCEL_A1`:
+  - L440: REV_DRV_OPEN_LOOP_ACCEL_A1 The acceleration rate for reverse drive open
+  - L443: REV_DRV_OPEN_LOOP_ACCEL_A1 /
+  - L655: 9. REV_DRV_OPEN_LOOP_ACCEL_A1
+  - L677: 9. REV_DRV_OPEN_LOOP_ACCEL_A1
+  - L690: 9. REV_DRV_OPEN_LOOP_ACCEL_A1
+  - L794: REV_DRV_OPEN_LOOP_ACCEL_A1 TRADEOFF:
+
+Regenerate with: `./tools/datasheet_prepare.py components/mcf8329a/datasheets/pre-startup-tuning-guide.pdf`

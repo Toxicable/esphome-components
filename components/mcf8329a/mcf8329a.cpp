@@ -1,4 +1,5 @@
 #include "mcf8329a.h"
+#include "mcf8329a_tables.h"
 #include "mcf8329a_tuning.h"
 
 #include <algorithm>
@@ -24,130 +25,6 @@ using namespace regs;
 
 static const char* const TAG = "mcf8329a";
 static constexpr uint32_t FIXED_INTER_BYTE_DELAY_US = 100u;
-static constexpr uint8_t LOCK_ILIMIT_PERCENT_TABLE[16] = {
-  5,
-  10,
-  15,
-  20,
-  25,
-  30,
-  40,
-  50,
-  60,
-  65,
-  70,
-  75,
-  80,
-  85,
-  90,
-  95,
-};
-static const char* const LOCK_ABN_SPEED_THRESHOLD_LABELS[8] = {
-  "130%",
-  "140%",
-  "150%",
-  "160%",
-  "170%",
-  "180%",
-  "190%",
-  "200%",
-};
-static const char* const ABNORMAL_BEMF_THRESHOLD_LABELS[8] = {
-  "40%",
-  "45%",
-  "50%",
-  "55%",
-  "60%",
-  "65%",
-  "67.5%",
-  "70%",
-};
-static const char* const NO_MOTOR_THRESHOLD_LABELS[8] = {
-  "1%",
-  "2%",
-  "3%",
-  "4%",
-  "5%",
-  "7.5%",
-  "10%",
-  "20%",
-};
-static constexpr float OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
-  0.0f,
-  0.05f,
-  1.0f,
-  2.5f,
-  5.0f,
-  10.0f,
-  25.0f,
-  50.0f,
-  75.0f,
-  100.0f,
-  250.0f,
-  500.0f,
-  750.0f,
-  1000.0f,
-  5000.0f,
-  10000.0f,
-};
-static constexpr float THETA_ERROR_RAMP_RATE_TABLE[8] = {
-  0.01f,
-  0.05f,
-  0.1f,
-  0.15f,
-  0.2f,
-  0.5f,
-  1.0f,
-  2.0f,
-};
-static constexpr float CL_SLOW_ACC_HZ_PER_S_TABLE[16] = {
-  0.1f,
-  1.0f,
-  2.0f,
-  3.0f,
-  5.0f,
-  10.0f,
-  20.0f,
-  30.0f,
-  40.0f,
-  50.0f,
-  100.0f,
-  200.0f,
-  500.0f,
-  750.0f,
-  1000.0f,
-  2000.0f,
-};
-static constexpr float LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
-  0.0f,
-  0.1f,
-  0.2f,
-  0.5f,
-  1.0f,
-  2.5f,
-  5.0f,
-  7.5f,
-  10.0f,
-  25.0f,
-  50.0f,
-  75.0f,
-  100.0f,
-  200.0f,
-  500.0f,
-  1000.0f,
-};
-static constexpr uint8_t HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[8] = {
-  0, 1, 2, 3, 4, 5, 6, 7,
-};
-static constexpr uint8_t MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[8] = {
-  10, 20, 30, 40, 50, 60, 70, 80,
-};
-static constexpr uint8_t MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[4] = {
-  15, 25, 35, 50,
-};
-static constexpr float MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[8] = {
-  0.1f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f,
-};
 MCF8329AComponent::~MCF8329AComponent() {
   delete this->tuning_controller_;
   this->tuning_controller_ = nullptr;
@@ -531,7 +408,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config ILIMIT (phase peak): %u%% BASE_CURRENT (code=%u)",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->cfg_ilimit_ & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[this->cfg_ilimit_ & 0x0Fu]),
       static_cast<unsigned>(this->cfg_ilimit_)
     );
   } else {
@@ -551,7 +428,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config lock current limit: %u%% BASE_CURRENT (code=%u)",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->cfg_lock_ilimit_ & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[this->cfg_lock_ilimit_ & 0x0Fu]),
       static_cast<unsigned>(this->cfg_lock_ilimit_)
     );
   } else {
@@ -561,7 +438,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config HW lock current limit: %u%% BASE_CURRENT (code=%u)",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->cfg_hw_lock_ilimit_ & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[this->cfg_hw_lock_ilimit_ & 0x0Fu]),
       static_cast<unsigned>(this->cfg_hw_lock_ilimit_)
     );
   } else {
@@ -588,13 +465,13 @@ void MCF8329AComponent::dump_config() {
     );
     if (this->cfg_ilimit_set_) {
       const float limit_a =
-        base_current_a * (static_cast<float>(LOCK_ILIMIT_PERCENT_TABLE[this->cfg_ilimit_ & 0x0Fu]) / 100.0f);
+        base_current_a * (static_cast<float>(tables::LOCK_ILIMIT_PERCENT[this->cfg_ilimit_ & 0x0Fu]) / 100.0f);
       ESP_LOGCONFIG(TAG, "  Motor config ILIMIT approx: %.2fA", limit_a);
     }
     if (this->cfg_open_loop_ilimit_set_) {
       const float limit_a = base_current_a *
                             (static_cast<float>(
-                               LOCK_ILIMIT_PERCENT_TABLE[this->cfg_open_loop_ilimit_ & 0x0Fu]
+                               tables::LOCK_ILIMIT_PERCENT[this->cfg_open_loop_ilimit_ & 0x0Fu]
                              ) /
                              100.0f);
       ESP_LOGCONFIG(TAG, "  Motor config open-loop ILIMIT approx: %.2fA", limit_a);
@@ -603,7 +480,7 @@ void MCF8329AComponent::dump_config() {
       const float limit_a =
         base_current_a *
         (static_cast<float>(
-           LOCK_ILIMIT_PERCENT_TABLE[this->cfg_align_or_slow_current_ilimit_ & 0x0Fu]
+           tables::LOCK_ILIMIT_PERCENT[this->cfg_align_or_slow_current_ilimit_ & 0x0Fu]
          ) /
          100.0f);
       ESP_LOGCONFIG(TAG, "  Motor config align/slow current limit approx: %.2fA", limit_a);
@@ -611,7 +488,7 @@ void MCF8329AComponent::dump_config() {
     if (this->cfg_lock_ilimit_set_) {
       const float limit_a = base_current_a *
                             (static_cast<float>(
-                               LOCK_ILIMIT_PERCENT_TABLE[this->cfg_lock_ilimit_ & 0x0Fu]
+                               tables::LOCK_ILIMIT_PERCENT[this->cfg_lock_ilimit_ & 0x0Fu]
                              ) /
                              100.0f);
       ESP_LOGCONFIG(TAG, "  Motor config lock ILIMIT approx: %.2fA", limit_a);
@@ -619,7 +496,7 @@ void MCF8329AComponent::dump_config() {
     if (this->cfg_hw_lock_ilimit_set_) {
       const float limit_a = base_current_a *
                             (static_cast<float>(
-                               LOCK_ILIMIT_PERCENT_TABLE[this->cfg_hw_lock_ilimit_ & 0x0Fu]
+                               tables::LOCK_ILIMIT_PERCENT[this->cfg_hw_lock_ilimit_ & 0x0Fu]
                              ) /
                              100.0f);
       ESP_LOGCONFIG(TAG, "  Motor config HW lock ILIMIT approx: %.2fA", limit_a);
@@ -659,21 +536,21 @@ void MCF8329AComponent::dump_config() {
     TAG,
     "  Motor config ABN speed threshold: %s",
     this->cfg_lock_abn_speed_threshold_set_
-      ? LOCK_ABN_SPEED_THRESHOLD_LABELS[this->cfg_lock_abn_speed_threshold_ & 0x7u]
+      ? tables::LOCK_ABN_SPEED_THRESHOLD_LABELS[this->cfg_lock_abn_speed_threshold_ & 0x7u]
       : "(unchanged)"
   );
   ESP_LOGCONFIG(
     TAG,
     "  Motor config ABN BEMF threshold: %s",
     this->cfg_abnormal_bemf_threshold_set_
-      ? ABNORMAL_BEMF_THRESHOLD_LABELS[this->cfg_abnormal_bemf_threshold_ & 0x7u]
+      ? tables::ABNORMAL_BEMF_THRESHOLD_LABELS[this->cfg_abnormal_bemf_threshold_ & 0x7u]
       : "(unchanged)"
   );
   ESP_LOGCONFIG(
     TAG,
     "  Motor config no-motor threshold: %s",
     this->cfg_no_motor_threshold_set_
-      ? NO_MOTOR_THRESHOLD_LABELS[this->cfg_no_motor_threshold_ & 0x7u]
+      ? tables::NO_MOTOR_THRESHOLD_LABELS[this->cfg_no_motor_threshold_ & 0x7u]
       : "(unchanged)"
   );
   if (this->cfg_max_speed_set_) {
@@ -690,7 +567,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config open-loop current limit: %u%% BASE_CURRENT (code=%u)",
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[this->cfg_open_loop_ilimit_ & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[this->cfg_open_loop_ilimit_ & 0x0Fu]),
       static_cast<unsigned>(this->cfg_open_loop_ilimit_)
     );
   } else {
@@ -701,7 +578,7 @@ void MCF8329AComponent::dump_config() {
       TAG,
       "  Motor config align/slow current limit: %u%% BASE_CURRENT (code=%u)",
       static_cast<unsigned>(
-        LOCK_ILIMIT_PERCENT_TABLE[this->cfg_align_or_slow_current_ilimit_ & 0x0Fu]
+        tables::LOCK_ILIMIT_PERCENT[this->cfg_align_or_slow_current_ilimit_ & 0x0Fu]
       ),
       static_cast<unsigned>(this->cfg_align_or_slow_current_ilimit_)
     );
@@ -732,7 +609,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config open-loop accel A2: %.2f Hz/s2 (code=%u)",
-      OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[this->cfg_open_loop_accel2_ & 0x0Fu],
+      tables::OPEN_LOOP_ACCEL2_HZ_PER_S2[this->cfg_open_loop_accel2_ & 0x0Fu],
       static_cast<unsigned>(this->cfg_open_loop_accel2_)
     );
   } else {
@@ -760,7 +637,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config theta error ramp rate: %.2f (code=%u)",
-      THETA_ERROR_RAMP_RATE_TABLE[this->cfg_theta_error_ramp_rate_ & 0x07u],
+      tables::THETA_ERROR_RAMP_RATE[this->cfg_theta_error_ramp_rate_ & 0x07u],
       static_cast<unsigned>(this->cfg_theta_error_ramp_rate_)
     );
   } else {
@@ -770,7 +647,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config CL slow accel: %.1f Hz/s (code=%u)",
-      CL_SLOW_ACC_HZ_PER_S_TABLE[this->cfg_cl_slow_acc_ & 0x0Fu],
+      tables::CL_SLOW_ACC_HZ_PER_S[this->cfg_cl_slow_acc_ & 0x0Fu],
       static_cast<unsigned>(this->cfg_cl_slow_acc_)
     );
   } else {
@@ -789,7 +666,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config MPET open-loop current ref: %u%% BASE_CURRENT (code=%u)",
-      static_cast<unsigned>(MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[this->cfg_mpet_open_loop_curr_ref_ & 0x07u]),
+      static_cast<unsigned>(tables::MPET_OPEN_LOOP_CURR_REF_PERCENT[this->cfg_mpet_open_loop_curr_ref_ & 0x07u]),
       static_cast<unsigned>(this->cfg_mpet_open_loop_curr_ref_)
     );
   } else {
@@ -799,7 +676,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config MPET open-loop speed ref: %u%% MAX_SPEED (code=%u)",
-      static_cast<unsigned>(MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[this->cfg_mpet_open_loop_speed_ref_ & 0x03u]),
+      static_cast<unsigned>(tables::MPET_OPEN_LOOP_SPEED_REF_PERCENT[this->cfg_mpet_open_loop_speed_ref_ & 0x03u]),
       static_cast<unsigned>(this->cfg_mpet_open_loop_speed_ref_)
     );
   } else {
@@ -809,7 +686,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config MPET open-loop slew: %.1f Hz/s (code=%u)",
-      MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[this->cfg_mpet_open_loop_slew_ & 0x07u],
+      tables::MPET_OPEN_LOOP_SLEW_HZ_PER_S[this->cfg_mpet_open_loop_slew_ & 0x07u],
       static_cast<unsigned>(this->cfg_mpet_open_loop_slew_)
     );
   } else {
@@ -819,7 +696,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config LOCK_ILIMIT deglitch: %.1fms (code=%u)",
-      LOCK_ILIMIT_DEGLITCH_MS_TABLE[this->cfg_lock_ilimit_deglitch_ & 0x0Fu],
+      tables::LOCK_ILIMIT_DEGLITCH_MS[this->cfg_lock_ilimit_deglitch_ & 0x0Fu],
       static_cast<unsigned>(this->cfg_lock_ilimit_deglitch_)
     );
   } else {
@@ -829,7 +706,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config HW_LOCK_ILIMIT deglitch: %uus (code=%u)",
-      static_cast<unsigned>(HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[this->cfg_hw_lock_ilimit_deglitch_ & 0x07u]),
+      static_cast<unsigned>(tables::HW_LOCK_ILIMIT_DEGLITCH_US[this->cfg_hw_lock_ilimit_deglitch_ & 0x07u]),
       static_cast<unsigned>(this->cfg_hw_lock_ilimit_deglitch_)
     );
   } else {
@@ -1770,43 +1647,43 @@ bool MCF8329AComponent::apply_motor_config_() {
     this->mode_to_string_(effective_cfg_mode),
     this->align_time_to_string_(effective_align_time),
     static_cast<unsigned>(effective_align_or_slow_ilimit),
-    static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_align_or_slow_ilimit & 0x0Fu]),
+    static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[effective_align_or_slow_ilimit & 0x0Fu]),
     effective_open_loop_limit_use_ilimit ? "ilimit" : "ol_ilimit",
     static_cast<unsigned>(effective_ol_ilimit),
-    static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ol_ilimit & 0x0Fu]),
+    static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[effective_ol_ilimit & 0x0Fu]),
     this->comms_client_.decode_open_loop_accel_hz_per_s(effective_ol_accel),
-    OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[effective_ol_accel2 & 0x0Fu],
+    tables::OPEN_LOOP_ACCEL2_HZ_PER_S2[effective_ol_accel2 & 0x0Fu],
     YESNO(effective_auto_handoff),
     this->comms_client_.decode_open_to_closed_handoff_percent(effective_handoff_threshold),
-    THETA_ERROR_RAMP_RATE_TABLE[effective_theta_error_ramp_rate & 0x07u],
-    CL_SLOW_ACC_HZ_PER_S_TABLE[effective_cl_slow_acc & 0x0Fu],
+    tables::THETA_ERROR_RAMP_RATE[effective_theta_error_ramp_rate & 0x07u],
+    tables::CL_SLOW_ACC_HZ_PER_S[effective_cl_slow_acc & 0x0Fu],
     effective_mpet_use_dedicated_params ? "dedicated" : "startup",
     static_cast<unsigned>(effective_mpet_curr_ref),
-    static_cast<unsigned>(MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[effective_mpet_curr_ref & 0x07u]),
+    static_cast<unsigned>(tables::MPET_OPEN_LOOP_CURR_REF_PERCENT[effective_mpet_curr_ref & 0x07u]),
     static_cast<unsigned>(effective_mpet_speed_ref),
-    static_cast<unsigned>(MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[effective_mpet_speed_ref & 0x03u]),
+    static_cast<unsigned>(tables::MPET_OPEN_LOOP_SPEED_REF_PERCENT[effective_mpet_speed_ref & 0x03u]),
     static_cast<unsigned>(effective_mpet_slew),
-    MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[effective_mpet_slew & 0x07u],
+    tables::MPET_OPEN_LOOP_SLEW_HZ_PER_S[effective_mpet_slew & 0x07u],
     this->brake_mode_to_string_(effective_brake_mode),
     this->brake_time_to_string_(effective_brake_time),
     static_cast<unsigned>(effective_ilimit),
-    static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_ilimit & 0x0Fu]),
+    static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[effective_ilimit & 0x0Fu]),
     static_cast<unsigned>(effective_lock_ilimit),
-    static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_lock_ilimit & 0x0Fu]),
+    static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[effective_lock_ilimit & 0x0Fu]),
     static_cast<unsigned>(effective_hw_lock_ilimit),
-    static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[effective_hw_lock_ilimit & 0x0Fu]),
+    static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[effective_hw_lock_ilimit & 0x0Fu]),
     this->lock_mode_to_string_(effective_lock_mode),
     this->lock_mode_to_string_(effective_mtr_lock_mode),
     this->lock_mode_to_string_(effective_hw_lock_mode),
     this->lock_retry_time_to_string_(effective_lck_retry),
-    LOCK_ILIMIT_DEGLITCH_MS_TABLE[effective_lock_ilimit_deg & 0x0Fu],
-    static_cast<unsigned>(HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[effective_hw_lock_ilimit_deg & 0x07u]),
+    tables::LOCK_ILIMIT_DEGLITCH_MS[effective_lock_ilimit_deg & 0x0Fu],
+    static_cast<unsigned>(tables::HW_LOCK_ILIMIT_DEGLITCH_US[effective_hw_lock_ilimit_deg & 0x07u]),
     YESNO(effective_lock1_en),
     YESNO(effective_lock2_en),
     YESNO(effective_lock3_en),
-    LOCK_ABN_SPEED_THRESHOLD_LABELS[effective_lock_abn_speed & 0x7u],
-    ABNORMAL_BEMF_THRESHOLD_LABELS[effective_abnormal_bemf_threshold & 0x7u],
-    NO_MOTOR_THRESHOLD_LABELS[effective_no_motor_threshold & 0x7u]
+    tables::LOCK_ABN_SPEED_THRESHOLD_LABELS[effective_lock_abn_speed & 0x7u],
+    tables::ABNORMAL_BEMF_THRESHOLD_LABELS[effective_abnormal_bemf_threshold & 0x7u],
+    tables::NO_MOTOR_THRESHOLD_LABELS[effective_no_motor_threshold & 0x7u]
   );
   this->motor_config_summary_ = summary;
   ESP_LOGI(TAG, "Motor config: %s", this->motor_config_summary_.c_str());
@@ -2442,11 +2319,11 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
       "lock1=%s lock2=%s lock3=%s lock_abn_speed=%s abn_bemf_thr=%s no_mtr_thr=%s",
       speed_cmd_percent,
       static_cast<unsigned>(ilimit),
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[ilimit & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[ilimit & 0x0Fu]),
       static_cast<unsigned>(lock_ilimit),
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[lock_ilimit & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[lock_ilimit & 0x0Fu]),
       static_cast<unsigned>(hw_lock_ilimit),
-      static_cast<unsigned>(LOCK_ILIMIT_PERCENT_TABLE[hw_lock_ilimit & 0x0Fu]),
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[hw_lock_ilimit & 0x0Fu]),
       static_cast<unsigned>(lock_mode),
       this->lock_mode_to_string_(lock_mode),
       static_cast<unsigned>(mtr_lock_mode),
@@ -2458,9 +2335,9 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
       YESNO(lock1_en),
       YESNO(lock2_en),
       YESNO(lock3_en),
-      LOCK_ABN_SPEED_THRESHOLD_LABELS[lock_abn_speed & 0x7u],
-      ABNORMAL_BEMF_THRESHOLD_LABELS[abnormal_bemf_threshold & 0x7u],
-      NO_MOTOR_THRESHOLD_LABELS[no_motor_threshold & 0x7u]
+      tables::LOCK_ABN_SPEED_THRESHOLD_LABELS[lock_abn_speed & 0x7u],
+      tables::ABNORMAL_BEMF_THRESHOLD_LABELS[abnormal_bemf_threshold & 0x7u],
+      tables::NO_MOTOR_THRESHOLD_LABELS[no_motor_threshold & 0x7u]
     );
 
     const bool limits_at_guardrail =

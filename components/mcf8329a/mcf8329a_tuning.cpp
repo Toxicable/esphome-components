@@ -3,6 +3,7 @@
 #include "mcf8329a_tuning.h"
 
 #include "mcf8329a.h"
+#include "mcf8329a_tables.h"
 
 #include <algorithm>
 #include <cmath>
@@ -20,100 +21,6 @@ namespace mcf8329a {
 using namespace regs;
 
 static const char* const TUNING_TAG = "mcf8329a";
-static constexpr uint8_t TUNING_LOCK_ILIMIT_PERCENT_TABLE[16] = {
-  5,
-  10,
-  15,
-  20,
-  25,
-  30,
-  40,
-  50,
-  60,
-  65,
-  70,
-  75,
-  80,
-  85,
-  90,
-  95,
-};
-static constexpr float TUNING_OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[16] = {
-  0.0f,
-  0.05f,
-  1.0f,
-  2.5f,
-  5.0f,
-  10.0f,
-  25.0f,
-  50.0f,
-  75.0f,
-  100.0f,
-  250.0f,
-  500.0f,
-  750.0f,
-  1000.0f,
-  5000.0f,
-  10000.0f,
-};
-static constexpr float TUNING_THETA_ERROR_RAMP_RATE_TABLE[8] = {
-  0.01f,
-  0.05f,
-  0.1f,
-  0.15f,
-  0.2f,
-  0.5f,
-  1.0f,
-  2.0f,
-};
-static constexpr float TUNING_CL_SLOW_ACC_HZ_PER_S_TABLE[16] = {
-  0.1f,
-  1.0f,
-  2.0f,
-  3.0f,
-  5.0f,
-  10.0f,
-  20.0f,
-  30.0f,
-  40.0f,
-  50.0f,
-  100.0f,
-  200.0f,
-  500.0f,
-  750.0f,
-  1000.0f,
-  2000.0f,
-};
-static constexpr float TUNING_LOCK_ILIMIT_DEGLITCH_MS_TABLE[16] = {
-  0.0f,
-  0.1f,
-  0.2f,
-  0.5f,
-  1.0f,
-  2.5f,
-  5.0f,
-  7.5f,
-  10.0f,
-  25.0f,
-  50.0f,
-  75.0f,
-  100.0f,
-  200.0f,
-  500.0f,
-  1000.0f,
-};
-static constexpr uint8_t TUNING_HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[8] = {
-  0, 1, 2, 3, 4, 5, 6, 7,
-};
-static constexpr uint8_t TUNING_MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[8] = {
-  10, 20, 30, 40, 50, 60, 70, 80,
-};
-static constexpr uint8_t TUNING_MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[4] = {
-  15, 25, 35, 50,
-};
-static constexpr float TUNING_MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[8] = {
-  0.1f, 0.5f, 1.0f, 2.0f, 3.0f, 5.0f, 10.0f, 20.0f,
-};
 struct InitialTuneCandidate {
   uint8_t phase_ilimit_code;
   uint8_t lock_ilimit_code;
@@ -444,22 +351,22 @@ struct MCF8329ATuningController::Impl {
     ESP_LOGI(
       TUNING_TAG,
       "  phase_current_limit_percent: %u",
-      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.phase_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[candidate.phase_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
       TUNING_TAG,
       "  lock_ilimit_percent: %u",
-      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.lock_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[candidate.lock_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
       TUNING_TAG,
       "  hw_lock_ilimit_percent: %u",
-      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.hw_lock_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[candidate.hw_lock_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
       TUNING_TAG,
       "  open_loop_ilimit_percent: %u",
-      static_cast<unsigned>(TUNING_LOCK_ILIMIT_PERCENT_TABLE[candidate.open_loop_ilimit_code & 0x0Fu])
+      static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[candidate.open_loop_ilimit_code & 0x0Fu])
     );
     ESP_LOGI(
       TUNING_TAG,
@@ -471,7 +378,7 @@ struct MCF8329ATuningController::Impl {
     ESP_LOGI(
       TUNING_TAG,
       "  open_loop_accel2_hz_per_s2: %.2f",
-      TUNING_OPEN_LOOP_ACCEL2_HZ_PER_S2_TABLE[candidate.open_loop_accel_a2_code & 0x0Fu]
+      tables::OPEN_LOOP_ACCEL2_HZ_PER_S2[candidate.open_loop_accel_a2_code & 0x0Fu]
     );
     ESP_LOGI(
       TUNING_TAG,
@@ -483,23 +390,23 @@ struct MCF8329ATuningController::Impl {
     ESP_LOGI(
       TUNING_TAG,
       "  theta_error_ramp_rate: %.2f",
-      TUNING_THETA_ERROR_RAMP_RATE_TABLE[candidate.theta_error_ramp_code & 0x07u]
+      tables::THETA_ERROR_RAMP_RATE[candidate.theta_error_ramp_code & 0x07u]
     );
     ESP_LOGI(
       TUNING_TAG,
       "  cl_slow_acc_hz_per_s: %.1f",
-      TUNING_CL_SLOW_ACC_HZ_PER_S_TABLE[candidate.cl_slow_acc_code & 0x0Fu]
+      tables::CL_SLOW_ACC_HZ_PER_S[candidate.cl_slow_acc_code & 0x0Fu]
     );
     ESP_LOGI(
       TUNING_TAG,
       "  lock_ilimit_deglitch_ms: %.1f",
-      TUNING_LOCK_ILIMIT_DEGLITCH_MS_TABLE[candidate.lock_ilimit_deglitch_code & 0x0Fu]
+      tables::LOCK_ILIMIT_DEGLITCH_MS[candidate.lock_ilimit_deglitch_code & 0x0Fu]
     );
     ESP_LOGI(
       TUNING_TAG,
       "  hw_lock_ilimit_deglitch_us: %u",
       static_cast<unsigned>(
-        TUNING_HW_LOCK_ILIMIT_DEGLITCH_US_TABLE[candidate.hw_lock_ilimit_deglitch_code & 0x07u]
+        tables::HW_LOCK_ILIMIT_DEGLITCH_US[candidate.hw_lock_ilimit_deglitch_code & 0x07u]
       )
     );
     ESP_LOGI(TUNING_TAG, "  auto_handoff_enable: %s", candidate.auto_handoff_enable ? "true" : "false");
@@ -1277,11 +1184,11 @@ struct MCF8329ATuningController::Impl {
       prefix,
       YESNO(mpet_use_dedicated),
       static_cast<unsigned>(mpet_curr_code),
-      static_cast<unsigned>(TUNING_MPET_OPEN_LOOP_CURR_REF_PERCENT_TABLE[mpet_curr_code & 0x07u]),
+      static_cast<unsigned>(tables::MPET_OPEN_LOOP_CURR_REF_PERCENT[mpet_curr_code & 0x07u]),
       static_cast<unsigned>(mpet_speed_code),
-      static_cast<unsigned>(TUNING_MPET_OPEN_LOOP_SPEED_REF_PERCENT_TABLE[mpet_speed_code & 0x03u]),
+      static_cast<unsigned>(tables::MPET_OPEN_LOOP_SPEED_REF_PERCENT[mpet_speed_code & 0x03u]),
       static_cast<unsigned>(mpet_slew_code),
-      TUNING_MPET_OPEN_LOOP_SLEW_HZ_PER_S_TABLE[mpet_slew_code & 0x07u],
+      tables::MPET_OPEN_LOOP_SLEW_HZ_PER_S[mpet_slew_code & 0x07u],
       static_cast<unsigned>(mpet_timeout_ms / 1000u)
     );
   }

@@ -1,9 +1,11 @@
 ## Continuous learning
 - When you learn new **repo-wide** project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
 - When you learn new **component-specific** knowledge, update that component's `components/<name>/AGENTS_KNOWLEDGE.md` before finishing.
+- When component file layout or ownership patterns change, update `components/<name>/CONTEXT_INDEX.md` (or add one) in the same change so future edits can stay low-context.
 
 ## Component knowledge files (required)
 - Before working in `components/<name>/`, read `components/<name>/AGENTS_KNOWLEDGE.md` if it exists and follow it as component-scoped guidance.
+- Then read `components/<name>/CONTEXT_INDEX.md` if it exists to target only the files needed for the task.
 - Keep component-specific notes out of this root file when possible; store them in the component's own `AGENTS_KNOWLEDGE.md`.
 
 ## Repo tips
@@ -17,8 +19,12 @@
 - In README YAML examples, use `##` for section/explanatory comment lines and keep single `#` for commented keys so bulk-uncomment keeps headings as comments.
 - Prefer `std::numeric_limits<float>::quiet_NaN()` (with `<limits>`) in headers instead of `NAN` to avoid macro ordering issues.
 - Validate any chip assumptions against the datasheet before implementing or documenting behavior.
-- `tools/pdf_to_text.py` extracts text from text-based PDFs using `pypdf`, writing `<pdf>.txt` (input-only CLI).
+- `tools/pdf_to_text.py` extracts text from text-based PDFs using `pypdf`, writing `<pdf>.txt` for ad hoc inspection.
 - `tools/pdf_to_text.py` strips embedded `\x00` bytes automatically so `rg`/`grep` treat output as text.
+- For checked-in datasheet bundles, keep the PDF as the canonical source; do not check in extracted `.txt` transcripts unless a legacy component still depends on them.
+- Use `tools/datasheet_prepare.py <pdf>` to generate `<pdf stem>.compact.txt`, `<pdf stem>.index.md`, and `<pdf stem>.compact.map.tsv` for low-context reading while preserving traceability to the PDF source.
+- `tools/datasheet_prepare.py` discovers quick-reference tokens algorithmically by default (`--token-mode auto`); use `--profile ti-mcf83xx` and/or `--token ...` when you need family-specific/manual token pinning.
+- Generated datasheet artifacts (`*.compact.txt`, `*.index.md`, `*.compact.map.tsv`) should be treated as build artifacts: regenerate when the canonical PDF changes instead of manually editing.
 - Devcontainer installs `pypdf` alongside `esphome` for the PDF ingestion tool.
 - Devcontainer shells default to the ESP-IDF Python venv; Python deps needed at runtime should be installed into that env (Dockerfile sources `export.sh` before installing).
 - ESPHome `i2c::I2CDevice::write_read()` returns `i2c::ErrorCode` (not bool); always compare to `i2c::ERROR_OK` or reads will be inverted.
@@ -28,3 +34,5 @@
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
 - `.clang-format` should keep a JS-like feel for C++ formatting (2-space indents, attached braces, and tighter wrapping).
 - Prefer monolith ESPHome integrations in component `__init__.py` (single `<component_name>:` YAML block with optional nested entity configs) over split platform modules (`sensor.py`, `switch.py`, `number.py`, etc.).
+- Keep component `AGENTS_KNOWLEDGE.md` files concise and focused on active invariants; move historical troubleshooting/session chronology into `components/<name>/notes/*.md` and reference it from the active file.
+- Prefer adding `components/<name>/CONTEXT_INDEX.md` for medium/large components, with read order, edit map, and links to deep-history notes/docs.
