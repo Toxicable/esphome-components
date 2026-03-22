@@ -230,9 +230,6 @@ void MCF8329AComponent::update() {
       bool speed_fdbk_ok = false;
       bool speed_ref_open_loop_ok = false;
       bool fg_speed_fdbk_ok = false;
-      const bool idle_speed_command =
-        (this->speed_applied_percent_ <= 0.1f) && !this->speed_target_active_;
-      static constexpr float IDLE_SPEED_NOISE_HZ = 20.0f;
 
       if (this->read_reg32(REG_SPEED_FDBK, raw_speed_fdbk)) {
         speed_fdbk_hz =
@@ -251,46 +248,16 @@ void MCF8329AComponent::update() {
         fg_speed_fdbk_ok = true;
       }
 
-      const bool speed_feedback_idle_or_unavailable =
-        !speed_fdbk_ok || std::fabs(speed_fdbk_hz) < IDLE_SPEED_NOISE_HZ;
-      if (idle_speed_command) {
-        if (speed_fdbk_ok && std::fabs(speed_fdbk_hz) < IDLE_SPEED_NOISE_HZ) {
-          speed_fdbk_hz = 0.0f;
-        }
-        if (speed_ref_open_loop_ok && speed_feedback_idle_or_unavailable) {
-          speed_ref_open_loop_hz = 0.0f;
-        }
-        if (fg_speed_fdbk_ok) {
-          const bool fg_implausible_at_idle = fg_speed_fdbk_hz > (max_speed_hz * 1.5f);
-          if ((fg_implausible_at_idle && speed_feedback_idle_or_unavailable) ||
-              std::fabs(fg_speed_fdbk_hz) < IDLE_SPEED_NOISE_HZ) {
-            fg_speed_fdbk_hz = 0.0f;
-          }
-        }
-      }
-
       if (this->speed_fdbk_hz_sensor_ != nullptr) {
-        if (speed_fdbk_ok) {
-          this->speed_fdbk_hz_sensor_->publish_state(speed_fdbk_hz);
-        } else if (idle_speed_command) {
-          this->speed_fdbk_hz_sensor_->publish_state(0.0f);
-        }
+        this->speed_fdbk_hz_sensor_->publish_state(speed_fdbk_ok ? speed_fdbk_hz : NAN);
       }
 
       if (this->speed_ref_open_loop_hz_sensor_ != nullptr) {
-        if (speed_ref_open_loop_ok) {
-          this->speed_ref_open_loop_hz_sensor_->publish_state(speed_ref_open_loop_hz);
-        } else if (idle_speed_command && speed_feedback_idle_or_unavailable) {
-          this->speed_ref_open_loop_hz_sensor_->publish_state(0.0f);
-        }
+        this->speed_ref_open_loop_hz_sensor_->publish_state(speed_ref_open_loop_ok ? speed_ref_open_loop_hz : NAN);
       }
 
       if (this->fg_speed_fdbk_hz_sensor_ != nullptr) {
-        if (fg_speed_fdbk_ok) {
-          this->fg_speed_fdbk_hz_sensor_->publish_state(fg_speed_fdbk_hz);
-        } else if (idle_speed_command && speed_feedback_idle_or_unavailable) {
-          this->fg_speed_fdbk_hz_sensor_->publish_state(0.0f);
-        }
+        this->fg_speed_fdbk_hz_sensor_->publish_state(fg_speed_fdbk_ok ? fg_speed_fdbk_hz : NAN);
       }
 
       if (speed_diag_due) {
@@ -1721,6 +1688,7 @@ bool MCF8329AComponent::set_brake_override(bool brake_on) {
       this->brake_input_to_string_(brake_input_value)
     );
   }
+
   return true;
 }
 

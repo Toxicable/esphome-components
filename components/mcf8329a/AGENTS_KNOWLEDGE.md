@@ -36,7 +36,7 @@ Component-scoped active guidance for `components/mcf8329a`.
 ## Telemetry and Logs
 - Algorithm-state transitions are logged at `INFO` (init + changes) using `ALGORITHM_STATE`.
 - Runtime emits active-speed diagnostic logs (cmd/ref/fdbk/fg/max-speed/read-valid flags).
-- Idle guards zero-out stale implausible speed telemetry, especially FG spikes at idle.
+- Speed telemetry (`speed_fdbk_hz`, `speed_ref_open_loop_hz`, `fg_speed_fdbk_hz`) publishes direct decoded register values (no brake/idle zero-clamping); failed reads publish `NaN`.
 - Startup/algorithm numeric `*_code` sensors and per-fault bit entities are intentionally removed; use logs + aggregate entities.
 
 ## Register/Decode Notes
