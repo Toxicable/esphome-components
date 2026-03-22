@@ -1,5 +1,7 @@
 # Next Session Plan: Validation First, Then MPET
 
+// TODO: check on status of this doc
+
 ## Updated
 - 2026-03-21
 
