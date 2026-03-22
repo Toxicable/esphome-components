@@ -55,3 +55,4 @@ Component-scoped active guidance for `components/mcf8329a`.
 - Prefer within-guardrail troubleshooting first; do not suggest `allow_unsafe_current_limits: true` unless explicitly requested.
 - If startup overshoots after open-loop to closed-loop transition, prioritize `MOTOR_STARTUP2` handoff/current/accel tuning before steady-state PI tuning.
 - If speed loop decays despite active closed-loop, verify `CLOSED_LOOP4.MAX_SPEED` scaling first.
+- If `i2c error 2` (`ERROR_NOT_ACKNOWLEDGED`) increases with motor ramp (even at `i2c.frequency <= 25kHz`), treat it as ramp-coupled comm integrity (EMI/ground/brownout/internal busy-NACK) and prioritize oscilloscope captures at both MCU and MCF8329A pins under load before register-level tuning.
