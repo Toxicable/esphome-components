@@ -1,1 +1,2 @@
 - Include `esphome/core/hal.h` in `husb238.cpp` when using timing helpers like `delay()`, `millis()`, or `micros()`.
+- Avoid issuing PD renegotiation commands from `setup()`; defer boot-time voltage requests until the component has observed an attached source and the ESP has had a short startup grace period.

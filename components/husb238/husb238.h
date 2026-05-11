@@ -51,10 +51,13 @@ class HUSB238Component : public PollingComponent, public i2c::I2CDevice {
   static float current_code_to_amps_(uint8_t code);
   static float legacy_5v_current_to_amps_(uint8_t code);
   static const char *pd_response_to_string_(uint8_t code);
+  void maybe_run_boot_request_(bool attached);
 
   uint8_t initial_request_voltage_{0};
   uint8_t last_requested_voltage_{0};
   bool request_on_boot_{true};
+  bool boot_request_pending_{false};
+  uint32_t boot_request_due_ms_{0};
 
   sensor::Sensor *voltage_sensor_{nullptr};
   sensor::Sensor *current_sensor_{nullptr};

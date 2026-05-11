@@ -19,6 +19,7 @@ static constexpr uint8_t REG_GO_COMMAND = 0x09;
 static constexpr uint8_t CMD_REQUEST_SELECTED_PDO = 0x01;
 static constexpr uint8_t CMD_GET_SRC_CAP = 0x04;
 static constexpr uint8_t CMD_HARD_RESET = 0x10;
+static constexpr uint32_t BOOT_REQUEST_DELAY_MS = 3000;
 
 void HUSB238Component::setup() {
   uint8_t value;
@@ -28,11 +29,13 @@ void HUSB238Component::setup() {
     return;
   }
 
-  // Ask the chip to refresh source capabilities now that ESPHome is online.
-  this->request_source_capabilities();
-
   if (this->request_on_boot_ && this->initial_request_voltage_ != 0) {
-    this->request_voltage(this->initial_request_voltage_);
+    this->boot_request_pending_ = true;
+    this->boot_request_due_ms_ = millis() + BOOT_REQUEST_DELAY_MS;
+    ESP_LOGI(
+      TAG, "Deferring %uV boot PDO request for %ums to avoid renegotiating during ESP startup",
+      this->initial_request_voltage_, BOOT_REQUEST_DELAY_MS
+    );
   }
 }
 
@@ -80,6 +83,8 @@ void HUSB238Component::update() {
     actual_voltage = 0;
     actual_current = 0.0f;
   }
+
+  this->maybe_run_boot_request_(attached);
 
   if (this->voltage_sensor_ != nullptr)
     this->voltage_sensor_->publish_state(actual_voltage);
@@ -142,6 +147,23 @@ bool HUSB238Component::request_source_capabilities() {
 bool HUSB238Component::hard_reset() {
   ESP_LOGW(TAG, "Sending USB-PD hard reset");
   return this->write_reg_(REG_GO_COMMAND, CMD_HARD_RESET);
+}
+
+void HUSB238Component::maybe_run_boot_request_(bool attached) {
+  if (!this->boot_request_pending_)
+    return;
+
+  if (!attached)
+    return;
+
+  const uint32_t now = millis();
+  if (now < this->boot_request_due_ms_)
+    return;
+
+  if (!this->request_voltage(this->initial_request_voltage_))
+    return;
+
+  this->boot_request_pending_ = false;
 }
 
 bool HUSB238Component::read_reg_(uint8_t reg, uint8_t *value) {

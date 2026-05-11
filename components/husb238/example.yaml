@@ -14,7 +14,7 @@ husb238:
   address: 0x08
   update_interval: 2s
 
-  # Optional. Firmware will request this after ESPHome boots.
+  # Optional. Firmware will request this a few seconds after ESPHome boots.
   # Hardware VSET/ISET still decide the safe startup/default before firmware runs.
   request_voltage: 20V
   request_on_boot: true

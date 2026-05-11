@@ -17,3 +17,5 @@ Copy `components/husb238` into the same directory as your ESPHome YAML, then use
 ## Notes
 
 The HUSB238 can also be configured by VSET/ISET resistors. Those still matter at startup, before the ESP has booted and issued any I2C command.
+
+Boot-time PD renegotiation is deferred briefly after ESPHome startup instead of running inside `setup()`. That avoids changing the USB-C contract while the ESP32 is still bringing up subsystems like Wi-Fi.
