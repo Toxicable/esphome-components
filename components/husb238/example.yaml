@@ -1,0 +1,41 @@
+external_components:
+  - source:
+      type: local
+      path: components
+
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+  frequency: 100kHz
+
+husb238:
+  id: pd_sink
+  address: 0x08
+  update_interval: 2s
+
+  # Optional. Firmware will request this after ESPHome boots.
+  # Hardware VSET/ISET still decide the safe startup/default before firmware runs.
+  request_voltage: 20V
+  request_on_boot: true
+
+  voltage:
+    name: "USB PD Voltage"
+  current:
+    name: "USB PD Current"
+  power:
+    name: "USB PD Power"
+  attached:
+    name: "USB PD Attached"
+  cc2_connected:
+    name: "USB PD CC2 Connected"
+  pd_response:
+    name: "USB PD Response"
+  available_pdos:
+    name: "USB PD Available PDOs"
+  voltage_select:
+    name: "USB PD Request Voltage"
+  refresh_capabilities_button:
+    name: "USB PD Refresh Capabilities"
+  hard_reset_button:
+    name: "USB PD Hard Reset"

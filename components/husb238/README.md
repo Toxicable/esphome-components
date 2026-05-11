@@ -1,0 +1,19 @@
+# ESPHome HUSB238 external component
+
+Local external component for the Hynetek HUSB238 USB-C PD sink controller.
+
+## Features
+
+- I2C address defaults to `0x08`
+- Publishes actual negotiated voltage/current/power
+- Publishes attach state, CC orientation, PD command response, available PDOs
+- Select entity to request 5/9/12/15/18/20 V
+- Buttons for `Get_SRC_Cap` and hard reset
+
+## Install
+
+Copy `components/husb238` into the same directory as your ESPHome YAML, then use the `external_components` block shown in `example.yaml`.
+
+## Notes
+
+The HUSB238 can also be configured by VSET/ISET resistors. Those still matter at startup, before the ESP has booted and issued any I2C command.
