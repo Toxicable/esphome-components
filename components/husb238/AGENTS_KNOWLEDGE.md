@@ -1,0 +1,1 @@
+- Include `esphome/core/hal.h` in `husb238.cpp` when using timing helpers like `delay()`, `millis()`, or `micros()`.
