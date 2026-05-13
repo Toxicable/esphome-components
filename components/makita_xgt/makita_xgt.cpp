@@ -31,7 +31,6 @@ void MakitaXGTComponent::update() {
 
 void MakitaXGTComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Makita XGT Battery:");
-  LOG_UART_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   LOG_TEXT_SENSOR("  ", "Model", this->model_text_sensor_);
   LOG_SENSOR("  ", "Charge Count", this->charge_count_sensor_);
