@@ -58,22 +58,38 @@ bool MakitaXGTComponent::factory_reset() {
 
   uint8_t buffer[FRAME_MAX]{};
   uint8_t rx_length = 0;
-  if (this->send_command_(RESET_CMD0, sizeof(RESET_CMD0), buffer, rx_length) != ReadStatus::OK) {
+  if (this->send_command_("reset_0", RESET_CMD0, sizeof(RESET_CMD0), buffer, rx_length) != ReadStatus::OK) {
     return false;
   }
   delay(10);
-  return this->send_command_(RESET_CMD1, sizeof(RESET_CMD1), buffer, rx_length) == ReadStatus::OK;
+  return this->send_command_("reset_1", RESET_CMD1, sizeof(RESET_CMD1), buffer, rx_length) == ReadStatus::OK;
 }
 
 bool MakitaXGTComponent::wake_battery_() {
   this->flush_rx_();
+  ESP_LOGD(TAG, "Wake: sending 0x00");
   this->write_byte(0x00);
   this->flush();
   delay(WAKE_DELAY_MS);
   return true;
 }
 
+void MakitaXGTComponent::log_bytes_(const char* prefix, const uint8_t* data, uint8_t length) const {
+  char line[3 * FRAME_MAX + 1];
+  size_t pos = 0;
+  for (uint8_t i = 0; i < length && pos + 3 < sizeof(line); i++) {
+    int written = snprintf(&line[pos], sizeof(line) - pos, "%02X%s", data[i], (i + 1 < length) ? " " : "");
+    if (written <= 0) {
+      break;
+    }
+    pos += static_cast<size_t>(written);
+  }
+  line[sizeof(line) - 1] = '\0';
+  ESP_LOGD(TAG, "%s: %s", prefix, line);
+}
+
 MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
+  const char* label,
   const uint8_t* command,
   uint8_t command_length,
   uint8_t* buffer,
@@ -85,21 +101,29 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
       delay(RETRY_DELAY_MS);
     }
     this->flush_rx_();
+    ESP_LOGD(TAG, "TX %s attempt %u", label, attempt + 1);
+    this->log_bytes_("TX raw", command, command_length);
     this->write_array(command, command_length);
     this->flush();
 
     if (!this->read_frame_(buffer, rx_length)) {
+      ESP_LOGW(TAG, "RX timeout for %s on attempt %u", label, attempt + 1);
       continue;
     }
+
+    this->log_bytes_("RX raw", buffer, rx_length);
 
     for (uint8_t i = 0; i < rx_length; i++) {
       buffer[i] = this->reverse_bits_(buffer[i]);
     }
 
+    this->log_bytes_("RX decoded", buffer, rx_length);
+
     if (!this->check_crc_(buffer, rx_length)) {
-      ESP_LOGW(TAG, "CRC mismatch for response");
+      ESP_LOGW(TAG, "CRC mismatch for %s response", label);
       return ReadStatus::CRC_ERROR;
     }
+    ESP_LOGD(TAG, "RX %s CRC OK (%u bytes)", label, rx_length);
     return ReadStatus::OK;
   }
 
@@ -176,7 +200,7 @@ bool MakitaXGTComponent::read_all_() {
 
   uint8_t buffer[FRAME_MAX]{};
   uint8_t rx_length = 0;
-  ReadStatus status = this->send_command_(MODEL_CMD, sizeof(MODEL_CMD), buffer, rx_length);
+  ReadStatus status = this->send_command_("model", MODEL_CMD, sizeof(MODEL_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) {
     ESP_LOGW(TAG, "Failed to read model");
     return false;
@@ -192,37 +216,37 @@ bool MakitaXGTComponent::read_all_() {
     this->model_.push_back(c);
   }
 
-  status = this->send_command_(NUM_CHARGES_CMD, sizeof(NUM_CHARGES_CMD), buffer, rx_length);
+  status = this->send_command_("charge_count", NUM_CHARGES_CMD, sizeof(NUM_CHARGES_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->charge_count_ = this->decode_u16_swapped_(buffer);
 
-  status = this->send_command_(CELL_SIZE_CMD, sizeof(CELL_SIZE_CMD), buffer, rx_length);
+  status = this->send_command_("cell_size", CELL_SIZE_CMD, sizeof(CELL_SIZE_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->cell_size_mah_ = buffer[5];
 
-  status = this->send_command_(PARALLEL_COUNT_CMD, sizeof(PARALLEL_COUNT_CMD), buffer, rx_length);
+  status = this->send_command_("parallel_count", PARALLEL_COUNT_CMD, sizeof(PARALLEL_COUNT_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->parallel_count_ = buffer[4];
 
-  status = this->send_command_(HEALTH_CMD, sizeof(HEALTH_CMD), buffer, rx_length);
+  status = this->send_command_("health", HEALTH_CMD, sizeof(HEALTH_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   const uint16_t raw_health = this->decode_u16_swapped_(buffer);
   const uint32_t divisor = static_cast<uint32_t>(this->cell_size_mah_) * this->parallel_count_;
   this->health_percent_ = divisor == 0 ? 0 : static_cast<uint16_t>(raw_health / divisor);
 
-  status = this->send_command_(CHARGE_CMD, sizeof(CHARGE_CMD), buffer, rx_length);
+  status = this->send_command_("charge", CHARGE_CMD, sizeof(CHARGE_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->charge_percent_ = static_cast<uint16_t>(this->decode_u16_swapped_(buffer) / 255U);
 
-  status = this->send_command_(TEMPERATURE1_CMD, sizeof(TEMPERATURE1_CMD), buffer, rx_length);
+  status = this->send_command_("temperature1", TEMPERATURE1_CMD, sizeof(TEMPERATURE1_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->temperature1_c_ = -30.0f + ((static_cast<float>(this->decode_u16_swapped_(buffer)) - 2431.0f) / 10.0f);
 
-  status = this->send_command_(TEMPERATURE2_CMD, sizeof(TEMPERATURE2_CMD), buffer, rx_length);
+  status = this->send_command_("temperature2", TEMPERATURE2_CMD, sizeof(TEMPERATURE2_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->temperature2_c_ = -30.0f + ((static_cast<float>(this->decode_u16_swapped_(buffer)) - 2431.0f) / 10.0f);
 
-  status = this->send_command_(PACK_VOLTAGE_CMD, sizeof(PACK_VOLTAGE_CMD), buffer, rx_length);
+  status = this->send_command_("pack_voltage", PACK_VOLTAGE_CMD, sizeof(PACK_VOLTAGE_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->pack_voltage_v_ = static_cast<float>(this->decode_u16_swapped_(buffer)) / 1000.0f;
 
@@ -236,12 +260,14 @@ bool MakitaXGTComponent::read_all_() {
     const uint8_t value1 = static_cast<uint8_t>(cell_index * 2U + 194U);
     cell_cmd[4] = this->reverse_bits_(value0);
     cell_cmd[1] = this->reverse_bits_(value1);
-    status = this->send_command_(cell_cmd, sizeof(cell_cmd), buffer, rx_length);
+    char label[16];
+    snprintf(label, sizeof(label), "cell_%u", cell_index);
+    status = this->send_command_(label, cell_cmd, sizeof(cell_cmd), buffer, rx_length);
     if (status != ReadStatus::OK) return false;
     this->cell_voltages_v_[cell] = static_cast<float>(this->decode_u16_swapped_(buffer)) / 1000.0f;
   }
 
-  status = this->send_command_(LOCK_STATUS_CMD, sizeof(LOCK_STATUS_CMD), buffer, rx_length);
+  status = this->send_command_("lock_status", LOCK_STATUS_CMD, sizeof(LOCK_STATUS_CMD), buffer, rx_length);
   if (status != ReadStatus::OK) return false;
   this->lock_status_ = buffer[4];
 

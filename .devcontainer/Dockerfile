@@ -1,5 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/python:3.11-bookworm
 
+ARG ESPHOME_VERSION=2026.4.5
+
 # Remove Yarn repo to avoid expired key during apt-get update; not needed here.
 RUN rm -f /etc/apt/sources.list.d/yarn.list \
     && apt-get update \
@@ -22,7 +24,7 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir esphome pypdf
+    && python -m pip install --no-cache-dir "esphome==${ESPHOME_VERSION}" pypdf
 
 ENV IDF_PATH=/opt/esp-idf
 ENV IDF_TOOLS_PATH=/opt/esp-idf-tools
