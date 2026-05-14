@@ -106,7 +106,7 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
     this->write_array(command, command_length);
     this->flush();
 
-    if (!this->read_frame_(buffer, rx_length)) {
+    if (!this->read_frame_(command, command_length, buffer, rx_length)) {
       ESP_LOGW(TAG, "RX timeout for %s on attempt %u", label, attempt + 1);
       continue;
     }
@@ -130,15 +130,35 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
   return ReadStatus::RX_ERROR;
 }
 
-bool MakitaXGTComponent::read_frame_(uint8_t* buffer, uint8_t& rx_length) {
+bool MakitaXGTComponent::read_frame_(const uint8_t* command, uint8_t command_length, uint8_t* buffer, uint8_t& rx_length) {
   rx_length = 0;
+  uint8_t echo_length = 0;
   const uint32_t deadline = millis() + RESPONSE_TIMEOUT_MS;
   while (millis() < deadline && rx_length < FRAME_MAX) {
     while (this->available() > 0 && rx_length < FRAME_MAX) {
-      if (!this->read_byte(&buffer[rx_length])) {
+      uint8_t byte = 0;
+      if (!this->read_byte(&byte)) {
         break;
       }
-      rx_length++;
+
+      if (echo_length < command_length) {
+        if (byte == command[echo_length]) {
+          echo_length++;
+          if (echo_length == command_length) {
+            ESP_LOGD(TAG, "Ignoring echoed TX frame (%u bytes)", command_length);
+            rx_length = 0;
+            echo_length = 0;
+          }
+          continue;
+        }
+
+        for (uint8_t i = 0; i < echo_length && rx_length < FRAME_MAX; i++) {
+          buffer[rx_length++] = command[i];
+        }
+        echo_length = command_length;
+      }
+
+      buffer[rx_length++] = byte;
     }
     if (rx_length >= 8 && this->available() == 0) {
       return true;

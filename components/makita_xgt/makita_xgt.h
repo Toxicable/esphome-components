@@ -50,7 +50,7 @@ class MakitaXGTComponent : public PollingComponent, public uart::UARTDevice {
     uint8_t& rx_length
   );
   void log_bytes_(const char* prefix, const uint8_t* data, uint8_t length) const;
-  bool read_frame_(uint8_t* buffer, uint8_t& rx_length);
+  bool read_frame_(const uint8_t* command, uint8_t command_length, uint8_t* buffer, uint8_t& rx_length);
   uint8_t reverse_bits_(uint8_t value) const;
   bool check_crc_(const uint8_t* buffer, uint8_t length) const;
   bool read_all_();
