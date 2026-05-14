@@ -133,13 +133,14 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
 bool MakitaXGTComponent::read_frame_(const uint8_t* command, uint8_t command_length, uint8_t* buffer, uint8_t& rx_length) {
   rx_length = 0;
   uint8_t echo_length = 0;
-  const uint32_t deadline = millis() + RESPONSE_TIMEOUT_MS;
+  uint32_t deadline = millis() + RESPONSE_TIMEOUT_MS;
   while (millis() < deadline && rx_length < FRAME_MAX) {
     while (this->available() > 0 && rx_length < FRAME_MAX) {
       uint8_t byte = 0;
       if (!this->read_byte(&byte)) {
         break;
       }
+      deadline = millis() + INTER_BYTE_TIMEOUT_MS;
 
       if (echo_length < command_length) {
         if (byte == command[echo_length]) {

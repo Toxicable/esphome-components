@@ -8,5 +8,6 @@ Component-scoped notes for `components/makita_xgt`.
 - Short responses are validated with an 8-bit sum CRC using `0xCC` framing; the model response is a long `0xA5 0xA5` frame with a 16-bit additive CRC.
 - `send_command_()` now emits debug logs for wake/TX raw/RX raw/RX decoded/CRC status; keep those logs when adjusting UART protocol handling because they are the primary bring-up aid.
 - Some UART setups echo transmitted bytes back into RX; `read_frame_()` must ignore an exact echoed command before treating bytes as a battery response.
+- At `9600 8E1`, an echoed 32-byte model command takes about 37 ms on the wire, so response timing must allow for echo drain plus a short inter-byte completion gap.
 - `health` is published using the upstream derived formula `raw_health / (cell_size * parallel_count)`, not a directly reported percentage.
 - `factory_reset` is a destructive control and should remain optional and clearly labeled unsafe in docs.
