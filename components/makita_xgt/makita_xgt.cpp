@@ -107,7 +107,10 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
     this->flush();
 
     if (!this->read_frame_(command, command_length, buffer, rx_length)) {
-      ESP_LOGW(TAG, "RX timeout for %s on attempt %u", label, attempt + 1);
+      if (rx_length > 0) {
+        this->log_bytes_("RX partial", buffer, rx_length);
+      }
+      ESP_LOGW(TAG, "RX timeout for %s on attempt %u (%u bytes after echo)", label, attempt + 1, rx_length);
       continue;
     }
 
@@ -133,6 +136,7 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
 bool MakitaXGTComponent::read_frame_(const uint8_t* command, uint8_t command_length, uint8_t* buffer, uint8_t& rx_length) {
   rx_length = 0;
   uint8_t echo_length = 0;
+  bool ignored_echo = false;
   uint32_t deadline = millis() + RESPONSE_TIMEOUT_MS;
   while (millis() < deadline && rx_length < FRAME_MAX) {
     while (this->available() > 0 && rx_length < FRAME_MAX) {
@@ -149,6 +153,7 @@ bool MakitaXGTComponent::read_frame_(const uint8_t* command, uint8_t command_len
             ESP_LOGD(TAG, "Ignoring echoed TX frame (%u bytes)", command_length);
             rx_length = 0;
             echo_length = 0;
+            ignored_echo = true;
           }
           continue;
         }
@@ -165,6 +170,9 @@ bool MakitaXGTComponent::read_frame_(const uint8_t* command, uint8_t command_len
       return true;
     }
     delay(1);
+  }
+  if (ignored_echo && rx_length == 0) {
+    ESP_LOGD(TAG, "No response bytes arrived after echoed TX frame");
   }
   return rx_length >= 8;
 }
