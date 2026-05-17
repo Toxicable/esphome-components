@@ -64,6 +64,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_sleep_mode(uint8_t mode) {
     sleep_mode_ = mode;
   }
+  void set_apply_configuration_on_boot(bool value) {
+    apply_configuration_on_boot_ = value;
+  }
   void set_ts1_pullup_180k(bool value) {
     has_ts1_config_ = true;
     ts1_pullup_180k_ = value;
@@ -169,6 +172,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool set_sleep_allowed(bool allowed);
   bool clear_alarm_latches();
   bool reset_passed_charge_counter();
+  bool apply_requested_configuration();
 
  protected:
   static constexpr uint8_t BOOT_PRESERVE = 0;
@@ -195,7 +199,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_current_limit_config_() const;
   bool has_regulator_config_() const;
   bool has_ts_pin_config_() const;
+  bool has_boot_mode_config_() const;
   bool apply_boot_modes_();
+  bool apply_requested_configuration_();
   bool apply_regulator_config_();
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
@@ -236,6 +242,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool ts3_pullup_180k_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
+  bool apply_configuration_on_boot_{true};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool cell_map_initialized_{false};
   bool regulator_config_deferred_{false};
@@ -298,6 +305,11 @@ class BQ76952ClearAlarmsButton : public button::Button, public Parented<BQ76952C
 };
 
 class BQ76952ResetPassedChargeButton : public button::Button, public Parented<BQ76952Component> {
+ protected:
+  void press_action() override;
+};
+
+class BQ76952ApplyConfigurationButton : public button::Button, public Parented<BQ76952Component> {
  protected:
   void press_action() override;
 };

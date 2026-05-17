@@ -32,6 +32,7 @@ bq76952:
   ## Startup behavior:
   ## preserve = don't change device state on boot
   ## enable/disable send startup subcommands
+  # apply_configuration_on_boot: false
   autonomous_fet_mode: preserve
   sleep_mode: preserve
 
@@ -147,6 +148,8 @@ bq76952:
   #   name: "Clear Alarms"
   # reset_passed_charge:
   #   name: "Reset Passed Charge"
+  # apply_configuration:
+  #   name: "Apply Configuration"
 ```
 
 ## Config Options You’ll Likely Tune
@@ -155,6 +158,7 @@ bq76952:
 - `cell_count`: match your physical stack (`3..16`)
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
+- `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
 - `charge_current_limit_a`: charge overcurrent protection threshold
 - `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
@@ -184,6 +188,8 @@ REG1 notes:
 - If you use the BREG + external NPN preregulator route, enable both `reg0_enabled` and `reg1_enabled`.
 - If REGIN is supplied externally, leave `reg0_enabled: false` and only enable `reg1_enabled`.
 - These writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`.
+- Boot-time regulator, TS-pin, and current-limit writes are intentionally delayed by 10 seconds after startup when `apply_configuration_on_boot: true`.
+- If `apply_configuration_on_boot: false`, use the `apply_configuration` button to push regulator, TS-pin, current-limit, and boot-mode settings in one shot.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
@@ -206,17 +212,14 @@ Thermistor wiring:
 - These boot writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`, just like the current-limit settings.
 
 Current limit notes:
-- These values are written to device protection settings during boot.
+- These values are written when boot auto-apply runs, or when `apply_configuration` is pressed.
 - Setting `charge_current_limit_a` automatically enables OCC and CHG-FET trip-on-OCC.
 - Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
 - They require the chip to be in `FULLACCESS`.
 - Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
 - If requested values are already present in data memory, the component skips `CONFIG_UPDATE` and
   does not re-apply them.
-- When ESP32 OTA rollback is active and the image is still pending verification, this component
-  defers these writes until the boot is marked successful to avoid rollback loops.
-- If your ESP is powered through that switched FET path, expect one reset when deferred writes are
-  finally applied (after boot is already marked successful).
+- This component now uses a fixed 10-second post-boot delay for automatic writes instead of waiting on OTA state.
 
 ## Autonomous Mode
 

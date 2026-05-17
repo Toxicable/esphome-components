@@ -25,6 +25,7 @@ BQ76952AutonomousFetSwitch = bq76952_ns.class_("BQ76952AutonomousFetSwitch", swi
 BQ76952SleepAllowedSwitch = bq76952_ns.class_("BQ76952SleepAllowedSwitch", switch_.Switch)
 BQ76952ClearAlarmsButton = bq76952_ns.class_("BQ76952ClearAlarmsButton", button.Button)
 BQ76952ResetPassedChargeButton = bq76952_ns.class_("BQ76952ResetPassedChargeButton", button.Button)
+BQ76952ApplyConfigurationButton = bq76952_ns.class_("BQ76952ApplyConfigurationButton", button.Button)
 
 CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
@@ -38,6 +39,7 @@ CONF_CURRENT_RECOVERY_TIME_S = "current_recovery_time_s"
 CONF_REG0_ENABLED = "reg0_enabled"
 CONF_REG1_ENABLED = "reg1_enabled"
 CONF_REG1_VOLTAGE = "reg1_voltage"
+CONF_APPLY_CONFIGURATION_ON_BOOT = "apply_configuration_on_boot"
 CONF_PULLUP = "pullup"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
@@ -72,6 +74,7 @@ CONF_AUTONOMOUS_FET_CONTROL = "autonomous_fet_control"
 CONF_SLEEP_ALLOWED_CONTROL = "sleep_allowed_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
 CONF_RESET_PASSED_CHARGE = "reset_passed_charge"
+CONF_APPLY_CONFIGURATION = "apply_configuration"
 
 CELL_VOLTAGE_KEYS = [f"cell{index}_voltage" for index in range(1, 17)]
 
@@ -141,6 +144,7 @@ schema = {
     cv.Optional(CONF_REG0_ENABLED): cv.boolean,
     cv.Optional(CONF_REG1_ENABLED): cv.boolean,
     cv.Optional(CONF_REG1_VOLTAGE): cv.enum(REG1_VOLTAGE_OPTIONS, lower=True),
+    cv.Optional(CONF_APPLY_CONFIGURATION_ON_BOOT, default=True): cv.boolean,
     cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     # Backward-compatible alias for bat_voltage.
     cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -247,6 +251,10 @@ schema = {
         BQ76952ResetPassedChargeButton,
         entity_category=ENTITY_CATEGORY_CONFIG,
     ),
+    cv.Optional(CONF_APPLY_CONFIGURATION): button.button_schema(
+        BQ76952ApplyConfigurationButton,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+    ),
 }
 
 for key in CELL_VOLTAGE_KEYS:
@@ -270,6 +278,7 @@ async def to_code(config):
     cg.add(var.set_sense_resistor_milliohm(config[CONF_SENSE_RESISTOR_MILLIOHM]))
     cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
     cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
+    cg.add(var.set_apply_configuration_on_boot(config[CONF_APPLY_CONFIGURATION_ON_BOOT]))
     if CONF_CHARGE_CURRENT_LIMIT_A in config:
         cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))
     if CONF_DISCHARGE_CURRENT_LIMIT_A in config:
@@ -394,4 +403,7 @@ async def to_code(config):
         await cg.register_parented(btn, var)
     if CONF_RESET_PASSED_CHARGE in config:
         btn = await button.new_button(config[CONF_RESET_PASSED_CHARGE])
+        await cg.register_parented(btn, var)
+    if CONF_APPLY_CONFIGURATION in config:
+        btn = await button.new_button(config[CONF_APPLY_CONFIGURATION])
         await cg.register_parented(btn, var)

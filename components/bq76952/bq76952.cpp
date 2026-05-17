@@ -162,26 +162,36 @@ void BQ76952Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_()) {
-    this->regulator_config_deferred_ = this->has_regulator_config_();
-    this->current_limit_config_deferred_ = this->has_current_limit_config_();
-    this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
-    this->deferred_boot_config_log_ms_ = 0;
-    this->deferred_boot_config_apply_ms_ = millis() + 10000;
-    ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
+  if (this->apply_configuration_on_boot_) {
+    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_()) {
+      this->regulator_config_deferred_ = this->has_regulator_config_();
+      this->current_limit_config_deferred_ = this->has_current_limit_config_();
+      this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
+      this->deferred_boot_config_log_ms_ = 0;
+      this->deferred_boot_config_apply_ms_ = millis() + 10000;
+      ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
+    } else {
+      if (!this->apply_regulator_config_()) {
+        this->status_set_warning();
+      }
+      if (!this->apply_ts_pin_config_()) {
+        this->status_set_warning();
+      }
+      if (!this->apply_current_limit_config_()) {
+        this->status_set_warning();
+      }
+    }
+    if (!this->apply_boot_modes_()) {
+      this->status_set_warning();
+    }
   } else {
-    if (!this->apply_regulator_config_()) {
-      this->status_set_warning();
+    this->regulator_config_deferred_ = false;
+    this->current_limit_config_deferred_ = false;
+    this->ts_pin_config_deferred_ = false;
+    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+        this->has_boot_mode_config_()) {
+      ESP_LOGI(TAG, "Boot auto-apply disabled; use the Apply Configuration button to push requested settings");
     }
-    if (!this->apply_ts_pin_config_()) {
-      this->status_set_warning();
-    }
-    if (!this->apply_current_limit_config_()) {
-      this->status_set_warning();
-    }
-  }
-  if (!this->apply_boot_modes_()) {
-    this->status_set_warning();
   }
 }
 
@@ -873,6 +883,39 @@ bool BQ76952Component::has_regulator_config_() const {
 
 bool BQ76952Component::has_ts_pin_config_() const {
   return has_ts1_config_ || has_ts2_config_ || has_ts3_config_;
+}
+
+bool BQ76952Component::has_boot_mode_config_() const {
+  return autonomous_fet_mode_ != BOOT_PRESERVE || sleep_mode_ != BOOT_PRESERVE;
+}
+
+bool BQ76952Component::apply_requested_configuration() {
+  return this->apply_requested_configuration_();
+}
+
+bool BQ76952Component::apply_requested_configuration_() {
+  this->regulator_config_deferred_ = false;
+  this->current_limit_config_deferred_ = false;
+  this->ts_pin_config_deferred_ = false;
+
+  bool ok = true;
+  if (!this->apply_regulator_config_()) {
+    ok = false;
+  }
+  if (!this->apply_ts_pin_config_()) {
+    ok = false;
+  }
+  if (!this->apply_current_limit_config_()) {
+    ok = false;
+  }
+  if (!this->apply_boot_modes_()) {
+    ok = false;
+  }
+
+  if (!ok) {
+    this->status_set_warning();
+  }
+  return ok;
 }
 
 bool BQ76952Component::apply_regulator_config_() {
@@ -1873,6 +1916,12 @@ void BQ76952ClearAlarmsButton::press_action() {
 void BQ76952ResetPassedChargeButton::press_action() {
   if (this->parent_ != nullptr) {
     this->parent_->reset_passed_charge_counter();
+  }
+}
+
+void BQ76952ApplyConfigurationButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->apply_requested_configuration();
   }
 }
 
