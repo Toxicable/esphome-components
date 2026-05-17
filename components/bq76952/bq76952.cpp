@@ -90,6 +90,10 @@ constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
+
+const char* ts_pullup_to_string(bool pullup_180k) {
+  return pullup_180k ? "180k" : "18k";
+}
 }  // namespace
 
 void BQ76952Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
@@ -359,8 +363,9 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
-    if (temp_c < -40.0f || temp_c > 120.0f) {
+    if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
       ESP_LOGW(TAG, "TS1 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+      this->ts_diag_log_ms_ = millis() + 15000;
     }
     ts1_temperature_sensor_->publish_state(temp_c);
   }
@@ -373,8 +378,9 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
-    if (temp_c < -40.0f || temp_c > 120.0f) {
+    if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
       ESP_LOGW(TAG, "TS2 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+      this->ts_diag_log_ms_ = millis() + 15000;
     }
     ts2_temperature_sensor_->publish_state(temp_c);
   }
@@ -387,8 +393,9 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
-    if (temp_c < -40.0f || temp_c > 120.0f) {
+    if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
       ESP_LOGW(TAG, "TS3 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+      this->ts_diag_log_ms_ = millis() + 15000;
     }
     ts3_temperature_sensor_->publish_state(temp_c);
   }
@@ -448,6 +455,15 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "TS1 Temperature", ts1_temperature_sensor_);
   LOG_SENSOR("  ", "TS2 Temperature", ts2_temperature_sensor_);
   LOG_SENSOR("  ", "TS3 Temperature", ts3_temperature_sensor_);
+  if (has_ts1_config_) {
+    ESP_LOGCONFIG(TAG, "  TS1 config: thermistor, pullup=%s, measurement=report-only", ts_pullup_to_string(ts1_pullup_180k_));
+  }
+  if (has_ts2_config_) {
+    ESP_LOGCONFIG(TAG, "  TS2 config: thermistor, pullup=%s, measurement=report-only", ts_pullup_to_string(ts2_pullup_180k_));
+  }
+  if (has_ts3_config_) {
+    ESP_LOGCONFIG(TAG, "  TS3 config: thermistor, pullup=%s, measurement=report-only", ts_pullup_to_string(ts3_pullup_180k_));
+  }
 
   LOG_TEXT_SENSOR("  ", "Security State", security_state_sensor_);
   LOG_TEXT_SENSOR("  ", "Operating Mode", operating_mode_sensor_);

@@ -216,6 +216,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool current_limit_config_deferred_{false};
   bool ts_pin_config_deferred_{false};
   uint32_t deferred_current_limit_log_ms_{0};
+  uint32_t ts_diag_log_ms_{0};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};
