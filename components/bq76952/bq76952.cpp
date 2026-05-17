@@ -898,7 +898,6 @@ bool BQ76952Component::apply_regulator_config_() {
 
   uint8_t reg12 = 0;
   uint8_t reg0 = 0;
-  bool reg0_changed = false;
   bool precheck_ok = true;
   if (!this->read_data_memory_u8_(DM_REG12_CONFIG, reg12)) {
     ESP_LOGW(TAG, "Failed pre-check read of REG12 Config");
@@ -950,7 +949,6 @@ bool BQ76952Component::apply_regulator_config_() {
     ESP_LOGW(TAG, "REG0/REG1 pre-check incomplete; proceeding with CONFIG_UPDATE");
   } else if (reg0_reapply_requested && target_reg12 == reg12 && target_reg0 == reg0) {
     ESP_LOGI(TAG, "REG0 requested on and config already matches; forcing reapply path for live regulator state");
-    reg0_changed = true;
   }
 
   if (!this->set_cfgupdate_mode_(true)) {
@@ -1009,9 +1007,16 @@ bool BQ76952Component::apply_regulator_config_() {
     }
   }
 
-  if (ok && reg12 != target_reg12) {
-    if (!this->write_data_memory_u8_(DM_REG12_CONFIG, target_reg12)) {
-      ESP_LOGW(TAG, "Failed writing REG12 Config");
+  const bool direct_reg_bringup = reg0_reapply_requested;
+  if (ok && direct_reg_bringup) {
+    ESP_LOGI(
+      TAG,
+      "Using direct regulator bring-up sequence: write REG12=0x%02X, write REG0=0x%02X, exit CONFIG_UPDATE, send REG12_CONTROL",
+      target_reg12,
+      target_reg0
+    );
+    if (!this->write_subcommand_data_(DM_REG12_CONFIG, &target_reg12, 1)) {
+      ESP_LOGW(TAG, "Failed direct write of REG12 Config");
       ok = false;
     } else {
       ESP_LOGI(
@@ -1022,20 +1027,48 @@ bool BQ76952Component::apply_regulator_config_() {
         target_reg12
       );
     }
-  }
-
-  if (ok && reg0 != target_reg0) {
-    if (!this->write_data_memory_u8_(DM_REG0_CONFIG, target_reg0)) {
-      ESP_LOGW(TAG, "Failed writing REG0 Config");
+    if (ok && !this->write_subcommand_data_(DM_REG0_CONFIG, &target_reg0, 1)) {
+      ESP_LOGW(TAG, "Failed direct write of REG0 Config");
       ok = false;
-    } else {
-      reg0_changed = true;
+    } else if (ok) {
       ESP_LOGI(
         TAG,
         "Configured REG0: enabled=%s (REG0 Config=0x%02X)",
         (target_reg0 & REG0_CONFIG_REG0_EN) ? "yes" : "no",
         target_reg0
       );
+    }
+    if (ok) {
+      delay_microseconds_safe(2500);
+    }
+  } else {
+    if (ok && reg12 != target_reg12) {
+      if (!this->write_data_memory_u8_(DM_REG12_CONFIG, target_reg12)) {
+        ESP_LOGW(TAG, "Failed writing REG12 Config");
+        ok = false;
+      } else {
+        ESP_LOGI(
+          TAG,
+          "Configured REG1: enabled=%s voltage=%s (REG12 Config=0x%02X)",
+          (target_reg12 & REG12_CONFIG_REG1_EN) ? "yes" : "no",
+          reg1_voltage_to_string(target_reg12),
+          target_reg12
+        );
+      }
+    }
+
+    if (ok && reg0 != target_reg0) {
+      if (!this->write_data_memory_u8_(DM_REG0_CONFIG, target_reg0)) {
+        ESP_LOGW(TAG, "Failed writing REG0 Config");
+        ok = false;
+      } else {
+        ESP_LOGI(
+          TAG,
+          "Configured REG0: enabled=%s (REG0 Config=0x%02X)",
+          (target_reg0 & REG0_CONFIG_REG0_EN) ? "yes" : "no",
+          target_reg0
+        );
+      }
     }
   }
 
@@ -1054,40 +1087,15 @@ bool BQ76952Component::apply_regulator_config_() {
     }
   }
 
-  if (ok && reg0_changed) {
-    ESP_LOGI(TAG, "REG0 Config changed; sending soft reset so preregulator state is reapplied");
-    if (!this->write_subcommand_(SUBCMD_RESET)) {
-      ESP_LOGW(TAG, "Failed sending RESET() after REG0 configuration");
-      ok = false;
-    } else {
-      delay(1000);
-      uint16_t battery_status_after_reset = 0;
-      uint8_t reg12_after_reset = 0;
-      uint8_t reg0_after_reset = 0;
-      if (this->read_u16_(REG_BATTERY_STATUS, battery_status_after_reset) &&
-          this->read_data_memory_u8_(DM_REG12_CONFIG, reg12_after_reset) &&
-          this->read_data_memory_u8_(DM_REG0_CONFIG, reg0_after_reset)) {
-        const uint8_t security_state_after_reset = static_cast<uint8_t>((battery_status_after_reset >> 8) & 0x03);
-        ESP_LOGI(
-          TAG,
-          "Post-RESET regulator readback: security_state=%u REG12=0x%02X REG0=0x%02X BatteryStatus=0x%04X",
-          static_cast<unsigned>(security_state_after_reset),
-          reg12_after_reset,
-          reg0_after_reset,
-          battery_status_after_reset
-        );
-      } else {
-        ESP_LOGI(TAG, "Post-RESET regulator readback failed");
-      }
-    }
-  } else if (ok) {
+  if (ok) {
+    delay_microseconds_safe(5000);
     uint8_t reg12_final = 0;
     uint8_t reg0_final = 0;
     if (this->read_data_memory_u8_(DM_REG12_CONFIG, reg12_final) &&
         this->read_data_memory_u8_(DM_REG0_CONFIG, reg0_final)) {
-      ESP_LOGI(TAG, "REG final readback without reset: REG12=0x%02X REG0=0x%02X", reg12_final, reg0_final);
+      ESP_LOGI(TAG, "REG final readback: REG12=0x%02X REG0=0x%02X", reg12_final, reg0_final);
     } else {
-      ESP_LOGI(TAG, "REG final readback without reset failed");
+      ESP_LOGI(TAG, "REG final readback failed");
     }
   }
 

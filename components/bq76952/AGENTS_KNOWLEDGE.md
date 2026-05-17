@@ -15,6 +15,7 @@ Component-scoped notes for `components/bq76952`.
 - Boot-time regulator/TS/current-limit writes now use a fixed 10-second post-boot delay instead of waiting for ESP32 OTA pending-verify to clear.
 - Regulator debug instrumentation logs at `INFO` level: pre-check `REG0/REG12` values, in-`CONFIG_UPDATE` readback, staged REG1 disable before voltage changes, `REG12_CONTROL()` sends, and post-reset/final `REG0/REG12` readback.
 - Data-memory access should not be treated like a generic subcommand read: after writing `0x3E/0x3F`, allow the transfer buffer to populate, read response length from `0x61`, then read back from `0x40`; after writing checksum/length to `0x60/0x61`, allow a short settle time before verification or exiting `CONFIG_UPDATE`.
+- For runtime `REG0`/`REGIN` bring-up, use the minimal sequence without a reset: enter `CONFIG_UPDATE`, write `REG12 Config`, write `REG0 Config`, exit `CONFIG_UPDATE`, send `REG12_CONTROL()` with the same `REG12` byte, then measure `REGIN`.
 - Coulomb-counter accumulation is exposed from `DASTATUS6 (0x0076)` as signed `userAh` plus a 32-bit fractional term and converted through the auto-detected `userA` scale; `RESET_PASSQ (0x0082)` is exposed as a manual button, not a boot-time automatic reset.
 - Keep the YAML monolithic in `__init__.py`; do not split this component into platform modules unless the repo-wide preference changes.
 - Document `i2c_id` in examples; ESPHome requires it for this component when a node defines more than one I2C bus.
