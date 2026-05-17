@@ -33,6 +33,9 @@ CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
 CONF_CHARGE_CURRENT_DELAY_MS = "charge_current_delay_ms"
 CONF_DISCHARGE_CURRENT_DELAY_MS = "discharge_current_delay_ms"
 CONF_CURRENT_RECOVERY_TIME_S = "current_recovery_time_s"
+CONF_REG0_ENABLED = "reg0_enabled"
+CONF_REG1_ENABLED = "reg1_enabled"
+CONF_REG1_VOLTAGE = "reg1_voltage"
 CONF_PULLUP = "pullup"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
@@ -79,6 +82,14 @@ SLEEP_MODE_OPTIONS = {
     "disable": 2,
 }
 
+REG1_VOLTAGE_OPTIONS = {
+    "1.8v": 0,
+    "2.5v": 4,
+    "3.0v": 5,
+    "3.3v": 6,
+    "5.0v": 7,
+}
+
 POWER_PATH_OPTIONS = ["off", "charge", "discharge", "bidirectional"]
 TS_PULLUP_OPTIONS = {
     "18k": False,
@@ -122,6 +133,9 @@ schema = {
     cv.Optional(CONF_CHARGE_CURRENT_DELAY_MS): cv.int_range(min=10, max=426),
     cv.Optional(CONF_DISCHARGE_CURRENT_DELAY_MS): cv.int_range(min=10, max=426),
     cv.Optional(CONF_CURRENT_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
+    cv.Optional(CONF_REG0_ENABLED): cv.boolean,
+    cv.Optional(CONF_REG1_ENABLED): cv.boolean,
+    cv.Optional(CONF_REG1_VOLTAGE): cv.enum(REG1_VOLTAGE_OPTIONS, lower=True),
     cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     # Backward-compatible alias for bat_voltage.
     cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -245,6 +259,12 @@ async def to_code(config):
         cg.add(var.set_discharge_current_delay_ms(config[CONF_DISCHARGE_CURRENT_DELAY_MS]))
     if CONF_CURRENT_RECOVERY_TIME_S in config:
         cg.add(var.set_current_recovery_time_s(config[CONF_CURRENT_RECOVERY_TIME_S]))
+    if CONF_REG0_ENABLED in config:
+        cg.add(var.set_reg0_enabled(config[CONF_REG0_ENABLED]))
+    if CONF_REG1_ENABLED in config:
+        cg.add(var.set_reg1_enabled(config[CONF_REG1_ENABLED]))
+    if CONF_REG1_VOLTAGE in config:
+        cg.add(var.set_reg1_voltage(config[CONF_REG1_VOLTAGE]))
 
     if CONF_BAT_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])

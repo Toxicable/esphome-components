@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cstring>
+#include <cinttypes>
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
@@ -37,6 +38,8 @@ constexpr uint8_t REG_SUBCMD_CHECKSUM = 0x60;
 
 constexpr uint16_t SUBCMD_FET_ENABLE = 0x0022;
 constexpr uint16_t SUBCMD_MANUFACTURING_STATUS = 0x0057;
+constexpr uint16_t SUBCMD_DASTATUS6 = 0x0076;
+constexpr uint16_t SUBCMD_DASTATUS7 = 0x0077;
 constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
 constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
 constexpr uint16_t SUBCMD_DA_CONFIGURATION = 0x9303;
@@ -101,6 +104,15 @@ uint8_t ts_desired_config_value(bool pullup_180k) {
   const uint8_t measurement_bits = 0x08;  // Report-only thermistor measurement.
   const uint8_t pin_function_bits = 0x03;  // ADC Input or Thermistor.
   return pullup_bits | polynomial_bits | measurement_bits | pin_function_bits;
+}
+
+int32_t read_le_i32(const uint8_t* data) {
+  return static_cast<int32_t>(
+    static_cast<uint32_t>(data[0]) |
+    (static_cast<uint32_t>(data[1]) << 8) |
+    (static_cast<uint32_t>(data[2]) << 16) |
+    (static_cast<uint32_t>(data[3]) << 24)
+  );
 }
 }  // namespace
 
@@ -372,7 +384,25 @@ void BQ76952Component::update() {
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
     if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
-      ESP_LOGW(TAG, "TS1 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+      uint8_t dastatus6[32]{};
+      uint8_t dastatus7[16]{};
+      if (this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6)) &&
+          this->read_subcommand_(SUBCMD_DASTATUS7, dastatus7, sizeof(dastatus7))) {
+        const int32_t ts1_counts = read_le_i32(&dastatus6[24]);
+        const int32_t ts2_counts = read_le_i32(&dastatus6[28]);
+        const int32_t ts3_counts = read_le_i32(&dastatus7[0]);
+        ESP_LOGW(
+          TAG,
+          "TS1 raw=0x%04X interpreted=%.1fC counts(ts1=%" PRId32 ", ts2=%" PRId32 ", ts3=%" PRId32 ")",
+          static_cast<uint16_t>(temp_0p1k),
+          temp_c,
+          ts1_counts,
+          ts2_counts,
+          ts3_counts
+        );
+      } else {
+        ESP_LOGW(TAG, "TS1 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+      }
       this->ts_diag_log_ms_ = millis() + 15000;
     }
     ts1_temperature_sensor_->publish_state(temp_c);

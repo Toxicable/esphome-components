@@ -46,6 +46,18 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     current_recovery_time_s_ = value;
     has_current_recovery_time_ = true;
   }
+  void set_reg0_enabled(bool value) {
+    reg0_enabled_ = value;
+    has_reg0_config_ = true;
+  }
+  void set_reg1_enabled(bool value) {
+    reg1_enabled_ = value;
+    has_reg1_enabled_config_ = true;
+  }
+  void set_reg1_voltage(uint8_t value) {
+    reg1_voltage_code_ = value;
+    has_reg1_voltage_config_ = true;
+  }
   void set_autonomous_fet_mode(uint8_t mode) {
     autonomous_fet_mode_ = mode;
   }
@@ -174,10 +186,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool write_data_memory_u8_(uint16_t address, uint8_t value);
   bool set_cfgupdate_mode_(bool enabled);
   bool has_current_limit_config_() const;
+  bool has_regulator_config_() const;
   bool has_ts_pin_config_() const;
   bool ota_pending_verify_() const;
 
   bool apply_boot_modes_();
+  bool apply_regulator_config_();
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
   bool apply_current_limit_config_();
@@ -198,11 +212,17 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint16_t charge_current_delay_ms_{0};
   uint16_t discharge_current_delay_ms_{0};
   uint8_t current_recovery_time_s_{0};
+  uint8_t reg1_voltage_code_{0};
   bool has_charge_current_limit_{false};
   bool has_discharge_current_limit_{false};
   bool has_charge_current_delay_{false};
   bool has_discharge_current_delay_{false};
   bool has_current_recovery_time_{false};
+  bool has_reg0_config_{false};
+  bool has_reg1_enabled_config_{false};
+  bool has_reg1_voltage_config_{false};
+  bool reg0_enabled_{false};
+  bool reg1_enabled_{false};
   bool has_ts1_config_{false};
   bool has_ts2_config_{false};
   bool has_ts3_config_{false};
@@ -213,6 +233,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t sleep_mode_{BOOT_PRESERVE};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool cell_map_initialized_{false};
+  bool regulator_config_deferred_{false};
   bool current_limit_config_deferred_{false};
   bool ts_pin_config_deferred_{false};
   uint32_t deferred_current_limit_log_ms_{0};
