@@ -42,6 +42,7 @@ constexpr uint16_t SUBCMD_DASTATUS6 = 0x0076;
 constexpr uint16_t SUBCMD_DASTATUS7 = 0x0077;
 constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
 constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
+constexpr uint16_t SUBCMD_REG12_CONTROL = 0x0098;
 constexpr uint16_t SUBCMD_DA_CONFIGURATION = 0x9303;
 constexpr uint16_t SUBCMD_DSG_PDSG_OFF = 0x0093;
 constexpr uint16_t SUBCMD_CHG_PCHG_OFF = 0x0094;
@@ -78,6 +79,8 @@ constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
+constexpr uint16_t DM_REG12_CONFIG = 0x9236;
+constexpr uint16_t DM_REG0_CONFIG = 0x9237;
 constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
 constexpr uint16_t DM_TS2_CONFIG = 0x92FE;
 constexpr uint16_t DM_TS3_CONFIG = 0x92FF;
@@ -93,9 +96,27 @@ constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
+constexpr uint8_t REG12_CONFIG_REG1V_MASK = 0x07;
+constexpr uint8_t REG12_CONFIG_REG1_EN = 1u << 3;
+constexpr uint8_t REG0_CONFIG_REG0_EN = 1u << 0;
 
 const char* ts_pullup_to_string(bool pullup_180k) {
   return pullup_180k ? "180k" : "18k";
+}
+
+const char* reg1_voltage_to_string(uint8_t code) {
+  switch (code & REG12_CONFIG_REG1V_MASK) {
+    case 4:
+      return "2.5V";
+    case 5:
+      return "3.0V";
+    case 6:
+      return "3.3V";
+    case 7:
+      return "5.0V";
+    default:
+      return "1.8V";
+  }
 }
 
 uint8_t ts_desired_config_value(bool pullup_180k) {
@@ -126,8 +147,10 @@ void BQ76952Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if ((this->has_current_limit_config_() || this->has_ts_pin_config_()) && this->ota_pending_verify_()) {
-    this->current_limit_config_deferred_ = true;
+  if ((this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_()) &&
+      this->ota_pending_verify_()) {
+    this->regulator_config_deferred_ = this->has_regulator_config_();
+    this->current_limit_config_deferred_ = this->has_current_limit_config_();
     this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
     this->deferred_current_limit_log_ms_ = 0;
     ESP_LOGW(
@@ -135,6 +158,9 @@ void BQ76952Component::setup() {
       "Deferring boot configuration writes while OTA image is pending verify (avoids rollback resets)"
     );
   } else {
+    if (!this->apply_regulator_config_()) {
+      this->status_set_warning();
+    }
     if (!this->apply_ts_pin_config_()) {
       this->status_set_warning();
     }
@@ -148,7 +174,7 @@ void BQ76952Component::setup() {
 }
 
 void BQ76952Component::update() {
-  if (this->current_limit_config_deferred_ || this->ts_pin_config_deferred_) {
+  if (this->regulator_config_deferred_ || this->current_limit_config_deferred_ || this->ts_pin_config_deferred_) {
     if (this->ota_pending_verify_()) {
       const uint32_t now = millis();
       if (now >= this->deferred_current_limit_log_ms_) {
@@ -157,12 +183,16 @@ void BQ76952Component::update() {
       }
     } else {
       ESP_LOGI(TAG, "OTA boot marked successful; applying deferred boot configuration writes");
+      if (this->regulator_config_deferred_ && !this->apply_regulator_config_()) {
+        this->status_set_warning();
+      }
       if (this->ts_pin_config_deferred_ && !this->apply_ts_pin_config_()) {
         this->status_set_warning();
       }
       if (!this->apply_current_limit_config_()) {
         this->status_set_warning();
       }
+      this->regulator_config_deferred_ = false;
       this->current_limit_config_deferred_ = false;
       this->ts_pin_config_deferred_ = false;
     }
@@ -461,6 +491,15 @@ void BQ76952Component::dump_config() {
   }
   if (has_current_recovery_time_) {
     ESP_LOGCONFIG(TAG, "  current_recovery_time_s: %u", static_cast<unsigned>(current_recovery_time_s_));
+  }
+  if (has_reg0_config_) {
+    ESP_LOGCONFIG(TAG, "  reg0_enabled: %s", YESNO(reg0_enabled_));
+  }
+  if (has_reg1_enabled_config_) {
+    ESP_LOGCONFIG(TAG, "  reg1_enabled: %s", YESNO(reg1_enabled_));
+  }
+  if (has_reg1_voltage_config_) {
+    ESP_LOGCONFIG(TAG, "  reg1_voltage: %s", reg1_voltage_to_string(reg1_voltage_code_));
   }
 
   const char* autonomous_mode = "preserve";
@@ -764,6 +803,10 @@ bool BQ76952Component::has_current_limit_config_() const {
          has_discharge_current_delay_ || has_current_recovery_time_;
 }
 
+bool BQ76952Component::has_regulator_config_() const {
+  return has_reg0_config_ || has_reg1_enabled_config_ || has_reg1_voltage_config_;
+}
+
 bool BQ76952Component::has_ts_pin_config_() const {
   return has_ts1_config_ || has_ts2_config_ || has_ts3_config_;
 }
@@ -783,6 +826,164 @@ bool BQ76952Component::ota_pending_verify_() const {
 #else
   return false;
 #endif
+}
+
+bool BQ76952Component::apply_regulator_config_() {
+  if (!this->has_regulator_config_()) {
+    return true;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before REG0/REG1 configuration");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "REG0/REG1 configuration requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  uint8_t reg12 = 0;
+  uint8_t reg0 = 0;
+  bool precheck_ok = true;
+  if (!this->read_data_memory_u8_(DM_REG12_CONFIG, reg12)) {
+    ESP_LOGW(TAG, "Failed pre-check read of REG12 Config");
+    precheck_ok = false;
+  }
+  if (!this->read_data_memory_u8_(DM_REG0_CONFIG, reg0)) {
+    ESP_LOGW(TAG, "Failed pre-check read of REG0 Config");
+    precheck_ok = false;
+  }
+
+  uint8_t target_reg12 = reg12;
+  uint8_t target_reg0 = reg0;
+  if (has_reg1_voltage_config_) {
+    target_reg12 = static_cast<uint8_t>((target_reg12 & ~REG12_CONFIG_REG1V_MASK) | reg1_voltage_code_);
+  }
+  if (has_reg1_enabled_config_) {
+    if (reg1_enabled_) {
+      target_reg12 = static_cast<uint8_t>(target_reg12 | REG12_CONFIG_REG1_EN);
+    } else {
+      target_reg12 = static_cast<uint8_t>(target_reg12 & ~REG12_CONFIG_REG1_EN);
+    }
+  }
+  if (has_reg0_config_) {
+    if (reg0_enabled_) {
+      target_reg0 = static_cast<uint8_t>(target_reg0 | REG0_CONFIG_REG0_EN);
+    } else {
+      target_reg0 = static_cast<uint8_t>(target_reg0 & ~REG0_CONFIG_REG0_EN);
+    }
+  }
+
+  if (precheck_ok && target_reg12 == reg12 && target_reg0 == reg0) {
+    ESP_LOGI(TAG, "REG0/REG1 configuration already matches requested values; skipping CONFIG_UPDATE");
+    return true;
+  }
+  if (!precheck_ok) {
+    ESP_LOGW(TAG, "REG0/REG1 pre-check incomplete; proceeding with CONFIG_UPDATE");
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for REG0/REG1 configuration");
+    return false;
+  }
+
+  bool ok = true;
+  if (!this->read_data_memory_u8_(DM_REG12_CONFIG, reg12)) {
+    ESP_LOGW(TAG, "Failed reading REG12 Config");
+    ok = false;
+  }
+  if (!this->read_data_memory_u8_(DM_REG0_CONFIG, reg0)) {
+    ESP_LOGW(TAG, "Failed reading REG0 Config");
+    ok = false;
+  }
+
+  if (ok) {
+    target_reg12 = reg12;
+    target_reg0 = reg0;
+    if (has_reg1_voltage_config_) {
+      target_reg12 = static_cast<uint8_t>((target_reg12 & ~REG12_CONFIG_REG1V_MASK) | reg1_voltage_code_);
+    }
+    if (has_reg1_enabled_config_) {
+      if (reg1_enabled_) {
+        target_reg12 = static_cast<uint8_t>(target_reg12 | REG12_CONFIG_REG1_EN);
+      } else {
+        target_reg12 = static_cast<uint8_t>(target_reg12 & ~REG12_CONFIG_REG1_EN);
+      }
+    }
+    if (has_reg0_config_) {
+      if (reg0_enabled_) {
+        target_reg0 = static_cast<uint8_t>(target_reg0 | REG0_CONFIG_REG0_EN);
+      } else {
+        target_reg0 = static_cast<uint8_t>(target_reg0 & ~REG0_CONFIG_REG0_EN);
+      }
+    }
+
+    const bool current_reg1_enabled = (reg12 & REG12_CONFIG_REG1_EN) != 0;
+    const bool voltage_change = has_reg1_voltage_config_ &&
+                                ((reg12 & REG12_CONFIG_REG1V_MASK) != (target_reg12 & REG12_CONFIG_REG1V_MASK));
+    if (current_reg1_enabled && voltage_change) {
+      const uint8_t staged_reg12 = static_cast<uint8_t>(reg12 & ~REG12_CONFIG_REG1_EN);
+      if (staged_reg12 != reg12) {
+        if (!this->write_data_memory_u8_(DM_REG12_CONFIG, staged_reg12)) {
+          ESP_LOGW(TAG, "Failed disabling REG1 before voltage update");
+          ok = false;
+        } else {
+          reg12 = staged_reg12;
+        }
+      }
+    }
+  }
+
+  if (ok && reg12 != target_reg12) {
+    if (!this->write_data_memory_u8_(DM_REG12_CONFIG, target_reg12)) {
+      ESP_LOGW(TAG, "Failed writing REG12 Config");
+      ok = false;
+    } else {
+      ESP_LOGI(
+        TAG,
+        "Configured REG1: enabled=%s voltage=%s (REG12 Config=0x%02X)",
+        (target_reg12 & REG12_CONFIG_REG1_EN) ? "yes" : "no",
+        reg1_voltage_to_string(target_reg12),
+        target_reg12
+      );
+    }
+  }
+
+  if (ok && reg0 != target_reg0) {
+    if (!this->write_data_memory_u8_(DM_REG0_CONFIG, target_reg0)) {
+      ESP_LOGW(TAG, "Failed writing REG0 Config");
+      ok = false;
+    } else {
+      ESP_LOGI(
+        TAG,
+        "Configured REG0: enabled=%s (REG0 Config=0x%02X)",
+        (target_reg0 & REG0_CONFIG_REG0_EN) ? "yes" : "no",
+        target_reg0
+      );
+    }
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after REG0/REG1 configuration");
+    ok = false;
+  }
+
+  if (ok && has_reg1_enabled_config_) {
+    uint8_t runtime_reg12 = target_reg12;
+    if (!this->write_subcommand_data_(SUBCMD_REG12_CONTROL, &runtime_reg12, 1)) {
+      ESP_LOGW(TAG, "Failed sending REG12_CONTROL() after REG1 configuration");
+      ok = false;
+    }
+  }
+
+  return ok;
 }
 
 bool BQ76952Component::apply_ts_pin_config_() {

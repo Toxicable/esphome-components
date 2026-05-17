@@ -42,6 +42,12 @@ bq76952:
   # discharge_current_delay_ms: 23
   # current_recovery_time_s: 3
 
+  ## Optional REG0/REG1 supply setup (applied at boot):
+  ## Set reg0_enabled when using the BREG + external NPN preregulator route.
+  # reg0_enabled: true
+  # reg1_enabled: true
+  # reg1_voltage: 3.3V
+
   ## Optional sensors:
   # bat_voltage:
   #   name: "BAT Voltage"
@@ -148,11 +154,21 @@ bq76952:
 - `charge_current_delay_ms`: OCC trip delay (10ms to 426ms)
 - `discharge_current_delay_ms`: OCD1 trip delay (10ms to 426ms)
 - `current_recovery_time_s`: shared recovery timer for OCC/OCD protections (0s to 255s)
+- `reg0_enabled`: enable the on-chip preregulator that drives the external BREG transistor
+- `reg1_enabled`: enable the REG1 LDO output
+- `reg1_voltage`: set REG1 to `1.8V`, `2.5V`, `3.0V`, `3.3V`, or `5.0V`
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
 - `ts1/ts2/ts3_temperature.pullup`: select `18k` or `180k` internal pull-up for the BQ thermistor bias
 
 Current and voltage scaling are automatically detected from the chip configuration.
 No manual unit settings are needed.
+
+REG1 notes:
+- `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.
+- `reg0_enabled` programs `Settings:Configuration:REG0 Config`.
+- If you use the BREG + external NPN preregulator route, enable both `reg0_enabled` and `reg1_enabled`.
+- If REGIN is supplied externally, leave `reg0_enabled: false` and only enable `reg1_enabled`.
+- These writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
