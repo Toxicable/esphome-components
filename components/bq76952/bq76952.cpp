@@ -97,8 +97,8 @@ constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
-constexpr uint8_t REG12_CONFIG_REG1V_MASK = 0x07;
-constexpr uint8_t REG12_CONFIG_REG1_EN = 1u << 3;
+constexpr uint8_t REG12_CONFIG_REG1V_MASK = 0x0E;
+constexpr uint8_t REG12_CONFIG_REG1_EN = 1u << 0;
 constexpr uint8_t REG0_CONFIG_REG0_EN = 1u << 0;
 
 const char* ts_pullup_to_string(bool pullup_180k) {
@@ -106,7 +106,7 @@ const char* ts_pullup_to_string(bool pullup_180k) {
 }
 
 const char* reg1_voltage_to_string(uint8_t code) {
-  switch (code & REG12_CONFIG_REG1V_MASK) {
+  switch ((code & REG12_CONFIG_REG1V_MASK) >> 1) {
     case 4:
       return "2.5V";
     case 5:

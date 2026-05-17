@@ -88,11 +88,11 @@ SLEEP_MODE_OPTIONS = {
 }
 
 REG1_VOLTAGE_OPTIONS = {
-    "1.8v": 0,
-    "2.5v": 4,
-    "3.0v": 5,
-    "3.3v": 6,
-    "5.0v": 7,
+    "1.8v": 0x00,
+    "2.5v": 0x08,
+    "3.0v": 0x0A,
+    "3.3v": 0x0C,
+    "5.0v": 0x0E,
 }
 
 POWER_PATH_OPTIONS = ["off", "charge", "discharge", "bidirectional"]
