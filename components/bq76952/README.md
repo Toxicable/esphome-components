@@ -3,7 +3,7 @@
 ESPHome external component for TI BQ76952 (3S to 16S packs over I2C).
 
 It provides:
-- core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature, TS1 temperature)
+- core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature, TS1/TS2/TS3 temperatures)
 - battery/FET/alarm status entities
 - host controls for FET path, sleep-allow, and alarm-clear
 - startup policy options for autonomous FET control and sleep mode
@@ -87,6 +87,13 @@ bq76952:
   #   name: "Die Temperature"
   # ts1_temperature:
   #   name: "TS1 Temperature"
+  #   pullup: 18k
+  # ts2_temperature:
+  #   name: "TS2 Temperature"
+  #   pullup: 18k
+  # ts3_temperature:
+  #   name: "TS3 Temperature"
+  #   pullup: 18k
 
   ## Optional text sensors:
   # security_state:
@@ -142,18 +149,30 @@ bq76952:
 - `discharge_current_delay_ms`: OCD1 trip delay (10ms to 426ms)
 - `current_recovery_time_s`: shared recovery timer for OCC/OCD protections (0s to 255s)
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
+- `ts1/ts2/ts3_temperature.pullup`: select `18k` or `180k` internal pull-up for the BQ thermistor bias
 
 Current and voltage scaling are automatically detected from the chip configuration.
 No manual unit settings are needed.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
-Cell voltage entities are auto-aligned to a contiguous VC window ending at the highest populated cell-voltage
-command seen at startup. This lets reduced-cell-count packs wired near the top of the monitor input stack publish
-their highest configured cell sensor from the highest populated VC pair instead of a `0 V` lower unused command.
+Cell voltage entities are mapped to the first `cell_count` populated cell-voltage commands seen at startup, in
+ascending command order. This supports sparse layouts such as `VC1-VC0`, `VC2-VC1`, `VC3-VC2`, and `VC16-VC15`
+for a 4S pack, so `cell1..cell4` follow the actual populated differential measurements.
 
-`ts1_temperature` expects TS1 to be configured as a thermistor input. If TS1 is set to ADC input mode in the
-chip configuration, this command reports TS1 pin voltage instead of temperature.
+When `ts1_temperature`, `ts2_temperature`, or `ts3_temperature` is configured, this component programs that BQ76952
+pin into thermistor mode at boot using the selected internal pull-up (`18k` default, or `180k`). The measurement
+is configured as report-only thermistor data and is not assigned to cell/FET protections by this component.
+
+`ts2_temperature` shares the TS2 pin with the BQ76952 SHUTDOWN wake function. If your design uses TS2 for wake,
+do not also use it as a thermistor input.
+
+Thermistor wiring:
+- Wire the thermistor directly between `TS1`/`TS2`/`TS3` and `VSS`.
+- Do not add an external pull-up on the TS pin; the BQ76952 biases the thermistor with its internal pull-up.
+- Set `pullup: 18k` for a typical `10 kOhm NTC`.
+- Set `pullup: 180k` for higher-value thermistors such as `100 kOhm`/`200 kOhm`.
+- These boot writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`, just like the current-limit settings.
 
 Current limit notes:
 - These values are written to device protection settings during boot.

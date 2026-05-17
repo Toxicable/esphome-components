@@ -52,6 +52,18 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_sleep_mode(uint8_t mode) {
     sleep_mode_ = mode;
   }
+  void set_ts1_pullup_180k(bool value) {
+    has_ts1_config_ = true;
+    ts1_pullup_180k_ = value;
+  }
+  void set_ts2_pullup_180k(bool value) {
+    has_ts2_config_ = true;
+    ts2_pullup_180k_ = value;
+  }
+  void set_ts3_pullup_180k(bool value) {
+    has_ts3_config_ = true;
+    ts3_pullup_180k_ = value;
+  }
 
   void set_stack_voltage_sensor(sensor::Sensor* sensor) {
     stack_voltage_sensor_ = sensor;
@@ -71,6 +83,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   }
   void set_ts1_temperature_sensor(sensor::Sensor* sensor) {
     ts1_temperature_sensor_ = sensor;
+  }
+  void set_ts2_temperature_sensor(sensor::Sensor* sensor) {
+    ts2_temperature_sensor_ = sensor;
+  }
+  void set_ts3_temperature_sensor(sensor::Sensor* sensor) {
+    ts3_temperature_sensor_ = sensor;
   }
 
   void set_security_state_sensor(text_sensor::TextSensor* sensor) {
@@ -156,10 +174,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool write_data_memory_u8_(uint16_t address, uint8_t value);
   bool set_cfgupdate_mode_(bool enabled);
   bool has_current_limit_config_() const;
+  bool has_ts_pin_config_() const;
   bool ota_pending_verify_() const;
 
   bool apply_boot_modes_();
   bool load_unit_scaling_();
+  bool apply_ts_pin_config_();
   bool apply_current_limit_config_();
 
   const char* security_state_to_string_(uint16_t battery_status) const;
@@ -183,11 +203,18 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_charge_current_delay_{false};
   bool has_discharge_current_delay_{false};
   bool has_current_recovery_time_{false};
+  bool has_ts1_config_{false};
+  bool has_ts2_config_{false};
+  bool has_ts3_config_{false};
+  bool ts1_pullup_180k_{false};
+  bool ts2_pullup_180k_{false};
+  bool ts3_pullup_180k_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool cell_map_initialized_{false};
   bool current_limit_config_deferred_{false};
+  bool ts_pin_config_deferred_{false};
   uint32_t deferred_current_limit_log_ms_{0};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
@@ -197,6 +224,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* current_sensor_{nullptr};
   sensor::Sensor* die_temperature_sensor_{nullptr};
   sensor::Sensor* ts1_temperature_sensor_{nullptr};
+  sensor::Sensor* ts2_temperature_sensor_{nullptr};
+  sensor::Sensor* ts3_temperature_sensor_{nullptr};
 
   text_sensor::TextSensor* security_state_sensor_{nullptr};
   text_sensor::TextSensor* operating_mode_sensor_{nullptr};

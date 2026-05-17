@@ -33,6 +33,7 @@ CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
 CONF_CHARGE_CURRENT_DELAY_MS = "charge_current_delay_ms"
 CONF_DISCHARGE_CURRENT_DELAY_MS = "discharge_current_delay_ms"
 CONF_CURRENT_RECOVERY_TIME_S = "current_recovery_time_s"
+CONF_PULLUP = "pullup"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
@@ -41,6 +42,8 @@ CONF_LD_VOLTAGE = "ld_voltage"
 CONF_CURRENT = "current"
 CONF_DIE_TEMPERATURE = "die_temperature"
 CONF_TS1_TEMPERATURE = "ts1_temperature"
+CONF_TS2_TEMPERATURE = "ts2_temperature"
+CONF_TS3_TEMPERATURE = "ts3_temperature"
 
 CONF_SECURITY_STATE = "security_state"
 CONF_OPERATING_MODE = "operating_mode"
@@ -77,6 +80,10 @@ SLEEP_MODE_OPTIONS = {
 }
 
 POWER_PATH_OPTIONS = ["off", "charge", "discharge", "bidirectional"]
+TS_PULLUP_OPTIONS = {
+    "18k": False,
+    "180k": True,
+}
 
 
 VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -95,6 +102,10 @@ def _validate_config(config):
     for index, key in enumerate(CELL_VOLTAGE_KEYS, start=1):
         if key in config and index > cell_count:
             raise cv.Invalid(f"{key} requires cell_count >= {index}")
+
+    for key in (CONF_TS1_TEMPERATURE, CONF_TS2_TEMPERATURE, CONF_TS3_TEMPERATURE):
+        if key in config and isinstance(config[key], dict):
+            continue
     return config
 
 
@@ -133,7 +144,19 @@ schema = {
         accuracy_decimals=1,
         device_class=DEVICE_CLASS_TEMPERATURE,
         state_class=STATE_CLASS_MEASUREMENT,
-    ),
+    ).extend({cv.Optional(CONF_PULLUP, default="18k"): cv.enum(TS_PULLUP_OPTIONS, lower=True)}),
+    cv.Optional(CONF_TS2_TEMPERATURE): sensor.sensor_schema(
+        unit_of_measurement=UNIT_CELSIUS,
+        accuracy_decimals=1,
+        device_class=DEVICE_CLASS_TEMPERATURE,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ).extend({cv.Optional(CONF_PULLUP, default="18k"): cv.enum(TS_PULLUP_OPTIONS, lower=True)}),
+    cv.Optional(CONF_TS3_TEMPERATURE): sensor.sensor_schema(
+        unit_of_measurement=UNIT_CELSIUS,
+        accuracy_decimals=1,
+        device_class=DEVICE_CLASS_TEMPERATURE,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ).extend({cv.Optional(CONF_PULLUP, default="18k"): cv.enum(TS_PULLUP_OPTIONS, lower=True)}),
     cv.Optional(CONF_SECURITY_STATE): text_sensor.text_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
@@ -250,6 +273,15 @@ async def to_code(config):
     if CONF_TS1_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_TS1_TEMPERATURE])
         cg.add(var.set_ts1_temperature_sensor(sens))
+        cg.add(var.set_ts1_pullup_180k(config[CONF_TS1_TEMPERATURE][CONF_PULLUP]))
+    if CONF_TS2_TEMPERATURE in config:
+        sens = await sensor.new_sensor(config[CONF_TS2_TEMPERATURE])
+        cg.add(var.set_ts2_temperature_sensor(sens))
+        cg.add(var.set_ts2_pullup_180k(config[CONF_TS2_TEMPERATURE][CONF_PULLUP]))
+    if CONF_TS3_TEMPERATURE in config:
+        sens = await sensor.new_sensor(config[CONF_TS3_TEMPERATURE])
+        cg.add(var.set_ts3_temperature_sensor(sens))
+        cg.add(var.set_ts3_pullup_180k(config[CONF_TS3_TEMPERATURE][CONF_PULLUP]))
 
     if CONF_SECURITY_STATE in config:
         ts = await text_sensor.new_text_sensor(config[CONF_SECURITY_STATE])

@@ -27,6 +27,8 @@ constexpr uint8_t REG_CC2_CURRENT = 0x3A;
 constexpr uint8_t REG_ALARM_STATUS = 0x62;
 constexpr uint8_t REG_INT_TEMPERATURE = 0x68;
 constexpr uint8_t REG_TS1_TEMPERATURE = 0x70;
+constexpr uint8_t REG_TS2_TEMPERATURE = 0x72;
+constexpr uint8_t REG_TS3_TEMPERATURE = 0x74;
 constexpr uint8_t REG_FET_STATUS = 0x7F;
 
 constexpr uint8_t REG_SUBCMD_LO = 0x3E;
@@ -73,6 +75,9 @@ constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
+constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
+constexpr uint16_t DM_TS2_CONFIG = 0x92FE;
+constexpr uint16_t DM_TS3_CONFIG = 0x92FF;
 constexpr uint16_t DM_CHG_FET_PROTECTIONS_A = 0x9265;
 constexpr uint16_t DM_DSG_FET_PROTECTIONS_A = 0x9269;
 constexpr uint16_t DM_OCC_THRESHOLD = 0x9280;
@@ -97,14 +102,18 @@ void BQ76952Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if (this->has_current_limit_config_() && this->ota_pending_verify_()) {
+  if ((this->has_current_limit_config_() || this->has_ts_pin_config_()) && this->ota_pending_verify_()) {
     this->current_limit_config_deferred_ = true;
+    this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
     this->deferred_current_limit_log_ms_ = 0;
     ESP_LOGW(
       TAG,
-      "Deferring boot current-limit config while OTA image is pending verify (avoids rollback resets)"
+      "Deferring boot configuration writes while OTA image is pending verify (avoids rollback resets)"
     );
   } else {
+    if (!this->apply_ts_pin_config_()) {
+      this->status_set_warning();
+    }
     if (!this->apply_current_limit_config_()) {
       this->status_set_warning();
     }
@@ -115,19 +124,23 @@ void BQ76952Component::setup() {
 }
 
 void BQ76952Component::update() {
-  if (this->current_limit_config_deferred_) {
+  if (this->current_limit_config_deferred_ || this->ts_pin_config_deferred_) {
     if (this->ota_pending_verify_()) {
       const uint32_t now = millis();
       if (now >= this->deferred_current_limit_log_ms_) {
-        ESP_LOGI(TAG, "Current-limit config still deferred: waiting for OTA boot to be marked successful");
+        ESP_LOGI(TAG, "Boot configuration writes still deferred: waiting for OTA boot to be marked successful");
         this->deferred_current_limit_log_ms_ = now + 15000;
       }
     } else {
-      ESP_LOGI(TAG, "OTA boot marked successful; applying deferred current-limit config");
+      ESP_LOGI(TAG, "OTA boot marked successful; applying deferred boot configuration writes");
+      if (this->ts_pin_config_deferred_ && !this->apply_ts_pin_config_()) {
+        this->status_set_warning();
+      }
       if (!this->apply_current_limit_config_()) {
         this->status_set_warning();
       }
       this->current_limit_config_deferred_ = false;
+      this->ts_pin_config_deferred_ = false;
     }
   }
 
@@ -233,19 +246,17 @@ void BQ76952Component::update() {
   }
 
   if (!cell_map_initialized_) {
-    int8_t highest_present_index = -1;
+    std::array<uint8_t, 16> present_indices{};
+    uint8_t present_count = 0;
     for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
       if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
-        highest_present_index = static_cast<int8_t>(i);
+        present_indices[present_count++] = i;
       }
     }
 
-    if (highest_present_index >= 0) {
-      const uint8_t start_index = static_cast<uint8_t>(
-        std::max(0, highest_present_index + 1 - static_cast<int>(cell_count_))
-      );
+    if (present_count >= cell_count_) {
       for (uint8_t i = 0; i < cell_count_; i++) {
-        cell_read_map_[i] = start_index + i;
+        cell_read_map_[i] = present_indices[i];
       }
     } else {
       for (uint8_t i = 0; i < cell_count_; i++) {
@@ -351,6 +362,28 @@ void BQ76952Component::update() {
     ts1_temperature_sensor_->publish_state(temp_c);
   }
 
+  if (ts2_temperature_sensor_ != nullptr) {
+    int16_t temp_0p1k = 0;
+    if (!this->read_i16_(REG_TS2_TEMPERATURE, temp_0p1k)) {
+      ESP_LOGW(TAG, "Failed to read TS2 Temperature");
+      this->status_set_warning();
+      return;
+    }
+    const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
+    ts2_temperature_sensor_->publish_state(temp_c);
+  }
+
+  if (ts3_temperature_sensor_ != nullptr) {
+    int16_t temp_0p1k = 0;
+    if (!this->read_i16_(REG_TS3_TEMPERATURE, temp_0p1k)) {
+      ESP_LOGW(TAG, "Failed to read TS3 Temperature");
+      this->status_set_warning();
+      return;
+    }
+    const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
+    ts3_temperature_sensor_->publish_state(temp_c);
+  }
+
   this->status_clear_warning();
 }
 
@@ -404,6 +437,8 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "Current", current_sensor_);
   LOG_SENSOR("  ", "Int Temperature", die_temperature_sensor_);
   LOG_SENSOR("  ", "TS1 Temperature", ts1_temperature_sensor_);
+  LOG_SENSOR("  ", "TS2 Temperature", ts2_temperature_sensor_);
+  LOG_SENSOR("  ", "TS3 Temperature", ts3_temperature_sensor_);
 
   LOG_TEXT_SENSOR("  ", "Security State", security_state_sensor_);
   LOG_TEXT_SENSOR("  ", "Operating Mode", operating_mode_sensor_);
@@ -615,6 +650,10 @@ bool BQ76952Component::has_current_limit_config_() const {
          has_discharge_current_delay_ || has_current_recovery_time_;
 }
 
+bool BQ76952Component::has_ts_pin_config_() const {
+  return has_ts1_config_ || has_ts2_config_ || has_ts3_config_;
+}
+
 bool BQ76952Component::ota_pending_verify_() const {
 #if defined(USE_ESP32) && defined(USE_OTA_ROLLBACK)
   const esp_partition_t* running = esp_ota_get_running_partition();
@@ -630,6 +669,98 @@ bool BQ76952Component::ota_pending_verify_() const {
 #else
   return false;
 #endif
+}
+
+bool BQ76952Component::apply_ts_pin_config_() {
+  if (!this->has_ts_pin_config_()) {
+    return true;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before TS pin configuration");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "TS pin configuration requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  struct TsPinConfig {
+    const char* label;
+    uint16_t address;
+    bool enabled;
+    bool pullup_180k;
+  };
+
+  const std::array<TsPinConfig, 3> configs{{
+    {"TS1", DM_TS1_CONFIG, has_ts1_config_, ts1_pullup_180k_},
+    {"TS2", DM_TS2_CONFIG, has_ts2_config_, ts2_pullup_180k_},
+    {"TS3", DM_TS3_CONFIG, has_ts3_config_, ts3_pullup_180k_},
+  }};
+
+  bool needs_update = false;
+  std::array<uint8_t, 3> desired_values{};
+  std::array<uint8_t, 3> current_values{};
+
+  for (size_t i = 0; i < configs.size(); i++) {
+    if (!configs[i].enabled) {
+      continue;
+    }
+    if (!this->read_data_memory_u8_(configs[i].address, current_values[i])) {
+      ESP_LOGW(TAG, "Failed to read %s pin config", configs[i].label);
+      return false;
+    }
+
+    const uint8_t pullup_bits = configs[i].pullup_180k ? 0x40 : 0x00;
+    const uint8_t polynomial_bits = configs[i].pullup_180k ? 0x10 : 0x00;
+    const uint8_t measurement_bits = 0x08;  // Report-only thermistor measurement.
+    const uint8_t pin_function_bits = 0x03;  // ADCIN/Thermistor function.
+    desired_values[i] = pullup_bits | polynomial_bits | measurement_bits | pin_function_bits;
+    if (current_values[i] != desired_values[i]) {
+      needs_update = true;
+    }
+  }
+
+  if (!needs_update) {
+    return true;
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for TS pin configuration");
+    return false;
+  }
+
+  bool ok = true;
+  for (size_t i = 0; i < configs.size(); i++) {
+    if (!configs[i].enabled || current_values[i] == desired_values[i]) {
+      continue;
+    }
+    if (!this->write_data_memory_u8_(configs[i].address, desired_values[i])) {
+      ESP_LOGW(TAG, "Failed to write %s pin config", configs[i].label);
+      ok = false;
+      break;
+    }
+    ESP_LOGI(
+      TAG,
+      "Configured %s as thermistor input (%s pull-up, report-only)",
+      configs[i].label,
+      configs[i].pullup_180k ? "180k" : "18k"
+    );
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after TS pin configuration");
+    ok = false;
+  }
+
+  return ok;
 }
 
 bool BQ76952Component::apply_current_limit_config_() {
