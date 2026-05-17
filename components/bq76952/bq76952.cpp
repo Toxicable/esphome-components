@@ -121,11 +121,19 @@ const char* reg1_voltage_to_string(uint8_t code) {
 }
 
 uint8_t ts_desired_config_value(bool pullup_180k) {
-  const uint8_t pullup_bits = pullup_180k ? 0x40 : 0x00;
-  const uint8_t polynomial_bits = pullup_180k ? 0x10 : 0x00;
-  const uint8_t measurement_bits = 0x08;  // Report-only thermistor measurement.
-  const uint8_t pin_function_bits = 0x03;  // ADC Input or Thermistor.
-  return pullup_bits | polynomial_bits | measurement_bits | pin_function_bits;
+  constexpr uint8_t TS_PIN_FUNCTION_ADC_OR_THERMISTOR = 0x03;
+  constexpr uint8_t TS_MEASUREMENT_REPORT_ONLY = 0x02;
+  constexpr uint8_t TS_OPT_PULLUP_18K = 0x00;
+  constexpr uint8_t TS_OPT_PULLUP_180K = 0x01;
+  constexpr uint8_t TS_OPT_POLYNOMIAL_18K = 0x00;
+  constexpr uint8_t TS_OPT_POLYNOMIAL_180K = 0x01;
+
+  // OPT[5:0] occupies register bits [7:2]; PIN_FXN[1:0] occupies bits [1:0].
+  const uint8_t opt_bits =
+    static_cast<uint8_t>(((pullup_180k ? TS_OPT_PULLUP_180K : TS_OPT_PULLUP_18K) << 4) |
+                         ((pullup_180k ? TS_OPT_POLYNOMIAL_180K : TS_OPT_POLYNOMIAL_18K) << 2) |
+                         TS_MEASUREMENT_REPORT_ONLY);
+  return static_cast<uint8_t>((opt_bits << 2) | TS_PIN_FUNCTION_ADC_OR_THERMISTOR);
 }
 
 int32_t read_le_i32(const uint8_t* data) {
@@ -1017,7 +1025,7 @@ bool BQ76952Component::apply_regulator_config_() {
     ok = false;
   }
 
-  if (ok && has_reg1_enabled_config_) {
+  if (ok && target_reg12 != reg12) {
     uint8_t runtime_reg12 = target_reg12;
     if (!this->write_subcommand_data_(SUBCMD_REG12_CONTROL, &runtime_reg12, 1)) {
       ESP_LOGW(TAG, "Failed sending REG12_CONTROL() after REG1 configuration");
