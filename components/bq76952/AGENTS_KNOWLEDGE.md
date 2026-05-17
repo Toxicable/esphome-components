@@ -11,6 +11,8 @@ Component-scoped notes for `components/bq76952`.
 - `reg0_enabled`, `reg1_enabled`, and `reg1_voltage` program `REG0 Config (0x9237)` and `REG12 Config (0x9236)` at boot; if a live REG1 voltage change is requested while REG1 is already on, the component stages the write by disabling REG1 first, then applying the new voltage and enable state.
 - After any live `REG12 Config (0x9236)` change, send `REG12_CONTROL()/0x0098` with the full updated byte so REG1 runtime state matches the data-memory setting, even when only the voltage bits changed.
 - `REG12 Config (0x9236)` encodes `REG1_EN` in bit `0` and `REG1V[2:0]` in bits `3:1` (not bits `3` and `2:0` respectively). YAML voltage option values and C++ masks/shifts must match that layout.
+- Matching `REG0 Config` / `REG12 Config` bytes do not prove the live preregulator state is active; when `reg0_enabled` is requested, the component should force a reapply/reset path instead of trusting the pre-check match alone.
+- Boot-time regulator/TS/current-limit writes now use a fixed 10-second post-boot delay instead of waiting for ESP32 OTA pending-verify to clear.
 - Coulomb-counter accumulation is exposed from `DASTATUS6 (0x0076)` as signed `userAh` plus a 32-bit fractional term and converted through the auto-detected `userA` scale; `RESET_PASSQ (0x0082)` is exposed as a manual button, not a boot-time automatic reset.
 - Keep the YAML monolithic in `__init__.py`; do not split this component into platform modules unless the repo-wide preference changes.
 - Document `i2c_id` in examples; ESPHome requires it for this component when a node defines more than one I2C bus.
