@@ -41,6 +41,7 @@ constexpr uint16_t SUBCMD_MANUFACTURING_STATUS = 0x0057;
 constexpr uint16_t SUBCMD_DASTATUS6 = 0x0076;
 constexpr uint16_t SUBCMD_DASTATUS7 = 0x0077;
 constexpr uint16_t SUBCMD_RESET_PASSQ = 0x0082;
+constexpr uint16_t SUBCMD_RESET = 0x0012;
 constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
 constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
 constexpr uint16_t SUBCMD_REG12_CONTROL = 0x0098;
@@ -901,6 +902,7 @@ bool BQ76952Component::apply_regulator_config_() {
 
   uint8_t reg12 = 0;
   uint8_t reg0 = 0;
+  bool reg0_changed = false;
   bool precheck_ok = true;
   if (!this->read_data_memory_u8_(DM_REG12_CONFIG, reg12)) {
     ESP_LOGW(TAG, "Failed pre-check read of REG12 Config");
@@ -1011,6 +1013,7 @@ bool BQ76952Component::apply_regulator_config_() {
       ESP_LOGW(TAG, "Failed writing REG0 Config");
       ok = false;
     } else {
+      reg0_changed = true;
       ESP_LOGI(
         TAG,
         "Configured REG0: enabled=%s (REG0 Config=0x%02X)",
@@ -1030,6 +1033,16 @@ bool BQ76952Component::apply_regulator_config_() {
     if (!this->write_subcommand_data_(SUBCMD_REG12_CONTROL, &runtime_reg12, 1)) {
       ESP_LOGW(TAG, "Failed sending REG12_CONTROL() after REG1 configuration");
       ok = false;
+    }
+  }
+
+  if (ok && reg0_changed) {
+    ESP_LOGI(TAG, "REG0 Config changed; sending soft reset so preregulator state is reapplied");
+    if (!this->write_subcommand_(SUBCMD_RESET)) {
+      ESP_LOGW(TAG, "Failed sending RESET() after REG0 configuration");
+      ok = false;
+    } else {
+      delay(1000);
     }
   }
 

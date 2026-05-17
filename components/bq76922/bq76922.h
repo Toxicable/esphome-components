@@ -69,6 +69,10 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   void set_die_temperature_sensor(sensor::Sensor* sensor) {
     die_temperature_sensor_ = sensor;
   }
+  void set_ts1_pullup_180k(bool value) {
+    has_ts1_config_ = true;
+    ts1_pullup_180k_ = value;
+  }
   void set_ts1_temperature_sensor(sensor::Sensor* sensor) {
     ts1_temperature_sensor_ = sensor;
   }
@@ -155,10 +159,12 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool read_data_memory_u8_(uint16_t address, uint8_t& value);
   bool write_data_memory_u8_(uint16_t address, uint8_t value);
   bool set_cfgupdate_mode_(bool enabled);
+  bool has_ts1_pin_config_() const;
   bool has_current_limit_config_() const;
   bool ota_pending_verify_() const;
 
   bool apply_boot_modes_();
+  bool apply_ts1_config_();
   bool load_unit_scaling_();
   bool apply_current_limit_config_();
 
@@ -183,6 +189,8 @@ class BQ76922Component : public PollingComponent, public i2c::I2CDevice {
   bool has_charge_current_delay_{false};
   bool has_discharge_current_delay_{false};
   bool has_current_recovery_time_{false};
+  bool has_ts1_config_{false};
+  bool ts1_pullup_180k_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
   std::array<uint8_t, 5> cell_read_map_{0, 1, 2, 3, 4};

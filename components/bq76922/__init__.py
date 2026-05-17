@@ -33,6 +33,7 @@ CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
 CONF_CHARGE_CURRENT_DELAY_MS = "charge_current_delay_ms"
 CONF_DISCHARGE_CURRENT_DELAY_MS = "discharge_current_delay_ms"
 CONF_CURRENT_RECOVERY_TIME_S = "current_recovery_time_s"
+CONF_PULLUP = "pullup"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
@@ -80,6 +81,10 @@ SLEEP_MODE_OPTIONS = {
 }
 
 POWER_PATH_OPTIONS = ["off", "charge", "discharge", "bidirectional"]
+TS_PULLUP_OPTIONS = {
+    "18k": False,
+    "180k": True,
+}
 
 
 VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -151,7 +156,7 @@ CONFIG_SCHEMA = cv.All(
                 accuracy_decimals=1,
                 device_class=DEVICE_CLASS_TEMPERATURE,
                 state_class=STATE_CLASS_MEASUREMENT,
-            ),
+            ).extend({cv.Optional(CONF_PULLUP, default="18k"): cv.enum(TS_PULLUP_OPTIONS, lower=True)}),
             cv.Optional(CONF_SECURITY_STATE): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
@@ -269,6 +274,7 @@ async def to_code(config):
     if CONF_TS1_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_TS1_TEMPERATURE])
         cg.add(var.set_ts1_temperature_sensor(sens))
+        cg.add(var.set_ts1_pullup_180k(config[CONF_TS1_TEMPERATURE][CONF_PULLUP]))
 
     if CONF_SECURITY_STATE in config:
         ts = await text_sensor.new_text_sensor(config[CONF_SECURITY_STATE])

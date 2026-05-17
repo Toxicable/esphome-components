@@ -64,6 +64,7 @@ bq76922:
   #   name: "Die Temperature"
   # ts1_temperature:
   #   name: "TS1 Temperature"
+  #   pullup: 18k
 
   ## Optional text sensors:
   # security_state:
@@ -118,14 +119,16 @@ bq76922:
 - `discharge_current_delay_ms`: OCD1 trip delay (10ms to 426ms)
 - `current_recovery_time_s`: shared recovery timer for OCC/OCD protections (0s to 255s)
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
+- `ts1_temperature.pullup`: select `18k` or `180k` internal pull-up for the TS1 thermistor bias
 
 Current and voltage scaling are automatically detected from the chip configuration.
 No manual unit settings are needed.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
-`ts1_temperature` expects TS1 to be configured as a thermistor input. If TS1 is set to ADC input mode in the
-chip configuration, this command reports TS1 pin voltage instead of temperature.
+When `ts1_temperature` is configured, this component programs `TS1 Config (0x92FD)` at boot so the pin reports
+thermistor temperature instead of ADC pin voltage. The default `pullup: 18k` is intended for a typical `10 kOhm`
+NTC; use `pullup: 180k` for higher-value thermistors such as `100 kOhm` or `200 kOhm`.
 
 If you use fewer than 5 cells and jumper unused sense inputs, the component auto-detects
 which cell-voltage commands are active on first read. This covers common layouts like 4S
@@ -143,6 +146,11 @@ Current limit notes:
   now defers these writes until the boot is marked successful to avoid rollback loops.
 - If your ESP is powered through that switched FET path, expect one reset when deferred writes are
   finally applied (after boot is already marked successful).
+
+TS1 thermistor notes:
+- Wire the thermistor directly between `TS1` and `VSS`.
+- Do not add an external pull-up on `TS1`; the BQ76922 biases the thermistor with its internal pull-up.
+- These boot writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`, just like current-limit writes.
 
 ## Autonomous Mode
 

@@ -79,11 +79,30 @@ constexpr uint16_t DM_OCC_DELAY = 0x9281;
 constexpr uint16_t DM_OCD1_THRESHOLD = 0x9282;
 constexpr uint16_t DM_OCD1_DELAY = 0x9283;
 constexpr uint16_t DM_PROTECTION_RECOVERY_TIME = 0x92AF;
+constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
 
 constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
+
+constexpr uint8_t TS_PIN_FXN_ADC_THERMISTOR = 0x03;
+constexpr uint8_t TS_OPT_PULLUP_18K = 0x00;
+constexpr uint8_t TS_OPT_PULLUP_180K = 0x01;
+constexpr uint8_t TS_OPT_POLYNOMIAL_18K = 0x00;
+constexpr uint8_t TS_OPT_POLYNOMIAL_180K = 0x01;
+constexpr uint8_t TS_OPT_MEASUREMENT_REPORT_ONLY = 0x02;
+
+const char *ts_pullup_to_string(bool pullup_180k) {
+  return pullup_180k ? "180k" : "18k";
+}
+
+uint8_t ts1_desired_config_value(bool pullup_180k) {
+  const uint8_t opt_pullup = pullup_180k ? TS_OPT_PULLUP_180K : TS_OPT_PULLUP_18K;
+  const uint8_t opt_polynomial = pullup_180k ? TS_OPT_POLYNOMIAL_180K : TS_OPT_POLYNOMIAL_18K;
+  const uint8_t opt = static_cast<uint8_t>((opt_pullup << 4) | (opt_polynomial << 2) | TS_OPT_MEASUREMENT_REPORT_ONLY);
+  return static_cast<uint8_t>((opt << 2) | TS_PIN_FXN_ADC_THERMISTOR);
+}
 }  // namespace
 
 void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
@@ -93,6 +112,9 @@ void BQ76922Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* se
 }
 
 void BQ76922Component::setup() {
+  if (!this->apply_ts1_config_()) {
+    this->status_set_warning();
+  }
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
@@ -351,6 +373,10 @@ void BQ76922Component::update() {
   this->status_clear_warning();
 }
 
+bool BQ76922Component::has_ts1_pin_config_() const {
+  return has_ts1_config_;
+}
+
 void BQ76922Component::dump_config() {
   ESP_LOGCONFIG(TAG, "BQ76922:");
   LOG_I2C_DEVICE(this);
@@ -605,6 +631,64 @@ bool BQ76922Component::set_cfgupdate_mode_(bool enabled) {
 
   ESP_LOGW(TAG, "Timed out waiting for CONFIG_UPDATE=%s", enabled ? "1" : "0");
   return false;
+}
+
+bool BQ76922Component::apply_ts1_config_() {
+  if (!this->has_ts1_pin_config_()) {
+    return true;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before TS1 configuration");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "TS1 configuration requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  uint8_t current = 0;
+  if (!this->read_data_memory_u8_(DM_TS1_CONFIG, current)) {
+    ESP_LOGW(TAG, "Failed to read TS1 config");
+    return false;
+  }
+
+  const uint8_t desired = ts1_desired_config_value(ts1_pullup_180k_);
+  ESP_LOGI(TAG, "TS1 config current=0x%02X desired=0x%02X", current, desired);
+  if (current == desired) {
+    return true;
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for TS1 configuration");
+    return false;
+  }
+
+  bool ok = true;
+  if (!this->write_data_memory_u8_(DM_TS1_CONFIG, desired)) {
+    ESP_LOGW(TAG, "Failed to write TS1 config");
+    ok = false;
+  } else {
+    ESP_LOGI(
+      TAG,
+      "Configured TS1 as thermistor input (%s pull-up, report-only)",
+      ts_pullup_to_string(ts1_pullup_180k_)
+    );
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after TS1 configuration");
+    ok = false;
+  }
+
+  return ok;
 }
 
 bool BQ76922Component::has_current_limit_config_() const {
