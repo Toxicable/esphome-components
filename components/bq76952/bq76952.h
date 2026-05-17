@@ -90,6 +90,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_current_sensor(sensor::Sensor* sensor) {
     current_sensor_ = sensor;
   }
+  void set_passed_charge_sensor(sensor::Sensor* sensor) {
+    passed_charge_sensor_ = sensor;
+  }
+  void set_passed_charge_time_sensor(sensor::Sensor* sensor) {
+    passed_charge_time_sensor_ = sensor;
+  }
   void set_die_temperature_sensor(sensor::Sensor* sensor) {
     die_temperature_sensor_ = sensor;
   }
@@ -162,6 +168,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool set_autonomous_fet_control(bool enabled);
   bool set_sleep_allowed(bool allowed);
   bool clear_alarm_latches();
+  bool reset_passed_charge_counter();
 
  protected:
   static constexpr uint8_t BOOT_PRESERVE = 0;
@@ -244,6 +251,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* ld_voltage_sensor_{nullptr};
   std::array<sensor::Sensor*, 16> cell_voltage_sensors_{};
   sensor::Sensor* current_sensor_{nullptr};
+  sensor::Sensor* passed_charge_sensor_{nullptr};
+  sensor::Sensor* passed_charge_time_sensor_{nullptr};
   sensor::Sensor* die_temperature_sensor_{nullptr};
   sensor::Sensor* ts1_temperature_sensor_{nullptr};
   sensor::Sensor* ts2_temperature_sensor_{nullptr};
@@ -285,6 +294,11 @@ class BQ76952SleepAllowedSwitch : public switch_::Switch, public Parented<BQ7695
 };
 
 class BQ76952ClearAlarmsButton : public button::Button, public Parented<BQ76952Component> {
+ protected:
+  void press_action() override;
+};
+
+class BQ76952ResetPassedChargeButton : public button::Button, public Parented<BQ76952Component> {
  protected:
   void press_action() override;
 };

@@ -40,6 +40,7 @@ constexpr uint16_t SUBCMD_FET_ENABLE = 0x0022;
 constexpr uint16_t SUBCMD_MANUFACTURING_STATUS = 0x0057;
 constexpr uint16_t SUBCMD_DASTATUS6 = 0x0076;
 constexpr uint16_t SUBCMD_DASTATUS7 = 0x0077;
+constexpr uint16_t SUBCMD_RESET_PASSQ = 0x0082;
 constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
 constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
 constexpr uint16_t SUBCMD_REG12_CONTROL = 0x0098;
@@ -129,6 +130,15 @@ uint8_t ts_desired_config_value(bool pullup_180k) {
 
 int32_t read_le_i32(const uint8_t* data) {
   return static_cast<int32_t>(
+    static_cast<uint32_t>(data[0]) |
+    (static_cast<uint32_t>(data[1]) << 8) |
+    (static_cast<uint32_t>(data[2]) << 16) |
+    (static_cast<uint32_t>(data[3]) << 24)
+  );
+}
+
+uint32_t read_le_u32(const uint8_t* data) {
+  return static_cast<uint32_t>(
     static_cast<uint32_t>(data[0]) |
     (static_cast<uint32_t>(data[1]) << 8) |
     (static_cast<uint32_t>(data[2]) << 16) |
@@ -392,6 +402,29 @@ void BQ76952Component::update() {
     }
     const float current_a = static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
     current_sensor_->publish_state(current_a);
+  }
+
+  if (passed_charge_sensor_ != nullptr || passed_charge_time_sensor_ != nullptr) {
+    uint8_t dastatus6[12]{};
+    if (!this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6))) {
+      ESP_LOGW(TAG, "Failed to read DASTATUS6 passed charge");
+      this->status_set_warning();
+      return;
+    }
+
+    const int32_t accum_user_ah_integer = read_le_i32(&dastatus6[0]);
+    const uint32_t accum_user_ah_fraction = read_le_u32(&dastatus6[4]);
+    const uint32_t accum_time_s = read_le_u32(&dastatus6[8]);
+    const double total_user_ah = static_cast<double>(accum_user_ah_integer) +
+                                 static_cast<double>(accum_user_ah_fraction) / 4294967296.0;
+    const double user_ah_to_ah = static_cast<double>(current_lsb_ua_) / 1000000.0;
+
+    if (passed_charge_sensor_ != nullptr) {
+      passed_charge_sensor_->publish_state(static_cast<float>(total_user_ah * user_ah_to_ah));
+    }
+    if (passed_charge_time_sensor_ != nullptr) {
+      passed_charge_time_sensor_->publish_state(static_cast<float>(accum_time_s));
+    }
   }
 
   if (die_temperature_sensor_ != nullptr) {
@@ -755,6 +788,15 @@ bool BQ76952Component::clear_alarm_latches() {
     return false;
   }
 
+  return true;
+}
+
+bool BQ76952Component::reset_passed_charge_counter() {
+  if (!this->write_subcommand_(SUBCMD_RESET_PASSQ)) {
+    ESP_LOGW(TAG, "Failed to send RESET_PASSQ subcommand");
+    return false;
+  }
+  delay_microseconds_safe(800);
   return true;
 }
 
@@ -1755,6 +1797,12 @@ void BQ76952SleepAllowedSwitch::write_state(bool state) {
 void BQ76952ClearAlarmsButton::press_action() {
   if (this->parent_ != nullptr) {
     this->parent_->clear_alarm_latches();
+  }
+}
+
+void BQ76952ResetPassedChargeButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->reset_passed_charge_counter();
   }
 }
 

@@ -11,6 +11,7 @@ from esphome.const import (
     STATE_CLASS_MEASUREMENT,
     UNIT_AMPERE,
     UNIT_CELSIUS,
+    UNIT_SECOND,
     UNIT_VOLT,
 )
 
@@ -23,6 +24,7 @@ BQ76952PowerPathSelect = bq76952_ns.class_("BQ76952PowerPathSelect", select.Sele
 BQ76952AutonomousFetSwitch = bq76952_ns.class_("BQ76952AutonomousFetSwitch", switch_.Switch)
 BQ76952SleepAllowedSwitch = bq76952_ns.class_("BQ76952SleepAllowedSwitch", switch_.Switch)
 BQ76952ClearAlarmsButton = bq76952_ns.class_("BQ76952ClearAlarmsButton", button.Button)
+BQ76952ResetPassedChargeButton = bq76952_ns.class_("BQ76952ResetPassedChargeButton", button.Button)
 
 CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
@@ -43,6 +45,8 @@ CONF_STACK_VOLTAGE = "stack_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
 CONF_LD_VOLTAGE = "ld_voltage"
 CONF_CURRENT = "current"
+CONF_PASSED_CHARGE = "passed_charge"
+CONF_PASSED_CHARGE_TIME = "passed_charge_time"
 CONF_DIE_TEMPERATURE = "die_temperature"
 CONF_TS1_TEMPERATURE = "ts1_temperature"
 CONF_TS2_TEMPERATURE = "ts2_temperature"
@@ -67,6 +71,7 @@ CONF_POWER_PATH = "power_path"
 CONF_AUTONOMOUS_FET_CONTROL = "autonomous_fet_control"
 CONF_SLEEP_ALLOWED_CONTROL = "sleep_allowed_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
+CONF_RESET_PASSED_CHARGE = "reset_passed_charge"
 
 CELL_VOLTAGE_KEYS = [f"cell{index}_voltage" for index in range(1, 17)]
 
@@ -147,6 +152,18 @@ schema = {
         device_class=DEVICE_CLASS_CURRENT,
         state_class=STATE_CLASS_MEASUREMENT,
     ),
+    cv.Optional(CONF_PASSED_CHARGE): sensor.sensor_schema(
+        unit_of_measurement="Ah",
+        accuracy_decimals=6,
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
+    cv.Optional(CONF_PASSED_CHARGE_TIME): sensor.sensor_schema(
+        unit_of_measurement=UNIT_SECOND,
+        accuracy_decimals=0,
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     cv.Optional(CONF_DIE_TEMPERATURE): sensor.sensor_schema(
         unit_of_measurement=UNIT_CELSIUS,
         accuracy_decimals=1,
@@ -226,6 +243,10 @@ schema = {
         BQ76952ClearAlarmsButton,
         entity_category=ENTITY_CATEGORY_CONFIG,
     ),
+    cv.Optional(CONF_RESET_PASSED_CHARGE): button.button_schema(
+        BQ76952ResetPassedChargeButton,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+    ),
 }
 
 for key in CELL_VOLTAGE_KEYS:
@@ -287,6 +308,12 @@ async def to_code(config):
     if CONF_CURRENT in config:
         sens = await sensor.new_sensor(config[CONF_CURRENT])
         cg.add(var.set_current_sensor(sens))
+    if CONF_PASSED_CHARGE in config:
+        sens = await sensor.new_sensor(config[CONF_PASSED_CHARGE])
+        cg.add(var.set_passed_charge_sensor(sens))
+    if CONF_PASSED_CHARGE_TIME in config:
+        sens = await sensor.new_sensor(config[CONF_PASSED_CHARGE_TIME])
+        cg.add(var.set_passed_charge_time_sensor(sens))
     if CONF_DIE_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_DIE_TEMPERATURE])
         cg.add(var.set_die_temperature_sensor(sens))
@@ -364,4 +391,7 @@ async def to_code(config):
 
     if CONF_CLEAR_ALARMS in config:
         btn = await button.new_button(config[CONF_CLEAR_ALARMS])
+        await cg.register_parented(btn, var)
+    if CONF_RESET_PASSED_CHARGE in config:
+        btn = await button.new_button(config[CONF_RESET_PASSED_CHARGE])
         await cg.register_parented(btn, var)

@@ -4,6 +4,7 @@ ESPHome external component for TI BQ76952 (3S to 16S packs over I2C).
 
 It provides:
 - core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature, TS1/TS2/TS3 temperatures)
+- accumulated passed-charge telemetry from the on-chip coulomb counter
 - battery/FET/alarm status entities
 - host controls for FET path, sleep-allow, and alarm-clear
 - startup policy options for autonomous FET control and sleep mode
@@ -89,6 +90,10 @@ bq76952:
   #   name: "Cell 16"
   # current:
   #   name: "Current"
+  # passed_charge:
+  #   name: "Passed Charge"
+  # passed_charge_time:
+  #   name: "Passed Charge Time"
   # die_temperature:
   #   name: "Die Temperature"
   # ts1_temperature:
@@ -140,6 +145,8 @@ bq76952:
   #   name: "Sleep Allowed Control"
   # clear_alarms:
   #   name: "Clear Alarms"
+  # reset_passed_charge:
+  #   name: "Reset Passed Charge"
 ```
 
 ## Config Options You’ll Likely Tune
@@ -158,10 +165,18 @@ bq76952:
 - `reg1_enabled`: enable the REG1 LDO output
 - `reg1_voltage`: set REG1 to `1.8V`, `2.5V`, `3.0V`, `3.3V`, or `5.0V`
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
+- `passed_charge`: accumulated coulomb-count total converted to amp-hours using the chip's configured user-current scale
+- `passed_charge_time`: integration interval reported by the chip in seconds
 - `ts1/ts2/ts3_temperature.pullup`: select `18k` or `180k` internal pull-up for the BQ thermistor bias
 
 Current and voltage scaling are automatically detected from the chip configuration.
 No manual unit settings are needed.
+
+Passed charge notes:
+- `passed_charge` reads `DASTATUS6` and reports the integrated passed charge in signed amp-hours.
+- `passed_charge_time` reports the same accumulator window in seconds.
+- `reset_passed_charge` sends the chip's `RESET_PASSQ()` subcommand to zero the integration state and restart timing.
+- The device reports passed charge in `userAh`, so this component converts through the detected `userA` scaling from `DA Configuration`.
 
 REG1 notes:
 - `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.
