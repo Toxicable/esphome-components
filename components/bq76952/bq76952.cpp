@@ -359,6 +359,9 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
+    if (temp_c < -40.0f || temp_c > 120.0f) {
+      ESP_LOGW(TAG, "TS1 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+    }
     ts1_temperature_sensor_->publish_state(temp_c);
   }
 
@@ -370,6 +373,9 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
+    if (temp_c < -40.0f || temp_c > 120.0f) {
+      ESP_LOGW(TAG, "TS2 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+    }
     ts2_temperature_sensor_->publish_state(temp_c);
   }
 
@@ -381,6 +387,9 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
+    if (temp_c < -40.0f || temp_c > 120.0f) {
+      ESP_LOGW(TAG, "TS3 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
+    }
     ts3_temperature_sensor_->publish_state(temp_c);
   }
 
@@ -726,6 +735,13 @@ bool BQ76952Component::apply_ts_pin_config_() {
     if (current_values[i] != desired_values[i]) {
       needs_update = true;
     }
+    ESP_LOGI(
+      TAG,
+      "%s pin config current=0x%02X desired=0x%02X",
+      configs[i].label,
+      current_values[i],
+      desired_values[i]
+    );
   }
 
   if (!needs_update) {
