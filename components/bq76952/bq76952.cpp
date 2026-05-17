@@ -94,6 +94,14 @@ constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
 const char* ts_pullup_to_string(bool pullup_180k) {
   return pullup_180k ? "180k" : "18k";
 }
+
+uint8_t ts_desired_config_value(bool pullup_180k) {
+  const uint8_t pullup_bits = pullup_180k ? 0x40 : 0x00;
+  const uint8_t polynomial_bits = pullup_180k ? 0x10 : 0x00;
+  const uint8_t measurement_bits = 0x08;  // Report-only thermistor measurement.
+  const uint8_t pin_function_bits = 0x03;  // ADC Input or Thermistor.
+  return pullup_bits | polynomial_bits | measurement_bits | pin_function_bits;
+}
 }  // namespace
 
 void BQ76952Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor) {
@@ -456,13 +464,64 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "TS2 Temperature", ts2_temperature_sensor_);
   LOG_SENSOR("  ", "TS3 Temperature", ts3_temperature_sensor_);
   if (has_ts1_config_) {
-    ESP_LOGCONFIG(TAG, "  TS1 config: thermistor, pullup=%s, measurement=report-only", ts_pullup_to_string(ts1_pullup_180k_));
+    uint8_t current = 0;
+    const uint8_t desired = ts_desired_config_value(ts1_pullup_180k_);
+    if (this->read_data_memory_u8_(DM_TS1_CONFIG, current)) {
+      ESP_LOGCONFIG(
+        TAG,
+        "  TS1 config: thermistor, pullup=%s, measurement=report-only, desired=0x%02X actual=0x%02X",
+        ts_pullup_to_string(ts1_pullup_180k_),
+        desired,
+        current
+      );
+    } else {
+      ESP_LOGCONFIG(
+        TAG,
+        "  TS1 config: thermistor, pullup=%s, measurement=report-only, desired=0x%02X actual=<read failed>",
+        ts_pullup_to_string(ts1_pullup_180k_),
+        desired
+      );
+    }
   }
   if (has_ts2_config_) {
-    ESP_LOGCONFIG(TAG, "  TS2 config: thermistor, pullup=%s, measurement=report-only", ts_pullup_to_string(ts2_pullup_180k_));
+    uint8_t current = 0;
+    const uint8_t desired = ts_desired_config_value(ts2_pullup_180k_);
+    if (this->read_data_memory_u8_(DM_TS2_CONFIG, current)) {
+      ESP_LOGCONFIG(
+        TAG,
+        "  TS2 config: thermistor, pullup=%s, measurement=report-only, desired=0x%02X actual=0x%02X",
+        ts_pullup_to_string(ts2_pullup_180k_),
+        desired,
+        current
+      );
+    } else {
+      ESP_LOGCONFIG(
+        TAG,
+        "  TS2 config: thermistor, pullup=%s, measurement=report-only, desired=0x%02X actual=<read failed>",
+        ts_pullup_to_string(ts2_pullup_180k_),
+        desired
+      );
+    }
   }
   if (has_ts3_config_) {
-    ESP_LOGCONFIG(TAG, "  TS3 config: thermistor, pullup=%s, measurement=report-only", ts_pullup_to_string(ts3_pullup_180k_));
+    uint8_t current = 0;
+    const uint8_t desired = ts_desired_config_value(ts3_pullup_180k_);
+    if (this->read_data_memory_u8_(DM_TS3_CONFIG, current)) {
+      ESP_LOGCONFIG(
+        TAG,
+        "  TS3 config: thermistor, pullup=%s, measurement=report-only, desired=0x%02X actual=0x%02X",
+        ts_pullup_to_string(ts3_pullup_180k_),
+        desired,
+        current
+      );
+    } else {
+      ESP_LOGCONFIG(
+        TAG,
+        "  TS3 config: thermistor, pullup=%s, measurement=report-only, desired=0x%02X actual=<read failed>",
+        ts_pullup_to_string(ts3_pullup_180k_),
+        desired
+      );
+    }
   }
 
   LOG_TEXT_SENSOR("  ", "Security State", security_state_sensor_);
