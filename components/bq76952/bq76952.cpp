@@ -1083,11 +1083,7 @@ bool BQ76952Component::apply_ts_pin_config_() {
       return false;
     }
 
-    const uint8_t pullup_bits = configs[i].pullup_180k ? 0x40 : 0x00;
-    const uint8_t polynomial_bits = configs[i].pullup_180k ? 0x10 : 0x00;
-    const uint8_t measurement_bits = 0x08;  // Report-only thermistor measurement.
-    const uint8_t pin_function_bits = 0x03;  // ADCIN/Thermistor function.
-    desired_values[i] = pullup_bits | polynomial_bits | measurement_bits | pin_function_bits;
+    desired_values[i] = ts_desired_config_value(configs[i].pullup_180k);
     if (current_values[i] != desired_values[i]) {
       needs_update = true;
     }
