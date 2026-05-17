@@ -807,15 +807,35 @@ bool BQ76952Component::write_data_memory_u8_(uint16_t address, uint8_t value) {
     return false;
   }
 
+  // Data memory writes are committed after the checksum/length word is processed.
+  // Give the device a moment to transfer the buffer into memory before verifying.
+  delay_microseconds_safe(2500);
+
   uint8_t verify = 0;
-  if (!this->read_subcommand_(address, &verify, 1)) {
+  if (!this->read_data_memory_u8_(address, verify)) {
     return false;
   }
   return verify == value;
 }
 
 bool BQ76952Component::read_data_memory_u8_(uint16_t address, uint8_t& value) {
-  return this->read_subcommand_(address, &value, 1);
+  if (!this->write_subcommand_(address)) {
+    return false;
+  }
+
+  // Allow the device to populate the transfer buffer for data-memory readback.
+  delay_microseconds_safe(2500);
+
+  uint8_t response_length = 0;
+  if (!this->read_byte_(0x61, response_length)) {
+    return false;
+  }
+  if (response_length < 5) {
+    ESP_LOGW(TAG, "Unexpected data-memory response length 0x%02X for address 0x%04X", response_length, address);
+    return false;
+  }
+
+  return this->read_byte_(REG_SUBCMD_DATA, value);
 }
 
 bool BQ76952Component::set_cfgupdate_mode_(bool enabled) {
