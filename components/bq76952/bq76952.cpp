@@ -233,17 +233,19 @@ void BQ76952Component::update() {
   }
 
   if (!cell_map_initialized_) {
-    std::array<uint8_t, 16> present_indices{};
-    uint8_t present_count = 0;
+    int8_t highest_present_index = -1;
     for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
       if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
-        present_indices[present_count++] = i;
+        highest_present_index = static_cast<int8_t>(i);
       }
     }
 
-    if (present_count >= cell_count_) {
+    if (highest_present_index >= 0) {
+      const uint8_t start_index = static_cast<uint8_t>(
+        std::max(0, highest_present_index + 1 - static_cast<int>(cell_count_))
+      );
       for (uint8_t i = 0; i < cell_count_; i++) {
-        cell_read_map_[i] = present_indices[i];
+        cell_read_map_[i] = start_index + i;
       }
     } else {
       for (uint8_t i = 0; i < cell_count_; i++) {

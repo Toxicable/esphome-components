@@ -23,6 +23,7 @@ i2c:
   frequency: 400kHz
 
 bq76952:
+  i2c_id: i2c_bus
 
   ## Number of cells in series (3 to 16):
   cell_count: 16
@@ -130,6 +131,7 @@ bq76952:
 
 ## Config Options You’ll Likely Tune
 
+- `i2c_id`: required whenever your ESPHome node defines more than one I2C bus
 - `cell_count`: match your physical stack (`3..16`)
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
@@ -145,6 +147,10 @@ Current and voltage scaling are automatically detected from the chip configurati
 No manual unit settings are needed.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
+
+Cell voltage entities are auto-aligned to a contiguous VC window ending at the highest populated cell-voltage
+command seen at startup. This lets reduced-cell-count packs wired near the top of the monitor input stack publish
+their highest configured cell sensor from the highest populated VC pair instead of a `0 V` lower unused command.
 
 `ts1_temperature` expects TS1 to be configured as a thermistor input. If TS1 is set to ADC input mode in the
 chip configuration, this command reports TS1 pin voltage instead of temperature.
