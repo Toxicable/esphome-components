@@ -8,10 +8,6 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
-#if defined(USE_ESP32) && defined(USE_OTA_ROLLBACK)
-#include <esp_ota_ops.h>
-#endif
-
 namespace esphome {
 namespace bq76952 {
 
@@ -166,16 +162,13 @@ void BQ76952Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if ((this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_()) &&
-      this->ota_pending_verify_()) {
+  if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_()) {
     this->regulator_config_deferred_ = this->has_regulator_config_();
     this->current_limit_config_deferred_ = this->has_current_limit_config_();
     this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
-    this->deferred_current_limit_log_ms_ = 0;
-    ESP_LOGW(
-      TAG,
-      "Deferring boot configuration writes while OTA image is pending verify (avoids rollback resets)"
-    );
+    this->deferred_boot_config_log_ms_ = 0;
+    this->deferred_boot_config_apply_ms_ = millis() + 10000;
+    ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
   } else {
     if (!this->apply_regulator_config_()) {
       this->status_set_warning();
@@ -194,14 +187,14 @@ void BQ76952Component::setup() {
 
 void BQ76952Component::update() {
   if (this->regulator_config_deferred_ || this->current_limit_config_deferred_ || this->ts_pin_config_deferred_) {
-    if (this->ota_pending_verify_()) {
-      const uint32_t now = millis();
-      if (now >= this->deferred_current_limit_log_ms_) {
-        ESP_LOGI(TAG, "Boot configuration writes still deferred: waiting for OTA boot to be marked successful");
-        this->deferred_current_limit_log_ms_ = now + 15000;
+    const uint32_t now = millis();
+    if (now < this->deferred_boot_config_apply_ms_) {
+      if (now >= this->deferred_boot_config_log_ms_) {
+        ESP_LOGI(TAG, "Boot configuration writes still deferred: waiting for 10s post-boot delay");
+        this->deferred_boot_config_log_ms_ = now + 15000;
       }
     } else {
-      ESP_LOGI(TAG, "OTA boot marked successful; applying deferred boot configuration writes");
+      ESP_LOGI(TAG, "10s post-boot delay elapsed; applying deferred boot configuration writes");
       if (this->regulator_config_deferred_ && !this->apply_regulator_config_()) {
         this->status_set_warning();
       }
@@ -862,23 +855,6 @@ bool BQ76952Component::has_ts_pin_config_() const {
   return has_ts1_config_ || has_ts2_config_ || has_ts3_config_;
 }
 
-bool BQ76952Component::ota_pending_verify_() const {
-#if defined(USE_ESP32) && defined(USE_OTA_ROLLBACK)
-  const esp_partition_t* running = esp_ota_get_running_partition();
-  if (running == nullptr) {
-    return false;
-  }
-
-  esp_ota_img_states_t ota_state = ESP_OTA_IMG_UNDEFINED;
-  if (esp_ota_get_state_partition(running, &ota_state) != ESP_OK) {
-    return false;
-  }
-  return ota_state == ESP_OTA_IMG_PENDING_VERIFY;
-#else
-  return false;
-#endif
-}
-
 bool BQ76952Component::apply_regulator_config_() {
   if (!this->has_regulator_config_()) {
     return true;
@@ -933,12 +909,16 @@ bool BQ76952Component::apply_regulator_config_() {
     }
   }
 
-  if (precheck_ok && target_reg12 == reg12 && target_reg0 == reg0) {
+  const bool reg0_reapply_requested = has_reg0_config_ && reg0_enabled_;
+  if (precheck_ok && target_reg12 == reg12 && target_reg0 == reg0 && !reg0_reapply_requested) {
     ESP_LOGI(TAG, "REG0/REG1 configuration already matches requested values; skipping CONFIG_UPDATE");
     return true;
   }
   if (!precheck_ok) {
     ESP_LOGW(TAG, "REG0/REG1 pre-check incomplete; proceeding with CONFIG_UPDATE");
+  } else if (reg0_reapply_requested && target_reg12 == reg12 && target_reg0 == reg0) {
+    ESP_LOGI(TAG, "REG0 requested on and config already matches; forcing reapply path for live regulator state");
+    reg0_changed = true;
   }
 
   if (!this->set_cfgupdate_mode_(true)) {

@@ -195,8 +195,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_current_limit_config_() const;
   bool has_regulator_config_() const;
   bool has_ts_pin_config_() const;
-  bool ota_pending_verify_() const;
-
   bool apply_boot_modes_();
   bool apply_regulator_config_();
   bool load_unit_scaling_();
@@ -243,7 +241,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool regulator_config_deferred_{false};
   bool current_limit_config_deferred_{false};
   bool ts_pin_config_deferred_{false};
-  uint32_t deferred_current_limit_log_ms_{0};
+  uint32_t deferred_boot_config_log_ms_{0};
+  uint32_t deferred_boot_config_apply_ms_{0};
   uint32_t ts_diag_log_ms_{0};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
