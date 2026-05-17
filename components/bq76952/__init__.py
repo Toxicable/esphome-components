@@ -26,6 +26,7 @@ BQ76952SleepAllowedSwitch = bq76952_ns.class_("BQ76952SleepAllowedSwitch", switc
 BQ76952ClearAlarmsButton = bq76952_ns.class_("BQ76952ClearAlarmsButton", button.Button)
 BQ76952ResetPassedChargeButton = bq76952_ns.class_("BQ76952ResetPassedChargeButton", button.Button)
 BQ76952ApplyConfigurationButton = bq76952_ns.class_("BQ76952ApplyConfigurationButton", button.Button)
+BQ76952ProgramFactoryOtpButton = bq76952_ns.class_("BQ76952ProgramFactoryOtpButton", button.Button)
 
 CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
@@ -75,6 +76,7 @@ CONF_SLEEP_ALLOWED_CONTROL = "sleep_allowed_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
 CONF_RESET_PASSED_CHARGE = "reset_passed_charge"
 CONF_APPLY_CONFIGURATION = "apply_configuration"
+CONF_PROGRAM_FACTORY_OTP = "program_factory_otp"
 
 CELL_VOLTAGE_KEYS = [f"cell{index}_voltage" for index in range(1, 17)]
 
@@ -255,6 +257,10 @@ schema = {
         BQ76952ApplyConfigurationButton,
         entity_category=ENTITY_CATEGORY_CONFIG,
     ),
+    cv.Optional(CONF_PROGRAM_FACTORY_OTP): button.button_schema(
+        BQ76952ProgramFactoryOtpButton,
+        entity_category=ENTITY_CATEGORY_CONFIG,
+    ),
 }
 
 for key in CELL_VOLTAGE_KEYS:
@@ -406,4 +412,7 @@ async def to_code(config):
         await cg.register_parented(btn, var)
     if CONF_APPLY_CONFIGURATION in config:
         btn = await button.new_button(config[CONF_APPLY_CONFIGURATION])
+        await cg.register_parented(btn, var)
+    if CONF_PROGRAM_FACTORY_OTP in config:
+        btn = await button.new_button(config[CONF_PROGRAM_FACTORY_OTP])
         await cg.register_parented(btn, var)

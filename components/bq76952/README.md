@@ -150,6 +150,8 @@ bq76952:
   #   name: "Reset Passed Charge"
   # apply_configuration:
   #   name: "Apply Configuration"
+  # program_factory_otp:
+  #   name: "Program Factory OTP"
 ```
 
 ## Config Options You’ll Likely Tune
@@ -159,6 +161,7 @@ bq76952:
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
 - `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
+- `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
 - `charge_current_limit_a`: charge overcurrent protection threshold
 - `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
@@ -190,6 +193,7 @@ REG1 notes:
 - These writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`.
 - Boot-time regulator, TS-pin, and current-limit writes are intentionally delayed by 10 seconds after startup when `apply_configuration_on_boot: true`.
 - If `apply_configuration_on_boot: false`, use the `apply_configuration` button to push regulator, TS-pin, current-limit, and boot-mode settings in one shot.
+- `program_factory_otp` is separate from `apply_configuration` because OTP writes are irreversible bit-programming operations.
 
 `bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
 
@@ -236,4 +240,26 @@ Use either approach:
 Important:
 - `FET_ENABLE()` is a toggle subcommand and requires `UNSEALED` or `FULLACCESS`.
 - If the device is `SEALED`, the component will not be able to change this bit.
-- For persistence across full resets/SHUTDOWN, program your desired behavior into OTP during manufacturing.
+- For persistence across full resets/SHUTDOWN, use `program_factory_otp` during manufacturing.
+
+## Factory OTP
+
+`program_factory_otp` is intended for one-time factory use.
+
+What it does:
+- applies the requested live configuration first
+- writes startup-default boot-mode bits for `autonomous_fet_mode` and `sleep_mode`
+- runs `OTP_WR_CHECK()`
+- runs `OTP_WRITE()`
+
+What persists after a full BQ power cycle:
+- regulator settings already written into data memory
+- TS pin config already written into data memory
+- current-limit data-memory settings
+- startup default for autonomous FET mode via `Mfg Status Init[FET_EN]`
+- startup default for sleep allow via `Power Config[SLEEP]`
+
+Caution:
+- OTP programming is not a normal runtime control path
+- OTP bits are one-way programmed and cannot be reverted back to `0`
+- run this only when the board is in its intended final factory configuration

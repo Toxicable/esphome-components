@@ -41,6 +41,8 @@ constexpr uint16_t SUBCMD_RESET = 0x0012;
 constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
 constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
 constexpr uint16_t SUBCMD_REG12_CONTROL = 0x0098;
+constexpr uint16_t SUBCMD_OTP_WR_CHECK = 0x00A0;
+constexpr uint16_t SUBCMD_OTP_WRITE = 0x00A1;
 constexpr uint16_t SUBCMD_DA_CONFIGURATION = 0x9303;
 constexpr uint16_t SUBCMD_DSG_PDSG_OFF = 0x0093;
 constexpr uint16_t SUBCMD_CHG_PCHG_OFF = 0x0094;
@@ -77,6 +79,7 @@ constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
+constexpr uint16_t DM_POWER_CONFIG = 0x9234;
 constexpr uint16_t DM_REG12_CONFIG = 0x9236;
 constexpr uint16_t DM_REG0_CONFIG = 0x9237;
 constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
@@ -89,14 +92,17 @@ constexpr uint16_t DM_OCC_DELAY = 0x9281;
 constexpr uint16_t DM_OCD1_THRESHOLD = 0x9282;
 constexpr uint16_t DM_OCD1_DELAY = 0x9283;
 constexpr uint16_t DM_PROTECTION_RECOVERY_TIME = 0x92AF;
+constexpr uint16_t DM_MFG_STATUS_INIT = 0x9343;
 
 constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
+constexpr uint16_t POWER_CONFIG_SLEEP = 1u << 8;
 constexpr uint8_t REG12_CONFIG_REG1V_MASK = 0x0E;
 constexpr uint8_t REG12_CONFIG_REG1_EN = 1u << 0;
 constexpr uint8_t REG0_CONFIG_REG0_EN = 1u << 0;
+constexpr uint16_t MFG_STATUS_INIT_FET_EN = 1u << 4;
 
 const char* ts_pullup_to_string(bool pullup_180k) {
   return pullup_180k ? "180k" : "18k";
@@ -812,6 +818,96 @@ bool BQ76952Component::reset_passed_charge_counter() {
   return true;
 }
 
+bool BQ76952Component::program_factory_otp_defaults() {
+  if (!this->apply_requested_configuration_()) {
+    ESP_LOGW(TAG, "Factory OTP programming aborted: failed to apply requested live configuration first");
+    return false;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before OTP programming");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "Factory OTP programming requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for factory OTP programming");
+    return false;
+  }
+
+  bool ok = this->apply_boot_mode_startup_defaults_();
+
+  uint8_t otp_check[3]{};
+  if (ok) {
+    if (!this->write_subcommand_(SUBCMD_OTP_WR_CHECK)) {
+      ESP_LOGW(TAG, "Failed to send OTP_WR_CHECK()");
+      ok = false;
+    } else if (!this->wait_subcommand_ready_(SUBCMD_OTP_WR_CHECK, 1000)) {
+      ESP_LOGW(TAG, "Timed out waiting for OTP_WR_CHECK()");
+      ok = false;
+    } else if (!this->read_bytes_(REG_SUBCMD_DATA, otp_check, sizeof(otp_check))) {
+      ESP_LOGW(TAG, "Failed to read OTP_WR_CHECK() result");
+      ok = false;
+    } else {
+      ESP_LOGI(
+        TAG,
+        "OTP_WR_CHECK result=0x%02X fail_addr=0x%04X",
+        otp_check[0],
+        static_cast<unsigned>(static_cast<uint16_t>(otp_check[1]) | (static_cast<uint16_t>(otp_check[2]) << 8))
+      );
+      if ((otp_check[0] & 0x80) == 0) {
+        ESP_LOGW(TAG, "OTP_WR_CHECK() reports programming not allowed");
+        ok = false;
+      }
+    }
+  }
+
+  uint8_t otp_write[3]{};
+  if (ok) {
+    if (!this->write_subcommand_(SUBCMD_OTP_WRITE)) {
+      ESP_LOGW(TAG, "Failed to send OTP_WRITE()");
+      ok = false;
+    } else if (!this->wait_subcommand_ready_(SUBCMD_OTP_WRITE, 1000)) {
+      ESP_LOGW(TAG, "Timed out waiting for OTP_WRITE()");
+      ok = false;
+    } else if (!this->read_bytes_(REG_SUBCMD_DATA, otp_write, sizeof(otp_write))) {
+      ESP_LOGW(TAG, "Failed to read OTP_WRITE() result");
+      ok = false;
+    } else {
+      ESP_LOGI(
+        TAG,
+        "OTP_WRITE result=0x%02X fail_addr=0x%04X",
+        otp_write[0],
+        static_cast<unsigned>(static_cast<uint16_t>(otp_write[1]) | (static_cast<uint16_t>(otp_write[2]) << 8))
+      );
+      if ((otp_write[0] & 0x80) == 0) {
+        ESP_LOGW(TAG, "OTP_WRITE() reports programming did not complete");
+        ok = false;
+      }
+    }
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after factory OTP programming");
+    ok = false;
+  }
+
+  if (!ok) {
+    this->status_set_warning();
+  }
+  return ok;
+}
+
 bool BQ76952Component::write_data_memory_u8_(uint16_t address, uint8_t value) {
   if (!this->write_subcommand_data_(address, &value, 1)) {
     return false;
@@ -848,6 +944,25 @@ bool BQ76952Component::read_data_memory_u8_(uint16_t address, uint8_t& value) {
   return this->read_byte_(REG_SUBCMD_DATA, value);
 }
 
+bool BQ76952Component::read_data_memory_u16_(uint16_t address, uint16_t& value) {
+  if (!this->write_subcommand_(address)) {
+    return false;
+  }
+
+  delay_microseconds_safe(2500);
+
+  uint8_t response_length = 0;
+  if (!this->read_byte_(0x61, response_length)) {
+    return false;
+  }
+  if (response_length < 6) {
+    ESP_LOGW(TAG, "Unexpected data-memory response length 0x%02X for address 0x%04X", response_length, address);
+    return false;
+  }
+
+  return this->read_u16_(REG_SUBCMD_DATA, value);
+}
+
 bool BQ76952Component::set_cfgupdate_mode_(bool enabled) {
   const uint16_t command = enabled ? SUBCMD_SET_CFGUPDATE : SUBCMD_EXIT_CFGUPDATE;
   if (!this->write_subcommand_(command)) {
@@ -870,6 +985,24 @@ bool BQ76952Component::set_cfgupdate_mode_(bool enabled) {
 
   ESP_LOGW(TAG, "Timed out waiting for CONFIG_UPDATE=%s", enabled ? "1" : "0");
   return false;
+}
+
+bool BQ76952Component::write_data_memory_u16_(uint16_t address, uint16_t value) {
+  const uint8_t payload[2] = {
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+  };
+  if (!this->write_subcommand_data_(address, payload, sizeof(payload))) {
+    return false;
+  }
+
+  delay_microseconds_safe(2500);
+
+  uint16_t verify = 0;
+  if (!this->read_data_memory_u16_(address, verify)) {
+    return false;
+  }
+  return verify == value;
 }
 
 bool BQ76952Component::has_current_limit_config_() const {
@@ -915,6 +1048,63 @@ bool BQ76952Component::apply_requested_configuration_() {
   if (!ok) {
     this->status_set_warning();
   }
+  return ok;
+}
+
+bool BQ76952Component::apply_boot_mode_startup_defaults_() {
+  bool ok = true;
+
+  if (sleep_mode_ != BOOT_PRESERVE) {
+    uint16_t power_config = 0;
+    if (!this->read_data_memory_u16_(DM_POWER_CONFIG, power_config)) {
+      ESP_LOGW(TAG, "Failed reading Power Config for startup-default update");
+      ok = false;
+    } else {
+      uint16_t updated = power_config;
+      if (sleep_mode_ == BOOT_ENABLE) {
+        updated = static_cast<uint16_t>(updated | POWER_CONFIG_SLEEP);
+      } else {
+        updated = static_cast<uint16_t>(updated & ~POWER_CONFIG_SLEEP);
+      }
+      if (updated != power_config) {
+        if (!this->write_data_memory_u16_(DM_POWER_CONFIG, updated)) {
+          ESP_LOGW(TAG, "Failed writing Power Config startup default");
+          ok = false;
+        } else {
+          ESP_LOGI(TAG, "Configured Power Config startup default: SLEEP=%s (0x%04X)", updated & POWER_CONFIG_SLEEP ? "on" : "off", updated);
+        }
+      }
+    }
+  }
+
+  if (autonomous_fet_mode_ != BOOT_PRESERVE) {
+    uint16_t mfg_status_init = 0;
+    if (!this->read_data_memory_u16_(DM_MFG_STATUS_INIT, mfg_status_init)) {
+      ESP_LOGW(TAG, "Failed reading Mfg Status Init for startup-default update");
+      ok = false;
+    } else {
+      uint16_t updated = mfg_status_init;
+      if (autonomous_fet_mode_ == BOOT_ENABLE) {
+        updated = static_cast<uint16_t>(updated | MFG_STATUS_INIT_FET_EN);
+      } else {
+        updated = static_cast<uint16_t>(updated & ~MFG_STATUS_INIT_FET_EN);
+      }
+      if (updated != mfg_status_init) {
+        if (!this->write_data_memory_u16_(DM_MFG_STATUS_INIT, updated)) {
+          ESP_LOGW(TAG, "Failed writing Mfg Status Init startup default");
+          ok = false;
+        } else {
+          ESP_LOGI(
+            TAG,
+            "Configured Mfg Status Init startup default: FET_EN=%s (0x%04X)",
+            updated & MFG_STATUS_INIT_FET_EN ? "on" : "off",
+            updated
+          );
+        }
+      }
+    }
+  }
+
   return ok;
 }
 
@@ -1922,6 +2112,12 @@ void BQ76952ResetPassedChargeButton::press_action() {
 void BQ76952ApplyConfigurationButton::press_action() {
   if (this->parent_ != nullptr) {
     this->parent_->apply_requested_configuration();
+  }
+}
+
+void BQ76952ProgramFactoryOtpButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->program_factory_otp_defaults();
   }
 }
 

@@ -173,6 +173,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool clear_alarm_latches();
   bool reset_passed_charge_counter();
   bool apply_requested_configuration();
+  bool program_factory_otp_defaults();
 
  protected:
   static constexpr uint8_t BOOT_PRESERVE = 0;
@@ -194,7 +195,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool read_subcommand_u16_(uint16_t subcommand, uint16_t& value);
   bool write_subcommand_data_(uint16_t subcommand, const uint8_t* data, size_t len);
   bool read_data_memory_u8_(uint16_t address, uint8_t& value);
+  bool read_data_memory_u16_(uint16_t address, uint16_t& value);
   bool write_data_memory_u8_(uint16_t address, uint8_t value);
+  bool write_data_memory_u16_(uint16_t address, uint16_t value);
   bool set_cfgupdate_mode_(bool enabled);
   bool has_current_limit_config_() const;
   bool has_regulator_config_() const;
@@ -202,6 +205,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_boot_mode_config_() const;
   bool apply_boot_modes_();
   bool apply_requested_configuration_();
+  bool apply_boot_mode_startup_defaults_();
   bool apply_regulator_config_();
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
@@ -310,6 +314,11 @@ class BQ76952ResetPassedChargeButton : public button::Button, public Parented<BQ
 };
 
 class BQ76952ApplyConfigurationButton : public button::Button, public Parented<BQ76952Component> {
+ protected:
+  void press_action() override;
+};
+
+class BQ76952ProgramFactoryOtpButton : public button::Button, public Parented<BQ76952Component> {
  protected:
   void press_action() override;
 };
