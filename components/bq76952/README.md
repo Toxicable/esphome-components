@@ -151,7 +151,7 @@ bq76952:
   # apply_configuration:
   #   name: "Apply Configuration"
   # program_factory_otp:
-  #   name: "Program Factory OTP"
+  #   name: "OTP Program Factory Defaults"
 ```
 
 ## Config Options You’ll Likely Tune
@@ -161,7 +161,7 @@ bq76952:
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
 - `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
-- `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage
+- `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage; exposed as a diagnostic/factory action rather than a normal config control
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
 - `charge_current_limit_a`: charge overcurrent protection threshold
 - `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
@@ -224,6 +224,10 @@ Current limit notes:
 - If requested values are already present in data memory, the component skips `CONFIG_UPDATE` and
   does not re-apply them.
 - This component now uses a fixed 10-second post-boot delay for automatic writes instead of waiting on OTA state.
+
+Control grouping:
+- The runtime controls (`power_path`, `autonomous_fet_control`, `sleep_allowed_control`, `clear_alarms`, `reset_passed_charge`, `apply_configuration`) are normal config entities.
+- `program_factory_otp` is intentionally separate and should be labeled with an `OTP` prefix because it is an irreversible factory-only action.
 
 ## Autonomous Mode
 

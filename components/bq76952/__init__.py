@@ -259,7 +259,7 @@ schema = {
     ),
     cv.Optional(CONF_PROGRAM_FACTORY_OTP): button.button_schema(
         BQ76952ProgramFactoryOtpButton,
-        entity_category=ENTITY_CATEGORY_CONFIG,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
 }
 

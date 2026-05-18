@@ -464,28 +464,6 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
-    if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
-      uint8_t dastatus6[32]{};
-      uint8_t dastatus7[16]{};
-      if (this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6)) &&
-          this->read_subcommand_(SUBCMD_DASTATUS7, dastatus7, sizeof(dastatus7))) {
-        const int32_t ts1_counts = read_le_i32(&dastatus6[24]);
-        const int32_t ts2_counts = read_le_i32(&dastatus6[28]);
-        const int32_t ts3_counts = read_le_i32(&dastatus7[0]);
-        ESP_LOGW(
-          TAG,
-          "TS1 raw=0x%04X interpreted=%.1fC counts(ts1=%" PRId32 ", ts2=%" PRId32 ", ts3=%" PRId32 ")",
-          static_cast<uint16_t>(temp_0p1k),
-          temp_c,
-          ts1_counts,
-          ts2_counts,
-          ts3_counts
-        );
-      } else {
-        ESP_LOGW(TAG, "TS1 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
-      }
-      this->ts_diag_log_ms_ = millis() + 15000;
-    }
     ts1_temperature_sensor_->publish_state(temp_c);
   }
 
@@ -497,10 +475,6 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
-    if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
-      ESP_LOGW(TAG, "TS2 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
-      this->ts_diag_log_ms_ = millis() + 15000;
-    }
     ts2_temperature_sensor_->publish_state(temp_c);
   }
 
@@ -512,10 +486,6 @@ void BQ76952Component::update() {
       return;
     }
     const float temp_c = static_cast<float>(temp_0p1k) / 10.0f - 273.15f;
-    if ((temp_c < -40.0f || temp_c > 120.0f) && millis() >= this->ts_diag_log_ms_) {
-      ESP_LOGW(TAG, "TS3 raw=0x%04X interpreted=%.1fC", static_cast<uint16_t>(temp_0p1k), temp_c);
-      this->ts_diag_log_ms_ = millis() + 15000;
-    }
     ts3_temperature_sensor_->publish_state(temp_c);
   }
 
@@ -1161,18 +1131,6 @@ bool BQ76952Component::apply_regulator_config_() {
     }
   }
 
-  if (precheck_ok) {
-    ESP_LOGI(
-      TAG,
-      "REG pre-check: security_state=%u current(REG12=0x%02X REG0=0x%02X) target(REG12=0x%02X REG0=0x%02X)",
-      static_cast<unsigned>(security_state),
-      reg12,
-      reg0,
-      target_reg12,
-      target_reg0
-    );
-  }
-
   const bool reg0_reapply_requested = has_reg0_config_ && reg0_enabled_;
   if (precheck_ok && target_reg12 == reg12 && target_reg0 == reg0 && !reg0_reapply_requested) {
     ESP_LOGI(TAG, "REG0/REG1 configuration already matches requested values; skipping CONFIG_UPDATE");
@@ -1198,10 +1156,6 @@ bool BQ76952Component::apply_regulator_config_() {
     ESP_LOGW(TAG, "Failed reading REG0 Config");
     ok = false;
   }
-  if (ok) {
-    ESP_LOGI(TAG, "REG in CONFIG_UPDATE readback: REG12=0x%02X REG0=0x%02X", reg12, reg0);
-  }
-
   if (ok) {
     target_reg12 = reg12;
     target_reg0 = reg0;
@@ -1233,7 +1187,6 @@ bool BQ76952Component::apply_regulator_config_() {
           ESP_LOGW(TAG, "Failed disabling REG1 before voltage update");
           ok = false;
         } else {
-          ESP_LOGI(TAG, "Staged REG12 disable before voltage change: REG12=0x%02X", staged_reg12);
           reg12 = staged_reg12;
         }
       }
@@ -1315,20 +1268,6 @@ bool BQ76952Component::apply_regulator_config_() {
     if (!this->write_subcommand_data_(SUBCMD_REG12_CONTROL, &runtime_reg12, 1)) {
       ESP_LOGW(TAG, "Failed sending REG12_CONTROL() after REG1 configuration");
       ok = false;
-    } else {
-      ESP_LOGI(TAG, "Sent REG12_CONTROL() with 0x%02X", runtime_reg12);
-    }
-  }
-
-  if (ok) {
-    delay_microseconds_safe(5000);
-    uint8_t reg12_final = 0;
-    uint8_t reg0_final = 0;
-    if (this->read_data_memory_u8_(DM_REG12_CONFIG, reg12_final) &&
-        this->read_data_memory_u8_(DM_REG0_CONFIG, reg0_final)) {
-      ESP_LOGI(TAG, "REG final readback: REG12=0x%02X REG0=0x%02X", reg12_final, reg0_final);
-    } else {
-      ESP_LOGI(TAG, "REG final readback failed");
     }
   }
 
@@ -1451,72 +1390,29 @@ bool BQ76952Component::apply_current_limit_config_() {
     return false;
   }
 
+  // OCC/OCD thresholds are stored as 2 mV steps across the sense resistor.
   uint8_t occ_threshold_code = 0;
   uint8_t ocd1_threshold_code = 0;
+  if (has_charge_current_limit_) {
+    occ_threshold_code = this->encode_current_threshold_code_(charge_current_limit_a_, 2, 62, "Charge");
+  }
+  if (has_discharge_current_limit_) {
+    ocd1_threshold_code =
+      this->encode_current_threshold_code_(discharge_current_limit_a_, 2, 100, "Discharge");
+  }
+
+  // Delay encoding uses roughly 3.3 ms steps with a +2 code offset.
   uint8_t occ_delay_code = 0;
   uint8_t ocd1_delay_code = 0;
-
-  if (has_charge_current_limit_) {
-    const float threshold_mv = charge_current_limit_a_ * sense_resistor_milliohm_;
-    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
-    const int raw_code = code;
-    if (code < 2) {
-      code = 2;
-    } else if (code > 62) {
-      code = 62;
-    }
-    occ_threshold_code = static_cast<uint8_t>(code);
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Charge current limit clipped to device range: code=%d", code);
-    }
-  }
-
-  if (has_discharge_current_limit_) {
-    const float threshold_mv = discharge_current_limit_a_ * sense_resistor_milliohm_;
-    int code = static_cast<int>(std::lround(threshold_mv / 2.0f));
-    const int raw_code = code;
-    if (code < 2) {
-      code = 2;
-    } else if (code > 100) {
-      code = 100;
-    }
-    ocd1_threshold_code = static_cast<uint8_t>(code);
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Discharge current limit clipped to device range: code=%d", code);
-    }
-  }
-
   if (has_charge_current_delay_) {
-    int code = static_cast<int>(std::lround(static_cast<float>(charge_current_delay_ms_) / 3.3f - 2.0f));
-    const int raw_code = code;
-    if (code < 1) {
-      code = 1;
-    } else if (code > 127) {
-      code = 127;
-    }
-    occ_delay_code = static_cast<uint8_t>(code);
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Charge current delay clipped to device range: code=%d", code);
-    }
+    occ_delay_code = this->encode_current_delay_code_(charge_current_delay_ms_, "Charge");
   }
-
   if (has_discharge_current_delay_) {
-    int code = static_cast<int>(std::lround(static_cast<float>(discharge_current_delay_ms_) / 3.3f - 2.0f));
-    const int raw_code = code;
-    if (code < 1) {
-      code = 1;
-    } else if (code > 127) {
-      code = 127;
-    }
-    ocd1_delay_code = static_cast<uint8_t>(code);
-    if (raw_code != code) {
-      ESP_LOGW(TAG, "Discharge current delay clipped to device range: code=%d", code);
-    }
+    ocd1_delay_code = this->encode_current_delay_code_(discharge_current_delay_ms_, "Discharge");
   }
 
   bool needs_write = false;
   bool precheck_ok = true;
-  uint8_t data = 0;
 
   uint8_t required_enabled_protections_bits = 0;
   if (has_charge_current_limit_) {
@@ -1527,75 +1423,49 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
 
   if (required_enabled_protections_bits != 0) {
-    if (!this->read_data_memory_u8_(DM_ENABLED_PROTECTIONS_A, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of Enabled Protections A");
-      precheck_ok = false;
-    } else if ((data & required_enabled_protections_bits) != required_enabled_protections_bits) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_mask_(
+      DM_ENABLED_PROTECTIONS_A, required_enabled_protections_bits, "Enabled Protections A", needs_write
+    );
   }
 
   if (!needs_write && has_charge_current_limit_) {
-    if (!this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of CHG FET Protections A");
-      precheck_ok = false;
-    } else if ((data & CHG_FET_PROTECTION_A_OCC) == 0) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_mask_(
+      DM_CHG_FET_PROTECTIONS_A, CHG_FET_PROTECTION_A_OCC, "CHG FET Protections A", needs_write
+    );
   }
 
   if (!needs_write && has_discharge_current_limit_) {
-    if (!this->read_data_memory_u8_(DM_DSG_FET_PROTECTIONS_A, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of DSG FET Protections A");
-      precheck_ok = false;
-    } else if ((data & DSG_FET_PROTECTION_A_OCD1) == 0) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_OCD1, "DSG FET Protections A", needs_write
+    );
   }
 
   if (!needs_write && has_charge_current_limit_) {
-    if (!this->read_data_memory_u8_(DM_OCC_THRESHOLD, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of OCC threshold");
-      precheck_ok = false;
-    } else if (data != occ_threshold_code) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_OCC_THRESHOLD, occ_threshold_code, "OCC threshold", needs_write
+    );
   }
 
   if (!needs_write && has_charge_current_delay_) {
-    if (!this->read_data_memory_u8_(DM_OCC_DELAY, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of OCC delay");
-      precheck_ok = false;
-    } else if (data != occ_delay_code) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_value_(DM_OCC_DELAY, occ_delay_code, "OCC delay", needs_write);
   }
 
   if (!needs_write && has_discharge_current_limit_) {
-    if (!this->read_data_memory_u8_(DM_OCD1_THRESHOLD, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of OCD1 threshold");
-      precheck_ok = false;
-    } else if (data != ocd1_threshold_code) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_OCD1_THRESHOLD, ocd1_threshold_code, "OCD1 threshold", needs_write
+    );
   }
 
   if (!needs_write && has_discharge_current_delay_) {
-    if (!this->read_data_memory_u8_(DM_OCD1_DELAY, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of OCD1 delay");
-      precheck_ok = false;
-    } else if (data != ocd1_delay_code) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_OCD1_DELAY, ocd1_delay_code, "OCD1 delay", needs_write
+    );
   }
 
   if (!needs_write && has_current_recovery_time_) {
-    if (!this->read_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, data)) {
-      ESP_LOGW(TAG, "Failed pre-check read of current recovery time");
-      precheck_ok = false;
-    } else if (data != current_recovery_time_s_) {
-      needs_write = true;
-    }
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_, "current recovery time", needs_write
+    );
   }
 
   if (precheck_ok && !needs_write) {
@@ -1624,101 +1494,57 @@ bool BQ76952Component::apply_current_limit_config_() {
   bool ok = true;
 
   if (has_charge_current_limit_ || has_discharge_current_limit_) {
-    uint8_t enabled_protections_a = 0;
-    if (!this->read_data_memory_u8_(DM_ENABLED_PROTECTIONS_A, enabled_protections_a)) {
-      ESP_LOGW(TAG, "Failed reading Enabled Protections A");
-      ok = false;
-    } else {
-      uint8_t required_bits = 0;
-      if (has_charge_current_limit_) {
-        required_bits |= PROTECTION_A_OCC;
-      }
-      if (has_discharge_current_limit_) {
-        required_bits |= PROTECTION_A_OCD1;
-      }
-
-      const uint8_t updated = static_cast<uint8_t>(enabled_protections_a | required_bits);
-      if (updated != enabled_protections_a) {
-        if (!this->write_data_memory_u8_(DM_ENABLED_PROTECTIONS_A, updated)) {
-          ESP_LOGW(TAG, "Failed writing Enabled Protections A");
-          ok = false;
-        } else {
-          ESP_LOGI(TAG, "Enabled OCC/OCD1 protections (Enabled Protections A=0x%02X)", updated);
-        }
-      }
-    }
+    this->ensure_data_memory_mask_(
+      DM_ENABLED_PROTECTIONS_A, required_enabled_protections_bits, "Enabled Protections A", ok
+    );
   }
 
   if (has_charge_current_limit_) {
-    uint8_t chg_fet_protections_a = 0;
-    if (!this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, chg_fet_protections_a)) {
-      ESP_LOGW(TAG, "Failed reading CHG FET Protections A");
-      ok = false;
-    } else {
-      const uint8_t updated = static_cast<uint8_t>(chg_fet_protections_a | CHG_FET_PROTECTION_A_OCC);
-      if (updated != chg_fet_protections_a) {
-        if (!this->write_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, updated)) {
-          ESP_LOGW(TAG, "Failed writing CHG FET Protections A");
-          ok = false;
-        } else {
-          ESP_LOGI(TAG, "Enabled CHG FET trip on OCC (CHG FET Protections A=0x%02X)", updated);
-        }
-      }
-    }
+    this->ensure_data_memory_mask_(
+      DM_CHG_FET_PROTECTIONS_A, CHG_FET_PROTECTION_A_OCC, "CHG FET Protections A", ok
+    );
   }
 
   if (has_discharge_current_limit_) {
-    uint8_t dsg_fet_protections_a = 0;
-    if (!this->read_data_memory_u8_(DM_DSG_FET_PROTECTIONS_A, dsg_fet_protections_a)) {
-      ESP_LOGW(TAG, "Failed reading DSG FET Protections A");
-      ok = false;
-    } else {
-      const uint8_t updated = static_cast<uint8_t>(dsg_fet_protections_a | DSG_FET_PROTECTION_A_OCD1);
-      if (updated != dsg_fet_protections_a) {
-        if (!this->write_data_memory_u8_(DM_DSG_FET_PROTECTIONS_A, updated)) {
-          ESP_LOGW(TAG, "Failed writing DSG FET Protections A");
-          ok = false;
-        } else {
-          ESP_LOGI(TAG, "Enabled DSG FET trip on OCD1 (DSG FET Protections A=0x%02X)", updated);
-        }
-      }
-    }
+    this->ensure_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_OCD1, "DSG FET Protections A", ok
+    );
   }
 
   if (has_charge_current_limit_) {
-    if (!this->read_data_memory_u8_(DM_OCC_THRESHOLD, data)) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCC_THRESHOLD, current)) {
       ESP_LOGW(TAG, "Failed reading OCC threshold");
       ok = false;
-    } else if (data != occ_threshold_code) {
-      if (!this->write_data_memory_u8_(DM_OCC_THRESHOLD, occ_threshold_code)) {
-        ESP_LOGW(TAG, "Failed writing OCC threshold");
-        ok = false;
-      } else {
+    } else {
+      const bool changed = current != occ_threshold_code;
+      this->write_data_memory_value_if_needed_(DM_OCC_THRESHOLD, occ_threshold_code, "OCC threshold", ok);
+      if (ok && changed) {
         ESP_LOGI(
           TAG,
-          "Configured charge current limit %.3f A (OCC code=%d)",
+          "Configured charge current limit %.3f A (OCC threshold code=%u)",
           charge_current_limit_a_,
-          static_cast<int>(occ_threshold_code)
+          static_cast<unsigned>(occ_threshold_code)
         );
       }
     }
   }
 
   if (has_charge_current_delay_) {
-    if (!this->read_data_memory_u8_(DM_OCC_DELAY, data)) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCC_DELAY, current)) {
       ESP_LOGW(TAG, "Failed reading OCC delay");
       ok = false;
-    } else if (data != occ_delay_code) {
-      if (!this->write_data_memory_u8_(DM_OCC_DELAY, occ_delay_code)) {
-        ESP_LOGW(TAG, "Failed writing OCC delay");
-        ok = false;
-      } else {
+    } else {
+      const bool changed = current != occ_delay_code;
+      this->write_data_memory_value_if_needed_(DM_OCC_DELAY, occ_delay_code, "OCC delay", ok);
+      if (ok && changed) {
         const float effective_ms = static_cast<float>(occ_delay_code + 2) * 3.3f;
         ESP_LOGI(
           TAG,
-          "Configured charge current delay %u ms (OCC code=%d, effective=%.1f ms)",
+          "Configured charge current delay %u ms (OCC delay code=%u, effective=%.1f ms)",
           static_cast<unsigned>(charge_current_delay_ms_),
-          static_cast<int>(occ_delay_code),
+          static_cast<unsigned>(occ_delay_code),
           effective_ms
         );
       }
@@ -1726,39 +1552,39 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
 
   if (has_discharge_current_limit_) {
-    if (!this->read_data_memory_u8_(DM_OCD1_THRESHOLD, data)) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCD1_THRESHOLD, current)) {
       ESP_LOGW(TAG, "Failed reading OCD1 threshold");
       ok = false;
-    } else if (data != ocd1_threshold_code) {
-      if (!this->write_data_memory_u8_(DM_OCD1_THRESHOLD, ocd1_threshold_code)) {
-        ESP_LOGW(TAG, "Failed writing OCD1 threshold");
-        ok = false;
-      } else {
+    } else {
+      const bool changed = current != ocd1_threshold_code;
+      this->write_data_memory_value_if_needed_(DM_OCD1_THRESHOLD, ocd1_threshold_code, "OCD1 threshold", ok);
+      if (ok && changed) {
         ESP_LOGI(
           TAG,
-          "Configured discharge current limit %.3f A (OCD1 code=%d)",
+          "Configured discharge current limit %.3f A (OCD1 threshold code=%u)",
           discharge_current_limit_a_,
-          static_cast<int>(ocd1_threshold_code)
+          static_cast<unsigned>(ocd1_threshold_code)
         );
       }
     }
   }
 
   if (has_discharge_current_delay_) {
-    if (!this->read_data_memory_u8_(DM_OCD1_DELAY, data)) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCD1_DELAY, current)) {
       ESP_LOGW(TAG, "Failed reading OCD1 delay");
       ok = false;
-    } else if (data != ocd1_delay_code) {
-      if (!this->write_data_memory_u8_(DM_OCD1_DELAY, ocd1_delay_code)) {
-        ESP_LOGW(TAG, "Failed writing OCD1 delay");
-        ok = false;
-      } else {
+    } else {
+      const bool changed = current != ocd1_delay_code;
+      this->write_data_memory_value_if_needed_(DM_OCD1_DELAY, ocd1_delay_code, "OCD1 delay", ok);
+      if (ok && changed) {
         const float effective_ms = static_cast<float>(ocd1_delay_code + 2) * 3.3f;
         ESP_LOGI(
           TAG,
-          "Configured discharge current delay %u ms (OCD1 code=%d, effective=%.1f ms)",
+          "Configured discharge current delay %u ms (OCD1 delay code=%u, effective=%.1f ms)",
           static_cast<unsigned>(discharge_current_delay_ms_),
-          static_cast<int>(ocd1_delay_code),
+          static_cast<unsigned>(ocd1_delay_code),
           effective_ms
         );
       }
@@ -1766,14 +1592,16 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
 
   if (has_current_recovery_time_) {
-    if (!this->read_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, data)) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, current)) {
       ESP_LOGW(TAG, "Failed reading current recovery time");
       ok = false;
-    } else if (data != current_recovery_time_s_) {
-      if (!this->write_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_)) {
-        ESP_LOGW(TAG, "Failed writing current recovery time");
-        ok = false;
-      } else {
+    } else {
+      const bool changed = current != current_recovery_time_s_;
+      this->write_data_memory_value_if_needed_(
+        DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_, "current recovery time", ok
+      );
+      if (ok && changed) {
         ESP_LOGI(
           TAG, "Configured current recovery time %u s", static_cast<unsigned>(current_recovery_time_s_)
         );
@@ -1787,6 +1615,109 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
 
   return ok;
+}
+
+uint8_t BQ76952Component::encode_current_threshold_code_(
+  float current_a, uint8_t min_code, uint8_t max_code, const char* label
+) {
+  const float threshold_mv = current_a * sense_resistor_milliohm_;
+  const int raw_code = static_cast<int>(std::lround(threshold_mv / 2.0f));
+  int clamped_code = raw_code;
+  if (clamped_code < min_code) {
+    clamped_code = min_code;
+  } else if (clamped_code > max_code) {
+    clamped_code = max_code;
+  }
+  if (clamped_code != raw_code) {
+    ESP_LOGW(TAG, "%s current limit clipped to device range: code=%d", label, clamped_code);
+  }
+  return static_cast<uint8_t>(clamped_code);
+}
+
+uint8_t BQ76952Component::encode_current_delay_code_(uint16_t delay_ms, const char* label) {
+  const int raw_code = static_cast<int>(std::lround(static_cast<float>(delay_ms) / 3.3f - 2.0f));
+  int clamped_code = raw_code;
+  if (clamped_code < 1) {
+    clamped_code = 1;
+  } else if (clamped_code > 127) {
+    clamped_code = 127;
+  }
+  if (clamped_code != raw_code) {
+    ESP_LOGW(TAG, "%s current delay clipped to device range: code=%d", label, clamped_code);
+  }
+  return static_cast<uint8_t>(clamped_code);
+}
+
+bool BQ76952Component::precheck_data_memory_mask_(
+  uint16_t address, uint8_t required_bits, const char* label, bool& needs_write
+) {
+  uint8_t value = 0;
+  if (!this->read_data_memory_u8_(address, value)) {
+    ESP_LOGW(TAG, "Failed pre-check read of %s", label);
+    return false;
+  }
+  if ((value & required_bits) != required_bits) {
+    needs_write = true;
+  }
+  return true;
+}
+
+bool BQ76952Component::precheck_data_memory_value_(
+  uint16_t address, uint8_t desired_value, const char* label, bool& needs_write
+) {
+  uint8_t value = 0;
+  if (!this->read_data_memory_u8_(address, value)) {
+    ESP_LOGW(TAG, "Failed pre-check read of %s", label);
+    return false;
+  }
+  if (value != desired_value) {
+    needs_write = true;
+  }
+  return true;
+}
+
+bool BQ76952Component::ensure_data_memory_mask_(
+  uint16_t address, uint8_t required_bits, const char* label, bool& ok
+) {
+  uint8_t current = 0;
+  if (!this->read_data_memory_u8_(address, current)) {
+    ESP_LOGW(TAG, "Failed reading %s", label);
+    ok = false;
+    return false;
+  }
+
+  const uint8_t updated = static_cast<uint8_t>(current | required_bits);
+  if (updated == current) {
+    return true;
+  }
+  if (!this->write_data_memory_u8_(address, updated)) {
+    ESP_LOGW(TAG, "Failed writing %s", label);
+    ok = false;
+    return false;
+  }
+
+  ESP_LOGI(TAG, "Updated %s to 0x%02X", label, updated);
+  return true;
+}
+
+bool BQ76952Component::write_data_memory_value_if_needed_(
+  uint16_t address, uint8_t desired_value, const char* label, bool& ok
+) {
+  uint8_t current = 0;
+  if (!this->read_data_memory_u8_(address, current)) {
+    ESP_LOGW(TAG, "Failed reading %s", label);
+    ok = false;
+    return false;
+  }
+  if (current == desired_value) {
+    return true;
+  }
+  if (!this->write_data_memory_u8_(address, desired_value)) {
+    ESP_LOGW(TAG, "Failed writing %s", label);
+    ok = false;
+    return false;
+  }
+  return true;
 }
 
 bool BQ76952Component::read_byte_(uint8_t reg, uint8_t& value) {

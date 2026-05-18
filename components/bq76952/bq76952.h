@@ -210,6 +210,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
   bool apply_current_limit_config_();
+  uint8_t encode_current_threshold_code_(float current_a, uint8_t min_code, uint8_t max_code, const char* label);
+  uint8_t encode_current_delay_code_(uint16_t delay_ms, const char* label);
+  bool precheck_data_memory_mask_(uint16_t address, uint8_t required_bits, const char* label, bool& needs_write);
+  bool precheck_data_memory_value_(uint16_t address, uint8_t desired_value, const char* label, bool& needs_write);
+  bool ensure_data_memory_mask_(uint16_t address, uint8_t required_bits, const char* label, bool& ok);
+  bool write_data_memory_value_if_needed_(uint16_t address, uint8_t desired_value, const char* label, bool& ok);
 
   const char* security_state_to_string_(uint16_t battery_status) const;
   const char* operating_mode_to_string_(uint16_t battery_status, uint16_t control_status) const;
@@ -254,7 +260,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool ts_pin_config_deferred_{false};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
-  uint32_t ts_diag_log_ms_{0};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};
