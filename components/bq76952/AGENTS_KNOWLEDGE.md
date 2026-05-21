@@ -27,3 +27,4 @@ Component-scoped notes for `components/bq76952`.
 - `alarm_flags` is derived from the latched `0x62 Alarm Status`; `safety_status_flags` is the live decoded cause from `0x03/0x05/0x07 Safety Status A/B/C`.
 - `predischarge_enabled` writes `Settings:FET:FET Options (0x9308)[PDSG_EN]`; `pdsg_fet_on` reads `FET Status (0x7F)[PDSG_FET]`.
 - `fet_status_flags` decodes the full live `FET Status (0x7F)` register, including `DDSG_PIN` and `DCHG_PIN`, which is useful when debugging why PDSG/DSG or CHG/PCHG are being held off.
+- `event_logging` emits an edge-triggered INFO log whenever `FET Status`, `Alarm Status`, `Safety Status`, or `Battery Status[SS/PF]` changes, and snapshots PACK/LD/current at that moment.

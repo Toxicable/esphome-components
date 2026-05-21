@@ -68,6 +68,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     predischarge_enabled_ = value;
     has_predischarge_setting_ = true;
   }
+  void set_event_logging(bool value) {
+    event_logging_ = value;
+  }
   void set_apply_configuration_on_boot(bool value) {
     apply_configuration_on_boot_ = value;
   }
@@ -231,6 +234,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool apply_ts_pin_config_();
   bool apply_predischarge_config_();
   bool apply_current_limit_config_();
+  void maybe_log_event_(uint16_t battery_status, uint8_t fet_status, uint16_t alarm_status, bool have_alarm_status,
+                        uint8_t safety_status_a, uint8_t safety_status_b, uint8_t safety_status_c,
+                        bool have_safety_status);
   uint8_t encode_current_threshold_code_(float current_a, uint8_t min_code, uint8_t max_code, const char* label);
   uint8_t encode_current_delay_code_(uint16_t delay_ms, const char* label);
   bool precheck_data_memory_mask_(uint16_t address, uint8_t required_bits, const char* label, bool& needs_write);
@@ -277,6 +283,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool ts3_pullup_180k_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
+  bool event_logging_{false};
   bool apply_configuration_on_boot_{true};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool cell_map_initialized_{false};
@@ -284,6 +291,13 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool current_limit_config_deferred_{false};
   bool ts_pin_config_deferred_{false};
   bool predischarge_config_deferred_{false};
+  bool event_log_initialized_{false};
+  uint8_t last_fet_status_{0};
+  uint16_t last_alarm_status_{0};
+  uint8_t last_safety_status_a_{0};
+  uint8_t last_safety_status_b_{0};
+  uint8_t last_safety_status_c_{0};
+  uint16_t last_battery_status_fault_bits_{0};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
 

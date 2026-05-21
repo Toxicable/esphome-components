@@ -33,6 +33,7 @@ bq76952:
   ## preserve = don't change device state on boot
   ## enable/disable send startup subcommands
   # apply_configuration_on_boot: false
+  # event_logging: true
   autonomous_fet_mode: preserve
   sleep_mode: preserve
 
@@ -171,6 +172,7 @@ bq76952:
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
 - `predischarge_enabled`: boot-time setting for `Settings:FET:FET Options[PDSG_EN]` so the chip can turn on PDSG before DSG
+- `event_logging`: emit an `INFO` log line whenever live FET/fault state changes, including a PACK/LD/current snapshot
 - `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
 - `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage; exposed as a diagnostic/factory action rather than a normal config control
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds

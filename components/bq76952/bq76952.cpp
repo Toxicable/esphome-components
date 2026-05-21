@@ -250,6 +250,10 @@ void BQ76952Component::update() {
   uint16_t control_status = 0;
   uint16_t battery_status = 0;
   uint8_t fet_status = 0;
+  uint16_t alarm_status = 0;
+  uint8_t safety_status_a = 0;
+  uint8_t safety_status_b = 0;
+  uint8_t safety_status_c = 0;
 
   if (!this->read_u16_(REG_CONTROL_STATUS, control_status)) {
     ESP_LOGW(TAG, "Failed to read Control Status");
@@ -325,19 +329,19 @@ void BQ76952Component::update() {
     fet_status_flags_sensor_->publish_state(this->fet_status_flags_to_string_(fet_status));
   }
 
-  if (alarm_flags_sensor_ != nullptr) {
-    uint16_t alarm_status = 0;
+  const bool need_alarm_status = alarm_flags_sensor_ != nullptr || event_logging_;
+  if (need_alarm_status) {
     if (!this->read_u16_(REG_ALARM_STATUS, alarm_status)) {
       ESP_LOGW(TAG, "Failed to read Alarm Status");
       this->status_set_warning();
       return;
     }
+  }
+  if (alarm_flags_sensor_ != nullptr) {
     alarm_flags_sensor_->publish_state(this->alarm_flags_to_string_(alarm_status));
   }
-  if (safety_status_flags_sensor_ != nullptr) {
-    uint8_t safety_status_a = 0;
-    uint8_t safety_status_b = 0;
-    uint8_t safety_status_c = 0;
+  const bool need_safety_status = safety_status_flags_sensor_ != nullptr || event_logging_;
+  if (need_safety_status) {
     if (!this->read_byte_(REG_SAFETY_STATUS_A, safety_status_a) ||
         !this->read_byte_(REG_SAFETY_STATUS_B, safety_status_b) ||
         !this->read_byte_(REG_SAFETY_STATUS_C, safety_status_c)) {
@@ -345,10 +349,16 @@ void BQ76952Component::update() {
       this->status_set_warning();
       return;
     }
+  }
+  if (safety_status_flags_sensor_ != nullptr) {
     safety_status_flags_sensor_->publish_state(
       this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
     );
   }
+  this->maybe_log_event_(
+    battery_status, fet_status, alarm_status, need_alarm_status, safety_status_a, safety_status_b, safety_status_c,
+    need_safety_status
+  );
 
   if (autonomous_fet_enabled_binary_sensor_ != nullptr || autonomous_fet_switch_ != nullptr) {
     uint16_t manufacturing_status = 0;
@@ -564,6 +574,7 @@ void BQ76952Component::dump_config() {
   if (has_predischarge_setting_) {
     ESP_LOGCONFIG(TAG, "  predischarge_enabled: %s", YESNO(predischarge_enabled_));
   }
+  ESP_LOGCONFIG(TAG, "  event_logging: %s", YESNO(event_logging_));
   if (has_reg0_config_) {
     ESP_LOGCONFIG(TAG, "  reg0_enabled: %s", YESNO(reg0_enabled_));
   }
@@ -1734,6 +1745,73 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
 
   return ok;
+}
+
+void BQ76952Component::maybe_log_event_(uint16_t battery_status, uint8_t fet_status, uint16_t alarm_status,
+                                        bool have_alarm_status, uint8_t safety_status_a, uint8_t safety_status_b,
+                                        uint8_t safety_status_c, bool have_safety_status) {
+  if (!event_logging_) {
+    return;
+  }
+
+  const uint16_t battery_fault_bits = static_cast<uint16_t>(battery_status & (BATTERY_STATUS_SS | BATTERY_STATUS_PF));
+  const bool changed = !event_log_initialized_ || fet_status != last_fet_status_ ||
+                       battery_fault_bits != last_battery_status_fault_bits_ ||
+                       (have_alarm_status && alarm_status != last_alarm_status_) ||
+                       (have_safety_status &&
+                        (safety_status_a != last_safety_status_a_ || safety_status_b != last_safety_status_b_ ||
+                         safety_status_c != last_safety_status_c_));
+
+  if (!changed) {
+    return;
+  }
+
+  last_fet_status_ = fet_status;
+  last_battery_status_fault_bits_ = battery_fault_bits;
+  if (have_alarm_status) {
+    last_alarm_status_ = alarm_status;
+  }
+  if (have_safety_status) {
+    last_safety_status_a_ = safety_status_a;
+    last_safety_status_b_ = safety_status_b;
+    last_safety_status_c_ = safety_status_c;
+  }
+  event_log_initialized_ = true;
+
+  float pack_v = NAN;
+  float ld_v = NAN;
+  float current_a = NAN;
+
+  int16_t pack_raw = 0;
+  if (this->read_i16_(REG_PACK_VOLTAGE, pack_raw)) {
+    pack_v = user_volts_cv_ ? (static_cast<float>(pack_raw) / 100.0f) : (static_cast<float>(pack_raw) / 1000.0f);
+  }
+  int16_t ld_raw = 0;
+  if (this->read_i16_(REG_LD_VOLTAGE, ld_raw)) {
+    ld_v = user_volts_cv_ ? (static_cast<float>(ld_raw) / 100.0f) : (static_cast<float>(ld_raw) / 1000.0f);
+  }
+  int16_t cc2 = 0;
+  if (this->read_i16_(REG_CC2_CURRENT, cc2)) {
+    current_a = static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
+  }
+
+  const std::string fet_flags = this->fet_status_flags_to_string_(fet_status);
+  const std::string alarm_flags = have_alarm_status ? this->alarm_flags_to_string_(alarm_status) : "unread";
+  const std::string safety_flags = have_safety_status
+                                     ? this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
+                                     : "unread";
+  ESP_LOGI(
+    TAG,
+    "Event: fet=%s safety=%s alarm=%s ss=%u pf=%u pack=%.3fV ld=%.3fV current=%.3fA",
+    fet_flags.c_str(),
+    safety_flags.c_str(),
+    alarm_flags.c_str(),
+    (battery_status & BATTERY_STATUS_SS) ? 1 : 0,
+    (battery_status & BATTERY_STATUS_PF) ? 1 : 0,
+    static_cast<double>(pack_v),
+    static_cast<double>(ld_v),
+    static_cast<double>(current_a)
+  );
 }
 
 uint8_t BQ76952Component::encode_current_threshold_code_(
