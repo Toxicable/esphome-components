@@ -136,6 +136,8 @@ bq76952:
   #   name: "CHG FET"
   # dsg_fet_on:
   #   name: "DSG FET"
+  # pdsg_fet_on:
+  #   name: "PDSG FET"
   # autonomous_fet_enabled:
   #   name: "Autonomous FET"
 
@@ -162,6 +164,7 @@ bq76952:
 - `cell_count`: match your physical stack (`3..16`)
 - `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
 - `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
+- `predischarge_enabled`: boot-time setting for `Settings:FET:FET Options[PDSG_EN]` so the chip can turn on PDSG before DSG
 - `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
 - `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage; exposed as a diagnostic/factory action rather than a normal config control
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
@@ -190,6 +193,7 @@ Passed charge notes:
 Diagnostic notes:
 - `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.
 - `safety_status_flags` is the live decoded protection cause from `Safety Status A/B/C (0x03/0x05/0x07)`, for example `ocd1`, `scd`, `cuv`, `otd`, or `hwdf`.
+- `pdsg_fet_on` shows whether the predischarge PFET is currently being driven during a load bring-up event.
 
 REG1 notes:
 - `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.

@@ -75,6 +75,7 @@ constexpr uint16_t ALARM_STATUS_ADSCAN = 1u << 1;
 constexpr uint16_t ALARM_STATUS_WAKE = 1u << 0;
 
 constexpr uint8_t FET_STATUS_ALRT_PIN = 1u << 6;
+constexpr uint8_t FET_STATUS_PDSG = 1u << 3;
 constexpr uint8_t FET_STATUS_DSG = 1u << 2;
 constexpr uint8_t FET_STATUS_CHG = 1u << 0;
 
@@ -82,6 +83,7 @@ constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
+constexpr uint16_t DM_FET_OPTIONS = 0x9308;
 constexpr uint16_t DM_POWER_CONFIG = 0x9234;
 constexpr uint16_t DM_REG12_CONFIG = 0x9236;
 constexpr uint16_t DM_REG0_CONFIG = 0x9237;
@@ -99,6 +101,7 @@ constexpr uint16_t DM_MFG_STATUS_INIT = 0x9343;
 
 constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
+constexpr uint8_t FET_OPTIONS_PDSG_EN = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint16_t POWER_CONFIG_SLEEP = 1u << 8;
@@ -172,7 +175,8 @@ void BQ76952Component::setup() {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
   if (this->apply_configuration_on_boot_) {
-    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_()) {
+    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+        this->has_predischarge_config_()) {
       this->regulator_config_deferred_ = this->has_regulator_config_();
       this->current_limit_config_deferred_ = this->has_current_limit_config_();
       this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
@@ -184,6 +188,9 @@ void BQ76952Component::setup() {
         this->status_set_warning();
       }
       if (!this->apply_ts_pin_config_()) {
+        this->status_set_warning();
+      }
+      if (!this->apply_predischarge_config_()) {
         this->status_set_warning();
       }
       if (!this->apply_current_limit_config_()) {
@@ -198,6 +205,7 @@ void BQ76952Component::setup() {
     this->current_limit_config_deferred_ = false;
     this->ts_pin_config_deferred_ = false;
     if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+        this->has_predischarge_config_() ||
         this->has_boot_mode_config_()) {
       ESP_LOGI(TAG, "Boot auto-apply disabled; use the Apply Configuration button to push requested settings");
     }
@@ -218,6 +226,9 @@ void BQ76952Component::update() {
         this->status_set_warning();
       }
       if (this->ts_pin_config_deferred_ && !this->apply_ts_pin_config_()) {
+        this->status_set_warning();
+      }
+      if (!this->apply_predischarge_config_()) {
         this->status_set_warning();
       }
       if (!this->apply_current_limit_config_()) {
@@ -293,6 +304,9 @@ void BQ76952Component::update() {
   }
   if (dsg_fet_on_binary_sensor_ != nullptr) {
     dsg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_DSG) != 0);
+  }
+  if (pdsg_fet_on_binary_sensor_ != nullptr) {
+    pdsg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_PDSG) != 0);
   }
 
   if (alarm_flags_sensor_ != nullptr) {
@@ -531,6 +545,9 @@ void BQ76952Component::dump_config() {
   if (has_current_recovery_time_) {
     ESP_LOGCONFIG(TAG, "  current_recovery_time_s: %u", static_cast<unsigned>(current_recovery_time_s_));
   }
+  if (has_predischarge_setting_) {
+    ESP_LOGCONFIG(TAG, "  predischarge_enabled: %s", YESNO(predischarge_enabled_));
+  }
   if (has_reg0_config_) {
     ESP_LOGCONFIG(TAG, "  reg0_enabled: %s", YESNO(reg0_enabled_));
   }
@@ -646,6 +663,7 @@ void BQ76952Component::dump_config() {
   LOG_BINARY_SENSOR("  ", "Alert Pin", alert_pin_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "CHG FET On", chg_fet_on_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "DSG FET On", dsg_fet_on_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "PDSG FET On", pdsg_fet_on_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Autonomous FET Enabled", autonomous_fet_enabled_binary_sensor_);
 
   LOG_SELECT("  ", "Power Path", power_path_select_);
@@ -1007,6 +1025,10 @@ bool BQ76952Component::has_ts_pin_config_() const {
   return has_ts1_config_ || has_ts2_config_ || has_ts3_config_;
 }
 
+bool BQ76952Component::has_predischarge_config_() const {
+  return has_predischarge_setting_;
+}
+
 bool BQ76952Component::has_boot_mode_config_() const {
   return autonomous_fet_mode_ != BOOT_PRESERVE || sleep_mode_ != BOOT_PRESERVE;
 }
@@ -1025,6 +1047,9 @@ bool BQ76952Component::apply_requested_configuration_() {
     ok = false;
   }
   if (!this->apply_ts_pin_config_()) {
+    ok = false;
+  }
+  if (!this->apply_predischarge_config_()) {
     ok = false;
   }
   if (!this->apply_current_limit_config_()) {
@@ -1382,6 +1407,61 @@ bool BQ76952Component::apply_ts_pin_config_() {
 
   if (!this->set_cfgupdate_mode_(false)) {
     ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after TS pin configuration");
+    ok = false;
+  }
+
+  return ok;
+}
+
+bool BQ76952Component::apply_predischarge_config_() {
+  if (!this->has_predischarge_config_()) {
+    return true;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before predischarge configuration");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "Predischarge configuration requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  uint8_t current = 0;
+  if (!this->read_data_memory_u8_(DM_FET_OPTIONS, current)) {
+    ESP_LOGW(TAG, "Failed reading FET Options before predischarge configuration");
+    return false;
+  }
+
+  const uint8_t desired = predischarge_enabled_ ? static_cast<uint8_t>(current | FET_OPTIONS_PDSG_EN)
+                                                : static_cast<uint8_t>(current & ~FET_OPTIONS_PDSG_EN);
+  if (desired == current) {
+    ESP_LOGI(TAG, "Predischarge configuration already matches requested value");
+    return true;
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for predischarge configuration");
+    return false;
+  }
+
+  bool ok = true;
+  if (!this->write_data_memory_u8_(DM_FET_OPTIONS, desired)) {
+    ESP_LOGW(TAG, "Failed writing FET Options for predischarge");
+    ok = false;
+  } else {
+    ESP_LOGI(TAG, "Configured predischarge %s (FET Options=0x%02X)", YESNO(predischarge_enabled_), desired);
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after predischarge configuration");
     ok = false;
   }
 

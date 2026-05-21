@@ -122,7 +122,7 @@ void BQ76922Component::setup() {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
   if (this->has_current_limit_config_() && this->ota_pending_verify_()) {
-    this->current_limit_config_deferred_ = true;
+    this->current_limit_config_deferred_ = this->has_current_limit_config_();
     this->deferred_current_limit_log_ms_ = 0;
     ESP_LOGW(
       TAG,
@@ -220,7 +220,6 @@ void BQ76922Component::update() {
   if (dsg_fet_on_binary_sensor_ != nullptr) {
     dsg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_DSG) != 0);
   }
-
   if (alarm_flags_sensor_ != nullptr) {
     uint16_t alarm_status = 0;
     if (!this->read_u16_(REG_ALARM_STATUS, alarm_status)) {
@@ -416,7 +415,6 @@ void BQ76922Component::dump_config() {
   if (has_current_recovery_time_) {
     ESP_LOGCONFIG(TAG, "  current_recovery_time_s: %u", static_cast<unsigned>(current_recovery_time_s_));
   }
-
   const char* autonomous_mode = "preserve";
   if (autonomous_fet_mode_ == BOOT_ENABLE) {
     autonomous_mode = "enable";

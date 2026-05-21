@@ -31,6 +31,7 @@ BQ76952ProgramFactoryOtpButton = bq76952_ns.class_("BQ76952ProgramFactoryOtpButt
 CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
 CONF_SLEEP_MODE = "sleep_mode"
+CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
 CONF_CHARGE_CURRENT_LIMIT_A = "charge_current_limit_a"
 CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
@@ -69,6 +70,7 @@ CONF_SLEEP_ALLOWED_STATE = "sleep_allowed_state"
 CONF_ALERT_PIN = "alert_pin"
 CONF_CHG_FET_ON = "chg_fet_on"
 CONF_DSG_FET_ON = "dsg_fet_on"
+CONF_PDSG_FET_ON = "pdsg_fet_on"
 CONF_AUTONOMOUS_FET_ENABLED = "autonomous_fet_enabled"
 
 CONF_POWER_PATH = "power_path"
@@ -138,6 +140,7 @@ schema = {
         AUTONOMOUS_FET_MODE_OPTIONS, lower=True
     ),
     cv.Optional(CONF_SLEEP_MODE, default="preserve"): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
+    cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
     cv.Optional(CONF_CHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
     cv.Optional(CONF_DISCHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
@@ -234,6 +237,9 @@ schema = {
     cv.Optional(CONF_DSG_FET_ON): binary_sensor.binary_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
+    cv.Optional(CONF_PDSG_FET_ON): binary_sensor.binary_sensor_schema(
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+    ),
     cv.Optional(CONF_AUTONOMOUS_FET_ENABLED): binary_sensor.binary_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
@@ -288,6 +294,8 @@ async def to_code(config):
     cg.add(var.set_sense_resistor_milliohm(config[CONF_SENSE_RESISTOR_MILLIOHM]))
     cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
     cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
+    if CONF_PREDISCHARGE_ENABLED in config:
+        cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
     cg.add(var.set_apply_configuration_on_boot(config[CONF_APPLY_CONFIGURATION_ON_BOOT]))
     if CONF_CHARGE_CURRENT_LIMIT_A in config:
         cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))
@@ -389,6 +397,9 @@ async def to_code(config):
     if CONF_DSG_FET_ON in config:
         bs = await binary_sensor.new_binary_sensor(config[CONF_DSG_FET_ON])
         cg.add(var.set_dsg_fet_on_binary_sensor(bs))
+    if CONF_PDSG_FET_ON in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_PDSG_FET_ON])
+        cg.add(var.set_pdsg_fet_on_binary_sensor(bs))
     if CONF_AUTONOMOUS_FET_ENABLED in config:
         bs = await binary_sensor.new_binary_sensor(config[CONF_AUTONOMOUS_FET_ENABLED])
         cg.add(var.set_autonomous_fet_enabled_binary_sensor(bs))

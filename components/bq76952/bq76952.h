@@ -64,6 +64,10 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_sleep_mode(uint8_t mode) {
     sleep_mode_ = mode;
   }
+  void set_predischarge_enabled(bool value) {
+    predischarge_enabled_ = value;
+    has_predischarge_setting_ = true;
+  }
   void set_apply_configuration_on_boot(bool value) {
     apply_configuration_on_boot_ = value;
   }
@@ -152,6 +156,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_dsg_fet_on_binary_sensor(binary_sensor::BinarySensor* sensor) {
     dsg_fet_on_binary_sensor_ = sensor;
   }
+  void set_pdsg_fet_on_binary_sensor(binary_sensor::BinarySensor* sensor) {
+    pdsg_fet_on_binary_sensor_ = sensor;
+  }
   void set_autonomous_fet_enabled_binary_sensor(binary_sensor::BinarySensor* sensor) {
     autonomous_fet_enabled_binary_sensor_ = sensor;
   }
@@ -205,6 +212,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_current_limit_config_() const;
   bool has_regulator_config_() const;
   bool has_ts_pin_config_() const;
+  bool has_predischarge_config_() const;
   bool has_boot_mode_config_() const;
   bool apply_boot_modes_();
   bool apply_requested_configuration_();
@@ -212,6 +220,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool apply_regulator_config_();
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
+  bool apply_predischarge_config_();
   bool apply_current_limit_config_();
   uint8_t encode_current_threshold_code_(float current_a, uint8_t min_code, uint8_t max_code, const char* label);
   uint8_t encode_current_delay_code_(uint16_t delay_ms, const char* label);
@@ -243,6 +252,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_charge_current_delay_{false};
   bool has_discharge_current_delay_{false};
   bool has_current_recovery_time_{false};
+  bool has_predischarge_setting_{false};
+  bool predischarge_enabled_{false};
   bool has_reg0_config_{false};
   bool has_reg1_enabled_config_{false};
   bool has_reg1_voltage_config_{false};
@@ -291,6 +302,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   binary_sensor::BinarySensor* alert_pin_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* chg_fet_on_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* dsg_fet_on_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor* pdsg_fet_on_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* autonomous_fet_enabled_binary_sensor_{nullptr};
 
   select::Select* power_path_select_{nullptr};
