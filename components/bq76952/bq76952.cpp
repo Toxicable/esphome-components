@@ -99,13 +99,18 @@ constexpr uint16_t DM_OCC_THRESHOLD = 0x9280;
 constexpr uint16_t DM_OCC_DELAY = 0x9281;
 constexpr uint16_t DM_OCD1_THRESHOLD = 0x9282;
 constexpr uint16_t DM_OCD1_DELAY = 0x9283;
+constexpr uint16_t DM_SCD_THRESHOLD = 0x9286;
+constexpr uint16_t DM_SCD_DELAY = 0x9287;
 constexpr uint16_t DM_PROTECTION_RECOVERY_TIME = 0x92AF;
+constexpr uint16_t DM_SCD_RECOVERY_TIME = 0x9294;
 constexpr uint16_t DM_MFG_STATUS_INIT = 0x9343;
 
 constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
+constexpr uint8_t PROTECTION_A_SCD = 1u << 7;
 constexpr uint8_t FET_OPTIONS_PDSG_EN = 1u << 4;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
+constexpr uint8_t DSG_FET_PROTECTION_A_SCD = 1u << 7;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
 constexpr uint16_t POWER_CONFIG_SLEEP = 1u << 8;
 constexpr uint8_t REG12_CONFIG_REG1V_MASK = 0x0E;
@@ -476,7 +481,7 @@ void BQ76952Component::update() {
       this->status_set_warning();
       return;
     }
-    const float current_a = static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
+    const float current_a = -static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
     current_sensor_->publish_state(current_a);
   }
 
@@ -1043,8 +1048,9 @@ bool BQ76952Component::write_data_memory_u16_(uint16_t address, uint16_t value) 
 }
 
 bool BQ76952Component::has_current_limit_config_() const {
-  return has_charge_current_limit_ || has_discharge_current_limit_ || has_charge_current_delay_ ||
-         has_discharge_current_delay_ || has_current_recovery_time_;
+  return has_charge_current_limit_ || has_discharge_current_limit_ || has_scd_threshold_ || has_scd_delay_ ||
+         has_scd_recovery_time_ || has_charge_current_delay_ || has_discharge_current_delay_ ||
+         has_current_recovery_time_;
 }
 
 bool BQ76952Component::has_regulator_config_() const {
@@ -1530,6 +1536,30 @@ bool BQ76952Component::apply_current_limit_config_() {
     ocd1_threshold_code =
       this->encode_current_threshold_code_(discharge_current_limit_a_, 2, 100, "Discharge");
   }
+  uint8_t scd_threshold_code = 0;
+  if (has_scd_threshold_) {
+    switch (scd_threshold_mv_) {
+      case 10: scd_threshold_code = 0; break;
+      case 20: scd_threshold_code = 1; break;
+      case 40: scd_threshold_code = 2; break;
+      case 60: scd_threshold_code = 3; break;
+      case 80: scd_threshold_code = 4; break;
+      case 100: scd_threshold_code = 5; break;
+      case 125: scd_threshold_code = 6; break;
+      case 150: scd_threshold_code = 7; break;
+      case 175: scd_threshold_code = 8; break;
+      case 200: scd_threshold_code = 9; break;
+      case 250: scd_threshold_code = 10; break;
+      case 300: scd_threshold_code = 11; break;
+      case 350: scd_threshold_code = 12; break;
+      case 400: scd_threshold_code = 13; break;
+      case 450: scd_threshold_code = 14; break;
+      case 500: scd_threshold_code = 15; break;
+      default:
+        ESP_LOGW(TAG, "Unsupported SCD threshold %u mV", static_cast<unsigned>(scd_threshold_mv_));
+        return false;
+    }
+  }
 
   // Delay encoding uses roughly 3.3 ms steps with a +2 code offset.
   uint8_t occ_delay_code = 0;
@@ -1539,6 +1569,10 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
   if (has_discharge_current_delay_) {
     ocd1_delay_code = this->encode_current_delay_code_(discharge_current_delay_ms_, "Discharge");
+  }
+  uint8_t scd_delay_code = 0;
+  if (has_scd_delay_) {
+    scd_delay_code = (scd_delay_us_ == 0) ? 1 : static_cast<uint8_t>(scd_delay_us_ / 15 + 1);
   }
 
   bool needs_write = false;
@@ -1550,6 +1584,9 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
   if (has_discharge_current_limit_) {
     required_enabled_protections_bits |= PROTECTION_A_OCD1;
+  }
+  if (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_) {
+    required_enabled_protections_bits |= PROTECTION_A_SCD;
   }
 
   if (required_enabled_protections_bits != 0) {
@@ -1567,6 +1604,11 @@ bool BQ76952Component::apply_current_limit_config_() {
   if (!needs_write && has_discharge_current_limit_) {
     precheck_ok &= this->precheck_data_memory_mask_(
       DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_OCD1, "DSG FET Protections A", needs_write
+    );
+  }
+  if (!needs_write && (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_)) {
+    precheck_ok &= this->precheck_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_SCD, "DSG FET Protections A", needs_write
     );
   }
 
@@ -1589,6 +1631,19 @@ bool BQ76952Component::apply_current_limit_config_() {
   if (!needs_write && has_discharge_current_delay_) {
     precheck_ok &= this->precheck_data_memory_value_(
       DM_OCD1_DELAY, ocd1_delay_code, "OCD1 delay", needs_write
+    );
+  }
+  if (!needs_write && has_scd_threshold_) {
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_SCD_THRESHOLD, scd_threshold_code, "SCD threshold", needs_write
+    );
+  }
+  if (!needs_write && has_scd_delay_) {
+    precheck_ok &= this->precheck_data_memory_value_(DM_SCD_DELAY, scd_delay_code, "SCD delay", needs_write);
+  }
+  if (!needs_write && has_scd_recovery_time_) {
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_SCD_RECOVERY_TIME, scd_recovery_time_s_, "SCD recovery time", needs_write
     );
   }
 
@@ -1638,6 +1693,11 @@ bool BQ76952Component::apply_current_limit_config_() {
   if (has_discharge_current_limit_) {
     this->ensure_data_memory_mask_(
       DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_OCD1, "DSG FET Protections A", ok
+    );
+  }
+  if (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_) {
+    this->ensure_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_SCD, "DSG FET Protections A", ok
     );
   }
 
@@ -1721,6 +1781,60 @@ bool BQ76952Component::apply_current_limit_config_() {
     }
   }
 
+  if (has_scd_threshold_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_SCD_THRESHOLD, current)) {
+      ESP_LOGW(TAG, "Failed reading SCD threshold");
+      ok = false;
+    } else {
+      const bool changed = current != scd_threshold_code;
+      this->write_data_memory_value_if_needed_(DM_SCD_THRESHOLD, scd_threshold_code, "SCD threshold", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured SCD threshold %u mV (code=%u)",
+          static_cast<unsigned>(scd_threshold_mv_),
+          static_cast<unsigned>(scd_threshold_code)
+        );
+      }
+    }
+  }
+
+  if (has_scd_delay_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_SCD_DELAY, current)) {
+      ESP_LOGW(TAG, "Failed reading SCD delay");
+      ok = false;
+    } else {
+      const bool changed = current != scd_delay_code;
+      this->write_data_memory_value_if_needed_(DM_SCD_DELAY, scd_delay_code, "SCD delay", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured SCD delay %u us (code=%u)",
+          static_cast<unsigned>(scd_delay_us_),
+          static_cast<unsigned>(scd_delay_code)
+        );
+      }
+    }
+  }
+
+  if (has_scd_recovery_time_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_SCD_RECOVERY_TIME, current)) {
+      ESP_LOGW(TAG, "Failed reading SCD recovery time");
+      ok = false;
+    } else {
+      const bool changed = current != scd_recovery_time_s_;
+      this->write_data_memory_value_if_needed_(
+        DM_SCD_RECOVERY_TIME, scd_recovery_time_s_, "SCD recovery time", ok
+      );
+      if (ok && changed) {
+        ESP_LOGI(TAG, "Configured SCD recovery time %u s", static_cast<unsigned>(scd_recovery_time_s_));
+      }
+    }
+  }
+
   if (has_current_recovery_time_) {
     uint8_t current = 0;
     if (!this->read_data_memory_u8_(DM_PROTECTION_RECOVERY_TIME, current)) {
@@ -1792,7 +1906,7 @@ void BQ76952Component::maybe_log_event_(uint16_t battery_status, uint8_t fet_sta
   }
   int16_t cc2 = 0;
   if (this->read_i16_(REG_CC2_CURRENT, cc2)) {
-    current_a = static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
+    current_a = -static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
   }
 
   const std::string fet_flags = this->fet_status_flags_to_string_(fet_status);

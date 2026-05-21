@@ -71,6 +71,18 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_event_logging(bool value) {
     event_logging_ = value;
   }
+  void set_scd_threshold_mv(uint16_t value) {
+    scd_threshold_mv_ = value;
+    has_scd_threshold_ = true;
+  }
+  void set_scd_delay_us(uint16_t value) {
+    scd_delay_us_ = value;
+    has_scd_delay_ = true;
+  }
+  void set_scd_recovery_time_s(uint8_t value) {
+    scd_recovery_time_s_ = value;
+    has_scd_recovery_time_ = true;
+  }
   void set_apply_configuration_on_boot(bool value) {
     apply_configuration_on_boot_ = value;
   }
@@ -257,6 +269,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   int32_t current_lsb_ua_{1000};
   bool user_volts_cv_{true};
   float sense_resistor_milliohm_{1.0f};
+  uint16_t scd_threshold_mv_{0};
+  uint16_t scd_delay_us_{0};
+  uint8_t scd_recovery_time_s_{0};
   float charge_current_limit_a_{0.0f};
   float discharge_current_limit_a_{0.0f};
   uint16_t charge_current_delay_ms_{0};
@@ -265,6 +280,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t reg1_voltage_code_{0};
   bool has_charge_current_limit_{false};
   bool has_discharge_current_limit_{false};
+  bool has_scd_threshold_{false};
+  bool has_scd_delay_{false};
+  bool has_scd_recovery_time_{false};
   bool has_charge_current_delay_{false};
   bool has_discharge_current_delay_{false};
   bool has_current_recovery_time_{false};

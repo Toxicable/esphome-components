@@ -39,6 +39,9 @@ bq76952:
 
   ## Optional current protection thresholds (applied at boot):
   # sense_resistor_milliohm: 1.0
+  # scd_threshold_mv: 100
+  # scd_delay_us: 60
+  # scd_recovery_time_s: 5
   # charge_current_limit_a: 20.0
   # discharge_current_limit_a: 40.0
   # charge_current_delay_ms: 23
@@ -176,6 +179,9 @@ bq76952:
 - `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
 - `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage; exposed as a diagnostic/factory action rather than a normal config control
 - `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
+- `scd_threshold_mv`: short-circuit-in-discharge comparator threshold across `SRN-SRP`; allowed values are `10, 20, 40, 60, 80, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500`
+- `scd_delay_us`: SCD detection delay; use `0` for no added delay, or a multiple of `15` from `15` to `450`
+- `scd_recovery_time_s`: SCD recovery delay in seconds
 - `charge_current_limit_a`: charge overcurrent protection threshold
 - `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
 - `charge_current_delay_ms`: OCC trip delay (10ms to 426ms)
@@ -197,6 +203,9 @@ Passed charge notes:
 - `passed_charge_time` reports the same accumulator window in seconds.
 - `reset_passed_charge` sends the chip's `RESET_PASSQ()` subcommand to zero the integration state and restart timing.
 - The device reports passed charge in `userAh`, so this component converts through the detected `userA` scaling from `DA Configuration`.
+
+Current sign note:
+- The BQ76952 reports discharge current as more-negative in `CC2 Current()`. This component flips the sign for the user-facing `current` sensor so discharge is positive and charge is negative.
 
 Diagnostic notes:
 - `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.

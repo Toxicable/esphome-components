@@ -34,6 +34,9 @@ CONF_SLEEP_MODE = "sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
 CONF_EVENT_LOGGING = "event_logging"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
+CONF_SCD_THRESHOLD_MV = "scd_threshold_mv"
+CONF_SCD_DELAY_US = "scd_delay_us"
+CONF_SCD_RECOVERY_TIME_S = "scd_recovery_time_s"
 CONF_CHARGE_CURRENT_LIMIT_A = "charge_current_limit_a"
 CONF_DISCHARGE_CURRENT_LIMIT_A = "discharge_current_limit_a"
 CONF_CHARGE_CURRENT_DELAY_MS = "charge_current_delay_ms"
@@ -112,6 +115,32 @@ TS_PULLUP_OPTIONS = {
     "18k": False,
     "180k": True,
 }
+SCD_THRESHOLD_OPTIONS = {
+    10: 0,
+    20: 1,
+    40: 2,
+    60: 3,
+    80: 4,
+    100: 5,
+    125: 6,
+    150: 7,
+    175: 8,
+    200: 9,
+    250: 10,
+    300: 11,
+    350: 12,
+    400: 13,
+    450: 14,
+    500: 15,
+}
+
+
+def _validate_scd_delay_us(value):
+    if value == 0:
+        return value
+    if 15 <= value <= 450 and value % 15 == 0:
+        return value
+    raise cv.Invalid("scd_delay_us must be 0 or a multiple of 15 from 15 to 450")
 
 
 VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -147,6 +176,9 @@ schema = {
     cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_EVENT_LOGGING, default=False): cv.boolean,
     cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
+    cv.Optional(CONF_SCD_THRESHOLD_MV): cv.one_of(*SCD_THRESHOLD_OPTIONS.keys(), int=True),
+    cv.Optional(CONF_SCD_DELAY_US): _validate_scd_delay_us,
+    cv.Optional(CONF_SCD_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
     cv.Optional(CONF_CHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
     cv.Optional(CONF_DISCHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
     cv.Optional(CONF_CHARGE_CURRENT_DELAY_MS): cv.int_range(min=10, max=426),
@@ -311,6 +343,12 @@ async def to_code(config):
     if CONF_PREDISCHARGE_ENABLED in config:
         cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
     cg.add(var.set_event_logging(config[CONF_EVENT_LOGGING]))
+    if CONF_SCD_THRESHOLD_MV in config:
+        cg.add(var.set_scd_threshold_mv(config[CONF_SCD_THRESHOLD_MV]))
+    if CONF_SCD_DELAY_US in config:
+        cg.add(var.set_scd_delay_us(config[CONF_SCD_DELAY_US]))
+    if CONF_SCD_RECOVERY_TIME_S in config:
+        cg.add(var.set_scd_recovery_time_s(config[CONF_SCD_RECOVERY_TIME_S]))
     cg.add(var.set_apply_configuration_on_boot(config[CONF_APPLY_CONFIGURATION_ON_BOOT]))
     if CONF_CHARGE_CURRENT_LIMIT_A in config:
         cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))

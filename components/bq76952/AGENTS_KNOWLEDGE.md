@@ -21,6 +21,7 @@ Component-scoped notes for `components/bq76952`.
 - Data-memory access should not be treated like a generic subcommand read: after writing `0x3E/0x3F`, allow the transfer buffer to populate, read response length from `0x61`, then read back from `0x40`; after writing checksum/length to `0x60/0x61`, allow a short settle time before verification or exiting `CONFIG_UPDATE`.
 - For runtime `REG0`/`REGIN` bring-up, use the minimal sequence without a reset: enter `CONFIG_UPDATE`, write `REG12 Config`, write `REG0 Config`, exit `CONFIG_UPDATE`, send `REG12_CONTROL()` with the same `REG12` byte, then measure `REGIN`.
 - Coulomb-counter accumulation is exposed from `DASTATUS6 (0x0076)` as signed `userAh` plus a 32-bit fractional term and converted through the auto-detected `userA` scale; `RESET_PASSQ (0x0082)` is exposed as a manual button, not a boot-time automatic reset.
+- TI documents `CC2 Current()` as more-negative for discharge current; publish the user-facing `current` sensor as positive-for-discharge by negating the raw signed register value.
 - Keep the YAML monolithic in `__init__.py`; do not split this component into platform modules unless the repo-wide preference changes.
 - Document `i2c_id` in examples; ESPHome requires it for this component when a node defines more than one I2C bus.
 - If you need an extracted text view for ad hoc searching, generate it from `components/bq76952/bq76952.pdf`; the PDF remains canonical.
@@ -28,3 +29,4 @@ Component-scoped notes for `components/bq76952`.
 - `predischarge_enabled` writes `Settings:FET:FET Options (0x9308)[PDSG_EN]`; `pdsg_fet_on` reads `FET Status (0x7F)[PDSG_FET]`.
 - `fet_status_flags` decodes the full live `FET Status (0x7F)` register, including `DDSG_PIN` and `DCHG_PIN`, which is useful when debugging why PDSG/DSG or CHG/PCHG are being held off.
 - `event_logging` emits an edge-triggered INFO log whenever `FET Status`, `Alarm Status`, `Safety Status`, or `Battery Status[SS/PF]` changes, and snapshots PACK/LD/current at that moment.
+- `scd_threshold_mv`, `scd_delay_us`, and `scd_recovery_time_s` program `Protections:SCD` at `0x9286/0x9287/0x9294` and ensure `Enabled Protections A[SCD]` plus `DSG FET Protections A[SCD]` remain set.
