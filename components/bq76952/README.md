@@ -118,6 +118,8 @@ bq76952:
   #   name: "Alarm Flags"
   # safety_status_flags:
   #   name: "Safety Status Flags"
+  # fet_status_flags:
+  #   name: "FET Status Flags"
 
   ## Optional binary sensors:
   # sleep_mode_active:
@@ -132,6 +134,10 @@ bq76952:
   #   name: "Sleep Allowed"
   # alert_pin:
   #   name: "ALERT Pin"
+  # ddsg_pin:
+  #   name: "DDSG Pin"
+  # dchg_pin:
+  #   name: "DCHG Pin"
   # chg_fet_on:
   #   name: "CHG FET"
   # dsg_fet_on:
@@ -193,7 +199,9 @@ Passed charge notes:
 Diagnostic notes:
 - `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.
 - `safety_status_flags` is the live decoded protection cause from `Safety Status A/B/C (0x03/0x05/0x07)`, for example `ocd1`, `scd`, `cuv`, `otd`, or `hwdf`.
+- `fet_status_flags` is the live decoded `FET Status (0x7F)` register, for example `ddsg,pdsg` or `dchg,chg`.
 - `pdsg_fet_on` shows whether the predischarge PFET is currently being driven during a load bring-up event.
+- `ddsg_pin` and `dchg_pin` show whether the BQ76952's disable-output pins are asserted during the event.
 
 REG1 notes:
 - `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.

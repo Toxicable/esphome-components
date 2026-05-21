@@ -61,6 +61,7 @@ CONF_OPERATING_MODE = "operating_mode"
 CONF_POWER_PATH_STATE = "power_path_state"
 CONF_ALARM_FLAGS = "alarm_flags"
 CONF_SAFETY_STATUS_FLAGS = "safety_status_flags"
+CONF_FET_STATUS_FLAGS = "fet_status_flags"
 
 CONF_SLEEP_MODE_ACTIVE = "sleep_mode_active"
 CONF_CFGUPDATE_MODE = "cfgupdate_mode"
@@ -68,6 +69,8 @@ CONF_PROTECTION_FAULT = "protection_fault"
 CONF_PERMANENT_FAIL = "permanent_fail"
 CONF_SLEEP_ALLOWED_STATE = "sleep_allowed_state"
 CONF_ALERT_PIN = "alert_pin"
+CONF_DDSG_PIN = "ddsg_pin"
+CONF_DCHG_PIN = "dchg_pin"
 CONF_CHG_FET_ON = "chg_fet_on"
 CONF_DSG_FET_ON = "dsg_fet_on"
 CONF_PDSG_FET_ON = "pdsg_fet_on"
@@ -213,6 +216,9 @@ schema = {
     cv.Optional(CONF_SAFETY_STATUS_FLAGS): text_sensor.text_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
+    cv.Optional(CONF_FET_STATUS_FLAGS): text_sensor.text_sensor_schema(
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+    ),
     cv.Optional(CONF_SLEEP_MODE_ACTIVE): binary_sensor.binary_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
@@ -229,6 +235,12 @@ schema = {
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
     cv.Optional(CONF_ALERT_PIN): binary_sensor.binary_sensor_schema(
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+    ),
+    cv.Optional(CONF_DDSG_PIN): binary_sensor.binary_sensor_schema(
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+    ),
+    cv.Optional(CONF_DCHG_PIN): binary_sensor.binary_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
     cv.Optional(CONF_CHG_FET_ON): binary_sensor.binary_sensor_schema(
@@ -372,6 +384,9 @@ async def to_code(config):
     if CONF_SAFETY_STATUS_FLAGS in config:
         ts = await text_sensor.new_text_sensor(config[CONF_SAFETY_STATUS_FLAGS])
         cg.add(var.set_safety_status_flags_sensor(ts))
+    if CONF_FET_STATUS_FLAGS in config:
+        ts = await text_sensor.new_text_sensor(config[CONF_FET_STATUS_FLAGS])
+        cg.add(var.set_fet_status_flags_sensor(ts))
 
     if CONF_SLEEP_MODE_ACTIVE in config:
         bs = await binary_sensor.new_binary_sensor(config[CONF_SLEEP_MODE_ACTIVE])
@@ -391,6 +406,12 @@ async def to_code(config):
     if CONF_ALERT_PIN in config:
         bs = await binary_sensor.new_binary_sensor(config[CONF_ALERT_PIN])
         cg.add(var.set_alert_pin_binary_sensor(bs))
+    if CONF_DDSG_PIN in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_DDSG_PIN])
+        cg.add(var.set_ddsg_pin_binary_sensor(bs))
+    if CONF_DCHG_PIN in config:
+        bs = await binary_sensor.new_binary_sensor(config[CONF_DCHG_PIN])
+        cg.add(var.set_dchg_pin_binary_sensor(bs))
     if CONF_CHG_FET_ON in config:
         bs = await binary_sensor.new_binary_sensor(config[CONF_CHG_FET_ON])
         cg.add(var.set_chg_fet_on_binary_sensor(bs))

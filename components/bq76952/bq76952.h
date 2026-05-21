@@ -131,6 +131,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_safety_status_flags_sensor(text_sensor::TextSensor* sensor) {
     safety_status_flags_sensor_ = sensor;
   }
+  void set_fet_status_flags_sensor(text_sensor::TextSensor* sensor) {
+    fet_status_flags_sensor_ = sensor;
+  }
 
   void set_sleep_mode_binary_sensor(binary_sensor::BinarySensor* sensor) {
     sleep_mode_binary_sensor_ = sensor;
@@ -149,6 +152,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   }
   void set_alert_pin_binary_sensor(binary_sensor::BinarySensor* sensor) {
     alert_pin_binary_sensor_ = sensor;
+  }
+  void set_ddsg_pin_binary_sensor(binary_sensor::BinarySensor* sensor) {
+    ddsg_pin_binary_sensor_ = sensor;
+  }
+  void set_dchg_pin_binary_sensor(binary_sensor::BinarySensor* sensor) {
+    dchg_pin_binary_sensor_ = sensor;
   }
   void set_chg_fet_on_binary_sensor(binary_sensor::BinarySensor* sensor) {
     chg_fet_on_binary_sensor_ = sensor;
@@ -234,6 +243,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   const char* power_path_to_string_(uint8_t fet_status) const;
   std::string alarm_flags_to_string_(uint16_t alarm_status) const;
   std::string safety_status_flags_to_string_(uint8_t status_a, uint8_t status_b, uint8_t status_c) const;
+  std::string fet_status_flags_to_string_(uint8_t fet_status) const;
   void append_flag_(std::string& flags, const char* flag) const;
 
   uint8_t cell_count_{16};
@@ -294,6 +304,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* power_path_state_sensor_{nullptr};
   text_sensor::TextSensor* alarm_flags_sensor_{nullptr};
   text_sensor::TextSensor* safety_status_flags_sensor_{nullptr};
+  text_sensor::TextSensor* fet_status_flags_sensor_{nullptr};
 
   binary_sensor::BinarySensor* sleep_mode_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* cfgupdate_binary_sensor_{nullptr};
@@ -301,6 +312,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   binary_sensor::BinarySensor* permanent_fail_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* sleep_allowed_state_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* alert_pin_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor* ddsg_pin_binary_sensor_{nullptr};
+  binary_sensor::BinarySensor* dchg_pin_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* chg_fet_on_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* dsg_fet_on_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* pdsg_fet_on_binary_sensor_{nullptr};

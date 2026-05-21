@@ -75,8 +75,11 @@ constexpr uint16_t ALARM_STATUS_ADSCAN = 1u << 1;
 constexpr uint16_t ALARM_STATUS_WAKE = 1u << 0;
 
 constexpr uint8_t FET_STATUS_ALRT_PIN = 1u << 6;
+constexpr uint8_t FET_STATUS_DDSG_PIN = 1u << 5;
+constexpr uint8_t FET_STATUS_DCHG_PIN = 1u << 4;
 constexpr uint8_t FET_STATUS_PDSG = 1u << 3;
 constexpr uint8_t FET_STATUS_DSG = 1u << 2;
+constexpr uint8_t FET_STATUS_PCHG = 1u << 1;
 constexpr uint8_t FET_STATUS_CHG = 1u << 0;
 
 constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
@@ -303,6 +306,12 @@ void BQ76952Component::update() {
   if (alert_pin_binary_sensor_ != nullptr) {
     alert_pin_binary_sensor_->publish_state((fet_status & FET_STATUS_ALRT_PIN) != 0);
   }
+  if (ddsg_pin_binary_sensor_ != nullptr) {
+    ddsg_pin_binary_sensor_->publish_state((fet_status & FET_STATUS_DDSG_PIN) != 0);
+  }
+  if (dchg_pin_binary_sensor_ != nullptr) {
+    dchg_pin_binary_sensor_->publish_state((fet_status & FET_STATUS_DCHG_PIN) != 0);
+  }
   if (chg_fet_on_binary_sensor_ != nullptr) {
     chg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_CHG) != 0);
   }
@@ -311,6 +320,9 @@ void BQ76952Component::update() {
   }
   if (pdsg_fet_on_binary_sensor_ != nullptr) {
     pdsg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_PDSG) != 0);
+  }
+  if (fet_status_flags_sensor_ != nullptr) {
+    fet_status_flags_sensor_->publish_state(this->fet_status_flags_to_string_(fet_status));
   }
 
   if (alarm_flags_sensor_ != nullptr) {
@@ -658,6 +670,7 @@ void BQ76952Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "Power Path State", power_path_state_sensor_);
   LOG_TEXT_SENSOR("  ", "Alarm Flags", alarm_flags_sensor_);
   LOG_TEXT_SENSOR("  ", "Safety Status Flags", safety_status_flags_sensor_);
+  LOG_TEXT_SENSOR("  ", "FET Status Flags", fet_status_flags_sensor_);
 
   LOG_BINARY_SENSOR("  ", "Sleep Mode Active", sleep_mode_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Config Update Mode", cfgupdate_binary_sensor_);
@@ -665,6 +678,8 @@ void BQ76952Component::dump_config() {
   LOG_BINARY_SENSOR("  ", "Permanent Fail", permanent_fail_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Sleep Allowed State", sleep_allowed_state_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Alert Pin", alert_pin_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "DDSG Pin", ddsg_pin_binary_sensor_);
+  LOG_BINARY_SENSOR("  ", "DCHG Pin", dchg_pin_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "CHG FET On", chg_fet_on_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "DSG FET On", dsg_fet_on_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "PDSG FET On", pdsg_fet_on_binary_sensor_);
@@ -2157,6 +2172,37 @@ std::string BQ76952Component::safety_status_flags_to_string_(
   }
   if ((status_c & (1u << 1)) != 0) {
     this->append_flag_(flags, "hwdf");
+  }
+
+  if (flags.empty()) {
+    return "none";
+  }
+  return flags;
+}
+
+std::string BQ76952Component::fet_status_flags_to_string_(uint8_t fet_status) const {
+  std::string flags;
+
+  if ((fet_status & FET_STATUS_ALRT_PIN) != 0) {
+    this->append_flag_(flags, "alrt");
+  }
+  if ((fet_status & FET_STATUS_DDSG_PIN) != 0) {
+    this->append_flag_(flags, "ddsg");
+  }
+  if ((fet_status & FET_STATUS_DCHG_PIN) != 0) {
+    this->append_flag_(flags, "dchg");
+  }
+  if ((fet_status & FET_STATUS_PDSG) != 0) {
+    this->append_flag_(flags, "pdsg");
+  }
+  if ((fet_status & FET_STATUS_DSG) != 0) {
+    this->append_flag_(flags, "dsg");
+  }
+  if ((fet_status & FET_STATUS_PCHG) != 0) {
+    this->append_flag_(flags, "pchg");
+  }
+  if ((fet_status & FET_STATUS_CHG) != 0) {
+    this->append_flag_(flags, "chg");
   }
 
   if (flags.empty()) {
