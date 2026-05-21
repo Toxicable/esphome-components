@@ -52,6 +52,7 @@ CONF_SECURITY_STATE = "security_state"
 CONF_OPERATING_MODE = "operating_mode"
 CONF_POWER_PATH_STATE = "power_path_state"
 CONF_ALARM_FLAGS = "alarm_flags"
+CONF_SAFETY_STATUS_FLAGS = "safety_status_flags"
 
 CONF_SLEEP_MODE_ACTIVE = "sleep_mode_active"
 CONF_CFGUPDATE_MODE = "cfgupdate_mode"
@@ -167,6 +168,9 @@ CONFIG_SCHEMA = cv.All(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
             cv.Optional(CONF_ALARM_FLAGS): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_SAFETY_STATUS_FLAGS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
             cv.Optional(CONF_SLEEP_MODE_ACTIVE): binary_sensor.binary_sensor_schema(
@@ -288,6 +292,9 @@ async def to_code(config):
     if CONF_ALARM_FLAGS in config:
         ts = await text_sensor.new_text_sensor(config[CONF_ALARM_FLAGS])
         cg.add(var.set_alarm_flags_sensor(ts))
+    if CONF_SAFETY_STATUS_FLAGS in config:
+        ts = await text_sensor.new_text_sensor(config[CONF_SAFETY_STATUS_FLAGS])
+        cg.add(var.set_safety_status_flags_sensor(ts))
 
     if CONF_SLEEP_MODE_ACTIVE in config:
         bs = await binary_sensor.new_binary_sensor(config[CONF_SLEEP_MODE_ACTIVE])

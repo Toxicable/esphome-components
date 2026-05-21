@@ -102,3 +102,4 @@ bq25756:
 
 - The BQ25756 ADC result registers are little-endian in the I2C map: the low byte is at the base register and the high byte is at the next address.
 - `vfb_voltage` is optional and stays disabled unless configured, matching the datasheet recommendation to avoid unnecessary VFB ADC use during charging.
+- `ILIM_HIZ` and `CE` are still hardware-active by default. If `ILIM_HIZ` is left floating or driven high, the charger can enter HIZ and stop switching even though this component never sets `EN_HIZ` during startup. If `CE` is left floating or high, charging can stay blocked even when `charge_enable` reports on.

@@ -124,6 +124,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_alarm_flags_sensor(text_sensor::TextSensor* sensor) {
     alarm_flags_sensor_ = sensor;
   }
+  void set_safety_status_flags_sensor(text_sensor::TextSensor* sensor) {
+    safety_status_flags_sensor_ = sensor;
+  }
 
   void set_sleep_mode_binary_sensor(binary_sensor::BinarySensor* sensor) {
     sleep_mode_binary_sensor_ = sensor;
@@ -221,6 +224,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   const char* operating_mode_to_string_(uint16_t battery_status, uint16_t control_status) const;
   const char* power_path_to_string_(uint8_t fet_status) const;
   std::string alarm_flags_to_string_(uint16_t alarm_status) const;
+  std::string safety_status_flags_to_string_(uint8_t status_a, uint8_t status_b, uint8_t status_c) const;
   void append_flag_(std::string& flags, const char* flag) const;
 
   uint8_t cell_count_{16};
@@ -277,6 +281,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* operating_mode_sensor_{nullptr};
   text_sensor::TextSensor* power_path_state_sensor_{nullptr};
   text_sensor::TextSensor* alarm_flags_sensor_{nullptr};
+  text_sensor::TextSensor* safety_status_flags_sensor_{nullptr};
 
   binary_sensor::BinarySensor* sleep_mode_binary_sensor_{nullptr};
   binary_sensor::BinarySensor* cfgupdate_binary_sensor_{nullptr};

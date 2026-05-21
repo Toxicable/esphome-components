@@ -15,6 +15,9 @@ namespace {
 static const char* const TAG = "bq76952";
 
 constexpr uint8_t REG_CONTROL_STATUS = 0x00;
+constexpr uint8_t REG_SAFETY_STATUS_A = 0x03;
+constexpr uint8_t REG_SAFETY_STATUS_B = 0x05;
+constexpr uint8_t REG_SAFETY_STATUS_C = 0x07;
 constexpr uint8_t REG_BATTERY_STATUS = 0x12;
 constexpr uint8_t REG_CELL1_VOLTAGE = 0x14;
 constexpr uint8_t REG_STACK_VOLTAGE = 0x34;
@@ -300,6 +303,21 @@ void BQ76952Component::update() {
       return;
     }
     alarm_flags_sensor_->publish_state(this->alarm_flags_to_string_(alarm_status));
+  }
+  if (safety_status_flags_sensor_ != nullptr) {
+    uint8_t safety_status_a = 0;
+    uint8_t safety_status_b = 0;
+    uint8_t safety_status_c = 0;
+    if (!this->read_byte_(REG_SAFETY_STATUS_A, safety_status_a) ||
+        !this->read_byte_(REG_SAFETY_STATUS_B, safety_status_b) ||
+        !this->read_byte_(REG_SAFETY_STATUS_C, safety_status_c)) {
+      ESP_LOGW(TAG, "Failed to read Safety Status registers");
+      this->status_set_warning();
+      return;
+    }
+    safety_status_flags_sensor_->publish_state(
+      this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
+    );
   }
 
   if (autonomous_fet_enabled_binary_sensor_ != nullptr || autonomous_fet_switch_ != nullptr) {
@@ -618,6 +636,7 @@ void BQ76952Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "Operating Mode", operating_mode_sensor_);
   LOG_TEXT_SENSOR("  ", "Power Path State", power_path_state_sensor_);
   LOG_TEXT_SENSOR("  ", "Alarm Flags", alarm_flags_sensor_);
+  LOG_TEXT_SENSOR("  ", "Safety Status Flags", safety_status_flags_sensor_);
 
   LOG_BINARY_SENSOR("  ", "Sleep Mode Active", sleep_mode_binary_sensor_);
   LOG_BINARY_SENSOR("  ", "Config Update Mode", cfgupdate_binary_sensor_);
@@ -1982,6 +2001,77 @@ std::string BQ76952Component::alarm_flags_to_string_(uint16_t alarm_status) cons
   }
   if ((alarm_status & ALARM_STATUS_WAKE) != 0) {
     this->append_flag_(flags, "wake");
+  }
+
+  if (flags.empty()) {
+    return "none";
+  }
+  return flags;
+}
+
+std::string BQ76952Component::safety_status_flags_to_string_(
+  uint8_t status_a, uint8_t status_b, uint8_t status_c
+) const {
+  std::string flags;
+
+  if ((status_a & (1u << 7)) != 0) {
+    this->append_flag_(flags, "scd");
+  }
+  if ((status_a & (1u << 6)) != 0) {
+    this->append_flag_(flags, "ocd2");
+  }
+  if ((status_a & (1u << 5)) != 0) {
+    this->append_flag_(flags, "ocd1");
+  }
+  if ((status_a & (1u << 4)) != 0) {
+    this->append_flag_(flags, "occ");
+  }
+  if ((status_a & (1u << 3)) != 0) {
+    this->append_flag_(flags, "cov");
+  }
+  if ((status_a & (1u << 2)) != 0) {
+    this->append_flag_(flags, "cuv");
+  }
+
+  if ((status_b & (1u << 7)) != 0) {
+    this->append_flag_(flags, "otf");
+  }
+  if ((status_b & (1u << 6)) != 0) {
+    this->append_flag_(flags, "otint");
+  }
+  if ((status_b & (1u << 5)) != 0) {
+    this->append_flag_(flags, "otd");
+  }
+  if ((status_b & (1u << 4)) != 0) {
+    this->append_flag_(flags, "otc");
+  }
+  if ((status_b & (1u << 2)) != 0) {
+    this->append_flag_(flags, "utint");
+  }
+  if ((status_b & (1u << 1)) != 0) {
+    this->append_flag_(flags, "utd");
+  }
+  if ((status_b & (1u << 0)) != 0) {
+    this->append_flag_(flags, "utc");
+  }
+
+  if ((status_c & (1u << 7)) != 0) {
+    this->append_flag_(flags, "ocd3");
+  }
+  if ((status_c & (1u << 6)) != 0) {
+    this->append_flag_(flags, "scdl");
+  }
+  if ((status_c & (1u << 5)) != 0) {
+    this->append_flag_(flags, "ocdl");
+  }
+  if ((status_c & (1u << 4)) != 0) {
+    this->append_flag_(flags, "covl");
+  }
+  if ((status_c & (1u << 2)) != 0) {
+    this->append_flag_(flags, "pto");
+  }
+  if ((status_c & (1u << 1)) != 0) {
+    this->append_flag_(flags, "hwdf");
   }
 
   if (flags.empty()) {

@@ -116,6 +116,8 @@ bq76952:
   #   name: "Power Path State"
   # alarm_flags:
   #   name: "Alarm Flags"
+  # safety_status_flags:
+  #   name: "Safety Status Flags"
 
   ## Optional binary sensors:
   # sleep_mode_active:
@@ -184,6 +186,10 @@ Passed charge notes:
 - `passed_charge_time` reports the same accumulator window in seconds.
 - `reset_passed_charge` sends the chip's `RESET_PASSQ()` subcommand to zero the integration state and restart timing.
 - The device reports passed charge in `userAh`, so this component converts through the detected `userA` scaling from `DA Configuration`.
+
+Diagnostic notes:
+- `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.
+- `safety_status_flags` is the live decoded protection cause from `Safety Status A/B/C (0x03/0x05/0x07)`, for example `ocd1`, `scd`, `cuv`, `otd`, or `hwdf`.
 
 REG1 notes:
 - `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.

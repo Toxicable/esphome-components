@@ -32,6 +32,7 @@ Component-scoped notes for `components/bq76922`.
   - `0x0093` DSG/PDSG off, `0x0094` CHG/PCHG off, `0x0095` all off, `0x0096` all on.
 - `power_path` control now checks `Manufacturing Status[FET_EN]` first; if `FET_EN=0` (test mode), control is rejected with a log warning.
 - `power_path` now verifies CHG/DSG readback after command and rejects if device conditions keep FETs off; warning includes SS/PF bits.
+- `alarm_flags` is derived from the latched `0x62 Alarm Status`; `safety_status_flags` is the live decoded cause from `0x03/0x05/0x07 Safety Status A/B/C`.
 - CC2 current units and stack/PACK/LD voltage units are auto-detected from `Settings:Configuration:DA Configuration` (`0x9303`) during setup.
 - Optional boot-time current-limit settings are supported:
   - `charge_current_limit_a` writes `Protections OCC Threshold` (`0x9280`), 2mV/step, code range `2..62`.

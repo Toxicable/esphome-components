@@ -75,6 +75,8 @@ bq76922:
   #   name: "Power Path State"
   # alarm_flags:
   #   name: "Alarm Flags"
+  # safety_status_flags:
+  #   name: "Safety Status Flags"
 
   ## Optional binary sensors:
   # sleep_mode_active:
@@ -138,6 +140,10 @@ Current limit notes:
 - These values are written to device protection settings during boot.
 - Setting `charge_current_limit_a` automatically enables OCC and CHG-FET trip-on-OCC.
 - Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
+
+Diagnostic notes:
+- `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.
+- `safety_status_flags` is the live decoded protection cause from `Safety Status A/B/C (0x03/0x05/0x07)`, for example `ocd1`, `scd`, `cuv`, `otd`, or `hwdf`.
 - They require the chip to be in `FULLACCESS`.
 - Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
 - If requested values are already present in data memory, the component skips `CONFIG_UPDATE` and

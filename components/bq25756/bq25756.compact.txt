@@ -1,0 +1,4450 @@
+# Canonical source
+# bq25756.pdf
+# This compact text is generated. Do not edit manually; regenerate with tools/datasheet_prepare.py.
+# Original line count: 4678
+
+BQ25756: Standalone/I2C Controlled, 1- to 14-Cell Bidirectional Buck-Boost Battery
+Charge Controller
+1 Features
+• Wide input voltage operating range: 4.2 V to 70 V
+• Wide battery voltage operating range: up-to 70 V
+with multi-chemistry support:
+– 1- to 14-cell Li-ion charge profile
+– 1- to 16-cell LiFePO4 charge profile
+• Synchronous buck-boost charge controller with
+NFET drivers
+– Adjustable switching frequency from 200 kHz to
+600 kHz
+– Optional synchronization to external clock
+– Integrated loop compensation with soft start
+– Optional gate driver supply input for optimized
+efficiency
+• Automatic maximum power point tracking (MPPT)
+for solar charging
+• Buck-only mode
+• Bidirectional converter operation (Reverse Mode)
+supporting USB-PD Extended Power Range (EPR)
+– Adjustable input voltage (VAC) regulation from
+3.3 V to 65 V with 20-mV/step
+– Adjustable input current regulation (RAC_SNS)
+from 400 mA to 20 A with 50-mA/step using
+5-mΩ resistor
+• High accuracy
+– ±0.5% charge voltage regulation
+– ±3% charge current regulation
+– ±3% input current regulation
+• I2C controlled for optimal system performance with
+resistor-programmable option
+– Hardware adjustable input and output current
+limits
+• Integrated 16-bit ADC for voltage, current, and
+temperature monitoring
+• High safety integration
+– Adjustable input overvoltage and undervoltage
+protection
+– Battery overvoltage and overcurrent protection
+– Charging safety timer
+– Battery short protection
+– Thermal shutdown
+• Status outputs
+– Adapter present status (PG)
+– Charger operation status (STAT1, STAT2)
+• Package
+– 36-pin 5 mm × 6 mm QFN
+2 Applications
+• Kick eScooter, eBike
+• Cordless power tool, Garden tool
+• Robotic lawn mower
+• Portable power station
+• Cordless vacuum cleaner, Vacuum robot
+• Solar charger
+• USB-PD EPR (Extended Power Range)
+3 Description
+The BQ25756 is a wide input voltage, switched-
+mode buck-boost Li-Ion, Li-polymer, or LiFePO 4
+battery charge controller with bidirectional power flow
+support. The device offers high-efficiency battery
+charging over a wide voltage range with accurate
+charge current and charge voltage regulation,
+in addition to automatic charge preconditioning,
+termination, and charge status indication. The device
+integrates all the loop compensation for the buck-
+boost converter, thereby providing a high density
+solution with ease of use. In reverse mode, the device
+draws power from the battery and regulates the input
+terminal voltage with an added constant current loop
+for protection, supporting USB-PD EPR power profile.
+Device Information
+PART NUMBER(1) PACKAGE BODY SIZE (NOM)
+BQ25756 VQFN (36) 5.0 x 6.0 mm2
+(1) For all available packages, see the orderable addendum at
+the end of the data sheet.
+ICHG
+CSYS
+SYSTEM
+INPUT
+BATTERY
++
+ACP
+SRP
+SRN
+HIDRV2
+LODRV2
+HIDRV1
+LODRV1
+PGND
+ACN
+SW1 SW2
+REGN
+TS
+Host I2C
+FB
+ILIM_HIZ
+BQ25756
+REGN
+VAC
+OPTIONAL
+BIDIRECTIONAL
+POWER FLOW
+Simplified Schematic
+BQ25756
+SLUSEN5 – AUGUST 2023
+An IMPORTANT NOTICE at the end of this data sheet addresses availability, warranty, changes, use in safety-critical applications,
+intellectual property matters and other important disclaimers. PRODUCTION DATA.
+Table of Contents
+1 Features............................................................................1
+2 Applications.....................................................................1
+3 Description.......................................................................1
+4 Revision History.............................................................. 2
+5 Description (continued).................................................. 3
+6 Pin Configuration and Functions...................................4
+7 Specifications.................................................................. 7
+7.1 Absolute Maximum Ratings........................................ 7
+7.2 ESD Ratings............................................................... 7
+7.3 Recommended Operating Conditions.........................7
+7.4 Thermal Information....................................................8
+7.5 Electrical Characteristics.............................................9
+7.6 Timing Requirements................................................15
+7.7 Typical Characteristics..............................................16
+8 Detailed Description......................................................18
+8.1 Overview...................................................................18
+8.2 Functional Block Diagram.........................................19
+8.3 Feature Description...................................................20
+8.4 Device Functional Modes..........................................37
+8.5 BQ25756 Registers...................................................39
+9 Application and Implementation..................................61
+9.1 Application Information............................................. 61
+9.2 Typical Applications.................................................. 61
+10 Power Supply Recommendations..............................72
+11 Layout...........................................................................73
+11.1 Layout Guidelines................................................... 73
+11.2 Layout Example...................................................... 74
+12 Device and Documentation Support..........................76
+12.1 Device Support....................................................... 76
+12.2 Receiving Notification of Documentation Updates..76
+12.3 Support Resources................................................. 76
+12.4 Trademarks.............................................................76
+12.5 Electrostatic Discharge Caution..............................76
+12.6 Glossary..................................................................76
+13 Mechanical, Packaging, and Orderable
+Information.................................................................... 77
+4 Revision History
+NOTE: Page numbers for previous revisions may differ from page numbers in the current version.
+DATE REVISION NOTES
+August 2023 * Initial Release
+BQ25756
+SLUSEN5 – AUGUST 2023
+5 Description (continued)
+Besides the I2C host-controlled charging mode, the device also supports standalone charging mode via resistor
+programmable limits. Input current, charge current and charge voltage regulation targets can be set via the
+ILIM_HIZ, ICHG and FB pins, respectively.
+BQ25756
+SLUSEN5 – AUGUST 2023
+6 Pin Configuration and Functions
+1
+5
+4
+3
+2
+6
+7
+8
+9
+12 13 14 15 16 1711 18
+36 35 34 33 32 31 2930
+10
+28
+24
+25
+26
+27
+23
+22
+21
+20
+19
+SW1
+HIDRV1
+BTST1
+LODRV1
+REGN
+DRV_SUP
+LODRV2
+BTST2
+HIDRV2
+PGND
+37
+SCL
+SDA
+STAT1
+STAT2
+TS
+ICHG
+ACNACPNCVACACUVACOVFSW_
+SYNC
+NCNCSRPSRNFBFBG
+PGND
+ILIM_HIZ
+SW2
+PGND
+VAC
+PG
+CE
+INT
+Figure 6-1. BQ25756, RRV Package 36-pin VQFN Top View
+Table 6-1. Pin Functions
+PIN
+I/O DESCRIPTION
+NAME NO.
+SCL 1 I I2C Interface Clock – Connect SCL to the logic rail through a 10-kΩ resistor.
+SDA 2 IO I2C Interface Data – Connect SDA to the logic rail through a 10-kΩ resistor.
+INT 3 O Open Drain Interrupt Output – Connect the INT pin to a logic rail via 10-kΩ resistor. The INT pin sends
+an active low, 256-μs pulse to host to report the charger device status and faults.
+STAT1 4 O
+Open Drain Charge Status 1 Output – STAT1 and STAT2 indicate various charger operations, see
+Table 8-6. Connect to the pull up rail via 10-kΩ resistor. The STAT1, STAT2 pin functions can be
+disabled when DIS_STAT_PINS bit is set to 1. When disabled, this pin can be used as a general
+purpose indicator via the FORCE_STAT1_ON bit.
+STAT2 5 O
+Open Drain Charge Status 2 Output – STAT1 and STAT2 indicate various charger operations, see
+Table 8-6. Connect to the pull up rail via 10-kΩ resistor. The STAT1, STAT2 pin functions can be
+disabled when DIS_STAT_PINS bit is set to 1. When disabled, this pin can be used as a general
+purpose indicator via the FORCE_STAT2_ON bit.
+PG 6 O
+Open Drain Active Low Power Good Indicator – Connect to the pull up rail via 10-kΩ resistor. LOW
+indicates a good input source if VAC is within the programmed ACUV / ACOV operating window. The
+PG pin function can be disabled when DIS_PG_PIN bit is set to 1. When disabled, this pin can be used
+as a general purpose indicator via the FORCE_STAT3_ON bit.
+CE 7 IO
+Active Low Charge Enable Pin – Battery charging is enabled when EN_CHG bit is 1 and CE pin is
+LOW. CE pin must be pulled HIGH or LOW, do not leave floating. The CE pin function can be disabled
+when DIS_CE_PIN bit is set to 1. When disabled, this pin can be used as a general purpose indicator
+via the FORCE_STAT4_ON bit.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 6-1. Pin Functions (continued)
+PIN
+I/O DESCRIPTION
+NAME NO.
+TS 8 I
+Temperature Qualification Voltage Input – Connect a negative temperature coefficient thermistor.
+Program temperature window with a resistor divider from REGN to TS to PGND. Charge suspends
+when TS pin voltage is out of range. Recommend 103AT-2 10-kΩ thermistor.
+ICHG 9 I
+Charge Current Limit Setting – ICHG pin sets the maximum charge current, and can be used to
+monitor the charge current. A programming resistor to PGND is used to set the charge current limit as
+ICHG = KICHG / RICHG. When the device is under charge current regulation, the voltage at ICHG pin is
+VREF_ICHG. When ICHG pin voltage is less than VREF_ICHG, the actual charge current can be calculated
+as: IBAT = KICHG x VICHG / ( RICHG x VREF_ICHG). The actual charge current limit is the lower of the limits
+set by ICHG pin or the ICHG_REG register bits. This pin function can be disabled when EN_ICHG_PIN
+bit is 0. If ICHG pin is not used, this pin should be pulled to PGND, do not leave floating.
+ILIM_HIZ 10 I
+Input Current Limit Setting and HIZ Mode Control Pin – ILIM_HIZ pin sets the maximum input
+current limit, can be used to monitor the input current and can be pulled HIGH to force device into
+HIZ mode. A programming resistor to PGND is used to set the input current limit as ILIM = KILIM /
+RILIM. When the device is under input current regulation, the voltage at ILIM_HIZ pin is VREF_ILIM. When
+ILIM_HIZ pin voltage is less than VREF_ILIM, the actual input current can be calculated as: IAC = KILIM
+x VILIM / ( RILIM x VREF_ILIM). The actual input current limit is the lower of the limits set by ILIM_HIZ
+pin or the IAC_DPM register bits. This pin function can be disabled when EN_ILIM_HIZ_PIN bit is 0. If
+ILIM_HIZ pin is not used, this pin should be pulled to PGND, do not leave floating.
+FBG 11 I
+Voltage Feedback Divider Return – Connect to the bottom of battery feedback resistor. When
+charging, this pin is driven to PGND internally. When input voltage is outside of the ACUV / ACOV
+operating window, this pin is high-impedance, minimizing battery leakage current.
+FB 12 I Charge Voltage Analog Feedback Adjustment – Connect the output of a resistive voltage divider
+from the battery terminals to this node to adjust the output battery regulation voltage.
+SRN 13 I
+Charge Current-Sense Resistor, Negative Input – A 0.47-μF ceramic capacitor is placed from SRN to
+SRP to provide differential-mode filtering. An optional 0.1-μF ceramic capacitor is placed from the SRN
+pin to PGND for common-mode filtering.
+SRP 14 I
+Charge Current-Sense Resistor, Positive Input – A 0.47-μF ceramic capacitor is placed from SRN
+to SRP to provide differential-mode filtering. A 0.1-μF ceramic capacitor is placed from the SRP pin to
+PGND for common-mode filtering.
+NC 15 - No Connect - Leave this pin floating, do not tie to PGND
+NC 16 - No Connect - Leave this pin floating, do not tie to PGND
+PGND 17 - Tie this pin directly to PGND.
+SW2 18 P Boost Side Half Bridge Switching Node – Connect to the source of boost HS FET and the drain of
+boost LS FET. Connect the inductor between SW1 and SW2.
+HIDRV2 19 O Boost Side High-Side Gate Driver – Connect to the boost high-side N-channel MOSFET gate.
+BTST2 20 P Boost Side High-Side Power MOSFET Gate Driver Power Supply – Connect a capacitor between
+BTST2 and SW2 to provide bias to the high-side MOSFET gate driver.
+LODRV2 21 O Boost Side Low-Side Gate Driver – Connect to the boost low-side N-channel MOSFET gate.
+PGND 22 P Power Ground Return – The high current ground connection for the low-side gate drivers.
+DRV_SUP 23 P
+Charger Gate Drive Supply Input – Voltage on this pin is used to drive the gates of buck-boost
+converter switching FET. Connect a 4.7-μF ceramic capacitor from DRV_SUP to power ground. REGN
+LDO voltage can be used as the gate driver supply for all switching FETs by connecting REGN to
+DRV_SUP pin. In high-voltage applications, it is possible to directly provide the DRV_SUP voltage with
+an external supply up to 12 V to achieve higher switching efficiency. See Section 8.3.3.2 for more
+details.
+REGN 24 P
+Charger Internal Linear Regulator Output – Connect a 4.7-μF ceramic capacitor from REGN to
+power ground. REGN LDO voltage can be used as the gate driver supply for all switching FETs by
+connecting REGN to DRV_SUP pin. In high-voltage applications, it is possible to directly provide the
+DRV_SUP voltage with an external supply up to 12 V to achieve higher switching efficiency. See
+Section 8.3.3.2 for more details.
+LODRV1 25 O Buck Side Low-Side Gate Driver – Connect to the buck low-side N-channel MOSFET gate.
+BTST1 26 P Buck Side High-Side Power MOSFET Gate Driver Power Supply – Connect a capacitor between
+BTST1 and SW1 to provide bias to the high-side MOSFET gate driver.
+HIDRV1 27 O Buck Side High-Side Gate Driver – Connect to the buck high-side N-channel MOSFET gate.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 6-1. Pin Functions (continued)
+PIN
+I/O DESCRIPTION
+NAME NO.
+SW1 28 P Buck Side Half Bridge Switching Node – Connect to the source of buck HS FET and the drain of
+buck LS FET. Connect the inductor between SW1 and SW2.
+ACN 29 I
+Adapter Current-Sense Resistor, Negative Input – A 0.47-μF ceramic capacitor is placed from ACN
+to ACP to provide differential-mode filtering. An optional 0.1-μF ceramic capacitor is placed from the
+ACN pin to PGND for common-mode filtering.
+ACP 30 I
+Adapter Current-Sense Resistor, Positive Input – A 0.47-μF ceramic capacitor is placed from ACN
+to ACP to provide differential-mode filtering. A 0.1-μF ceramic capacitor is placed from the ACP pin to
+PGND for common-mode filtering
+NC 31 - No Connect - Leave this pin floating, do not tie to PGND
+VAC
+32
+P
+Input Voltage Detection and Power – Connect a 1-µF capacitor from pin to PGND. Pin 33 is the input
+bias to power the IC, and ACOV/ACUV resistor divider should be connected relative to pin 33. When
+Reverse Mode is enabled, pin 32 is regulated to VAC_REV.33
+ACUV 34 I
+AC Undervoltage Comparator Input – Connect a resistor divider from VAC to PGND to program the
+undervoltage protection. When this pin falls below VREF_ACUV, the device stops charging. The hardware
+limit for input voltage regulation reference is VACUV_DPM. The actual input voltage regulation is the
+higher of the pin-programmed value and the VAC_DPM register value. If ACUV programming is not
+used, pull this pin to VAC, do not leave floating.
+ACOV 35 I
+AC Overvoltage Comparator Input – Connect a resistor divider from VAC to PGND to program the
+overvoltage protection. When this pin rises above VREF_ACOV, the device stops charging. If ACOV
+programming is not used, pull this pin to PGND, do not leave floating.
+FSW_SYNC 36 I
+Switching Frequency and Synchronization Input – An external resistor is connected to the
+FSW_SYNC pin and PGND to set the nominal switching frequency. This pin can also be used to
+synchronize the PWM controller to an external clock with 200-kHz to 600-kHz frequency.
+Thermal Pad 37 P
+Exposed pad beneath the IC – Always solder the thermal pad to the board, and have vias on the
+thermal pad plane star-connecting to PGND and ground plane for high-current power converter. It also
+serves as a thermal pad to dissipate the heat.
+BQ25756
+SLUSEN5 – AUGUST 2023
+7 Specifications
+7.1 Absolute Maximum Ratings
+over operating free-air temperature range (unless otherwise noted)(1)
+MIN MAX UNIT
+Voltage VAC, ACUV, ACOV, ACP, ACN, SRP, SRN, FB, FBG –0.3 85 V
+Voltage SW1, SW2 –2 85 V
+Voltage SW1, SW2 (40ns transient) –4 85 V
+Voltage PG –0.3 40 V
+Voltage BTST1, HIDRV1 with respect to SW1 –0.3 14 V
+Voltage BTST2, HIDRV2 with respect to SW2 –0.3 14 V
+Voltage DRV_SUP, LODRV1, LODRV2 –0.3 14 V
+Voltage ACP with respect to ACN, SRP with respect to SRN –0.3 0.3 V
+Voltage CE, FSW_SYNC, ICHG, ILIM_HIZ, INT, REGN, SCL, SDA, MODE,
+STAT1, STAT2, TS –0.3 6 V
+Output Sink
+Current CE, PG, STAT1, STAT2 5 mA
+TJ Junction temperature –40 150 °C
+Tstg Storage temperature –65 150 °C
+(1) Stresses beyond those listed under Absolute Maximum Rating may cause permanent damage to the device. These are stress
+ratings only, which do not imply functional operation of the device at these or any other conditions beyond those indicated
+under Recommended Operating Condition. Exposure to absolute-maximum-rated conditions for extended periods may affect device
+reliability.
+7.2 ESD Ratings
+VALUE UNIT
+V(ESD) Electrostatic discharge
+Human body model (HBM), per ANSI/ESDA/
+JEDEC JS-001, all pins(1) ±2000
+V
+Charged device model (CDM), per ANSI/ESDA/
+JEDEC JS-002, all pins(2) ±500
+(1) JEDEC document JEP155 states that 500-V HBM allows safe manufacturing with a standard ESD control process.
+(2) JEDEC document JEP157 states that 250-V CDM allows safe manufacturing with a standard ESD control process.
+7.3 Recommended Operating Conditions
+over operating free-air temperature range (unless otherwise noted)
+MIN NOM MAX UNIT
+VAC Input voltage 4.2 70 V
+VBAT Battery voltage 0 70 V
+VDRV_SUP DRV_SUP pin direct drive voltage range 4.0 12 V
+FSW Switching Frequency 200 600 kHz
+TJ Junction temperature –40 125 °C
+TA Ambient temperature –40 105 °C
+CVAC VAC capacitor 1 µF
+CIN Buck-boost input capacitance (minimum value after derating) 160 µF
+COUT Buck-boost output capacitance (minimum value after derating) 160 µF
+CREGN REGN capacitor (nominal value before derating) 4.7 µF
+CDRV_SUP DRV_SUP capacitor (nominal value before derating) 4.7 µF
+L Switched Inductor 2.2 15 µH
+RDCR Inductor DC resistance 1.75 60 mΩ
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.3 Recommended Operating Conditions (continued)
+over operating free-air temperature range (unless otherwise noted)
+MIN NOM MAX UNIT
+RAC_SNS Input current sense resistor 0(1) 5 10 mΩ
+RBAT_SNS Battery current sense resistor 5 mΩ
+RICHG ICHG programming pulldown resistor 0.0(2) 100 kΩ
+RILIM_HIZ ILIM_HIZ programming pulldown resistor 0.0(3) 50 kΩ
+(1) When RAC_SNS is 0mΩ, input current limit function is disabled
+(2) When RICHG is pulled to GND, the hardware charge current limit is disabled, actual charge current is controlled by the ICHG_REG
+register setting
+(3) When RILIM_HIZ is pulled to GND, the hardware input current limit is disabled, actual input current is controlled by the IAC_DPM register
+setting
+7.4 Thermal Information
+THERMAL METRIC(1)
+BQ25756
+UNITRRV
+36 PINS
+RθJA Junction-to-ambient thermal resistance (JEDEC(1)) 29.4 °C/W
+RθJC(top) Junction-to-case (top) thermal resistance 18.8 °C/W
+RθJB Junction-to-board thermal resistance 9.9 °C/W
+ΨJT Junction-to-top characterization parameter 0.2 °C/W
+ΨJB Junction-to-board characterization parameter 9.8 °C/W
+RθJC(bot) Junction-to-case (bottom) thermal resistance 2.5 °C/W
+(1) For more information about traditional and new thermal metrics, see the Semiconductor and IC Package Thermal Metrics application
+report.
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.5 Electrical Characteristics
+VAC = ACP = ACN = SYS = SRP = SRN = 28V, TJ = -40°C to +125°C, and TJ = 25°C for typical values (unless otherwise
+noted)
+PARAMETER TEST CONDITIONS MIN TYP MAX UNIT
+QUIESCENT CURRENTS
+IQ_BAT
+Quiescent battery current with
+BATFET on (ISRN + ISRP)
+VBAT = 28V, VAC = 0V, ADC_EN = 0, TJ <
+105 °C 17 µA
+VBAT = 28V, VAC = 0V, ADC_EN = 1, TJ <
+105 °C 500 700 µA
+IQ_VAC Quiescent input current (IVAC) Not switching 0.75 1 mA
+IQ_REV
+Quiescent battery current in Reverse
+mode (ISRN + ISRP) Not switching 0.75 1 mA
+VAC / BAT POWER UP
+VVAC_OP VAC operating range 4.2 70 V
+VVAC_OK VAC converter enable threshold VAC rising, no battery 4.2 V
+VVAC_OKZ VAC converter disable threshold VAC falling, no battery 3.5 V
+VREF_ACUV
+ACUV comparator threshold to enter
+VAC_UVP VACUV falling 1.095 1.1 1.106 V
+VREF_ACUV_HYS
+ACUV comparator threshold
+hysteresis VACUV rising 50 mV
+VVAC_INT_OV
+VAC internal threshold to enter
+VAC_OVP IN rising 72 74 76 V
+VVAC_INT_OVZ
+VAC internal thresholds to exit
+VAC_OVP IN falling 69 71 73 V
+VREF_ACOV
+ACOV comparator threshold to enter
+VAC_OVP VACOV rising 1.184 1.2 1.206 V
+VREF_ACOV_HYS
+ACOV comparator threshold
+hysteresis VACOV falling 50 mV
+CHARGE VOLTAGE REGULATION
+VVFB_RANGE Feedback voltage range 1.504 1.566 V
+VVFB_NOM Nominal feedback voltage VFB_REG = 0x10 1.536 V
+VVFB_ACC Feedback voltage regulation accuracy
+TJ = 0°C to 85°C –0.5 0.5 %
+TJ = -40°C to 125°C –0.7 0.7 %
+RFBG FBG resistance to PGND IFBG = 1mA 33 55 Ω
+FAST CHARGECURRENT REGULATION
+ICHG_REG_RANGE Charge current regulation range 0.4 20 A
+ICHG_REG_ACC
+I2C setting charge current regulation
+accuracy
+RBAT_SNS = 5mΩ, VBAT = 12V, 36V, 55V.
+ICHG_REG = 0x012C
+15 A
+–3 3 %
+RBAT_SNS = 5mΩ, VBAT = 12V, 36V, 55V.
+ICHG_REG = 0x0064
+5 A
+–3 3 %
+RBAT_SNS = 5mΩ, VBAT = 12V, 36V, 55V.
+ICHG_REG = 0x0028
+2 A
+–5 5 %
+KICHG
+Hardware charge current limit set
+factor (Amperes of charge current per
+kΩ on ICHG pin)
+RBAT_SNS = 5mΩ, RICHG = 10kΩ, 5kΩ, and
+3.33kΩ 48 50 52 A x
+kΩ
+VREF_ICHG
+ICHG pin voltage when ICHG pin is in
+regulation 2.0 V
+PRE-CHARGE CURRENT REGULATION
+IPRECHG_RANGE Precharge current regulation range VFB < VBAT_LOWV * VVFB_REG 0.25 10 A
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.5 Electrical Characteristics (continued)
+VAC = ACP = ACN = SYS = SRP = SRN = 28V, TJ = -40°C to +125°C, and TJ = 25°C for typical values (unless otherwise
+noted)
+PARAMETER TEST CONDITIONS MIN TYP MAX UNIT
+IPRECHG_ACC
+I2C setting precharge current
+accuracy
+RBAT_SNS = 5mΩ, VFB < VBAT_LOWV *
+VVFB_REG. IPRECHG = 0x003C
+3.0 A
+–4 4 %
+RBAT_SNS = 5mΩ, VFB < VBAT_LOWV *
+VVFB_REG. IPRECHG[1:0] = 0x0014
+1.0 A
+–10 10 %
+RBAT_SNS = 5mΩ, VFB < VBAT_LOWV *
+VVFB_REG. IPRECHG[1:0] = 0x000A
+0.50 A
+–30 30 %
+CHARGE TERMINATION
+ITERM_RANGE Termination current range VFB = VVFB_REG 0.25 10 A
+ITERM_ACC Termination current accuracy
+RBAT_SNS = 5mΩ, VBAT = 12V, 36V,
+55V . ITERM = 0x001E
+1.5 A
+–7 7 %
+RBAT_SNS = 5mΩ, VBAT = 12V, 36V, 55V.
+ITERM = 0x000A
+0.50 A
+–20 20 %
+RBAT_SNS = 5mΩ, VBAT = 12V, 36V, 55V.
+ITERM = 0x0005
+0.250 A
+–50 50 %
+BATTERY VOLTAGE COMPARATORS
+VBAT_SHORT
+Trickle charge to pre-charge transition VSRN rising 2.8 3 3.2 V
+Pre-charge to trickle charge transition VSRN falling 2.2 2.4 2.6 V
+VBAT_LOWV Pre-charge to fast-charge transition
+VFB rising, as percentage of VFB_REG,
+VBAT_LOWV[2:0] = 3 69.0 71.7 73.8 %
+VFB rising, as percentage of VFB_REG,
+VBAT_LOWV[2:0] = 2 64.3 66.7 69.0 %
+VFB rising, as percentage of VFB_REG,
+VBAT_LOWV[2:0] = 1 52 55 58 %
+VFB rising, as percentage of VFB_REG,
+VBAT_LOWV[2:0] = 0 27 30 33 %
+VBAT_LOWV_HYS BAT_LOWV hysteresis 5 %
+VRECHG
+Battery recharge threshold for Li-Ion
+and LiFePO4
+VFB falling, as percentage of VFB_REG,
+VRECHG[1:0] = 3 97.6 %
+VFB falling, as percentage of VFB_REG,
+VRECHG[1:0] = 2 95.2 %
+VFB falling, as percentage of VFB_REG,
+VRECHG[1:0] = 1 94.3 %
+VFB falling, as percentage of VFB_REG,
+VRECHG[1:0] = 0 93.0 %
+INPUT CURRENT REGULATION
+IIREG_DPM_ACC
+I2C setting input current regulation
+accuracy in forward mode
+RAC_SNS = 2mΩ, IAC_DPM = 0x00A0
+20 A
+–3 3 %
+RAC_SNS = 2mΩ, IAC_DPM = 0x0050
+10 A
+–4 4 %
+RAC_SNS = 2mΩ, IAC_DPM = 0x0028
+5.0 A
+–7 7 %
+KILIM
+Hardware input current limit set factor
+(Amperes of input current per kΩ on
+ILIM_HIZ pin)
+RAC_SNS = 2mΩ, RILIM = 5kΩ, 2.5kΩ, and
+1.67kΩ 48 50 52 A x
+kΩ
+VREF_ILIM_HIZ
+ILIM_HIZ pin voltage when ILIM_HIZ
+pin is in regulation 2.0 V
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.5 Electrical Characteristics (continued)
+VAC = ACP = ACN = SYS = SRP = SRN = 28V, TJ = -40°C to +125°C, and TJ = 25°C for typical values (unless otherwise
+noted)
+PARAMETER TEST CONDITIONS MIN TYP MAX UNIT
+VIH_ILIM_HIZ
+ILIM_HIZ input high threshold to enter
+HIZ mode VILIM_HIZ rising 3.7 V
+INPUT VOLTAGE REGULATION
+VVREG_DPM_RANGE Input voltage DPM regulation range 4.2 65 V
+VVREG_DPM_ACC
+I2C setting input voltage regulation
+accuracy VAC_DPM = 0x076C
+38 V
+–2 2 %
+VVREG_DPM_ACC
+I2C setting input voltage regulation
+accuracy in forward mode
+VAC_DPM = 0x04E2
+25 V
+–2 2 %
+VAC_DPM = 0x03B6
+19 V
+–2 2 %
+VACUV_DPM
+ACUV pin voltage when in VDPM
+regulation 1.198 1.210 1.222 V
+REVERSE MODE VOLTAGE REGULATION
+VREV_RANGE
+VAC Voltage regulation range in
+Reverse mode 3.3 65 V
+VREV_ACC
+Voltage regulation accuracy in
+Reverse mode VAC_REV = 0x0960
+48 V
+–2 2 %
+VREV_ACC
+VAC Voltage regulation accuracy in
+Reverse mode
+VAC_REV = 0x0578
+28 V
+–2 2 %
+VAC_REV = 0x02EE
+15 V
+–2 2 %
+VAC_REV = 0x00FA
+5 V
+–2 2 %
+REVERSE MODE CURRENT REGULATION
+IIREV_ACC
+Input current regulation accuracy in
+Reverse mode
+RAC_SNS = 2mΩ, IAC_REV = 0x00A0
+20 A
+–3.5 3.5 %
+RAC_SNS = 2mΩ, IAC_REV = 0x0028
+5.0 A
+–5.5 5.5 %
+CHARGE MODE BATTERY-PACK NTC MONITOR
+VT1_RISE
+TS pin voltage rising T1 threshold,
+charge suspended above this voltage.
+As Percentage to REGN, TS_T1=0°C w/
+103AT 72.75 73.25 73.85 %
+VT1_FALL
+TS pin voltage falling T1 threshold,
+charge re-enabled below this voltage.
+As Percentage to REGN, TS_T1=0°C w/
+103AT 71.5 72 72.5 %
+VT2_RISE
+TS pin voltage rising T2 threshold,
+charge back to reduced ICHG above
+this voltage
+As Percentage to REGN, TS_T2=10°C w/
+103AT 67.75 68.25 68.75 %
+VT2_FALL
+TS pin voltage falling T2 threshold.
+Charge back to normal below this
+voltage
+As Percentage to REGN, TS_T2=10°C w/
+103AT 66.45 66.95 67.45 %
+VT3_FALL
+TS pin voltage falling T3 threshold,
+charge to ICHG and reduced VFB_REG
+below this voltage.
+As Percentage to REGN, TS_T3=45°C w/
+103AT 44.25 44.75 45.25 %
+VT3_RISE
+TS pin voltage rising T3 threshold.
+Charge back to normal above this
+voltage.
+As Percentage to REGN, TS_T3=45°C w/
+103AT 45.55 46.05 46.55 %
+VT5_FALL
+TS pin voltage falling T5 threshold,
+charge suspended below this voltage
+As Percentage to REGN, TS_T5=60°C w/
+103AT 33.875 34.375 34.875 %
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.5 Electrical Characteristics (continued)
+VAC = ACP = ACN = SYS = SRP = SRN = 28V, TJ = -40°C to +125°C, and TJ = 25°C for typical values (unless otherwise
+noted)
+PARAMETER TEST CONDITIONS MIN TYP MAX UNIT
+VT5_RISE
+TS pin voltage rising T5 threshold.
+Charge back to ICHG and reduced
+VFB_REG above this voltage.
+As Percentage to REGN, TS_T5=60°C w/
+103AT 35 35.5 36 %
+REVERSE MODE BATTERY-PACK NTC MONITOR
+VBCOLD_RISE
+TS pin voltage rising TCOLD
+threshold. Reverse mode suspended
+above this voltage
+As Percentage to REGN (BCOLD = –20°C
+w/ 103AT) 79.45 80.0 80.55 %
+VBCOLD_RISE
+TS pin voltage rising TCOLD
+threshold. Reverse mode suspended
+above this voltage
+As Percentage to REGN (BCOLD = –10°C
+w/ 103AT) 76.65 77.15 77.65 %
+VBCOLD_FALL TCOLD comparator falling threshold. As Percentage to REGN (–20°C w/ 103AT) 78.2 78.7 79.2 %
+VBCOLD_FALL TCOLD comparator falling threshold. As Percentage to REGN (–10°C w/ 103AT) 75.5 75.6 76.5 %
+VBHOT_FALL
+TS pin voltage falling THOT
+threshold. Reverse mode suspends
+below this voltage
+As Percentage to REGN, (BHOT = 55°C w/
+103AT) 37.2 37.7 38.2 %
+VBHOT_FALL
+TS pin voltage falling THOT
+threshold. Reverse mode suspends
+below this voltage
+As Percentage to REGN, (BHOT = 60°C w/
+103AT) 33.875 34.375 34.875 %
+VBHOT_FALL
+TS pin voltage falling THOT
+threshold. Reverse mode suspends
+below this voltage
+As Percentage to REGN, (BHOT 65°C w/
+103AT) 30.75 31.25 31.75 %
+VBHOT_RISE
+TS pin voltage rising THOT threshold.
+Reverse mode allowed above this
+voltage
+As Percentage to REGN, (BHOT = 55°C w/
+103AT) 38.5 39.0 39.95 %
+VBHOT_RISE
+TS pin voltage rising THOT threshold.
+Reverse mode allowed above this
+voltage
+As Percentage to REGN, (BHOT = 60°C w/
+103AT) 35 35.5 36 %
+VBHOT_RISE
+TS pin voltage rising THOT threshold.
+Reverse mode allowed above this
+voltage
+As Percentage to REGN, (BHOT 65°C w/
+103AT) 32.0 32.5 33.0 %
+BATTERY CHARGER PROTECTION
+VBAT_OV Battery overvoltage threshold VFB rising, as percentage of VFB_REG 102.5 104 105.5 %
+VBAT_OVZ Battery overvoltage falling threshold VFB falling, as percentage of VFB_REG 100.5 102 103.5 %
+VICHG_OC Battery charge over-current threshold VSRP - VSRN rising 120 170 mV
+THERMAL SHUTDOWN
+TSHUT
+Thermal shutdown rising threshold Temperature increasing 150 °C
+Thermal shutdown falling threshold Temperature decreasing 135 °C
+REGN REGULATOR AND GATE DRIVE SUPPLY (DRV_SUP)
+VREGN REGN LDO output voltage
+IREGN = 20mA 4.8 5 5.2 V
+VAC = 5V, IREGN = 20mA 4.35 4.6 V
+IREGN REGN LDO current limit VREGN = 4.5V 70 mA
+VREGN_OK
+REGN OK threshold to allow
+switching REGN rising 3.55 V
+VDRV_UVPZ
+DRV_SUP under-voltage threshold to
+allow switching DRV_SUP rising 3.7 V
+VDRV_OVP
+DRV_SUP over-voltage threshold to
+disable switching DRV_SUP rising 12.8 13.2 13.6 V
+POWER-PATH MANAGER
+IAC_LOAD VAC discharge load current 16 mA
+IBAT_LOAD Battery (SRN) discharge load current 16 mA
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.5 Electrical Characteristics (continued)
+VAC = ACP = ACN = SYS = SRP = SRN = 28V, TJ = -40°C to +125°C, and TJ = 25°C for typical values (unless otherwise
+noted)
+PARAMETER TEST CONDITIONS MIN TYP MAX UNIT
+SWITCHING FREQUENCY AND SYNC
+fSW Switching Frequency
+RFSW_SYNC = 133kΩ 212 250 288 kHz
+RFSW_SYNC = 50kΩ 425 500 575 kHz
+VIH_SYNC FSW_SYNC input high threshold 1.3 V
+VIL_SYNC FSW_SYNC input low threshold 0.4 V
+PWSYNC FSW_SYNC input pulse width 80 ns
+PWM DRIVERS
+RHIDRV1_ON Buck side high-side turnon resistance VBTST1 - VSW1 = 5V 3.4 Ω
+RHIDRV1_OFF Buck side high-side turnoff resistance VBTST1 - VSW1 = 5V 1.0 Ω
+VBTST1_REFRESH
+Bootstrap refresh comparator
+threshold voltage
+BTST1 falling, VBTST1 - VSW1 when low-side
+refresh pulse is requested 2.7 3.1 3.9 V
+RLODRV1_ON Buck side low-side turnon resistance VREGN = 5V 3.4 Ω
+RLODRV1_OFF Buck side low-side turnoff resistance VREGN = 5V 1.0 Ω
+tDT1 Buck side dead time, both edges 45 ns
+RHIDRV2_ON
+Boost side high-side turnon
+resistance VBTST2 - VSW2 = 5V 3.4 Ω
+RHIDRV2_OFF
+Boost side high-side turnoff
+resistance VBTST2 - VSW2 = 5V 1.0 Ω
+VBTST2_REFRESH
+Bootstrap refresh comparator
+threshold voltage
+BTST2 falling, VBTST2 - VSW2 when low-side
+refresh pulse is requested 2.7 3.1 3.9 V
+RLODRV2_ON Boost side low-side turnon resistance VREGN = 5V 3.4 Ω
+RLODRV2_OFF Boost side low-side turnoff resistance VREGN = 5V 1.0 Ω
+tDT2 Boost side dead time, both edges 45 ns
+ANALOG-TO-DIGITAL CONVERTER (ADC)
+tADC_CONV Conversion-time, each measurement
+ADC_SAMPLE[1:0] = 00 24 ms
+ADC_SAMPLE[1:0] = 01 12 ms
+ADC_SAMPLE[1:0] = 10 6 ms
+ADCRES Effective resolution
+ADC_SAMPLE[1:0] = 00 14 15 bits
+ADC_SAMPLE[1:0] = 01 13 14 bits
+ADC_SAMPLE[1:0] = 10 12 13 bits
+ADC MEASUREMENT RANGE AND LSB
+IAC_ADC
+Input current ADC reading (positive or
+negative)
+Range with 2mΩ RAC_SNS –50000 50000 mA
+LSB with 2mΩ RAC_SNS 2 mA
+IBAT_ADC
+Battery current ADC reading (positive
+or negative)
+Range with 5mΩ RBAT_SNS –20000 20000 mA
+LSB with 5mΩ RBAT_SNS 2 mA
+VAC_ADC Input voltage ADC reading
+Range 0 65534 mV
+LSB 2 mV
+VBAT_ADC Battery voltage ADC reading
+Range 0 65534 mV
+LSB 2 mV
+TSADC
+TS voltage ADC reading, as
+percentage of REGN
+Range 0 99.9 %
+LSB 0.098 %
+VFB_ADC FB voltage ADC reading
+Range 0 2047 mV
+LSB 1 mV
+I2C INTERFACE (SCL, SDA)
+VIH Input high threshold level 1.3 V
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.5 Electrical Characteristics (continued)
+VAC = ACP = ACN = SYS = SRP = SRN = 28V, TJ = -40°C to +125°C, and TJ = 25°C for typical values (unless otherwise
+noted)
+PARAMETER TEST CONDITIONS MIN TYP MAX UNIT
+VIL Input low threshold level 0.4 V
+VOL Output low threshold level Sink current = 5mA 0.4 V
+IIN_BIAS High-level leakage current Pull up rail 3.3V 1 µA
+LOGIC I/O PIN (CE, PG , STAT1, STAT2)
+VIH Input high threshold level (CE) 1.3 V
+VOL
+Output low threshold level (CE, PG,
+STAT1, STAT2) Sink current = 5mA 0.4 V
+VIL Input low threshold level (CE) 0.4 V
+IOUT_BIAS
+High-level leakage current (CE, PG,
+STAT1, STAT2) Pull up rail 3.3V 1 µA
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.6 Timing Requirements
+MIN NOM MAX UNIT
+VAC / BAT POWER UP
+tACOV_DGL Enter ACOV deglitch time, ACOV rising 100 µs
+tACOVZ_DGL Exit ACOV deglitch time, ACOV falling 12 ms
+tACUV_DGL Enter ACUV deglitch time, ACUV falling 100 µs
+tACUVZ_DGL Exit ACUV deglitch time, ACUV rising 12 ms
+BATTERY CHARGER
+tTERM_DGL
+Deglitch time for charge termination, VSRP - VSRN
+falling 220 ms
+tRECHG_DGL Deglitch time for recharge threshold, VFB falling 200 ms
+tPRECHG Pre-charge safety timer accuracy 1.7 2 2.3 hr
+tSAFETY Fast-charge safety timer accuracy, CHG_TMR = 8hr 6.8 8 9.2 hr
+tTOPOFF Top-off timer accuracy, TOPOFF_TMR = 30 min 25.5 30 34.5 min
+tCV_TIMER CV timer accuracy, CV_TMR = 10hr 8.5 10 11.5 hr
+BATTERY-PACK NTC MONITOR
+tTS_DGL Deglitch time for TS threshold crossing 25 ms
+MPPT TIMERS
+tP_AND_O
+Perturb and Observe timer accuracy, P_AND_O_TMR
+= 1 s 0.85 1 1.15 s
+tFULL_SWEEP
+Full Panel Sweep timer accuracy, FULL_SWEEP_TMR
+= 10 min 8.5 10 11.5 min
+I2C INTERFACE
+fSCL SCL clock frequency 1000 kHZ
+DIGITAL CLOCK AND WATCHDOG
+tLP_WDT
+I2C Watchdog reset time (EN_HIZ = 1,
+WATCHDOG[1:0] = 160s) 100 160 s
+tWDT
+I2C Watchdog reset time (EN_HIZ = 0,
+WATCHDOG[1:0] = 160s) 130 160 s
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.7 Typical Characteristics
+CVAC = 160 µF, COUT= 160 µF, fSW = 250 kHz, L = 10 μH, TA = 25°C (unless otherwise specified)
+Charging Current (A)
+Efficiency (%)
+0 2 4 6 8 10 12 14
+80
+82
+84
+86
+88
+90
+92
+94
+96
+98
+100
+5VIN
+15VIN
+20VIN
+24VIN
+36VIN
+48VIN
+60VIN
+VBAT = 20 V
+Figure 7-1. Charge Efficiency vs Charge Current (5s battery
+configuration)
+Charging Current (A)
+Efficiency (%)
+0 1 2 3 4 5 6 7 8 9 10
+80
+82
+84
+86
+88
+90
+92
+94
+96
+98
+100
+5VIN
+15VIN
+20VIN
+24VIN
+36VIN
+48VIN
+60VIN
+VBAT = 28 V
+Figure 7-2. Charge Efficiency vs Charge Current (7s battery
+configuration)
+Charging Current (A)
+Efficiency (%)
+0.5 1 1.5 2 2.5 3 3.5 4 4.5 5
+80
+82
+84
+86
+88
+90
+92
+94
+96
+98
+100
+5VIN
+15VIN
+20VIN
+24VIN
+36VIN
+48VIN
+60VIN
+VBAT = 38 V
+Figure 7-3. Charge Efficiency vs Charge Current (10s battery
+configuration)
+Temperature (C)
+Accuracy (%)
+-40 -25 -10 5 20 35 50 65 80
+-0.5
+-0.4
+-0.3
+-0.2
+-0.1
+0
+0.1
+0.2
+0.3
+0.4
+0.5
+20Vin, 29.2Vbat
+28Vin, 29.2Vbat
+36Vin, 29.2Vbat
+Figure 7-4. Charge Voltage Accuracy vs Temperature
+Temperature (C)
+Accuracy (%)
+-40 -25 -10 5 20 35 50 65 80
+-5
+-4
+-3
+-2
+-1
+0
+1
+2
+3
+4
+5
+20Vin, 27Vbat
+28Vin, 27Vbat
+36Vin, 27Vbat
+ICHG = 5 A
+Figure 7-5. Charge Current Accuracy vs Temperature
+Temperature (C)
+Current (mA)
+-40 -20 0 20 40 60 80 100 120
+0.00
+0.05
+0.10
+0.15
+0.20
+0.25
+0.30
+0.35
+0.40
+0.45
+0.50
+IQ_BAT
+IQ_VAC
+IQ_BAT: VAC = 0 V IQ_VAC: VAC = 20 V EN_HIZ = 1
+Figure 7-6. Battery and Input Quiescent Current vs Temperature
+with VBAT = 28 V
+BQ25756
+SLUSEN5 – AUGUST 2023
+7.7 Typical Characteristics (continued)
+CVAC = 160 µF, COUT= 160 µF, fSW = 250 kHz, L = 10 μH, TA = 25°C (unless otherwise specified)
+Temperature (C)
+Accuracy (%)
+-40 -25 -10 5 20 35 50 65 80
+-2
+-1
+0
+1
+2
+VINPM = 19V
+VINPM = 34V
+VBAT = 28 V
+Figure 7-7. Input Voltage (VAC_DPM) Regulation Accuracy vs
+Temperature
+Temperature (C)
+Accuracy (%)
+-40 -25 -10 5 20 35 50 65 80
+-5
+-4
+-3
+-2
+-1
+0
+1
+2
+3
+4
+5
+20Vin, 28Vbat
+28Vin, 28Vbat
+36Vin, 28Vbat
+IAC_DPM = 3 A
+Figure 7-8. Input Current (IAC_DPM) Regulation Accuracy vs
+Temperature
+Reverse Mode Output Power (W)
+Efficiency (%)
+0 20 40 60 80 100 120 140 160 180 200 220 240
+80
+82
+84
+86
+88
+90
+92
+94
+96
+98
+100
+5VSYS_REV
+9VSYS_REV
+15VSYS_REV
+20VSYS_REV
+36VSYS_REV
+48VSYS_REV
+VBAT = 20 V
+Figure 7-9. Reverse Mode Efficiency (5s battery configuration)
+Reverse Mode Output Power (W)
+Efficiency (%)
+0 20 40 60 80 100 120 140 160 180 200 220 240
+80
+82
+84
+86
+88
+90
+92
+94
+96
+98
+100
+5VSYS_REV
+9VSYS_REV
+15VSYS_REV
+20VSYS_REV
+36VSYS_REV
+48VSYS_REV
+VBAT = 28 V
+Figure 7-10. Reverse Mode Efficiency (7s battery configuration)
+Reverse Mode Output Power (W)
+Efficiency (%)
+0 20 40 60 80 100 120 140 160 180 200 220 240
+80
+82
+84
+86
+88
+90
+92
+94
+96
+98
+100
+5VSYS_REV
+9VSYS_REV
+15VSYS_REV
+20VSYS_REV
+36VSYS_REV
+48VSYS_REV
+VBAT = 38 V
+Figure 7-11. Reverse Mode Efficiency (10s battery
+configuration)
+Reverse Mode Regulation Voltage Setting (V)
+Accuracy (%)
+5 10 15 20 25 30 35 40 45 50
+-3
+-2
+-1
+0
+1
+2
+3
+19VBAT
+27VBAT
+38VBAT
+Figure 7-12. Reverse Mode Output Voltage Accuracy vs
+VAC_REV Setting
+BQ25756
+SLUSEN5 – AUGUST 2023
+8 Detailed Description
+8.1 Overview
+The BQ25756 is a wide input voltage, Li-Ion, Li-polymer, LiFePO 4 bi-directional switched-mode buck-boost
+battery charge controller. The device offers high-efficiency battery charging over a wide voltage range with
+accurate and programmable charge current and charge voltage regulation, in addition to automatic charge
+preconditioning, termination, and charge status indication. The device integrates all the loop compensation and
+5-V gate drivers for the buck-boost converter, thereby providing a high density solution with ease of use. The
+switching frequency of the device can be programmed or forced to follow an external clock frequency via the
+FSW_SYNC pin. While switching under light-load the device offers an optional Pulse Frequency Modulation
+(PFM) mode to increase efficiency. The charger has a digital state machine that advances the charger's states
+as the converter analog feedback loops hand off control to each other. It also manages the fault protection
+comparators. The loops regulate and comparators compare against reference values in the I 2C registers, unless
+clamped by external resistors.
+Besides the I2C host-controlled charging mode, the device also supports autonomous charging mode via resistor
+programmable limits. Input current, charge current and charge voltage regulation targets can be changed via
+the ILIM_HIZ, ICHG, and FB pins, respectively. The device can complete a charging cycle without any software
+intervention. Charging function is controlled via the CE pin.
+For Li-Ion and LiFePO 4 chemistries, the device checks battery voltage and charges the battery in different
+phases accordingly: trickle charging, pre-charging, constant current (CC) charging and constant voltage (CV)
+charging. At the end of the charging cycle, the charger automatically terminates when the charge current is
+below the termination current limit in the constant voltage phase. When the full battery falls below the recharge
+threshold, the charger automatically starts a new charge cycle.
+The input operating window is programmed via the ACUV and ACOV pins. When the input voltage is outside the
+programmed window, the device automatically stops the charger, and the PG pin pulls HIGH.
+The charger provides various safety features for battery charging and system operation, including battery
+temperature negative thermistor (NTC) monitoring,  charge timers  and over-voltage/over-current protections on
+battery and input. The thermal shutdown prevents charging when the junction temperature exceeds the T SHUT
+limit.
+The device supports buck-boost reverse power direction to deliver power from the battery to the input when
+the adapter is not present. In reverse mode, the regulation voltage and current can be programmed via the I 2C
+interface (VAC_REV and IAC_REV) to provide a CC/CV profile supporting the USB-PD Extended Power Range
+(EPR).
+The device has three status pins (STAT1, STAT2, and PG) to indicate the charging status and input voltage
+status. These pins can be used to drive LEDs or communicate with a host processor. If needed, these pins can
+also be used as general purpose indicators and their status controlled directly by the I 2C interface. In addition,
+the CE pin can also be used as a general purpose indicator. The INT pin immediately notifies host when the
+device status changes, including faults.
+The device also provides a 16-bit analog-to-digital converter (ADC) for monitoring input current, charge current
+and input/battery/thermistor voltages (IAC, IBAT, VAC, VBAT, TS).
+The device comes with a 36-pin 5-mm × 6-mm QFN package with 0.5-mm pin pitch.
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.2 Functional Block Diagram
+BTST1
+HIDRV1
+SW1
+LODRV1
+DRV_SUP
+BTST2
+HIDRV2
+SW2
+LODRV2
+DRV_SUP
+DRV_SUP
+STAT1
+STAT2
+PG
+CE
+INT
+BUCK-BOOST
+CONTROLLER
+FB
+FBG
+VFB_REG
+VFB
++
+–
+ACP
+ACN
+IAC
++
+–
+SRP
+SRN
+IBAT
+ACUV
++
+–
+VAC
+VAC_DPM
+VACUV
+VACUV_DPM
++
+–
++
+–
++
+–
+VREF_ILIM_HIZ
+VILIM_HIZ
+IAC_DPM
++
+–
++
+–
+VREF_ICHG
+VICHG
+ICHG_REG
+VO,REF
+REGN VDRV_SUP
+SDA
+SCL
+BAT_LOWV
+TERMINATION +
++
+IBAT
+ITERM
+VBAT_LOWV
+VFB
+RECHRG +
+VFB_REG 
+VRECHG
+VFB
+BAT_SHORT + VBAT_SHORT
+VBAT
+TS_SUSPEND
+IAC
+IBAT
+VAC
+VBAT
+VTS
+ADC
+CHARGE
+CONTROL
+I2C
+STATUS
+PIN
+CNTRL TS
+BATTERY
+THERMISTOR
+SENSING
+VTS
+ILIM_HIZ
+ICHG
+IBATIAC
+VICHG
+VILIM_HIZ
+FSW_SYNCOSCILLATOR
+CLK
+SYNC_DET
+HIZ_MODE
+EN_CHARGE
+EN_REVERSE
+EN_PFM
+REF
+DAC
+VAC_DPM
+IAC_DPM
+VFB_REG
+ICHG_REG
+VACUV_DPM
+VREF_ILIM_HIZ
+VREF_ICHG
++
+–
+VILIM_HIZ
+ACOV
+VAC
+REGN
+PGND
+CONVERTER
+CONTROL
++VREF_ACOV
+VACOV
+VREF_ACUV
+VACUV
+VAC_UVP
+VAC_OVP
+REGN
+LDOHIZ_MODE
+REGN
+VSRN
+TSHUT IC_TJ
+TSHUT
++
++VBAT_OV
+VFB
+BAT_OVP
++VICHG_OC
+BAT_OCP
+IBAT
++VDRV_OVP
+VDRV_SUP
+DRV_OVP
+VDRV_UVP
+VDRV_SUP
+DRV_UVP
++VSYS_REV_OV
+VSYS
+SYS_OVP
+BQ25756
++
++
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.3 Feature Description
+8.3.1 Device Power-On-Reset
+The internal bias circuits are powered from either VAC or SRN. When VAC rises above V VAC_OK, charging is
+allowed. When BAT rises above 3 V, reverse mode operation is allowed.
+A POR occurs when one of these supplies rises above its corresponding V OK level, while the other supply is
+below its corresponding V OK level. After the POR, I 2C interface is ready for communication and all the registers
+are reset to default value. The host can access all the registers after POR.
+8.3.2 Device Power-Up From Battery Without Input Source
+If only battery is present and the voltage is above 3-V threshold, the device is ready for I 2C communication , and
+the converter is ready to start operation in reverse mode . The REGN LDO stays off to minimize the quiescent
+current. The ADC can be used to monitor all system parameters.
+8.3.3 Device Power Up from Input Source
+When a valid input source (VVAC_OK < VAC and VAC within the ACUV and ACOV operating window) is detected,
+the PG pin pulls LOW. If charging is enabled, the device proceeds to enable the REGN LDO and power up the
+buck-boost converter.
+8.3.3.1 VAC Operating Window Programming (ACUV and ACOV)
+The VAC operating window can be programmed via the ACUV and ACOV pins using a three-resistor divider
+from VAC to PGND as shown in Figure 8-1.
+INPUT
+VAC
+ACUV
+ACOV
+RAC1
+RAC2
+RAC3
+Figure 8-1. ACUV and ACOV Programming
+When V ACUV falls and reaches V ACUV_DPM, the device enters input voltage regulation, thereby reducing the
+charge current. V ACUV continues falling below V REF_ACUV, the device automatically stops the converter and the
+PG pin pulls high.
+System Note:  if VAC_DPM register is programmed to a value higher than POR, the device regulates the
+VAC voltage to the higher of VAC_DPM register or V ACUV_DPM pin voltage. Refer to Section 8.3.5.1.2 for more
+information.
+When VACOV rises above VREF_ACOV, the device automatically stops the converter and the PG pin pulls high.
+The following equations govern the relationship between the resistor divider and the target operating voltage
+window programmed by ACOV and ACUV pins:
+VACOV_TARGET = VREF_ACOV ×
+RAC1 + RAC2 + RAC3
+RAC3 (1)
+VACUV_TARGET = VREF_ACUV ×
+RAC1 + RAC2 + RAC3
+RAC2 + RAC3 (2)
+If unused, tie ACUV to VAC and ACOV to PGND in order to apply the internal VAC operating window (VVAC_OP).
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.3.3.2 REGN Regulator (REGN LDO)
+The REGN LDO regulator provides a regulated bias supply for the IC and the TS external resistors. Additionally,
+REGN voltage can be used to drive the buck-boost switching FETs directly by tying the DRV_SUP pin to REGN.
+The pull-up rail of PG, STAT1, and STAT2 can be connected to REGN as well. The REGN LDO is enabled when
+below conditions are valid:
+1. VAC voltage above VVAC_OK and charge is enabled in forward mode.
+2. BAT voltage above 3 V in Reverse mode and Reverse Mode is enabled (EN_REV = 1)
+At high input voltages and/or large gate drive requirements, the power loss from gate driving via the REGN LDO
+can be excessive. This power for the gate drivers can be provided externally by directly driving the DRV_SUP
+pin with a high efficiency supply ranging from 4.5 V to 12 V. This supply should be able to provide at least 50 mA
+or more as required to drive the switching FET gate charge.
+The power dissipation for driving the gates via the REGN LDO is: PREGN = VAC − VREGN × QG TOT 1,2, 3,4 × f SW ,
+where QG(TOT)1,2,3,4 is the sum of the total gate charge for all switching FETs and fSW is the programmed
+switching frequency. The Safe Operating Area (SOA) below is based on a 1-W power loss limit.
+QG(TOT)1,2,3,4 x fSW (mA)
+Input Voltage (V)
+0 10 20 30 40 50 60 70 80 90 100
+0
+10
+20
+30
+40
+50
+60
+70
+80
+Figure 8-2. REGN LDO Safe Operating Area (SOA)
+8.3.3.3 Compensation-Free Buck-Boost Converter Operation
+The device integrates all the loop compensation, thereby providing a high density solution with ease of use. At
+startup, the device toggles the SW node for about 40 ms to determine the correct compensation values for a
+given set of passives. If the battery is above VBAT_LOWV, then SW2 is toggled. SW1 is toggled otherwise.
+The charger employs a synchronous buck-boost converter that allows charging from a wide range of input
+voltage sources. The charger operates in buck, buck-boost or boost mode. The converter can operate
+uninterruptedly and continuously across the three operation modes. During buck-boost mode, the converter
+alternates a SW1 pulse with a SW2 pulse, with effective switching frequency interleaved among these pulses for
+highest efficiency operation.
+During boost mode operation, the HS FET is forced to turn on for 225 ns in each switching cycle to ensure
+inductor energy is delivered to the output, effectively limiting the maximum boosting ratio. For example, when
+device is configured to switch at 500 kHz, the switching period is 2 μs, yielding a duty cycle limit of (1 - 0.225
+μs/2 μs) = 88.75%. Given a 5-V input, this translates to a maximum 44-V output assuming 100% efficiency. The
+true output will be lower than this ideal limit. At lower switching frequencies, the maximum duty cycle increases,
+making the limitation less significant.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-1. Switching MOSFET Operation
+MODE BUCK BUCK-BOOST BOOST
+HS BUCK FET Switching at fSW
+Switching (fSW interleaved
+between SW1 and SW2) ON
+LS BUCK FET Switching at fSW
+Switching (fSW interleaved
+between SW1 and SW2) OFF
+LS BOOST FET OFF Switching (fSW interleaved
+between SW1 and SW2) Switching at fSW
+HS BOOST FET ON Switching (fSW interleaved
+between SW1 and SW2) Switching at fSW
+8.3.3.3.1 Light-Load Operation
+In order to improve converter light-load efficiency, the device switches to Pulse Frequency Modulation (PFM)
+control at light load when the EN_PFM bit is set to 1. The effective switching frequency will decrease accordingly
+when output load decreases.
+EN_PFM bit is automatically cleared to 0 every time the converter starts and a valid SYNC clock input is
+detected on the FSW_SYNC pin, thereby ensuring fixed frequency operation regardless of output current. The
+bit can be overwritten to 1 to allow PFM after startup even when SYNC signal is present.
+Light-load PFM mode can be disabled by clearing the EN_PFM bit. In this case, the device switches in PWM
+mode at a fixed switching frequency.  It is recommended to disable PFM mode (EN_PFM = 0) when termination
+is enabled and set lower than 2 A.
+8.3.3.4 Switching Frequency and Synchronization (FSW_SYNC)
+The device switching frequency can be programmed between 200 kHz to 600 kHz using a resistor from the
+FSW_SYNC pin to PGND. The RFSW resistor is related to the nominal switching frequency (fSW) by the equation:
+RFSW = 1
+10 × fSW × 5 × 10−12 − 500 × 10−9 (3)
+This pin must be pulled to PGND using a R FSW, do not leave floating. In addition to programming the nominal
+switching frequency, the FSW_SYNC pin can also be used to synchronize the internal oscillator to an external
+clock signal. The synchronization feature works over the same range as the switching frequency: 200-kHz to
+600-kHz range.
+Table 8-2. Common RFSW and Switching Frequency Values
+RFSW (kΩ) SWITCHING FREQUENCY (kHz)
+200 200
+133 250
+100 300
+80 350
+66.67 400
+57.1 450
+50 500
+44.4 550
+40 600
+8.3.3.5 Device HIZ Mode
+When a valid input supply is present, it is possible to force the device into HIZ Mode which disables switching,
+disables REGN LDO. The system load is provided by the battery in this mode. The charger enters HIZ Mode
+when EN_HIZ bit is set to 1 or the ILIM_HIZ pin is pulled above VIH_ILIM_HIZ (refer to Section 8.3.5.1.1.1).
+BQ25756
+SLUSEN5 – AUGUST 2023
+If the device is operating in reverse mode with the converter turned on, and the device enters HIZ mode
+(EN_HIZ bit is set to 1 or ILIM_HIZ pin is pulled above VIH_ILIM_HIZ), switching stops. Once HIZ mode condition is
+cleared by the host, the device resumes reverse mode operation.
+The device exits HIZ Mode when the EN_HIZ bit is cleared to 0 or the ILIM_HIZ pin is pulled below 0.4 V.
+8.3.4 Battery Charging Management
+The device charges 1-cell up-to 14-cell Li-Ion batteries and 1-cell up-to 16-cell LiFePO 4 batteries. The charge
+cycle is autonomous and requires no host interaction.
+8.3.4.1 Autonomous Charging Cycle
+When battery charging is enabled (EN_CHG bit =1 and CE pin is LOW ), the device autonomously completes
+a charging cycle without host involvement. The device charging parameters can be set by hardware through
+the FB pin to set regulation voltage and the ICHG pin to set charging current. The host can always control the
+charging operation and optimize the charging parameters by writing to the corresponding registers through I2C.
+Table 8-3. Li-Ion & LiFePO4 Charging Parameter Default Settings
+PARAMETER VALUE
+Charge Stages Precharge → Fast Charge (CC) → Taper Charge (CV) →
+Termination → Recharge
+FB Voltage Regulation Target (VFB_REG) 1.536 V
+Battery Low Voltage (VBAT_LOWV ) 66.7% x VFB_REG = 1.0245 V
+Recharge Voltage (VRECHG) 97.6% x VFB_REG =1.4991 V
+Charging Current HW Limit (ICHG pin) ICHG = KICHG / RICHG
+Pre-Charge Current HW Limit (ICHG pin) 20% x ICHG
+Termination Current HW Limit (ICHG pin) 10% x ICHG
+CV Timer Disabled
+NTC Temperature Profile JEITA
+Safety Timer 12 hours
+A new charge cycle starts when the following conditions are valid:
+• VAC is within the ACUV and ACOV operating window
+• Device is not in HIZ mode (EN_HIZ = 0 and ILIM_HIZ pin voltage is below VIH_ILIM_HIZ)
+• REGN is above VREGN_OK
+• Battery charging is enabled (EN_CHG = 1 and CE pin is LOW )
+• No thermistor fault on TS
+• No safety timer fault
+For lithium-ion battery charging, the charger device automatically terminates the charging cycle when the
+charging current is below termination threshold, charge voltage is above recharge threshold, and device is
+not in DPM mode. When a full battery voltage is discharged below recharge threshold (threshold selectable via
+VRECHG[1:0] bits), the device automatically starts a new charging cycle. After the charge is done, toggle either
+CE pin or  EN_CHG bit can initiate a new charging cycle. In addition, the device offers a dedicated CV timer to
+stop the charging after a programmable period (CV_TMR bits) in CV mode, regardless of the charge current
+value.
+The status register (CHARGE_STAT) indicates the different charging phases as:
+• 000 – Not Charging
+• 001 – Trickle Charge (VFB < VBAT_SHORT)
+• 010 – Pre-charge (VBAT_SHORT < VFB < VBAT_LOWV)
+• 011 – Fast-charge (CC mode)
+• 100 – Taper Charge (CV mode)
+• 101 – Reserved
+• 110 – Top-off Timer Active Charging
+• 111 – Charge Termination Done
+BQ25756
+SLUSEN5 – AUGUST 2023
+When the charger transitions to any of these states, including when charge cycle is completed, an INT pulse is
+asserted to notify the host.
+Supercapacitors do not require Trickle Charge or Pre-charge regions when their voltage is low. For
+supercapacitor charging, setting the EN_PRECHG bit to 0 can disable both of these charging regions. In this
+case, the charger outputs ICHG current as long as the feedback voltage (V FB) is below VFB_REG. The following
+settings are recommended for supercapacitor charging:
+• EN_PRECHG = 0
+• EN_TERM = 0
+• EN_CHG_TMR = 0
+8.3.4.1.1 Charge Current Programming (ICHG pin and ICHG_REG)
+There are two distinct thresholds to limit the charge current (if both are enabled, the lowest limit of these will
+apply):
+1. ICHG pin pull down resistor (hardware control)
+2. ICHG_REG register bits (host software control)
+To set the maximum charge current using the ICHG pin, a pull-down resistor to PGND is used. It is required to
+use a 5-mΩ RBAT_SNS sense resistor. The charge current limit is controlled by:
+ICHG_MAX =
+KICHG
+RICHG (4)
+The precharge current limit is defined as I PRECHG_MAX = 20% x I CHG_MAX, and the termination current is I TERM =
+10% x ICHG_MAX.
+The actual charge current limit is the lower value between ICHG pin setting and I 2C register setting
+(ICHG_REG). For example, if the register setting is 10 A (0xC8), and ICHG pin has a 10-k Ω resistor (K ICHG
+= 50 A-kΩ) to ground for 5 A, the actual charge current limit is 5 A. The device regulates ICHG pin at V REF_ICHG.
+If ICHG pin voltage exceeds VREF_ICHG, the device enters charge current regulation.
+The ICHG pin can also be used to monitor charge current when device is not in charge current regulation. When
+not in charge current regulation, the voltage on ICHG pin (V ICHG) is proportional to the actual charging current.
+ICHG pin can be used to monitor battery current with the following relationship:
+IBAT =
+KICHG × VICHG
+RICHG × VREF_ICHG (5)
+For example, if ICHG pin is set with 10-k Ω resistor, and the ICHG voltage 1.0V, the actual charge current is
+between 2.4 A to 2.6 A (based on KICHG specified).
+If ICHG pin is shorted to PGND, the charge current limit is set by the ICHG_REG register. If hardware charge
+current limit function is not needed, it is recommended to short this pin to PGND. The ICHG pin function can be
+disabled by setting the EN_ICHG_PIN bit to 0 (recommended when pin is shorted to PGND). When the pin is
+disabled, charge current limit and monitoring functions via ICHG pin are not available.
+To set the maximum charge current using the ICHG_REG register bits, write to the ICHG_REG register bits.
+The charge current limit range is from 400 mA to 20,000 mA with 50 mA/step. The default ICHG_REG is set to
+maximum code, allowing ICHG pin to limit the current in hardware.
+8.3.4.2 Li-Ion Battery Charging Profile
+The device charges the battery in five phases: trickle charge, pre-charge, constant current, constant voltage, and
+top-off trickle charging (optional). At the beginning of a charging cycle, the device checks the battery voltage and
+regulates current/voltage accordingly.
+Table 8-4. Recommended Li-Ion Charge Settings
+PARAMETER I2C REGISTER BITS VALUE EQUIVALENT PER 4.2-V
+CHARGE (V)
+Battery Low Voltage VBAT_LOWV 0x3 = 71.4% x VFB_REG 3.0 V
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-4. Recommended Li-Ion Charge Settings (continued)
+PARAMETER I2C REGISTER BITS VALUE EQUIVALENT PER 4.2-V
+CHARGE (V)
+Recharge Voltage VRECHG 0x3 = 97.6% x VFB_REG 4.1 V
+If the charger device is in DPM regulation during charging, the actual charging current will be less than the
+programmed value. In this case, termination is temporarily disabled and the charging safety timer is counted at
+half the clock rate, as explained in Charging Safety Timer.
+Charge Voltage
+VFB_REG
+Charge Current
+ICHG
+VBATLOWV
+VBAT_SHORT
+IPRECHG
+ITERM
+IBAT_SHORT
+Battery Voltage
+Charge Current
+Trickle Charge Pre-charge Fast-Charge
+CC Top-off Timer
+(optional)
+CHARGE_STAT 001 010 011 110
+Taper-Charge
+CV
+100
+111
+Precharge Timer
+(2hrs)
+Safety Timer
+CHG_TMR[1:0]
+VRECHG
+100
+Safety Timer
+Auto-
+Recharge
+CV
+Figure 8-3. Typical Li-Ion Battery Charging Profile
+8.3.4.3 LiFePO4 Battery Charging Profile
+The device charges the battery in five phases: trickle charge, pre-charge, constant current, constant voltage, and
+top-off trickle charging (optional). At the beginning of a charging cycle, the device checks the battery voltage and
+regulates current/voltage accordingly.
+Table 8-5. Recommended LiFePO4 Charge Settings
+PARAMETER I2C REGISTER BITS VALUE EQUIVALENT PER 3.6-V
+CHARGE (V)
+Battery Low Voltage VBAT_LOWV 0x1 = 55% x VFB_REG 1.98 V
+Recharge Voltage VRECHG 0x0 = 93% x VFB_REG 3.35 V
+If the charger device is in DPM regulation during charging, the actual charging current will be less than the
+programmed value. In this case, termination is temporarily disabled and the charging safety timer is counted at
+half the clock rate, as explained in Charging Safety Timer. The typical charging cycle for LiFePO 4 follows the
+same profile as Typical Li-Ion Battery Charging Profile.
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.3.4.4 Charging Termination for Li-ion and LiFePO4
+The device terminates a charge cycle when the battery voltage is above recharge threshold, and the current is
+below termination current. The termination current threshold is controlled by the lower option between 10% x
+ICHG pin setting or the ITERM register setting.
+In standalone applications using the ICHG pin to program the current, the termination threshold is set at 10% of
+the ICHG pin value (10-A ICHG pin programming results in 1-A termination).
+In host-controlled applications, the termination current can be programmed using the ITERM register bits. The
+ICHG pin can still be used to set a hardware limit for the charge current.
+After the charging cycle is completed, the buck-boost converter turns off. When termination occurs, the status
+register CHARGE_STAT is set to 111, and an INT pulse is asserted to the host. Termination is temporarily
+disabled when the charger device is in input current, or input voltage regulation. Termination can be permanently
+disabled by writing 0 to EN_TERM.
+At low termination currents, due to the comparator offset, the actual termination current may be up to 20% higher
+than the termination target. In order to compensate for comparator offset, a programmable top-off timer (default
+disabled) can be applied after termination is detected. The top-off timer follows safety timer constraints, such that
+if safety timer is suspended, so is the top-off timer. Similarly, if safety timer is doubled, so is the top-off timer.
+CHARGE_STAT reports whether the top off timer is active via the 110 code. Once the Top-Off timer expires, the
+CHARGE_STAT register is set to 111 and an INT pulse is asserted to the host.
+8.3.4.5 Charging Safety Timer
+The device has built-in safety timer to prevent extended charging cycle due to abnormal battery conditions. The
+user can program fast charge safety timer through I 2C (CHG_TMR bits). When safety timer expires, the fault
+register CHG_TMR_STAT bit is set to 1, and an INT pulse is asserted to the host. The safety timer feature can
+be disabled by clearing EN_CHG_TMR bit.
+During input voltage or input current regulation, the safety timer counts at half clock rate as the actual charge
+current is likely to be below the programmed setting. For example, if the charger is in input current regulation
+(IAC_DPM_STAT=1) throughout the whole charging cycle, and the safety timer is set to 5 hours, then the timer
+will expire in 10 hours.  The timer also counts at half clock rate for TS pin events which reduce charge current
+(refer to JEITA Guideline Compliance in Charge Mode  section). This half clock rate feature can be disabled by
+setting EN_TMR2X = 0.
+During faults which disable charging, timer is suspended. Once the fault goes away, safety timer resumes. If
+the charging cycle is stopped and started again, the timer gets reset (toggle CE pin or EN_CHG bit restarts the
+timer).
+The pre-charge safety timer is a fixed 2 hour counter that runs when VBAT < V BAT_LOWV. The pre-charge safety
+timer is disabled when EN_PRECHG bit is 0.
+8.3.4.6 CV Timer
+In some applications, such as batteries with high-leakage or batteries in parallel with a system load, the battery
+current may never reach the ITERM threshold while in CV mode. The device offers a dedicated CV timer to
+control the amount of time the charger stays in CV mode.
+The CV timer begins counting when the device enters the CV mode , and its duration can be programmed
+through the CV_TMR register bits. Note that CV_TMR = 0 disables the timer altogether. The CV timer is an
+absolute timer, and the EN_TMR2X register bit has no effect on it.
+During faults which disable charging or when device falls out of CV regulation due to IAC_DPM or VAC_DPM,
+the CV timer is suspended. Once the device return to CV mode, the CV timer resumes. If the charging cycle is
+stopped and started again, the timer gets reset (toggle CE pin or EN_CHG bit restarts the timer).
+An INT is asserted to the host when CV timer expires, and can be masked via the CV_TMR_MASK bit.
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.3.4.7 Thermistor Qualification
+The charger device provides a single thermistor input for battery temperature monitor.
+8.3.4.7.1 JEITA Guideline Compliance in Charge Mode
+To improve the safety of charging Li-ion batteries, JEITA guideline was released on April 20, 2007. The guideline
+emphasized the importance of avoiding a high charge current and high charge voltage at certain low and high
+temperature ranges.
+To initiate a charge cycle, the voltage on TS pin must be within the VT1 to VT5 thresholds. If TS voltage exceeds
+the T1 to T5 range, the controller suspends charging and waits until the battery temperature is within the T1 to
+T5 range.
+At cool temperature, T1 to T2, JEITA recommends the charge current to be reduced to half of the charge current
+or lower. The device allows charge current in the cool temperature region to be progrramed to 20%, 40% or
+100% of the charge current at T2 to T3 or charge suspend, which is controlled by the register bits JEITA_ISETC.
+If charge current is reduced in the cool temperature region, the safety timer counts at half clock rate when
+EN_TMR2X = 1.
+At warm temperature, T3 to T5, JEITA recommends charge voltage less than 4.1 V / cell. The device provides
+the programmability of the charge voltage at T3-T5, to be with a voltage offset less than charge voltage at T2 to
+T3 or charge suspend, which is controlled by the register bits JEITA_VSET.
+The charger also provides flexible voltage/current settings beyond the JEITA requirements. The charge current
+setting at warm temperature T3 to T5 can be configured to be 40%, or 100% of the programmed charge current
+or charge suspend, which is programmed by the register bit JEITA_ISETH. If charge current is reduced in the
+JEITA warm region, the safety timer counts at half clock rate when EN_TMR2X = 1.
+The default charging profile for JEITA is shown in the figure below, in which the blue line is the default setting
+and the red dash line is the programmable options.
+T2
+10°C
+T3
+45°C
+T5
+60°C
+T1
+0°C
+100%
+20%
+40%
+60%
+80%
+Percentage of ICHG
+TS Temperature
+ISETC=00
+ISETC=01
+ISETC=10
+ISETC=11
+ISETH=0
+ISETH=1
+T2
+10°C
+T3
+45°C
+T5
+60°C
+T1
+0°C
+VFB_REG
+Percentage of VFB_REG
+TS Temperature
+VSET = 10
+94.3%
+97.6%
+VSET = 01
+VSET = 00
+VSET = 11
+Figure 8-4. TS Charging Values
+RT1RT2
+10K
+TS
+REGN
+PGND
+Assuming a 103AT NTC thermistor on the battery pack as shown above, the value of RT1 and RT2 can be
+determined by:
+BQ25756
+SLUSEN5 – AUGUST 2023
+RT2 =
+RTHCOLD × RTHHOT × 1
+VT1 − 1
+VT5
+RTHHOT × 1
+VT5 − 1 − RTHCOLD × 1
+VT1 − 1
+(6)
+RT1 =
+1
+VT1 − 1
+1
+RT2 + 1
+RTHCOLD
+(7)
+Select 0°C to 60°C range for Li-ion or Li-polymer battery:
+RTHT1 = 27.28 kΩ
+RTHT5 = 3.02 kΩ
+RT1 = 5.24 kΩ
+RT2 = 30.31 kΩ
+The device also offers programmability for all the thresholds via the TS Charging Threshold Control register
+(REG0x1B). This flexibility can help to change the charger's operating window in software.
+The JEITA profile can be disabled by clearing the EN_JEITA register bit. In this case, the device still limits the
+charging window from T1 to T5, but no special charge profile is employed within the Cool (T1 to T2) or Warm (T3
+to T5) regions.
+The NTC monitoring window can be disabled by clearing the EN_TS register bit. In this case, the TS pin voltage
+is ignored, and the device always reports normal TS status. If EN_TS is set to 0, TS pin can be floated or
+connected to PGND.
+8.3.4.7.2 Cold/Hot Temperature Window in Reverse Mode
+For battery protection during reverse or auto-reverse mode operation, the device monitors the battery
+temperature to be within the VBCOLD to VBHOT thresholds. When temperature is outside of the thresholds,
+the reverse mode is shut off. In addition, EN_REV, EN_AUTO_REV and REVERSE_STAT bits are cleared to 0
+and corresponding TS_STAT is reported (TS Cold or TS Hot). The temperature protection in reverse mode can
+be completely disabled by clearing the EN_TS bit to 0.
+VREGN
+GND
+VBCOLDx
+VBHOTx
+Temperature Range for Reverse Mode
+Reverse Mode Suspended
+Reverse Mode Enable
+Reverse Mode Suspended
+(55°C / 60°C / 65°C)
+(±10°C / ±20°C)
+Figure 8-5. TS Pin Thermistor Sense Threshold in Reverse Mode
+8.3.5 Power Management
+The device accommodates a wide range of input sources from 4.2 V up to 70 V.
+8.3.5.1 Dynamic Power Management: Input Voltage and Input Current Regulation
+The device features Dynamic Power Management (DPM), which continuously monitors the input current and
+input voltage. When input source is over-loaded, either the current exceeds the input current limit (lower of
+IAC_DPM or ILIM_HIZ pin setting), or the voltage falls below the input voltage limit (higher of VAC_DPM or
+BQ25756
+SLUSEN5 – AUGUST 2023
+ACUV pin setting, VACUV_DPM). The device then reduces the charge current until the input current falls below the
+input current limit and the input voltage rises above the input voltage limit.
+When the charge current is reduced to zero, but the input source is still overloaded, the input voltage continues
+to drop. Once the input voltage drops below the ACUV limit (VACUV < VREF_ACUV), the charger stops switching.
+8.3.5.1.1 Input Current Regulation
+The total input current is a function of the system supply current and the battery charging current. System current
+normally fluctuates as portions of the systems are powered up or down. Without DPM, the source must be able
+to supply the maximum system current and the maximum charger input current simultaneously. By using DPM,
+the battery charger reduces the charging current when the input current exceeds the input current limit set by
+the lower of IAC_DPM register bits, or ILIM_HIZ pin. This allows the current capability of the input source to be
+lowered, reducing system cost.
+There are two thresholds to limit the input current (if both are enabled, the lower limit of these two will apply):
+1. IAC_DPM register bits (host software control)
+2. ILIM_HIZ pull down resistor (hardware control)
+To set the maximum current using the IAC_DPM register bits, write to the IAC_DPM register bits. When using a
+2-mΩ resistor, the input current limit range is from 1 A to 50 A with 125 mA/step. The default IAC_DPM is set to
+maximum code, allowing ILIM_HIZ pin to limit the current in hardware.
+To set the maximum current using the ILIM_HIZ pin, refer to Section 8.3.5.1.1.1.
+Although both limits are referenced to a 2-m Ω sense resistor, other values can also be used. A larger sense
+resistor provides a larger sense voltage and higher regulation accuracy, but at the expense of higher conduction
+loss. For example, using a 5-mΩ resistor yields programmability from 400 mA to 20 A with 50 mA/step.
+8.3.5.1.1.1 ILIM_HIZ Pin
+To set the maximum input current using the ILIM_HIZ pin, a pull-down resistor to PGND is used. When using a
+2-mΩ RAC_SNS resistor, the input current limit is controlled by: IAC_MAX = KILIM / RILIM_HIZ.
+The actual input current limit is the lower value between ILIM_HIZ pin setting and register setting (IAC_DPM).
+For example, if the register setting is 20 A, and ILIM_HIZ pin has a 5-k Ω resistor (K ILIM = 50 A-k Ω) to ground
+for 10 A, the actual input current limit is 10 A. ILIM_HIZ pin can be used to set the input current limit
+when EN_ILIM_HIZ_PIN bit is set to 1. The device regulates the pin at V REF_ILIM_HIZ. If pin voltage exceeds
+VREF_ILIM_HIZ, the device enters input current regulation. Entering input current regulation through the pin sets
+the IAC_DPM_STAT and FLAG bits, and produces an interrupt to host. The interrupt can be masked via the
+IAC_DPM_MASK bit.
+The ILIM_HIZ pin can also be used to monitor input current. When not in input current regulation, the voltage on
+ILIM_HIZ pin (VILIM_HIZ) is proportional to the input current. Pin voltage can be used to monitor input current with
+the following relationship: IAC = KILIM x VILIM_HIZ / (RILIM_HIZ x VREF_ILIM_HIZ).
+For example, if the pin is set with 5-k Ω resistor, and the pin voltage is 1.0 V, the actual input current is between
+4.8 A to 5.2 A (based on KILIM specified).
+If ILIM_HIZ pin is shorted, the input current limit is set by the IAC_DPM register. If hardware input current limit
+function is not needed, it is recommended to short this pin to GND. If ILIM_HIZ pin is pulled above V IH_ILIM_HIZ,
+the device enters HIZ mode (refer to Section 8.3.3.5). The ILIM_HIZ pin function can be disabled by setting the
+EN_ILIM_HIZ_PIN bit to 0. When the pin is disabled, input current limit and monitoring functions as well as HIZ
+mode control via the pin are not available.
+KILIM is defined as 50 A×kΩ referenced to a 2-mΩ sense resistor. A larger sense resistor provides a larger sense
+voltage and higher regulation accuracy, but changes the gain from the ILIM_HIZ pin. For example, using a 5-m Ω
+resistor yields KILIM = 50 (A×kΩ) × 2 (mΩ) / 5 (mΩ) = 20 (A×kΩ).
+8.3.5.1.2 Input Voltage Regulation
+In addition to input current regulation, the device also offers input voltage regulation to limit the input power. This
+is especially useful when dealing with input sources such as solar panels, where the operating voltage must be
+BQ25756
+SLUSEN5 – AUGUST 2023
+controlled to extract the maximum power. Alternatively, if the input source current limitation is not known, input
+voltage regulation can be used to limit the power draw from the input source. By using input voltage regulation,
+the battery charger reduces the charging current when the input voltage falls below the input voltage limit set by
+the higher of VAC_DPM register bits, or ACUV pin.
+There are two thresholds to limit the input voltage (the higher limit of these will apply)
+1. VAC_DPM register bits (host software control)
+2. ACUV pin falling threshold (hardware control)
+To set the minimum input voltage using the VAC_DPM register bits, write the desired value directly to the
+VAC_DPM register bits. The default VAC_DPM is set to minimum code, allowing ACUV pin to limit the input
+voltage in hardware.
+To set the minimum input voltage using the ACUV pin, refer to Section 8.3.3.1.
+8.3.5.1.2.1 Max Power Point Tracking (MPPT) for Solar PV Panel
+When EN_MPPT bit is 1, the device provides a maximum power point tracking (MPPT) algorithm for solar
+PV panel input sources. The Input Power Maximizer algorithm finds and tracks the maximum power point by
+alternating between full panel sweep and perturb and observe modes of operation.
+The full panel sweep is used to find the input operating voltage which delivers the maximum charge current
+to the battery. Before running a full panel sweep, the device momentarily enters HIZ mode to measure input
+source open-circuit voltage (V OC). The device proceeds to reduce the input voltage regulation target, measuring
+the charge current output at each setting. The VAC_DPM register is used to program the minimum voltage
+to exit the full panel sweep. After the sweep is complete, the device updates the VAC_MPP register to the
+input voltage regulation value producing the maximum charge current. The device then waits for a period of
+FULL_SWEEP_TMR[1:0] before performing a new full panel sweep. A full panel sweep can be forced at any
+time by setting the FORCE_SWEEP bit to 1. Note that EN_MPPT = 1 is required for FORCE_SWEEP to work.
+The FORCE_SWEEP bit is automatically cleared to 0 after the full panel sweep is completed. Note that the
+device uses the internal ADC to determine the charge current at each step of the full panel sweep, therefore
+writes to the IBAT_ADC_DIS bit are ignored while MPPT is enabled (EN_MPPT = 1).
+In between full panel sweeps, the device employs a perturb and observe algorithm to track the MPP of the
+solar input source. The input voltage regulation set point is dithered, observing changes in charge current. The
+dithering period is controlled via the P_AND_O_TMR[1:0] register bits.
+Note that when the system is directly connected to the input supply, the device cannot limit the system load.
+Therefore, the MPPT algorithm may not find and track the true MPP under all conditions. To enable MPPT
+operation, it is recommended to connect the system load directly in parallel to the battery pack.
+VAC_DPM
+VOC
+Full Panel Sweep Perturb & Observe
+VAC Voltage
+Charge Current
+Figure 8-6. Maximum Power Point Tracking
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.3.6 Reverse Mode Power Direction
+The device supports buck-boost reverse power direction with CC/CV profile to deliver power from the battery
+to the input when the adapter is not present. The reverse mode output voltage regulation is set in VAC_REV
+register bits. The reverse mode also offers output current regulation via the R AC_SNS resistor. This parameter is
+controlled by the IAC_REV register bits. The reverse mode operation can be enabled if the following conditions
+are valid:
+1. SRN above 3 V
+2. DRV_SUP voltage within valid operating window (VDRV_UVP < VDRV < VDRV_OVP.
+3. Reverse mode operation is enabled (EN_REV = 1)
+4. Voltage at TS (thermistor) pin is within range configured by Reverse Temperature Monitor as configured by
+BHOT and BCOLD register bits
+While the reverse mode is active, the device sets the REVERSE_STAT bit to 1. Host can disable the reverse
+operation at any time by setting EN_REV bit to 0.
+The charger also monitors and regulates the battery discharging current in reverse mode. When the battery
+discharge current rises above the IBAT_REV register setting, the charger reduces the reverse mode power flow
+to limit the discharge current.
+8.3.7 Integrated 16-Bit ADC for Monitoring
+The device includes a 16-bit ADC to monitor critical system information based on the device’s modes of
+operation. The ADC is allowed to operate if either the V VAC>VVAC_OK or VBAT>VREGN_OK is valid. The ADC_EN
+bit provides the ability to enable and disable the ADC to conserve power. The ADC_RATE bit allows continuous
+conversion or one-shot behavior. After a one-shot conversion finishes, the ADC_EN bit is cleared, and must be
+re-asserted to start a new conversion.
+The ADC_SAMPLE bits control the resolution and sample speed of the ADC.  By default, ADC channels will be
+converted in one-shot or continuous conversion mode unless disabled in the ADC Function Disable register. If
+an ADC parameter is disabled by setting the corresponding bit, then the read-back value in the corresponding
+register will be from the last valid ADC conversion or the default POR value (all zeros if no conversions have
+taken place). If an ADC parameter is disabled in the middle of an ADC measurement cycle, the device will finish
+the conversion of that parameter, but will not convert the parameter starting the next conversion cycle. If all
+channels are disabled in one-shot conversion mode, the ADC_EN bit is cleared.
+The ADC_DONE_STAT and ADC_DONE_FLAG bits signal when a conversion is complete in one-shot mode
+only. This event produces an INT pulse, which can be masked with ADC_DONE_MASK. During continuous
+conversion mode, the ADC_DONE_STAT bit has no meaning and will be '0'. The ADC_DONE_FLAG bit will
+remain unchanged in continuous conversion mode.
+ADC conversion operates independently of the faults present in the device. ADC conversion will continue even
+after a fault has occurred (such as one that causes the power stage to be disabled), and the host must set
+ADC_EN = ‘0’ to disable the ADC. ADC readings are only valid for DC states and not for transients. When host
+writes ADC_EN = 0, the ADC stops immediately, and ADC measurement values correspond to last valid ADC
+reading.
+If the host wants to exit ADC more gracefully, it is possible to do either of the following:
+1. Write ADC_RATE to one-shot, and the ADC will stop at the end of a complete cycle of conversions, or
+2. Disable all ADC conversion channels, and the ADC will stop at the end of the current measurement.
+When system load is powered from the battery (input source is removed, or device in HIZ mode), enabling the
+ADC automatically powers up REGN and increases the quiescent current. To keep the battery leakage low, it is
+recommended to duty cycle or completely disable the ADC.
+8.3.8 Status Outputs (PG, STAT1, STAT2, and INT)
+8.3.8.1 Power Good Indicator (PG)
+The PG_STAT bit goes HIGH and the PG pin pulls LOW to indicate a good input source when a valid VAC
+voltage is detected. The PG pin can drive an LED. All conditions must be met to indicate power good:
+BQ25756
+SLUSEN5 – AUGUST 2023
+1. VVAC_OK < VVAC < VVAC_INT_OV
+2. VACUV > VREF_ACUV
+3. VACOV < VREF_ACOV
+4. Device not in HIZ mode
+The PG pin can be disabled via the DIS_PG_PIN bit. When disabled, this pin can be controlled to pull LOW
+using the FORCE_STAT3_ON bit.
+8.3.8.2 Charging Status Indicator (STAT1, STAT2 Pins)
+The device indicates charging state on the open drain STAT1 and STAT2 pins. The STAT1, STAT2 pins can drive
+LEDs.
+Table 8-6. STAT1, STAT2 Pin State
+CHARGING STATE STAT1 STAT2
+Charge in progress (including recharge) ON OFF
+Charge done (or float charging when
+EN_3_STAGE_CHARGE= 1) OFF ON
+Charging fault detected (TS out of range, safety timer fault,
+etc.) ON ON
+Charge disabled (EN_CHG = 0, or CE pin high) OFF OFF
+The STAT1, STAT2 pin function can be disabled via the DIS_STAT_PINS bit. When disabled, these pins can
+be controlled to independently pull LOW using the FORCE_STAT1_ON and FORCE_STAT2_ON bits. The STAT
+pins are not affected by the Reverse mode and remain OFF during this mode.
+8.3.8.3 Interrupt to Host (INT)
+In some applications, the host does not always monitor the charger operation. The INT pin notifies the system
+host on the device operation. By default, the following events will generate an active-low, 256-µs INT pulse.
+1. Valid input source conditions detected (see conditions for PG pin)
+2. Valid input source conditions removed (see conditions for PG pin)
+3. Entering IAC_DPM regulation through register or ILIM_HIZ pin
+4. Entering VAC_DPM regulation through register or ACUV pin
+5. I2C Watchdog timer expired
+6. Charger status changes state (CHARGE_STAT value change), including Charge Complete
+7. TS_STAT changes state (TS_STAT value change)
+8. Junction temperature shutdown (TSHUT)
+9. Battery overvoltage detected (BATOVP)
+10. Charge safety timer expired (including pre-charge or CV timer expiration)
+11. A rising edge on any of the *_STAT bits
+Each one of these INT sources can be masked off to prevent INT pulses from being sent out when they occur.
+Three bits exist for each one of these events:
+• The STAT bit holds the current status of each INT source
+• The FLAG bit holds information on which source produced an INT, regardless of the current status
+• The MASK bit is used to prevent the device from sending out INT for each particular event
+When one of the above conditions occurs (a rising edge on any of the *_STAT bits), the device sends out an
+INT pulse and keeps track of which source generated the INT via the FLAG registers. The FLAG register bits are
+automatically reset to zero after the host reads them, and a new edge on STAT bit is required to re-assert the
+FLAG.
+BQ25756
+SLUSEN5 – AUGUST 2023
+/INT
+I2C Flag Read
+IAC_DPM_FLAG
+IAC_DPM_STAT
+TS_FLAG
+TS_STAT
+Figure 8-7. INT Generation Behavior Example
+8.3.9 Protections
+The device closely monitors the input and battery voltage, as well as switching FET currents for safe switch-
+mode operation.
+8.3.9.1 Voltage and Current Monitoring
+8.3.9.1.1 VAC Over-voltage Protection (VAC_OVP)
+In order to protect downstream devices on the system rail, the input over-voltage threshold can be programed
+with the ACOV pin as V VACOV = V REF_ACOV (refer to Section 8.3.3.1). The device also features an internal
+over-voltage protection preset at V VAC_INT_OV. When the input voltage rises above the lower of these two
+thresholds, the device disables the charger. During input over-voltage, an INT pulse is asserted to signal the
+host, and the VAC_OV_STAT, and _FLAG bits are set. Additionally, the PG_STAT bit is cleared and the PG pin
+pulls HIGH. The device automatically resumes charging operation when the over-voltage condition goes away.
+8.3.9.1.2 VAC Under-voltage Protection (VAC_UVP)
+In order to maintain a minimum operating voltage on the system rail, the input under-voltage threshold can be
+programed with the ACUV pin as V VACUV = V REF_ACUV (refer to Section 8.3.3.1). The device also features an
+internal under-voltage protection preset at V VAC_OK. When the input voltage falls below the higher of these two
+thresholds, the device disables the charger. During input under-voltage, an INT pulse is asserted to signal the
+host, and the VAC_UV_STAT, and _FLAG bits are set. Additionally, the PG_STAT bit is cleared and the PG pin
+pulls HIGH. The device automatically resumes charging operation when the under-voltage condition goes away.
+8.3.9.1.3 Battery Over-voltage Protection (BAT_OVP)
+The device protects against battery over-charge using the BAT_OVP comparator. When the FB voltage exceeds
+VBAT_OV, the converters stops switching immediately and prevents the high-side FETs to turn on until the battery
+feedback voltage falls below V BAT_OVZ. This allows one-cycle response to an overvoltage condition, such as
+occurs when the load is removed or the battery is disconnected. During the BAT_OVP event, the I BAT_LOAD turns
+on and sinks current from SRN to GND, allowing for the discharge of stored energy in the output capacitors.
+BAT_OVP also suspends the safety timer, top-off timer, and CV timer.
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.3.9.1.4 Battery Over-current Protection (BAT_OCP)
+The device protects the battery against over-current condition using the BAT_OCP comparator. The device
+monitors the charge current and prevents the current from exceeding V ICHG_OC over R BAT_SNS. If V ICHG_OC
+threshold is reached, the device stops charging and attempts to restart after one second.
+8.3.9.1.5 Reverse Mode Over-voltage Protection (REV_OVP)
+While operating the converter in reverse mode, the device monitors the reverse voltage, V VAC. When VVAC rises
+above regulation target and exceeds VREV_OVP, the device stops switching, and waits for the voltage to fall below
+the threshold to resume switching. An INT pulse is asserted to the host.
+8.3.9.1.6 Reverse Mode Under-voltage Protection (REV_UVP)
+While operating the converter in reverse mode, the device monitors the reverse voltage, V VAC. When V VAC
+falls below the undervoltage threshold (programmable via SYSREV_UV register bit), the device stops switching,
+clears the EN_REV bit, and exits Reverse mode. During the over-voltage event duration, the REVERSE_STAT
+bit is cleared and the REVERSE_FLAG bit is set to indicate a fault in reverse mode. An INT pulse is also
+asserted to the host
+8.3.9.1.7 DRV_SUP Under-voltage and Over-voltage Protection (DRV_OKZ)
+The DRV_SUP pin must maintain a valid voltage between DRV_UVP and DRV_OVP for proper operation of the
+switching power converter stage. This is true both in charging mode and in reverse mode.
+When DRV_SUP pin voltage falls below DRV_UVP threshold, the switching converter stops operation, an INT
+pulse is asserted to signal the host, the DRV_OKZ_STAT, and DRV_OKZ_FLAG bits are set to signal the fault.
+Additionally, the STAT1 and STAT2 pins will change to reflect the charger function is disabled.
+When DRV_SUP pin voltage rises above DRV_OVP threshold, the switching converter stops operation, an INT
+pulse is asserted to signal the host, the DRV_OKZ_STAT, and DRV_OKZ_FLAG bit are set to signal the fault.
+Additionally the STAT1 and STAT2 pins will change to reflect the charger function is disabled.
+When the DRV pin returns to normal operating range, the device automatically resumes switching in either
+charging or reverse mode as configured before the fault.
+8.3.9.1.8 REGN Under-voltage Protection (REGN_OKZ)
+The REGN pin is driven by an internal regulator, and must maintain a voltage above REGN_OKZ for proper
+device operation. This is true both in charging mode  and in reverse mode, and for the ADC to function in battery
+only mode.
+If the internal regulator is overloaded externally, the pin voltage may drop. When REGN falls below REGN_OKZ
+threshold, the switching converter stops operation. Additionally, the STAT1 and STAT2 pins will change to reflect
+the charger function is disabled.  When the fault is removed, the REGN voltage recovers automatically and
+switching resumes in either charging or reverse mode as configured before the fault.
+8.3.9.2 Thermal Shutdown (TSHUT)
+The device has thermal shutdown to turn off the converter when IC surface temperature exceeds TSHUT. The
+fault register bits TSHUT_STAT and TSHUT_FLAG are set and an INT pulse is asserted to the host. The
+converter turns back on when IC temperature is below TSHUT_HYS.  Note that TSHUT protection is active both
+in charging and reverse mode of operation.
+8.3.10 Serial Interface
+The device uses I2C compatible interface for flexible charging parameter programming and instantaneous device
+status reporting. I 2C is a bi-directional 2-wire serial interface. Only two open-drain bus lines are required: a
+serial data line (SDA), and a serial clock line (SCL). Devices can be considered as controllers or targets when
+performing data transfers. A controller is a device which initiates a data transfer on the bus and generates the
+clock signals to permit that transfer. At that time, any device addressed is considered a target.
+The device operates as a target device with address 0x6B, receiving control inputs from the controller device like
+a micro-controller or digital signal processor through the registers defined in the Register Map. Registers read
+BQ25756
+SLUSEN5 – AUGUST 2023
+outside those defined in the map, return 0xFF. The I2C interface supports standard mode (up to 100 kbits/s), fast
+mode (up to 400 kbits/s), and fast mode plus (up to 1 Mbit/s). When the bus is free, both lines are HIGH. The
+SDA and SCL pins are open drain and must be connected to the positive supply voltage via a current source or
+pull-up resistor.
+System Note:  All 16-bit registers are defined as Little Endian, with the most-significant byte allocated to the
+higher address. 16-bit register writes must be done sequentially and are recommended to be programmed using
+multi-write approach described in the Section 8.3.10.7.
+8.3.10.1 Data Validity
+The data on the SDA line must be stable during the HIGH period of the clock. The HIGH or LOW state of the
+data line can only change when the clock signal on SCL line is LOW. One clock pulse is generated for each data
+bit transferred.
+SDA
+SCL
+Data line stable;
+Data valid Change of
+data allowed
+Figure 8-8. Bit Transfers on the I2C Bus
+8.3.10.2 START and STOP Conditions
+All transactions begin with a START (S) and are terminated with a STOP (P). A HIGH to LOW transition on the
+SDA line while SCL is HIGH defines a START condition. A LOW to HIGH transition on the SDA line when the
+SCL is HIGH defines a STOP condition.
+START and STOP conditions are always generated by the controller. The bus is considered busy after the
+START condition, and free after the STOP condition. When timeout condition is met, for example START
+condition is active for more than 2 seconds and there is no STOP condition triggered, the charger I 2C
+communication will automatically reset and communication lines are free for another transmission.
+START (S) STOP (P)
+SDA
+SCL
+SDA
+SCL
+Figure 8-9. START and STOP Conditions on the I2C Bus
+8.3.10.3 Byte Format
+Every byte on the SDA line must be 8 bits long. The number of bytes to be transmitted per transfer is
+unrestricted. Each byte has to be followed by an ACKNOWLEDGE (ACK) bit. Data is transferred with the
+Most Significant Bit (MSB) first. If a target cannot receive or transmit another complete byte of data until it
+has performed some other function, it can hold the SCL line low to force the controller into a wait state (clock
+BQ25756
+SLUSEN5 – AUGUST 2023
+stretching). Data transfer then continues when the target is ready for another byte of data and releases the SCL
+line.
+SCL
+SDA
+START or
+Repeated
+START
+S or Sr 1 2 7 8 9
+MSB
+ACK
+Acknowledgement
+signal from target
+1 2 8 9
+ACK
+Acknowledgement
+signal from target
+STOP or
+Repeated
+START
+P or Sr
+Figure 8-10. Data Transfer on the I2C Bus
+8.3.10.4 Acknowledge (ACK) and Not Acknowledge (NACK)
+The ACK signaling takes place after byte. The ACK bit allows the target to signal the controller that the byte was
+successfully received and another byte may be sent. All clock pulses, including the acknowledge 9 th clock pulse,
+are generated by the controller.
+The controller releases the SDA line during the acknowledge clock pulse so the target can pull the SDA line
+LOW and it remains stable LOW during the HIGH period of this 9th clock pulse.
+A NACK is signaled when the SDA line remains HIGH during the 9 th clock pulse. The controller can then
+generate either a STOP to abort the transfer or a repeated START to start a new transfer.
+8.3.10.5 Target Address and Data Direction Bit
+After the START signal, a target address is sent. This address is 7 bits long, followed by the 8 bit as a data
+direction bit (bit R/ W). A zero indicates a transmission (WRITE) and a one indicates a request for data (READ).
+The device 7-bit address is defined as 1101 011' (0x6B) by default.
+SCL
+SDA
+START
+S 1-7 8 9
+ACK
+1-7 8 9
+ACK
+1-7 8 9
+STOP
+P
+ADDRESS R/W DATA ACKDATA
+Figure 8-11. Complete Data Transfer on the I2C Bus
+8.3.10.6 Single Write and Read
+Target AddrS 0 ACK Reg Addr ACK Data to Addr ACK P
+Figure 8-12. Single Write
+Target AddrS 0 ACK Reg Addr ACK
+P
+S Target Addr 1 ACK
+Data NCK
+Figure 8-13. Single Read
+BQ25756
+SLUSEN5 – AUGUST 2023
+If the register address is not defined, the charger IC sends back NACK and returns to the idle state.
+8.3.10.7 Multi-Write and Multi-Read
+The charger device supports multi-read and multi-write of all registers.
+Data to Addr
+S 0 ACK Reg Addr ACK
+PACK Data to Addr+1 ACK ACKData to Addr+N
+Target Addr
+Figure 8-14. Multi-Write
+Target AddrS 0 ACK Reg Addr ACK
+P
+S Target Addr 1 ACK
+Data @ Addr NCKData @ Addr+1ACK ACK Data @ Addr+N
+Figure 8-15. Multi-Read
+8.4 Device Functional Modes
+8.4.1 Host Mode and Default Mode
+The device is a host controlled charger, but it can operate in default mode without host management. In default
+mode, the device can be used as an autonomous charger with no host or while host is in sleep mode. When the
+charger is in default mode, WD_STAT bit becomes HIGH, WD_FLAG is set to 1, and a INT is asserted low to
+alert the host (unless masked by WD_MASK). The WD_FLAG bit would read as a '1' upon the first read and then
+'0' upon subsequent reads. When the charger is in host mode, WD_STAT bit is LOW.
+After power-on-reset, the device starts in default mode with watchdog timer expired. All the registers are in the
+default settings.
+In default mode, the device keeps charging the battery with default 2-hour pre-charging safety timer and the
+12-hour fast charging safety timer. At the end of the 2-hour or 12-hour timer expiration, the charging is stopped if
+termination has not been detected.
+A write to any I 2C register transitions the charger from default mode to host mode, and initiates the watchdog
+timer. All the device parameters can be programmed by the host. To keep the device in host mode, the host has
+to reset the watchdog timer by writing 1 to WD_RST bit before the watchdog timer expires (WD_STAT bit is set),
+or disable watchdog timer by setting WATCHDOG bits = 00.
+When the watchdog timer is expired, the device returns to default mode and select registers are reset to default
+values as detailed in the Register Map section. The Watchdog timer will be reset on any write if the watchdog
+timer has expired. When watchdog timer expires, WD_STAT and WD_FLAG is set to 1, and /INT is asserted low
+to alert the host (unless masked by WD_MASK).
+BQ25756
+SLUSEN5 – AUGUST 2023
+I2C Write
+POR
+I2C Write to
+WD_RST
+Default Mode
+WD_STAT=1
+Host Mode
+WD_STAT=0
+Reset
+Watchdog
+Timer
+No
+Watchdog Timer Expired?
+Yes
+YesNo
+Reset
+Selective
+Registers
+Figure 8-16. Watchdog Timer Flow Chart
+8.4.2 Register Bit Reset
+Beside the register reset by the watchdog timer in the default mode, the register and the timer could be reset
+to the default value by writing the REG_RST bit to 1. The register bits which can be reset by the REG_RST
+bit, are noted in the Register Map section. After the register reset, the REG_RST bit will go back from 1 to 0
+automatically.
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.5 BQ25756 Registers
+Table 8-7 lists the memory-mapped registers for the BQ25756 registers. All register offset addresses not listed in
+Table 8-7 should be considered as reserved locations and the register contents should not be modified.
+Table 8-7. BQ25756 Registers
+Address Acronym Register Name Section
+0x0 REG0x00_Charge_Voltage_Limit Charge Voltage Limit Go
+0x2 REG0x02_Charge_Current_Limit Charge Current Limit Go
+0x6 REG0x06_Input_Current_DPM_Limit Input Current DPM Limit Go
+0x8 REG0x08_Input_Voltage_DPM_Limit Input Voltage DPM Limit Go
+0xA REG0x0A_Reverse_Mode_Input_Current
+_Limit
+Reverse Mode Input Current Limit Go
+0xC REG0x0C_Reverse_Mode_Input_Voltage
+_Limit
+Reverse Mode Input Voltage Limit Go
+0x10 REG0x10_Precharge_Current_Limit Precharge Current Limit Go
+0x12 REG0x12_Termination_Current_Limit Termination Current Limit Go
+0x14 REG0x14_Precharge_and_Termination_
+Control
+Precharge and Termination Control Go
+0x15 REG0x15_Timer_Control Timer Control Go
+0x16 REG0x16_Three-Stage_Charge_Control Three-Stage Charge Control Go
+0x17 REG0x17_Charger_Control Charger Control Go
+0x18 REG0x18_Pin_Control Pin Control Go
+0x19 REG0x19_Power_Path_and_Reverse_M
+ode_Control
+Power Path and Reverse Mode Control Go
+0x1A REG0x1A_MPPT_Control MPPT Control Go
+0x1B REG0x1B_TS_Charging_Threshold_Cont
+rol
+TS Charging Threshold Control Go
+0x1C REG0x1C_TS_Charging_Region_Behavi
+or_Control
+TS Charging Region Behavior Control Go
+0x1D REG0x1D_TS_Reverse_Mode_Threshold
+_Control
+TS Reverse Mode Threshold Control Go
+0x1E REG0x1E_Reverse_Undervoltage_Contr
+ol
+Reverse Undervoltage Control Go
+0x1F REG0x1F_VAC_Max_Power_Point_Dete
+cted
+VAC Max Power Point Detected Go
+0x21 REG0x21_Charger_Status_1 Charger Status 1 Go
+0x22 REG0x22_Charger_Status_2 Charger Status 2 Go
+0x23 REG0x23_Charger_Status_3 Charger Status 3 Go
+0x24 REG0x24_Fault_Status Fault Status Go
+0x25 REG0x25_Charger_Flag_1 Charger Flag 1 Go
+0x26 REG0x26_Charger_Flag_2 Charger Flag 2 Go
+0x27 REG0x27_Fault_Flag Fault Flag Go
+0x28 REG0x28_Charger_Mask_1 Charger Mask 1 Go
+0x29 REG0x29_Charger_Mask_2 Charger Mask 2 Go
+0x2A REG0x2A_Fault_Mask Fault Mask Go
+0x2B REG0x2B_ADC_Control ADC Control Go
+0x2C REG0x2C_ADC_Channel_Control ADC Channel Control Go
+0x2D REG0x2D_IAC_ADC IAC ADC Go
+0x2F REG0x2F_IBAT_ADC IBAT ADC Go
+0x31 REG0x31_VAC_ADC VAC ADC Go
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-7. BQ25756 Registers (continued)
+Address Acronym Register Name Section
+0x33 REG0x33_VBAT_ADC VBAT ADC Go
+0x37 REG0x37_TS_ADC TS ADC Go
+0x39 REG0x39_VFB_ADC VFB ADC Go
+0x3B REG0x3B_Gate_Driver_Strength_Control Gate Driver Strength Control Go
+0x3C REG0x3C_Gate_Driver_Dead_Time_Con
+trol
+Gate Driver Dead Time Control Go
+0x3D REG0x3D_Part_Information Part Information Go
+0x62 REG0x62_Reverse_Mode_Battery_Disch
+arge_Current
+Reverse Mode Battery Discharge Current Go
+Complex bit access types are encoded to fit into small table cells. Table 8-8 shows the codes that are used for
+access types in this section.
+Table 8-8. BQ25756 Access Type Codes
+Access Type Code Description
+Read Type
+R R Read
+Write Type
+W W Write
+Reset or Default Value
+-n Value after reset or the default
+value
+8.5.1 REG0x00_Charge_Voltage_Limit Register (Address = 0x0) [Reset = 0x0010]
+REG0x00_Charge_Voltage_Limit is shown in Table 8-9.
+Return to the Summary Table.
+I2C REG0x01=[15:8], I2C REG0x00=[7:0]
+Table 8-9. REG0x00_Charge_Voltage_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:5 RESERVED R 0x0 Reserved
+4:0 VFB_REG R/W 0x10 Reset by:
+REG_RESET
+FB Voltage Regulation Limit:
+POR: 1536mV (10h)
+Range: 1504mV-1566mV (0h-1Fh)
+Bit Step: 2mV
+Offset: 1504mV
+8.5.2 REG0x02_Charge_Current_Limit Register (Address = 0x2) [Reset = 0x0640]
+REG0x02_Charge_Current_Limit is shown in Table 8-10.
+Return to the Summary Table.
+I2C REG0x03=[15:8], I2C REG0x02=[7:0]
+Table 8-10. REG0x02_Charge_Current_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:11 RESERVED R 0x0 Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-10. REG0x02_Charge_Current_Limit Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+10:2 ICHG_REG R/W 0x190 Reset by:
+REG_RESET
+WATCHDOG
+Fast Charge Current Regulation Limit with 5mΩ
+RBAT_SNS:
+Actual charge current is the lower of ICHG_REG and
+ICHG pin
+POR: 20000mA (190h)
+Range: 400mA-20000mA (8h-190h)
+Clamped Low
+Clamped High
+Bit Step: 50mA
+1:0 RESERVED R 0x0 Reserved
+8.5.3 REG0x06_Input_Current_DPM_Limit Register (Address = 0x6) [Reset = 0x0640]
+REG0x06_Input_Current_DPM_Limit is shown in Table 8-11.
+Return to the Summary Table.
+I2C REG0x07=[15:8], I2C REG0x06=[7:0]
+Table 8-11. REG0x06_Input_Current_DPM_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:11 RESERVED R 0x0 Reserved
+10:2 IAC_DPM R/W 0x190 Reset by:
+REG_RESET
+Input Current DPM Regulation Limit with 5mΩ
+RAC_SNS:
+Actual input current limit is the lower of IAC_DPM and
+ILIM_HIZ pin
+POR: 20000mA (190h)
+Range: 400mA-20000mA (8h-190h)
+Clamped Low
+Clamped High
+Bit Step: 50mA
+1:0 RESERVED R 0x0 Reserved
+8.5.4 REG0x08_Input_Voltage_DPM_Limit Register (Address = 0x8) [Reset = 0x0348]
+REG0x08_Input_Voltage_DPM_Limit is shown in Table 8-12.
+Return to the Summary Table.
+I2C REG0x09=[15:8], I2C REG0x08=[7:0]
+Table 8-12. REG0x08_Input_Voltage_DPM_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:14 RESERVED R 0x0 Reserved
+13:2 VAC_DPM R/W 0xD2 Reset by:
+REG_RESET
+Input Voltage Regulation Limit:
+Note if EN_MPPT = 1, the Full Sweep method will use
+this limit as the lower search window for Full Panel
+Sweep
+POR: 4200mV (D2h)
+Range: 4200mV-65000mV (D2h-CB2h)
+Clamped Low
+Clamped High
+Bit Step: 20mV
+1:0 RESERVED R 0x0 Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.5.5 REG0x0A_Reverse_Mode_Input_Current_Limit Register (Address = 0xA) [Reset = 0x0640]
+REG0x0A_Reverse_Mode_Input_Current_Limit is shown in Table 8-13.
+Return to the Summary Table.
+I2C REG0x0B=[15:8], I2C REG0x0A=[7:0]
+Table 8-13. REG0x0A_Reverse_Mode_Input_Current_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:11 RESERVED R 0x0 Reserved
+10:2 IAC_REV R/W 0x190 Reset by:
+REG_RESET
+Input Current Regulation in Reverse Mode with 5mΩ
+RAC_SNS:
+POR: 20000mA (190h)
+Range: 400mA-20000mA (8h-190h)
+Clamped Low
+Clamped High
+Bit Step: 50mA
+1:0 RESERVED R 0x0 Reserved
+8.5.6 REG0x0C_Reverse_Mode_Input_Voltage_Limit Register (Address = 0xC) [Reset = 0x03E8]
+REG0x0C_Reverse_Mode_Input_Voltage_Limit is shown in Table 8-14.
+Return to the Summary Table.
+I2C REG0x0D=[15:8], I2C REG0x0C=[7:0]
+Table 8-14. REG0x0C_Reverse_Mode_Input_Voltage_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:14 RESERVED R 0x0 Reserved
+13:2 VAC_REV R/W 0xFA Reset by:
+REG_RESET
+VAC Voltage Regulation in Reverse Mode:
+POR: 5000mV (FAh)
+Range: 3300mV-65000mV (A5h-CB2h)
+Clamped Low
+Clamped High
+Bit Step: 20mV
+1:0 RESERVED R 0x0 Reserved
+8.5.7 REG0x10_Precharge_Current_Limit Register (Address = 0x10) [Reset = 0x0140]
+REG0x10_Precharge_Current_Limit is shown in Table 8-15.
+Return to the Summary Table.
+I2C REG0x11=[15:8], I2C REG0x10=[7:0]
+Table 8-15. REG0x10_Precharge_Current_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:10 RESERVED R 0x0 Reserved
+9:2 IPRECHG R/W 0x50 Actual pre-charge current
+is the lower of IPRECHG
+and ICHG pin
+Reset by:
+REG_RESET
+Pre-charge current regulation limit with 5mΩ
+RBAT_SNS:
+POR: 4000mA (50h)
+Range: 250mA-10000mA (5h-C8h)
+Clamped Low
+Clamped High
+Bit Step: 50mA
+1:0 RESERVED R 0x0 Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.5.8 REG0x12_Termination_Current_Limit Register (Address = 0x12) [Reset = 0x00A0]
+REG0x12_Termination_Current_Limit is shown in Table 8-16.
+Return to the Summary Table.
+I2C REG0x13=[15:8], I2C REG0x12=[7:0]
+Table 8-16. REG0x12_Termination_Current_Limit Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:10 RESERVED R 0x0 Reserved
+9:2 ITERM R/W 0x28 Actual termination current
+is the lower of ITERM and
+ICHG pin if both functions
+enabled
+Reset by:
+REG_RESET
+Termination Current Threshold with 5mΩ RBAT_SNS:
+POR: 2000mA (28h)
+Range: 250mA-10000mA (5h-C8h)
+Clamped Low
+Clamped High
+Bit Step: 50mA
+1:0 RESERVED R 0x0 Reserved
+8.5.9 REG0x14_Precharge_and_Termination_Control Register (Address = 0x14) [Reset = 0x0F]
+REG0x14_Precharge_and_Termination_Control is shown in Table 8-17.
+Return to the Summary Table.
+Table 8-17. REG0x14_Precharge_and_Termination_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:4 RESERVED R 0x0 Reserved
+3 EN_TERM R/W 0x1 Reset by:
+REG_RESET
+Enable termination control
+0b = Disable
+1b = Enable
+2:1 VBAT_LOWV R/W 0x3 Reset by:
+REG_RESET
+Battery threshold for PRECHG to FASTCHG transition,
+as percentage of VFB_REG:
+00b = 30% x VFB_REG
+01b = 55% x VFB_REG
+10b = 66.7% x VFB_REG
+11b = 71.4% x VFB_REG
+0 EN_PRECHG R/W 0x1 Reset by:
+REG_RESET
+Enable pre-charge and trickle charge functions:
+0b = Disable
+1b = Enable
+8.5.10 REG0x15_Timer_Control Register (Address = 0x15) [Reset = 0x1D]
+REG0x15_Timer_Control is shown in Table 8-18.
+Return to the Summary Table.
+Table 8-18. REG0x15_Timer_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 TOPOFF_TMR R/W 0x0 Reset by:
+REG_RESET
+Top-off timer control:
+00b = Disable
+01b = 15 mins
+10b = 30 mins
+11b = 45 mins
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-18. REG0x15_Timer_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+5:4 WATCHDOG R/W 0x1 Reset by:
+REG_RESET
+Watchdog timer control:
+00b = Disable
+01b = 40s
+10b = 80s
+11b = 160s
+3 EN_CHG_TMR R/W 0x1 Reset by:
+REG_RESET
+WATCHDOG
+Enable charge safety timer:
+0b = Disable
+1b = Enable
+2:1 CHG_TMR R/W 0x2 Reset by:
+REG_RESET
+Charge safety timer setting:
+00b = 5hr
+01b = 8hr
+10b = 12hr
+11b = 24hr
+0 EN_TMR2X R/W 0x1 Reset by:
+REG_RESET
+Charge safety timer speed in DPM:
+0b = Timer always counts normally
+1b = Timer slowed by 2x during input DPM
+8.5.11 REG0x16_Three-Stage_Charge_Control Register (Address = 0x16) [Reset = 0x00]
+REG0x16_Three-Stage_Charge_Control is shown in Table 8-19.
+Return to the Summary Table.
+Table 8-19. REG0x16_Three-Stage_Charge_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 RESERVED R 0x0 Reserved
+5 RESERVED R 0x0 Reserved
+4 RESERVED R 0x0 Reserved
+3:0 CV_TMR R/W 0x0 Reset by:
+REG_RESET
+WATCHDOG
+CV timer setting:
+0000b = disable
+0001b = 1hr
+0010b = 2hr
+... = ...
+1110b = 14hr
+1111b = 15hr
+8.5.12 REG0x17_Charger_Control Register (Address = 0x17) [Reset = 0xC9]
+REG0x17_Charger_Control is shown in Table 8-20.
+Return to the Summary Table.
+Table 8-20. REG0x17_Charger_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 VRECHG R/W 0x3 Reset by:
+REG_RESET
+Battery auto-recharge threshold, as percentage of
+VFB_REG:
+00b = 93.0% x VFB_REG
+01b = 94.3% x VFB_REG
+10b = 95.2% x VFB_REG
+11b = 97.6% x VFB_REG
+5 WD_RST R/W 0x0 Reset by:
+REG_RESET
+I2C Watchdog timer reset control:
+0b = Normal
+1b = Reset (bit goes back to 0 after timer reset)
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-20. REG0x17_Charger_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+4 DIS_CE_PIN R/W 0x0 Reset by:
+REG_RESET
+/CE pin function disable:
+0b = /CE pin enabled
+1b = /CE pin disabled
+3 EN_CHG_BIT_RES
+ET_BEHAVIOR
+R/W 0x1 Reset by:
+REG_RESET
+Controls the EN_CHG bit behavior when WATCHDOG
+expires:
+0b = EN_CHG bit resets to 0
+1b = EN_CHG bit resets to 1
+2 EN_HIZ R/W 0x0 Reset by:
+REG_RESET
+WATCHDOG
+Adapter Plug In
+HIZ mode enable:
+0b = Disable
+1b = Enable
+1 EN_IBAT_LOAD R/W 0x0 Sinks current from SRN
+to GND. Recommend
+to disable IBAT ADC
+(IBAT_ADC_DIS = 1)
+while this bit is active.
+Reset by:
+REG_RESET
+WATCHDOG
+Battery Load (IBAT_LOAD) Enable:
+0b = Disabled
+1b = Enabled
+0 EN_CHG R/W 0x1 Reset by:
+REG_RESET
+WATCHDOG
+Charge enable control:
+0b = Disable
+1b = Enable
+8.5.13 REG0x18_Pin_Control Register (Address = 0x18) [Reset = 0xC0]
+REG0x18_Pin_Control is shown in Table 8-21.
+Return to the Summary Table.
+Table 8-21. REG0x18_Pin_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 EN_ICHG_PIN R/W 0x1 Reset by:
+REG_RESET
+WATCHDOG
+ICHG pin function enable:
+0b = ICHG pin disabled
+1b = ICHG pin enabled
+6 EN_ILIM_HIZ_PIN R/W 0x1 Reset by:
+REG_RESET
+WATCHDOG
+ILIM_HIZ pin function enable:
+0b = ILIM_HIZ pin disabled
+1b = ILIM_HIZ pin enabled
+5 DIS_PG_PIN R/W 0x0 Reset by:
+REG_RESET
+PG pin function disable:
+0b = PG pin enabled
+1b = PG pin disabled
+4 DIS_STAT_PINS R/W 0x0 Reset by:
+REG_RESET
+STAT1, STAT2 pin function disable:
+0b = STAT pins enabled
+1b = STAT pins disabled
+3 FORCE_STAT4_ON R/W 0x0 Reset by:
+REG_RESET
+CE_STAT4 pin override:
+Can only be forced on if DIS_CE_PIN = 1
+0b = CE_STAT4 open-drain off
+1b = CE_STAT4 pulls LOW
+2 FORCE_STAT3_ON R/W 0x0 Reset by:
+REG_RESET
+PG_STAT3 pin override:
+Can only be forced on if DIS_PG_PIN = 1
+0b = PG_STAT3 open-drain off
+1b = PG_STAT3 pulls LOW
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-21. REG0x18_Pin_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+1 FORCE_STAT2_ON R/W 0x0 Reset by:
+REG_RESET
+STAT2 pin override:
+Can only be forced on if DIS_STAT_PINS = 1
+0b = STAT2 open-drain off
+1b = STAT2 pulls LOW
+0 FORCE_STAT1_ON R/W 0x0 Reset by:
+REG_RESET
+STAT1 pin override:
+Can only be forced on if DIS_STAT_PINS = 1
+0b = STAT1 open-drain off
+1b = STAT1 pulls LOW
+8.5.14 REG0x19_Power_Path_and_Reverse_Mode_Control Register (Address = 0x19) [Reset = 0x20]
+REG0x19_Power_Path_and_Reverse_Mode_Control is shown in Table 8-22.
+Return to the Summary Table.
+Table 8-22. REG0x19_Power_Path_and_Reverse_Mode_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 REG_RST R/W 0x0 Reset by:
+REG_RESET
+Register reset to default values:
+0b = Not reset
+1b = Reset (bit goes back to 0 after register reset)
+6 EN_IAC_LOAD R/W 0x0 Reset by:
+REG_RESET
+WATCHDOG
+VAC Load (IAC_LOAD) Enable:
+0b = Disabled
+1b = Enabled
+5 EN_PFM R/W 0x1 It is recommended to
+disable PFM when ITERM
+< 2A
+Reset by:
+REG_RESET
+Enable PFM mode in light-load:
+Note this bit is reset upon a valid SYNC signal
+detection on FSW_SYNC pin. Host can set this bit
+back to 1 to force PFM operation even with a valid
+SYNC input
+0b = Disable (Fixed-frequency DCM operation)
+1b = Enable (PFM operation)
+4 RESERVED R 0x0 Reserved
+3 RESERVED R 0x0 Reserved
+2 RESERVED R 0x0 Reserved
+1 RESERVED R 0x0 Reserved
+0 EN_REV R/W 0x0 Reset by:
+REG_RESET
+WATCHDOG
+Adapter Plug In
+Reverse Mode control:
+0b = Disable
+1b = Enable
+8.5.15 REG0x1A_MPPT_Control Register (Address = 0x1A) [Reset = 0x20]
+REG0x1A_MPPT_Control is shown in Table 8-23.
+Return to the Summary Table.
+Table 8-23. REG0x1A_MPPT_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 FORCE_SWEEP R/W 0x0 Reset by:
+REG_RESET
+Force Full Panel Sweep and reset MPPT timers:
+0b = Normal
+1b = Start Full Panel Sweep (bit goes back to 0 after
+Full Panel Sweep complete)
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-23. REG0x1A_MPPT_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+6:5 P_AND_O_TMR R/W 0x1 Reset by:
+REG_RESET
+Perturb and Observe timer control:
+00b = Disable Perturb & Observe
+01b = 0.5s
+10b = 1s
+11b = 10s
+4:3 RESERVED R 0x0 Reserved
+2:1 FULL_SWEEP_TMR R/W 0x0 Reset by:
+REG_RESET
+Full Panel Sweep timer control:
+00b = 3 min
+01b = 10 min
+10b = 15 min
+11b = 20 min
+0 EN_MPPT R/W 0x0 When MPPT is enabled,
+the ADC is controlled
+by the device, writes to
+REG2A are ignored
+Reset by:
+REG_RESET
+MPPT algorithm control:
+0b = Disable MPPT
+1b = Enable MPPT
+8.5.16 REG0x1B_TS_Charging_Threshold_Control Register (Address = 0x1B) [Reset = 0x96]
+REG0x1B_TS_Charging_Threshold_Control is shown in Table 8-24.
+Return to the Summary Table.
+Table 8-24. REG0x1B_TS_Charging_Threshold_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 TS_T5 R/W 0x2 Reset by:
+REG_RESET
+TS T5 (HOT) threshold control:
+00b = 41.2% (50C)
+01b = 37.7% (55C)
+10b = 34.375% (60C)
+11b = 31.25%(65C)
+5:4 TS_T3 R/W 0x1 Reset by:
+REG_RESET
+JEITA TS T3 (WARM) threshold control:
+00b = 48.4% (40C)
+01b = 44.8% (45C)
+10b = 41.2% (50C)
+11b = 37.7% (55C)
+3:2 TS_T2 R/W 0x1 Reset by:
+REG_RESET
+JEITA TS T2 (COOL) threshold control:
+00b = 71.1% (5C)
+01b = 68.4% (10C)
+10b = 65.5% (15C)
+11b = 62.4% (20C)
+1:0 TS_T1 R/W 0x2 Reset by:
+REG_RESET
+TS T1 (COLD) threshold control:
+00b = 77.15% (-10C)
+01b = 75.32% (-5C)
+10b = 73.25% (0C)
+11b = 71.1% (5C)
+8.5.17 REG0x1C_TS_Charging_Region_Behavior_Control Register (Address = 0x1C) [Reset = 0x57]
+REG0x1C_TS_Charging_Region_Behavior_Control is shown in Table 8-25.
+Return to the Summary Table.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-25. REG0x1C_TS_Charging_Region_Behavior_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 RESERVED R 0x0 Reserved
+6:5 JEITA_VSET R/W 0x2 Reset by:
+REG_RESET
+JEITA Warm (T3 < TS < T5) regulation voltage setting,
+as percentage of VFB_REG:
+00b = Charge Suspend
+01b = 94.3% x VFB_REG
+10b = 97.6% x VFB_REG
+11b = 100% x VFB_REG
+4 JEITA_ISETH R/W 0x1 Reset by:
+REG_RESET
+JEITA Warm (T3 < TS < T5) regulation current setting,
+as percentage of ICHG_REG:
+0b = 40% x ICHG_REG
+1b = 100% x ICHG_REG
+3:2 JEITA_ISETC R/W 0x1 Reset by:
+REG_RESET
+JEITA Cool (T1 < TS < T2) regulation current setting,
+as percentage of ICHG_REG:
+00b = Charge Suspend
+01b = 20% x ICHG_REG
+10b = 40% x ICHG_REG
+11b = 100% x ICHG_REG
+1 EN_JEITA R/W 0x1 EN_VREG_TEMP_COMP
+and EN_JEITA cannot be
+set to 1 at the same time.
+Reset by:
+REG_RESET
+JEITA profile control:
+0b = Disabled (COLD/HOT control only)
+1b = Enabled (COLD/COOL/WARM/HOT control)
+0 EN_TS R/W 0x1 Reset by:
+REG_RESET
+TS pin function control (applies to forward charging
+and reverse discharging modes):
+0b = Disabled (ignore TS pin)
+1b = Enabled
+8.5.18 REG0x1D_TS_Reverse_Mode_Threshold_Control Register (Address = 0x1D) [Reset = 0x40]
+REG0x1D_TS_Reverse_Mode_Threshold_Control is shown in Table 8-26.
+Return to the Summary Table.
+Table 8-26. REG0x1D_TS_Reverse_Mode_Threshold_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 BHOT R/W 0x1 Reset by:
+REG_RESET
+Reverse Mode TS HOT temperature threshold control:
+00b = 37.7% (55C)
+01b = 34.2% (60C)
+10b = 31.25%(65C)
+11b = Disable
+5 BCOLD R/W 0x0 Reset by:
+REG_RESET
+Reverse Mode TS COLD temperature threshold
+control:
+0b = 77.15% (-10C)
+1b = 80% (-20C)
+4:0 RESERVED R 0x0 Reserved
+8.5.19 REG0x1E_Reverse_Undervoltage_Control Register (Address = 0x1E) [Reset = 0x00]
+REG0x1E_Reverse_Undervoltage_Control is shown in Table 8-27.
+Return to the Summary Table.
+Table 8-27. REG0x1E_Reverse_Undervoltage_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 RESERVED R 0x0 Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-27. REG0x1E_Reverse_Undervoltage_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+6 RESERVED R 0x0 Reserved
+5 SYSREV_UV R/W 0x0 Reset by:
+REG_RESET
+Reverse Mode System UVP:
+0b = 80% of VSYS_REV target
+1b = Fixed at 3.3V
+4 RESERVED R 0x0 Reserved
+3 RESERVED R 0x0 Reserved
+2 RESERVED R 0x0 Reserved
+1 RESERVED R 0x0 Reserved
+0 RESERVED R 0x0 Reserved
+8.5.20 REG0x1F_VAC_Max_Power_Point_Detected Register (Address = 0x1F) [Reset = 0x0000]
+REG0x1F_VAC_Max_Power_Point_Detected is shown in Table 8-28.
+Return to the Summary Table.
+I2C REG0x20=[15:8], I2C REG0x1F=[7:0]
+Table 8-28. REG0x1F_VAC_Max_Power_Point_Detected Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:14 RESERVED R 0x0 Reserved
+13:2 VAC_MPP R 0x0 Input Voltage for Max Power Point detected:
+POR: 0mV (0h)
+Range: 0mV-60000mV (0h-BB8h)
+Clamped High
+Bit Step: 20mV
+1:0 RESERVED R 0x0 Reserved
+8.5.21 REG0x21_Charger_Status_1 Register (Address = 0x21) [Reset = 0x00]
+REG0x21_Charger_Status_1 is shown in Table 8-29.
+Return to the Summary Table.
+Table 8-29. REG0x21_Charger_Status_1 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 ADC_DONE_STAT R 0x0 ADC conversion status (in one-shot mode only):
+0b = Conversion not complete
+1b = Conversion complete
+6 IAC_DPM_STAT R 0x0 Input Current regulation status:
+0b = Normal
+1b = In Input Current regulation (ILIM pin or IAC_DPM)
+5 VAC_DPM_STAT R 0x0 Input Voltage regulation status:
+0b = Normal
+1b = In Input Voltage regulation (VAC_DPM or
+VSYS_REV)
+4 RESERVED R 0x0 Reserved
+3 WD_STAT R 0x0 I2C Watchdog timer status:
+0b = Normal
+1b = WD timer expired
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-29. REG0x21_Charger_Status_1 Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+2:0 CHARGE_STAT R 0x0 Charge cycle status:
+000b = Not charging
+001b = Trickle Charge (VBAT < VBAT_SHORT)
+010b = Pre-Charge (VBAT < VBAT_LOWV)
+011b = Fast Charge (CC mode)
+100b = Taper Charge (CV mode)
+101b = Reserved
+110b = Top-off Timer Charge
+111b = Charge Termination Done
+8.5.22 REG0x22_Charger_Status_2 Register (Address = 0x22) [Reset = 0x00]
+REG0x22_Charger_Status_2 is shown in Table 8-30.
+Return to the Summary Table.
+Table 8-30. REG0x22_Charger_Status_2 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 PG_STAT R 0x0 Input Power Good status:
+0b = Not Power Good
+1b = Power Good
+6:4 TS_STAT R 0x0 TS (Battery NTC) status:
+000b = Normal
+001b = TS Warm
+010b = TS Cool
+011b = TS Cold
+100b = TS Hot
+3:2 RESERVED R 0x0 Reserved
+1:0 MPPT_STAT R 0x0 Max Power Point Tracking Algorithm status:
+00b = MPPT Disabled
+01b = MPPT Enabled, But Not Running
+10b = Full Panel Sweep In Progress
+11b = Max Power Voltage Detected
+8.5.23 REG0x23_Charger_Status_3 Register (Address = 0x23) [Reset = 0x00]
+REG0x23_Charger_Status_3 is shown in Table 8-31.
+Return to the Summary Table.
+Table 8-31. REG0x23_Charger_Status_3 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 RESERVED R 0x0 Reserved
+5:4 FSW_SYNC_STAT R 0x0 FSW_SYNC pin status:
+00b = Normal, no external clock detected
+01b = Valid ext. clock detected
+10b = Pin fault (frequency out-of-range)
+11b = Reserved
+3 CV_TMR_STAT R 0x0 CV Timer status:
+0b = Normal
+1b = CV Timer Expired
+2 REVERSE_STAT R 0x0 Converter Reverse Mode status:
+0b = Reverse Mode off
+1b = Reverse Mode On
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-31. REG0x23_Charger_Status_3 Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+1 RESERVED R 0x0 Reserved
+0 RESERVED R 0x0 Reserved
+8.5.24 REG0x24_Fault_Status Register (Address = 0x24) [Reset = 0x00]
+REG0x24_Fault_Status is shown in Table 8-32.
+Return to the Summary Table.
+Table 8-32. REG0x24_Fault_Status Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 VAC_UV_STAT R 0x0 Input under-voltage status:
+0b = Input Normal
+1b = Device in Input under-voltage protection
+6 VAC_OV_STAT R 0x0 Input over-voltage status:
+0b = Input Normal
+1b = Device in Input over-voltage protection
+5 IBAT_OCP_STAT R 0x0 Battery over-current status:
+0b = Battery current normal
+1b = Battery over-current detected
+4 VBAT_OV_STAT R 0x0 Battery over-voltage status:
+0b = Normal
+1b = Device in Battery over-voltage protection
+3 TSHUT_STAT R 0x0 Thermal shutdown status:
+0b = Normal
+1b = Device in thermal shutdown protection
+2 CHG_TMR_STAT R 0x0 Charge safety timer status:
+0b = Normal
+1b = Charge safety timer expired
+1 DRV_OKZ_STAT R 0x0 In battery-only mode with
+ADC disabled, this bit
+always reads '1'
+DRV_SUP pin voltage status:
+0b = Normal
+1b = DRV_SUP pin voltage is out of valid range
+0 RESERVED R 0x0 Reserved
+8.5.25 REG0x25_Charger_Flag_1 Register (Address = 0x25) [Reset = 0x00]
+REG0x25_Charger_Flag_1 is shown in Table 8-33.
+Return to the Summary Table.
+Table 8-33. REG0x25_Charger_Flag_1 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 ADC_DONE_FLAG R 0x0 ADC conversion INT flag (in one-shot mode only):
+Note: always reads 0 in continuous mode
+Access: R (ClearOnRead)
+0b = Conversion not complete
+1b = Conversion complete
+6 IAC_DPM_FLAG R 0x0 Input Current regulation INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Device entered Input Current regulation
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-33. REG0x25_Charger_Flag_1 Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+5 VAC_DPM_FLAG R 0x0 Input Voltage regulation INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Device entered Input Voltage regulation
+4 RESERVED R 0x0 Reserved
+3 WD_FLAG R 0x0 I2C Watchdog timer INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = WD_STAT rising edge detected
+2 RESERVED R 0x0 Reserved
+1 CV_TMR_FLAG R 0x0 CV timer INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = CV timer expired rising edge detected
+0 CHARGE_FLAG R 0x0 Charge cycle INT flag:
+Access: R (ClearOnRead)
+0b = Not charging
+1b = CHARGE_STAT[2:0] bits changed (transition to
+any state)
+8.5.26 REG0x26_Charger_Flag_2 Register (Address = 0x26) [Reset = 0x00]
+REG0x26_Charger_Flag_2 is shown in Table 8-34.
+Return to the Summary Table.
+Table 8-34. REG0x26_Charger_Flag_2 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 PG_FLAG R 0x0 Input Power Good INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = PG signal toggle detected
+6 RESERVED R 0x0 Reserved
+5 RESERVED R 0x0 Reserved
+4 TS_FLAG R 0x0 TS (Battery NTC) INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = TS_STAT[2:0] bits changed (transitioned to any
+state)
+3 REVERSE_FLAG R 0x0 Reverse Mode INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Reverse Mode toggle detected
+2 RESERVED R 0x0 Reserved
+1 FSW_SYNC_FLAG R 0x0 FSW_SYNC pin signal INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = FSW_SYNC status changed
+0 MPPT_FLAG R 0x0 Max Power Point Tracking INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = MPPT_STAT[1:0] bits changed (transitioned to
+any state)
+BQ25756
+SLUSEN5 – AUGUST 2023
+8.5.27 REG0x27_Fault_Flag Register (Address = 0x27) [Reset = 0x00]
+REG0x27_Fault_Flag is shown in Table 8-35.
+Return to the Summary Table.
+Table 8-35. REG0x27_Fault_Flag Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 VAC_UV_FLAG R 0x0 Input under-voltage INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Entered input under-voltage fault
+6 VAC_OV_FLAG R 0x0 Input over-voltage INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Entered Input over-voltage fault
+5 IBAT_OCP_FLAG R 0x0 Battery over-current INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Entered Battery over-current fault
+4 VBAT_OV_FLAG R 0x0 Battery over-voltage INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Entered battery over-voltage fault
+3 TSHUT_FLAG R 0x0 Thermal shutdown INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Entered TSHUT fault
+2 CHG_TMR_FLAG R 0x0 Charge safety timer INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = Charge Safety timer expired rising edge detected
+1 DRV_OKZ_FLAG R 0x0 DRV_SUP pin voltage INT flag:
+Access: R (ClearOnRead)
+0b = Normal
+1b = DRV_SUP pin fault detected
+0 RESERVED R 0x0 Reserved
+8.5.28 REG0x28_Charger_Mask_1 Register (Address = 0x28) [Reset = 0x00]
+REG0x28_Charger_Mask_1 is shown in Table 8-36.
+Return to the Summary Table.
+Table 8-36. REG0x28_Charger_Mask_1 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 ADC_DONE_MASK R/W 0x0 Reset by:
+REG_RESET
+ADC conversion INT mask (in one-shot mode only):
+0b = ADC_DONE produces INT pulse
+1b = ADC_DONE does not produce INT pulse
+6 IAC_DPM_MASK R/W 0x0 Reset by:
+REG_RESET
+Input Current regulation INT mask:
+0b = IAC_DPM_FLAG produces INT pulse
+1b = IAC_DPM_FLAG does not produce INT pulse
+5 VAC_DPM_MASK R/W 0x0 Reset by:
+REG_RESET
+Input Voltage regulation INT mask:
+0b = VAC_DPM_FLAG produces INT pulse
+1b = VAC_DPM_FLAG does not produce INT pulse
+4 RESERVED R 0x0 Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-36. REG0x28_Charger_Mask_1 Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+3 WD_MASK R/W 0x0 Reset by:
+REG_RESET
+I2C Watchdog timer INT mask:
+0b = WD expiration produces INT pulse
+1b = WD expiration does not produce INT pulse
+2 RESERVED R 0x0 Reserved
+1 CV_TMR_MASK R/W 0x0 Reset by:
+REG_RESET
+CV timer INT mask:
+0b = CV Timer expired rising edge produces INT pulse
+1b = CV Timer expired rising edge does not produce
+INT pulse
+0 CHARGE_MASK R/W 0x0 Reset by:
+REG_RESET
+Charge cycle INT mask:
+0b = CHARGE_STAT change produces INT pulse
+1b = CHARGE_STAT change does not produces INT
+pulse
+8.5.29 REG0x29_Charger_Mask_2 Register (Address = 0x29) [Reset = 0x00]
+REG0x29_Charger_Mask_2 is shown in Table 8-37.
+Return to the Summary Table.
+Table 8-37. REG0x29_Charger_Mask_2 Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 PG_MASK R/W 0x0 Reset by:
+REG_RESET
+Input Power Good INT mask:
+0b = PG toggle produces INT pulse
+1b = PG toggle does not produce INT pulse
+6 RESERVED R 0x0 Reserved
+5 RESERVED R 0x0 Reserved
+4 TS_MASK R/W 0x0 Reset by:
+REG_RESET
+TS (Battery NTC) INT mask:
+0b = TS_STAT change produces INT pulse
+1b = TS_STAT change does not produce INT pulse
+3 REVERSE_MASK R/W 0x0 Reset by:
+REG_RESET
+Reverse Mode INT mask:
+0b = REVERSE_STAT toggle produces INT pulse
+1b = REVERSE_STAT toggle does no produce INT
+pulse
+2 RESERVED R 0x0 Reserved
+1 FSW_SYNC_MASK R/W 0x0 Reset by:
+REG_RESET
+FSW_SYNC pin signal INT mask:
+0b = FSW_SYNC status change produces INT pulse
+1b = FSW_SYNC status change does not produce INT
+pulse
+0 MPPT_MASK R/W 0x0 Reset by:
+REG_RESET
+Max Power Point Tracking INT mask:
+0b = MPPT_STAT rising edge produces INT pulse
+1b = MPPT_STAT rising edge does no produce INT
+pulse
+8.5.30 REG0x2A_Fault_Mask Register (Address = 0x2A) [Reset = 0x00]
+REG0x2A_Fault_Mask is shown in Table 8-38.
+Return to the Summary Table.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-38. REG0x2A_Fault_Mask Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 VAC_UV_MASK R/W 0x0 Reset by:
+REG_RESET
+Input under-voltage INT mask:
+0b = Input under-voltage event produces INT pulse
+1b = Input under-voltage event does not produce INT
+pulse
+6 VAC_OV_MASK R/W 0x0 Reset by:
+REG_RESET
+Input over-voltage INT mask:
+0b = Input over-voltage event produces INT pulse
+1b = Input over-voltage event does not produce INT
+pulse
+5 IBAT_OCP_MASK R/W 0x0 Reset by:
+REG_RESET
+Battery over-current INT mask:
+0b = Battery over-current event produces INT pulse
+1b = Battery over-current event does not produce INT
+pulse
+4 VBAT_OV_MASK R/W 0x0 Reset by:
+REG_RESET
+Battery over-voltage INT mask:
+0b = Battery over-voltage event produces INT pulse
+1b = Battery over-voltage event does not produce INT
+pulse
+3 TSHUT_MASK R/W 0x0 Reset by:
+REG_RESET
+Thermal shutdown INT mask:
+0b = TSHUT event produces INT pulse
+1b = TSHUT event does not produce INT pulse
+2 CHG_TMR_MASK R/W 0x0 Reset by:
+REG_RESET
+Charge safety timer INT mask:
+0b = Timer expired rising edge produces INT pulse
+1b = Timer expired rising edge does not produce INT
+pulse
+1 DRV_OKZ_MASK R/W 0x0 Reset by:
+REG_RESET
+DRV_SUP pin voltage INT mask:
+0b = DRV_SUP pin fault produces INT pulse
+1b = DRV_SUP pin fault does not produce INT pulse
+0 RESERVED R 0x0 Reserved
+8.5.31 REG0x2B_ADC_Control Register (Address = 0x2B) [Reset = 0x60]
+REG0x2B_ADC_Control is shown in Table 8-39.
+Return to the Summary Table.
+Table 8-39. REG0x2B_ADC_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 ADC_EN R/W 0x0 When
+EN_VREG_TEMP_COMP
+= 1, the ADC will
+be automatically enabled,
+regardless of the status of
+ADC_EN
+Reset by:
+REG_RESET
+WATCHDOG
+ADC control:
+0b = Disable ADC
+1b = Enable ADC
+6 ADC_RATE R/W 0x1 Reset by:
+REG_RESET
+ADC conversion rate control:
+0b = Continuous conversion
+1b = One-shot conversion
+5:4 ADC_SAMPLE R/W 0x2 Reset by:
+REG_RESET
+ADC sample speed:
+00b = 15 bit effective resolution
+01b = 14 bit effective resolution
+10b = 13 bit effective resolution
+11b = Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-39. REG0x2B_ADC_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+3 ADC_AVG R/W 0x0 Reset by:
+REG_RESET
+ADC average control:
+0b = Single value
+1b = Running average
+2 ADC_AVG_INIT R/W 0x0 Reset by:
+REG_RESET
+ADC average initial value control:
+0b = Start average using existing register value
+1b = Start average using new ADC conversion
+1:0 RESERVED R 0x0 Reserved
+8.5.32 REG0x2C_ADC_Channel_Control Register (Address = 0x2C) [Reset = 0x0A]
+REG0x2C_ADC_Channel_Control is shown in Table 8-40.
+Return to the Summary Table.
+Table 8-40. REG0x2C_ADC_Channel_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 IAC_ADC_DIS R/W 0x0 Reset by:
+REG_RESET
+IAC ADC control
+0b = Enable
+1b = Disable
+6 IBAT_ADC_DIS R/W 0x0 Recommend to disable
+IBAT ADC channel when
+EN_IBAT_LOAD bit is 1
+Reset by:
+REG_RESET
+IBAT ADC control
+0b = Enable
+1b = Disable
+5 VAC_ADC_DIS R/W 0x0 Reset by:
+REG_RESET
+VAC ADC control
+0b = Enable
+1b = Disable
+4 VBAT_ADC_DIS R/W 0x0 Reset by:
+REG_RESET
+VBAT ADC control
+0b = Enable
+1b = Disable
+3 RESERVED R 0x0 Reserved
+2 TS_ADC_DIS R/W 0x0 Reset by:
+REG_RESET
+TS ADC control
+0b = Enable
+1b = Disable
+1 VFB_ADC_DIS R/W 0x1 Reset by:
+REG_RESET
+VFB ADC control
+Recommend to disable this channel when charging is
+enabled
+0b = Enable
+1b = Disable
+0 RESERVED R 0x0 Reserved
+8.5.33 REG0x2D_IAC_ADC Register (Address = 0x2D) [Reset = 0x0000]
+REG0x2D_IAC_ADC is shown in Table 8-41.
+Return to the Summary Table.
+I2C REG0x2E=[15:8], I2C REG0x2D=[7:0]
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-41. REG0x2D_IAC_ADC Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:0 IAC_ADC R 0x0 IAC ADC reading with 5mΩ RAC_SNS:
+Reported as 2s complement
+POR: 0mA(0h)
+Format: 2s Complement
+Range: -20000mA - 20000mA (9E58h-61A8h)
+Clamped Low
+Clamped High
+Bit Step: 0.8mA
+8.5.34 REG0x2F_IBAT_ADC Register (Address = 0x2F) [Reset = 0x0000]
+REG0x2F_IBAT_ADC is shown in Table 8-42.
+Return to the Summary Table.
+I2C REG0x30=[15:8], I2C REG0x2F=[7:0]
+Table 8-42. REG0x2F_IBAT_ADC Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:0 IBAT_ADC R 0x0 IBAT ADC reading with 5mΩ RBAT_SNS:
+Reported as 2s complement
+POR: 0mA (0h)
+Format: 2s Complement
+Range: -20000mA-20000mA (D8F0h-2710h)
+Clamped Low
+Clamped High
+Bit Step: 2mA
+8.5.35 REG0x31_VAC_ADC Register (Address = 0x31) [Reset = 0x0000]
+REG0x31_VAC_ADC is shown in Table 8-43.
+Return to the Summary Table.
+I2C REG0x32=[15:8], I2C REG0x31=[7:0]
+Table 8-43. REG0x31_VAC_ADC Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:0 VAC_ADC R 0x0 VAC ADC reading:
+Reported as unsigned integer
+POR: 0mV (0h)
+Format: 2s Complement
+Range: 0mV-65534mV (0h-7FFFh)
+Clamped Low
+Bit Step: 2mV
+8.5.36 REG0x33_VBAT_ADC Register (Address = 0x33) [Reset = 0x0000]
+REG0x33_VBAT_ADC is shown in Table 8-44.
+Return to the Summary Table.
+I2C REG0x34=[15:8], I2C REG0x33=[7:0]
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-44. REG0x33_VBAT_ADC Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:0 VBAT_ADC R 0x0 VBAT ADC reading:
+Reported as unsigned integer
+POR: 0mV (0h)
+Format: 2s Complement
+Range: 0mV-65534mV (0h-7FFFh)
+Clamped Low
+Bit Step: 2mV
+8.5.37 REG0x37_TS_ADC Register (Address = 0x37) [Reset = 0x0000]
+REG0x37_TS_ADC is shown in Table 8-45.
+Return to the Summary Table.
+I2C REG0x38=[15:8], I2C REG0x37=[7:0]
+Table 8-45. REG0x37_TS_ADC Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:0 TS_ADC R 0x0 TS ADC reading as percentage of REGN:
+Reported as unsigned integer
+POR: 0%(0h)
+Range: 0% - 99.90234375% (0h-3FFh)
+Clamped High
+Bit Step: 0.09765625%
+8.5.38 REG0x39_VFB_ADC Register (Address = 0x39) [Reset = 0x0000]
+REG0x39_VFB_ADC is shown in Table 8-46.
+Return to the Summary Table.
+I2C REG0x3A=[15:8], I2C REG0x39=[7:0]
+Table 8-46. REG0x39_VFB_ADC Register Field Descriptions
+Bit Field Type Reset Notes Description
+15:0 VFB_ADC R 0x0 VFB ADC reading:
+POR: 0mV (0h)
+Range: 0mV-2047mV (0h-7FFh)
+Clamped High
+Bit Step: 1mV
+8.5.39 REG0x3B_Gate_Driver_Strength_Control Register (Address = 0x3B) [Reset = 0x00]
+REG0x3B_Gate_Driver_Strength_Control is shown in Table 8-47.
+Return to the Summary Table.
+Table 8-47. REG0x3B_Gate_Driver_Strength_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 BOOST_HS_DRV R/W 0x0 Reset by:
+REG_RESET
+Boost High Side FET Gate Driver Strength:
+00b = Fastest
+01b = Faster
+10b = Slower
+11b = Slowest
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-47. REG0x3B_Gate_Driver_Strength_Control Register Field Descriptions (continued)
+Bit Field Type Reset Notes Description
+5:4 BUCK_HS_DRV R/W 0x0 Reset by:
+REG_RESET
+Buck High Side FET Gate Driver Strength:
+00b = Fastest
+01b = Faster
+10b = Slower
+11b = Slowest
+3:2 BOOST_LS_DRV R/W 0x0 Reset by:
+REG_RESET
+Boost Low Side FET Gate Driver Strength:
+00b = Fastest
+01b = Faster
+10b = Slower
+11b = Slowest
+1:0 BUCK_LS_DRV R/W 0x0 Reset by:
+REG_RESET
+Buck Low Side FET Gate Driver Strength:
+00b = Fastest
+01b = Faster
+10b = Slower
+11b = Slowest
+8.5.40 REG0x3C_Gate_Driver_Dead_Time_Control Register (Address = 0x3C) [Reset = 0x00]
+REG0x3C_Gate_Driver_Dead_Time_Control is shown in Table 8-48.
+Return to the Summary Table.
+Table 8-48. REG0x3C_Gate_Driver_Dead_Time_Control Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:4 RESERVED R 0x0 Reserved
+3:2 BOOST_DEAD_TIM
+E
+R/W 0x0 Reset by:
+REG_RESET
+Boost Side FETs Dead Time Control:
+00b = 45ns
+01b = 75ns
+10b = 105ns
+11b = 135ns
+1:0 BUCK_DEAD_TIME R/W 0x0 Reset by:
+REG_RESET
+Buck Side FETs Dead Time Control:
+00b = 45ns
+01b = 75ns
+10b = 105ns
+11b = 135ns
+8.5.41 REG0x3D_Part_Information Register (Address = 0x3D) [Reset = 0x12]
+REG0x3D_Part_Information is shown in Table 8-49.
+Return to the Summary Table.
+Table 8-49. REG0x3D_Part_Information Register Field Descriptions
+Bit Field Type Reset Notes Description
+7 RESERVED R 0x0 Reserved
+6:3 PART_NUM R 0x2 Part Number:
+010 - BQ25756
+2:0 DEV_REV R 0x2 Device Revision:
+8.5.42 REG0x62_Reverse_Mode_Battery_Discharge_Current Register (Address = 0x62) [Reset = 0x02]
+REG0x62_Reverse_Mode_Battery_Discharge_Current is shown in Table 8-50.
+Return to the Summary Table.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 8-50. REG0x62_Reverse_Mode_Battery_Discharge_Current Register Field Descriptions
+Bit Field Type Reset Notes Description
+7:6 IBAT_REV R/W 0x0 Reset by:
+REG_RESET
+Reverse mode battery discharge current limit:
+00b = 20A
+01b = 15A
+10b = 10A
+11b = 5A
+5:2 RESERVED R 0x0 Reserved
+1 EN_CONV_FAST_T
+RANSIENT
+R/W 0x1 Reset by:
+REG_RESET
+Enable converter fast transient response in reverse
+mode only -
+0b = Disable
+1b = Enable
+0 RESERVED R 0x0 Reserved
+BQ25756
+SLUSEN5 – AUGUST 2023
+9 Application and Implementation
+Note
+Information in the following applications sections is not part of the TI component specification,
+and TI does not warrant its accuracy or completeness. TI’s customers are responsible for
+determining suitability of components for their purposes, as well as validating and testing their design
+implementation to confirm system functionality.
+9.1 Application Information
+9.2 Typical Applications
+9.2.1 Typical Application
+The device can be configured as a solar charger using the MPPT Control register (REG1A) . When the input
+source falls outside the VAC operating window programmed through ACUV and ACOV, the device automatically
+stops switching. Figure 9-1 shows a typical schematic when using the device as a solar charging from either
+single 18-V panel or two panels in series up-to 36 Vin. The charging parameters and MPPT search window are
+programmed via the I2C registers.
+ICHG
+CSYS
+SYSTEM
+Vin
+12V ~ 48V
+BATTERY
++
+ACP
+SRP
+SRN
+HIDRV2
+LODRV2
+HIDRV1
+LODRV1
+DRV_SUP
+PGND
+BTST1 BTST2
+FSW_SYNC
+VAC
+ACN
+SW1 SW2
+ACUV
+REGN
+TS
+STAT1
+PG
+INT
+SCL
+CE
+SDA
+FB
+ILIM_HIZREGN
+STAT2 BQ25756
+ACOV
+REGN
+4S Li-Ion
+12V ~
+16.8V
+Q1
+Q2 Q3
+Q4
+100nF 100nF
+5m
+
+5m
+3 x 10k
+249k
+24.88k   5.24k
+30.31k
+
+
+133k
+
+
+L1
+RAC_SNS
+RBAT_SNS
+4.7µF  4.7µF
+DRV_SUP DRV_SUP
+2.4
+100µF
+10
+80µF
+80µF
+Host
+10
+   10
+FBG
+MODE
+2x 100nF
+1µF 1000k
+
+73.2k
+
+27.4k
+10
+10
+2x 100nF
+470nF
+470nF
+80µF
+80µF
+Figure 9-1. BQ25756: Solar Charging with Autonomous MPPT Algorithm to Charge 4s Battery with
+Maximum 15-A Charge Current
+Table 9-1. Recommended Part Numbers:
+COMPONENT VALUE RECOMMENDED PART NUMBER
+Q1, Q2, Q3, Q4 60 V, 3.1 mΩ AONS66614
+L1 10 μH, 12 mΩ IHLP6767GZ-01
+BQ25756
+SLUSEN5 – AUGUST 2023
+9.2.1.1 Design Requirements
+For this design example, use the parameters shown in the table below.
+Table 9-2. Design Parameters
+PARAMETER VALUE
+Input voltage operating range (VAC) 12 V to 48 V
+Input current limit (IAC) Optimal current determined by MPPT
+Output current limit (IOUT) 15 A
+Battery charge voltage (VBAT_REG) 17.4 V
+Switching frequency 250 kHz
+9.2.1.2 Detailed Design Procedure
+9.2.1.2.1 ACUV / ACOV Input Voltage Operating Window Programming
+The input voltage operating window is programmed by an ACUV / ACOV window with a resistor divider from
+VAC to GND. The top resistor, RAC1 is typically selected as 1,000 k Ω to minimize the input voltage leakage
+current. Assuming the desired trip-points for under-voltage and over-voltage protection are labeled V VACUVP and
+VVACOVP, the resistor divider required can be calculated as follows. The internal reference for the over-voltage
+threshold (VREF_ACOV) is 1.2 V. The internal reference for the under-voltage threshold (VREF_ACUV) is 1.1 V.
+INPUT
+VAC
+ACUV
+ACOV
+RAC1
+RAC2
+RAC3
+Figure 9-2. ACUV and ACOV Resistor Divider
+VVACOVP =
+1.2V 1,000kΩ + RAC2 + RAC3
+RAC3 (8)
+VVACUVP =
+1.1V 1,000kΩ + RAC2 + RAC3
+RAC2 + RAC3 (9)
+For the default device operating window of 4.2 V to 60 V, the ACUV can be pulled up directly to VAC, while the
+ACOV can be pulled directly to GND.
+9.2.1.2.2 Charge Voltage Selection
+The battery regulation voltage is programmed using a resistor divider to the FB pin. The default internal voltage
+reference is 1.536 V, and can be changed via the VFB_REG register bits. The top of the resistor divider is
+selected to be 249 kΩ.
+RTOP = 249 kΩ
+The bottom resistor can be calculated as:
+RBOT = RTOP ×
+VFB
+VBATREG − VFB + RFBG  (10)
+where
+• VFB is the target feedback voltage programmed through I2C (default 1.536 V),
+• VBATREG is the desired battery regulation target (16.8 V in this example)
+BQ25756
+SLUSEN5 – AUGUST 2023
+• RFBG is the internal FBG pull-down resistor (33 Ω)
+RFB_BOT = 25.09 kΩ.
+Choosing the nearest 0.1% resistor value, gives R FB_BOT = 24.88 kΩ, for a nominal charge voltage of 16.89 V.
+Further fine-tuning of the regulation voltage can be achieved by changing the internal feedback reference. For
+example, to get the regulation voltage to exactly 16.8 V with the selected resistor divider, the internal voltage
+reference could be changed to 1.528 V via VFB_REG.
+It is recommended to use 0.1% accurate resistors to maximize the charge voltage accuracy.
+9.2.1.2.3 Switching Frequency Selection
+The switching frequency is set by a resistor connected from the FSW_SYNC pin to PGND. The RFSW resistor
+required to set the desired frequency is calculated using Equation 3 or Table 8-2. A 0.1% standard resistor of
+133 kΩ is selected to set fSW = 250 kHz.
+9.2.1.2.4 Inductor Selection
+Higher switching frequency allows the use of smaller inductor and capacitor values. Inductor saturation current
+should be higher than the inductor current (IL) plus half the ripple current (IRIPPLE):
+ISAT ≥ IL + 1
+2 IRIPPLE (11)
+The inductor ripple current in buck operation depends on input voltage (V AC), duty cycle (D BUCK = V BAT/VAC),
+switching frequency (fSW) and inductance (L):
+IRIPPLE_BUCK =
+VAC × DBUCK × 1 − DBUCK
+fSW × L (12)
+During boost operation, the duty cycle is: DBOOST = 1 – (VAC/VBAT). The inductor ripple current is:
+IRIPPLE_BOOST =
+VAC × DBOOST
+fSW × L (13)
+The maximum inductor ripple current happens with D = 0.5 or close to 0.5. Ripple calculations should be
+analyzed for both forward and reverse operating modes if applicable.
+Usually inductor ripple is designed in the range of (20 – 40%) maximum inductor current (in either forward or
+reverse mode) as a trade-off between inductor size and efficiency for a practical design.
+9.2.1.2.5 Input (VAC) Capacitor
+Input capacitor should have enough ripple current rating to absorb input switching ripple current. The worst case
+RMS ripple current is half of the output when duty cycle is 0.5 in forward buck mode, or reverse boost mode. If
+the converter does not operate at 50% duty cycle, then the worst case capacitor RMS current occurs where the
+duty cycle is closest to 50% and can be estimated by Equation 14:
+ICIN = ICHG × D × 1 − D (14)
+A combination of ceramic and bulk capacitors should be used to provide a short path for high di/dt current
+and to reduce the voltage ripple. Ceramic capacitors should be placed close to the switching half-bridge. Given
+total bulk input capacitance, it is recommended to distribute equally on either side of R AC_SNS. The complete
+schematic is a good starting point for input capacitor for typical applications.
+9.2.1.2.6 Output (VBAT) Capacitor
+In forward boost mode or reverse buck mode, the output capacitor conducts high ripple current. The output
+capacitor RMS ripple current is given by where the minimum VAC corresponds to the maximum capacitor
+current.
+BQ25756
+SLUSEN5 – AUGUST 2023
+ICBAT = IBAT
+VBAT
+VAC − 1 (15)
+A 5-mΩ output capacitor ESR causes an output voltage ripple of 74 mV as given by:
+ΔVRIPPLE ESR = IBAT ×
+VBAT
+VAC, min × ESR (16)
+A 140-μF output capacitor causes a capacitive ripple voltage of 66 mV as given by:
+ΔVRIPPLE CBAT = IBAT ×
+1 − VAC,min
+VBAT
+CBAT × fSW (17)
+A combination of ceramic and bulk capacitors should be used to provide low ESR and high ripple current
+capacity. Ceramic capacitors should be placed close to the switching half-bridge. Given total bulk output
+capacitance, it is recommended to distribute equally on either side of R BAT_SNS. The complete schematic is
+a good starting point for CBAT for typical applications.
+9.2.1.2.7 Sense Resistor (RAC_SNS and RBAT_SNS) and Current Programming
+The battery current sense resistor between SRP and SRN is fixed at 5 m Ω; using a different value is not
+recommended. The input current sense resistor between ACP and ACN is typically 2 m Ω, but can be increased
+to achieve better accuracy at lower sensed currents. In USB-PD EPR applications, a 5-m Ω sense resistor is
+recommended to achieve programmability in 50 mA/step.  In addition, if input current limit function is not desired,
+ACP and ACN may be shorted together. For both of these sense resistors, a filter network is recommended as
+shown in the Typical Application.
+For both the input current and the output current, the limits may be programmed using the I 2C interface or an
+external programming resistor on ILIM_HIZ and ICHG pins, respectively.
+PARAMETER FORMULA VALUE
+Input Current Hardware Limit Unused Pull ILIM_HIZ pin to GND
+Input Current Software Limit Unused, set by MPPT REG06 = 0x0640 (20 A with 5-mΩ RAC_SNS)
+Output Current Hardware Limit Unused Pull ICHG pin to GND
+Output Current Software Limit ICHG = 15 A REG02 = 0x04B0 (15 A)
+The default input sense resistor (R AC_SNS) is 2 m Ω, and the register allows for a range of up-to 50-A input
+current limit. If lower currents are desired, it is possible to use a higher resistor, such as 5 m Ω. In this case, the
+IAC_DPM register value should be multiplied by a factor of 2/5 to program the correct current. For example, if
+a 5-mΩ RAC_SNS is used, and the register is programmed to a value of 0x60, the true maximum current across
+the RAC_SNS will be: 12A * 2/5 = 4.8 A. Similarly, the K ILIM parameter used to set the ILIM_HIZ pull-down resistor
+should be scaled by 2/5. For example, with a 5-m Ω RAC_SNS resistor, a 6-A current limit would be achieved as:
+RILIM = KILIM * (2/5) / 6A = 3.3 kΩ.
+9.2.1.2.8 Power MOSFETs Selection
+Four external N-channel MOSFETs are used for a synchronous switching buck-boost battery charger. The gate
+drivers are integrated into the IC with 5 V of gate drive voltage. An external gate drive voltage can be provided
+directly into the DRV_SUP pin for increased efficiency.
+Figure-of-merit (FOM) is usually used for selecting proper MOSFET based on a tradeoff between the conduction
+loss and switching loss. For the top side MOSFET, FOM is defined as the product of a MOSFET's on-resistance,
+RDS(ON), and the gate-to-drain charge, Q GD. For the bottom side MOSFET, FOM is defined as the product of the
+MOSFET's on-resistance, RDS(ON), and the total gate charge, QG.
+FOMtop = RDS(on) · QGD; FOMbottom = RDS(on) · QG (18)
+BQ25756
+SLUSEN5 – AUGUST 2023
+The lower the FOM value, the lower the total power loss. Usually lower R DS(ON) has higher cost with the same
+package size.
+The top-side MOSFET loss includes conduction loss and switching loss. Taking buck mode operation as
+an example the power loss is a function of duty cycle (D=V OUT/VIN), charging current (I CHG), MOSFET's on-
+resistance (RDS(ON)_top), input voltage (VIN), switching frequency (fS), turn-on time (ton) and turn-off time (toff):
+Ptop =Pcon_top+Psw_top (19)
+Pcon_top =D · IL_RMS 2 · RDS(on)_top; (20)
+IL_RMS 2=IL_DC 2+Iripple 2/12 (21)
+• IL_DC is the average inductor DC current;
+• Iripple is the inductor current ripple peak-to-peak value;
+Psw_top =PIV_top+PQoss_top+PGate_top; (22)
+The first item P con_top represents the conduction loss which is straight forward. The second term P sw_top
+represents the multiple switching loss items in top MOSFET including voltage and current overlap losses
+(PIV_top), MOSFET parasitic output capacitance loss (P Qoss_top) and gate drive loss (P Gate_top). To calculate
+voltage and current overlap losses (PIV_top):
+PIV_top =0.5x VIN · Ivalley · ton· fS+0.5x VIN · Ipeak · toff · fS (23)
+Ivalley =IL_DC- 0.5 · Iripple (inductor current valley value); (24)
+Ipeak =IL_DC+ 0.5 · Iripple (inductor current peak value); (25)
+• ton is the MOSFET turn-on time that VDS falling time from VIN to almost zero (MOSFET turn on conduction
+voltage);
+• toff is the MOSFET turn-off time that IDS falling time from Ipeak to zero;
+The MOSFET turn-on and turn-off times are given by:
+SW SW
+on off
+on off
+Q Qt = , t = I I
+(26)
+where Q sw is the switching charge, I on is the turn-on gate driving current, and I off is the turn-off gate driving
+current. If the switching charge is not given in MOSFET datasheet, it can be estimated by gate-to-drain charge
+(QGD) and gate-to-source charge (QGS):
+Qsw =QGD+QGS (27)
+Gate driving current can be estimated by REGN voltage (V REGN), MOSFET plateau voltage (V plt), total turn-on
+gate resistance (Ron), and turn-off gate resistance (Roff) of the gate driver:
+REGN plt plt
+on off
+on off
+V - V V
+I = , I = R R
+(28)
+To calculate top MOSFET parasitic output capacitance loss (PQoss_top):
+PQoss_top =0.5 · VIN· Qoss · fS (29)
+• Qoss is the MOSFET parasitic output charge which can be found in MOSFET datasheet. It is recommended
+to limit the total switch node capacitance CSW (nF) < 160/VIN; for example, for a 60-V application, it is
+recommended to keep the total CSW < 2.67 nF
+To calculate top MOSFET gate drive loss (PGate_top):
+BQ25756
+SLUSEN5 – AUGUST 2023
+PGate_top =VIN· QGate_top · fS (30)
+• QGate_top is the top MOSFET gate charge which can be found in MOSFET datasheet;
+• Note here VIN is used instead of real gate drive voltage because the gate drive is generated based on LDO
+from VIN, the total gate drive related loss are all considered when VIN is used for gate drive loss calculation.
+• Alternatively, gate drive voltage can be supplied directly by external high efficiency supply into the DRV_SUP
+pin. In this case, the power loss to drive the gates becomes: PGate_top =VDRV_SUP· QGate_top · fS
+The bottom-side MOSFET loss also includes conduction loss and switching loss:
+Pbottom =Pcon_bottom+Psw_bottom (31)
+Pcon_bottom =(1 - D) · IL_RMS 2 · RDS(on)_bottom; (32)
+Psw_bottom =PRR_bottom+PDead_bottom+PGate_bottom; (33)
+The first item P con_bottom represents the conduction loss which is straight forward. The second term P sw_bottom
+represents the multiple switching loss items in bottom MOSFET including reverse recovery losses (P RR_bottom),
+Dead time body diode conduction loss (P Dead_bottom) and gate drive loss (P Gate_bottom). The detail calculation can
+be found below:
+PRR_bottom=VIN · Qrr · fS (34)
+• Qrr is the bottom MOSFET reverse recovery charge which can be found in MOSFET data sheet;
+PDead_bottom=VF · Ivalley · fS · tdead_rise+VF · Ipeak · fS · tdead_fall (35)
+• VF is the body diode forward conduction voltage drop;
+• tdead_rise is the SW rising edge deadtime between top and bottom MOSFETs which is around 40 ns;
+• tdead_fall is the SW falling edge deadtime between top and bottom MOSFETs which is around 30 ns;
+PGate_bottom can follow the same method as top MOSFET gate drive loss calculation approach.
+9.2.1.2.9 Converter Fast Transient Response
+The device integrates all the loop compensation, thereby providing a high density solution with ease of use. For
+faster transient reponse  in reverse operating mode , the EN_CONV_FAST_TRANSIENT bit can be set to 1. If
+device is not used in reverse boost mode operation, this section can be disregarded.
+When the converter is operating in boost mode, the non-continuous inductor current flow to the load results in a
+right-half plane (RHP) zero. The RHP zero location is:
+RHPz =
+VIN, boost
+IIN, boost
+1
+2πL (36)
+For good phase margin, the unity gain bandwidth (UGBW) of the converter should be about 1/3 of the RHPz.
+The boost output capacitor ( Cload), and the converter transient parameters ( R1, gm1) need to be scaled to move
+the location of the UGBW of the converter.
+1 ≈
+Adiv × gm1 sR1C1 + 1
+sC1
+Vi
+Io × 50m
+1
+1 + s CloadRload
+2
+(37)
+The device adjusts Adiv, gm1 and R1 based on the output voltage and the EN_CONV_FAST_TRANSIENT bit
+setting per the table below. During some boost case scenarios, the Cload needs to be adjusted to limit the
+converter bandwidth.
+Boost Output
+Voltage
+Adiv C1 EN_CONV_FAST_TRANSIENT = 0 EN_CONV_FAST_TRANSIENT = 1
+gm1 R1 gm1 R1
+≤8 V 1/5 75 pF 0.4 μ 600 kΩ 2 μ 1.3 MΩ
+BQ25756
+SLUSEN5 – AUGUST 2023
+Boost Output
+Voltage
+Adiv C1 EN_CONV_FAST_TRANSIENT = 0 EN_CONV_FAST_TRANSIENT = 1
+gm1 R1 gm1 R1
+8 V to 16 V 1/10 75 pF 0.47 μ 1 MΩ 2 μ 1.8 MΩ
+16 V to 32 V 1/20 75 pF 0.67 μ 2.8 MΩ 2 μ 2.8 MΩ
+>32 V 1/40 75 pF 2 μ 2.8 MΩ 2 μ 2.8 MΩ
+As an example, assume the device operates in  reverse boost mode from a 5V supply to provide a 7V boost
+output voltage with load up-to 5A and 10μH inductor. The RHPz is approximately located at:
+RHPz =
+VIN, boost
+IIN, boost
+1
+2πL = 11.4kHz (38)
+For best stability, the UGBW of the converter should be limited to 1/3 of the RHP zero, or 3.8kHz. If
+EN_CONV_FAST_TRANSIENT = 1, the equation becomes:
+1 ≈ 0.2 × 2μ  jω × 1.3MΩ × 75pF + 1
+jω × 75pF
+5V
+5A × 50m
+1
+1 + jω Cload × 1.4
+2
+(39)
+Solving the above for Cload gives ≥674 μF capacitor requirement.
+Conversely, if EN_CONV_FAST_TRANSIENT = 0, the UGBW equation becomes:
+1 ≈ 0.2 × 0.4μ  jω × 0.6MΩ × 75pF + 1
+jω × 75pF
+5V
+5A × 50m
+1
+1 + jω Cload × 1.4
+2
+(40)
+Solving the above for Cload gives ≥51 μF capacitor requirement. However, the minimum recommended capacitor
+for converter stability is 80 μF, so this minimum value should be used.
+BQ25756
+SLUSEN5 – AUGUST 2023
+9.2.1.3 Application Curves
+CVAC = 160 µF, COUT = 160 µF, VVAC = 20 V, VBAT = 29.4 V (unless otherwise specified)
+VAC = 20 V VBAT = 20 V ICHG = 5 A
+Figure 9-3. VAC Plug-In Power Up with 5-A ICHG
+VAC = 20 V → 0 V VBAT = 20 V ICHG = 5 A
+Figure 9-4. VAC Un-plug Power Down with 5-A
+ICHG
+VAC = 20 V VBAT = 24 V ICHG = 5 A
+Figure 9-5. Charge Enable via I2C with 5-A ICHG
+VAC = 20 V VBAT = 24 V ICHG = 5 A
+Figure 9-6. Charge Disable via I2C with 5-A ICHG
+VAC = 20 V VBAT = 24 V ICHG = 5 A
+Figure 9-7. Charge Enable via CE Pin with 5-A
+ICHG
+VAC = 20 V VBAT = 24 V ICHG = 5 A
+Figure 9-8. Charge Disable via CE Pin with 5-A
+ICHG
+BQ25756
+SLUSEN5 – AUGUST 2023
+VAC = 24 V VBAT = 20 V ICHG = 5 A
+Figure 9-9. Buck Switching Waveform
+VAC = 24 V VOUT = 28 V ICHG = 5 A
+Figure 9-10. Boost Switching Waveform
+VAC = 24 V VBAT = 24 V ICHG = 5 A
+Figure 9-11. Buck-Boost Switching Waveform
+VOC = 30 V
+ISC = 3.5 A
+VBAT = 24 V EN_CHG = 0 → 1
+Figure 9-12. Max Power Point Tracking (MPPT) Full
+Panel Sweep
+VOC = 30 V
+ISC = 3.5 A
+VBAT = 24 V P&O Timer = 0.5s
+Figure 9-13. Max Power Point Tracking (MPPT)
+Perturb and Observe
+VBAT = 24 V VAC_REV = 20 V ILOAD = 4 A
+Figure 9-14. Reverse Mode Power Up with 4-A
+Load
+BQ25756
+SLUSEN5 – AUGUST 2023
+VBAT = 24 V VAC_REV = 20 V ILOAD = 4 A
+Figure 9-15. Reverse Mode Power Down with 4-A
+Load
+VBAT = 28 V VAC_REV = 5 V ILOAD = 0.5 A →
+4.5 A
+Figure 9-16. Reverse Mode Buck Transient
+Reponse
+VBAT = 28 V VAC_REV = 28 V ILOAD = 0.5 A →
+4.5 A
+Figure 9-17. Reverse Mode Buck-Boost Transient
+Reponse
+VBAT = 28 V VAC_REV = 48 V ILOAD = 0.5 A →
+4.5 A
+Figure 9-18. Reverse Mode Boost Transient
+Reponse
+9.2.2 Typical Application (USB-PD EPR Configuration)
+The device can be configured as a bidirectional buck-boost charger for USB-PD EPR charging applications. In
+this mode, the device can charge the battery from USB power and provide power back to the port when not
+charging. An optional gate drive voltage can be provided using the DRV_SUP pin to reduce switching losses.
+Figure 9-19 shows a typical schematic when using the device as a buck-boost charger for 10-cell Li-ion battery
+with USB-PD EPR input and bidirectional output for 240-W applications. The TPS26750 device communicates
+with the USB port, and controls the BQ25756 via I 2C to charge with only the available power. In reverse mode,
+the TPS26750 negotiates with downstream device for the power profile, and controls the BQ25756 via I 2C to
+provide the correct voltage and current to the USB port. The TPS2663x eFUSE can isolate the VBUS port from
+the BQ25756 input port when a fault is detected or the power source is removed.
+BQ25756
+SLUSEN5 – AUGUST 2023
+ICHG
+CSYS
+SYSTEM
+Vin
+5V ~ 48V
+BATTERY
++
+ACP
+SRP
+SRN
+HIDRV2
+LODRV2
+HIDRV1
+LODRV1
+DRV_SUP
+PGND
+BTST1 BTST2
+FSW_SYNC
+VAC
+ACN
+SW1 SW2
+ACUV
+REGN
+TS
+STAT1
+PG
+INT
+SCL
+CE
+SDA
+FB
+ILIM_HIZ
+STAT2 BQ25756
+ACOV
+REGN
+10S Li-Ion
+30V ~ 42V
+Q1
+Q2 Q3
+Q4
+100nF 100nF
+5m
+
+5m
+249k
+
+
+9.42k   5.24k
+
+
+30.31k
+57.1k
+L1
+RAC_SNS
+RBAT_SNS
+4.7µF  4.7µF
+DRV_SUP DRV_SUP
+80µF
+80µF
+10
+
+  10
+
+
+FBG
+MODE
+2x 100nF
+1µF
+10
+10
+
+2x 100nF
+470nF
+470nF
+80µF
+80µF
+10k
+BUCKVIN 5V
+TPS26750
+TPS2663x
+VBUS
+USB-PD EPR
+Controller
+CCx
+BIDIRECTIONAL
+POWER FLOW
+3k
+
+Figure 9-19. BQ25756: USB-PD EPR Input to Charge 10s Battery with up-to 240 W. Bidirectional Power
+Flow to Provide USB-PD EPR Power to the Input Port.
+Table 9-3. Recommended Part Numbers:
+COMPONENT VALUE RECOMMENDED PART NUMBER
+Q1, Q2, Q3, Q4 80 V, 6.2 mΩ SiR880BDP
+L1 10 μH, 19 mΩ CMLB135T-100MS
+9.2.2.1 Design Requirements
+For this design example, use the parameters shown in the table below.
+Table 9-4. Design Parameters
+PARAMETER VALUE
+Input voltage operating range (VAC) 5 V to 48 V
+Input current limit (IAC) HW limit: 6.7 A
+SW limit: set by TPS26750 PD controller
+Charge current limit (ICHG) 5 A
+Battery charge voltage (VBAT_REG) 42 V
+Switching frequency 450 kHz
+Reverse Mode voltage regulation (VAC_REV) Set by TPS26750: 5 V to 48 V
+Reverse Mode current regulation (IAC_REV) HW limit: 6.7 A
+SW limit: set by TPS26750 PD controller
+BQ25756
+SLUSEN5 – AUGUST 2023
+10 Power Supply Recommendations
+The power supply for the device is any DC voltage source within the specified input range. The supply should
+also be capable of supplying sufficient current based on the programmed input current limit. The input supply
+should be bypassed with a combination of electrolytic and ceramic capacitors to avoid ringing due to the
+parasitic impedance of the connecting cables.
+When device is operating in the reverse direction, the supply at the OUTPUT should follow the same
+recommendations as the input supply mentioned above.
+BQ25756
+SLUSEN5 – AUGUST 2023
+11 Layout
+11.1 Layout Guidelines
+Proper layout of the components to minimize high frequency current path loops is important to prevent electrical
+and magnetic field radiation and high frequency resonant problems. Here is a PCB layout priority list for proper
+layout.
+Table 11-1. PCB Layout Guidelines
+COMPONENTS FUNCTION IMPACT GUIDELINES
+Buck high side FET,
+Buck low side FET, input
+capacitors
+Buck input loop High frequency noise,
+ripple, efficiency
+This path forms a high frequency switching loop due
+to the pulsating current at the input of the buck. Place
+components on the same side of the board. Minimize
+loop area to reduce parasitic inductance. Maximize
+trace width to reduce parasitic resistance. Place input
+ceramic capacitors close to the switching FETs.
+Boost low side FET, boost
+high side FET, output
+capacitors
+Boost output loop High frequency noise,
+ripple, efficiency
+This path forms a high frequency switching loop due to
+the pulsating current at the output of the boost. Place
+components on the same side of the board. Minimize
+loop area to reduce parasitic inductance. Maximize
+trace width to reduce parasitic resistance. Place output
+ceramic capacitors close to the switching FETs.
+Sense resistors, switching
+FETs, inductor
+Current path Efficiency The current path from input to output through the
+power stage and sense resistors has low impedance.
+Pay attention to via resistance if they are not on the
+same side. The number of vias can be estimated as
+1- to 2-A per via for a 10-mil via with 1 oz. copper
+thickness.
+Switching FETs, inductor Power stage Thermal, efficiency The switching FETs and inductor are the components
+with highest power loss. Allow enough copper area
+for heat dissipation. Multiple thermal vias can be used
+to connect more copper layers together and dissipate
+more heat.
+DRV_SUP, BTST1, BTST2
+capacitors
+Switching FET gate drive High frequency noise,
+parasitic ringing, gate
+drive integrity
+The DRV_SUP capacitor is used to supply the power
+to drive the low side FETs. The BTST capacitors are
+used to drive the high side FETs. It is recommended to
+place the capacitors as close as possible to the IC.
+LODRV1, LODRV2 Low side gate drive High frequency noise,
+parasitic ringing, gate
+drive integrity
+LODRV1 and LODRV2 supplies the gate drive current
+to turn on the low side FETs. The return of LODRV1
+and LODRV2 is PGND. As current take the path of
+least impedance, a ground plane close to the low side
+gate drive traces is recommended. Minimize gate drive
+length and aim for at least 20-mil gate drive trace
+width.
+HIDRV1, HIDRV2, SW1
+(pin trace), SW2 (pin
+trace)
+High side gate drive High frequency noise,
+parasitic ringing, gate
+drive integrity
+HIDRV1 and HIDRV2 supplies the gate drive current
+to turn on the high side FETs. The return of HIDRV1
+and HIDRV2 are SW1 and SW2, respectively. Route
+HIDRV1/SW1 and HIDRV2/SW2 pair next to each
+other to reduce gate drive parasitic inductance.
+Minimize gate drive length and aim for at least 20-mil
+gate drive trace width.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Table 11-1. PCB Layout Guidelines (continued)
+COMPONENTS FUNCTION IMPACT GUIDELINES
+Current limit resistors,
+FSW_SYNC resistor
+IC programmable settings Regulation accuracy,
+switching integrity
+Pin voltage determines the settings for input current
+limit, output current limit and switching frequency.
+Ground noise on these could lead to inacuracy.
+Minimize ground return from these resistors to the IC
+ground pin.
+Input (ACP, ACN) and
+output (SRP, SRN) current
+sense
+Current regulation Regulation accuracy Use Kelvin-sensing technique for input and output
+current sense resistors. Connect the current sense
+traces to the center of the pads, and run current sense
+traces as differential pairs, away from switching nodes.
+Input (ACUV), and output
+(FB, VO_SNS) voltage
+sensing
+Voltage sense and
+regulation
+Regulation accuracy ACUV divider sets internal input voltage regulation in
+forward mode (VACUV_DPM). FB divider sets battery
+voltage regulation in forward mode (VFB_ACC). Route
+the top of the divider point to the target regulation
+location. Avoid routing close to high power switching
+nodes.
+Bypass capacitors Noise filter Noise immunity Place lowest value capacitors closest to the IC.
+11.2 Layout Example
+Based on the above layout guidelines, the buck-boost PCB layout example top view is shown below including all
+the key power components.
+Figure 11-1. PCB Layout Reference Example Top View
+For both input and output current sensing resistors, differential sensing and routing method are suggested and
+highlighted in figure below. Use wide trace for gate drive traces, minimum 20-mil trace width. Connect all analog
+grounds to a dedicated low-impedance copper plane, which is tied to the power ground underneath the IC
+exposed pad.
+BQ25756
+SLUSEN5 – AUGUST 2023
+Figure 11-2. PCB Layout Gate Drive and Current Sensing Signal Layer Routing
+BQ25756
+SLUSEN5 – AUGUST 2023
+12 Device and Documentation Support
+12.1 Device Support
+12.1.1 Third-Party Products Disclaimer
+TI'S PUBLICATION OF INFORMATION REGARDING THIRD-PARTY PRODUCTS OR SERVICES DOES NOT
+CONSTITUTE AN ENDORSEMENT REGARDING THE SUITABILITY OF SUCH PRODUCTS OR SERVICES
+OR A WARRANTY, REPRESENTATION OR ENDORSEMENT OF SUCH PRODUCTS OR SERVICES, EITHER
+ALONE OR IN COMBINATION WITH ANY TI PRODUCT OR SERVICE.
+12.2 Receiving Notification of Documentation Updates
+To receive notification of documentation updates, navigate to the device product folder on ti.com. Click on
+Subscribe to updates  to register and receive a weekly digest of any product information that has changed. For
+change details, review the revision history included in any revised document.
+12.3 Support Resources
+TI E2E ™ support forums  are an engineer's go-to source for fast, verified answers and design help — straight
+from the experts. Search existing answers or ask your own question to get the quick design help you need.
+Linked content is provided "AS IS" by the respective contributors. They do not constitute TI specifications and do
+not necessarily reflect TI's views; see TI's Terms of Use.
+12.4 Trademarks
+TI E2E™ is a trademark of Texas Instruments.
+All trademarks are the property of their respective owners.
+12.5 Electrostatic Discharge Caution
+This integrated circuit can be damaged by ESD. Texas Instruments recommends that all integrated circuits be handled
+with appropriate precautions. Failure to observe proper handling and installation procedures can cause damage.
+ESD damage can range from subtle performance degradation to complete device failure. Precision integrated circuits may
+be more susceptible to damage because very small parametric changes could cause the device not to meet its published
+specifications.
+12.6 Glossary
+TI Glossary This glossary lists and explains terms, acronyms, and definitions.
+BQ25756
+SLUSEN5 – AUGUST 2023
+13 Mechanical, Packaging, and Orderable Information
+The following pages include mechanical, packaging, and orderable information. This information is the most
+current data available for the designated devices. This data is subject to change without notice and revision of
+this document. For browser-based versions of this data sheet, refer to the left-hand navigation.
+BQ25756
+SLUSEN5 – AUGUST 2023
+PACKAGE OPTION ADDENDUM
+www.ti.com 9-Nov-2025
+PACKAGING INFORMATION
+Orderable part number Status
+(1)
+Material type
+(2)
+Package | Pins Package qty | Carrier RoHS
+(3)
+Lead finish/
+Ball material
+(4)
+MSL rating/
+Peak reflow
+(5)
+Op temp (°C) Part marking
+(6)
+BQ25756RRVR Active Production VQFN (RRV) | 36 3000 | LARGE T&R Yes NIPDAU Level-1-260C-UNLIM -40 to 125 BQ25756
+BQ25756RRVR.A Active Production VQFN (RRV) | 36 3000 | LARGE T&R Yes NIPDAU Level-1-260C-UNLIM -40 to 125 BQ25756
+
+(1) Status:  For more details on status, see our product life cycle.
+
+(2) Material type:  When designated, preproduction parts are prototypes/experimental devices, and are not yet approved or released for full production. Testing and final process, including without limitation quality assurance,
+reliability performance testing, and/or process qualification, may not yet be complete, and this item is subject to further changes or possible discontinuation. If available for ordering, purchases will be subject to an additional
+waiver at checkout, and are intended for early internal evaluation purposes only. These items are sold without warranties of any kind.
+
+(3) RoHS values:  Yes, No, RoHS Exempt. See the TI RoHS Statement for additional information and value definition.
+
+(4) Lead finish/Ball material:  Parts may have multiple material finish options. Finish options are separated by a vertical ruled line. Lead finish/Ball material values may wrap to two lines if the finish value exceeds the maximum
+column width.
+
+(5) MSL rating/Peak reflow:  The moisture sensitivity level ratings and peak solder (reflow) temperatures. In the event that a part has multiple moisture sensitivity ratings, only the lowest level per JEDEC standards is shown.
+Refer to the shipping label for the actual reflow temperature that will be used to mount the part to the printed circuit board.
+
+(6) Part marking:  There may be an additional marking, which relates to the logo, the lot trace code information, or the environmental category of the part.
+
+Multiple part markings will be inside parentheses. Only one part marking contained in parentheses and separated by a "~" will appear on a part. If a line is indented then it is a continuation of the previous line and the two
+combined represent the entire part marking for that device.
+
+Important Information and Disclaimer:The information provided on this page represents TI's knowledge and belief as of the date that it is provided. TI bases its knowledge and belief on information provided by third parties, and
+makes no representation or warranty as to the accuracy of such information. Efforts are underway to better integrate information from third parties. TI has taken and continues to take reasonable steps to provide representative
+and accurate information but may not have conducted destructive testing or chemical analysis on incoming materials and chemicals. TI and TI suppliers consider certain information to be proprietary, and thus CAS numbers
+and other limited information may not be available for release.
+
+In no event shall TI's liability arising out of such information exceed the total purchase price of the TI part(s) at issue in this document sold by TI to Customer on an annual basis.
+
+Addendum-Page 1
+PACKAGE MATERIALS INFORMATION
+
+www.ti.com 28-Aug-2023
+TAPE AND REEL INFORMATION
+Reel Width (W1)
+REEL DIMENSIONS
+A0B0K0WDimension designed to accommodate the component lengthDimension designed to accommodate the component thicknessOverall width of the carrier tapePitch between successive cavity centersDimension designed to accommodate the component width
+TAPE DIMENSIONSK0 P1B0WA0Cavity
+QUADRANT ASSIGNMENTS FOR PIN 1 ORIENTATION IN TAPE
+Pocket QuadrantsSprocket HolesQ1Q1Q2Q2Q3Q3Q4Q4User Direction of Feed
+P1ReelDiameter
+
+*All dimensions are nominal
+Device Package
+Type
+Package
+Drawing
+Pins SPQ Reel
+Diameter
+(mm)
+Reel
+Width
+W1 (mm)
+A0
+(mm)
+B0
+(mm)
+K0
+(mm)
+P1
+(mm)
+W
+(mm)
+Pin1
+Quadrant
+BQ25756RRVR VQFN RRV 36 3000 330.0 12.4 5.3 6.3 1.15 8.0 12.0 Q1
+Pack Materials-Page 1
+PACKAGE MATERIALS INFORMATION
+
+www.ti.com 28-Aug-2023
+TAPE AND REEL BOX DIMENSIONS
+Width (mm)
+W LH
+
+*All dimensions are nominal
+Device Package Type Package Drawing Pins SPQ Length (mm) Width (mm) Height (mm)
+BQ25756RRVR VQFN RRV 36 3000 367.0 367.0 35.0
+Pack Materials-Page 2
+GENERIC PACKAGE VIEW
+This image is a representation of the package family, actual package may vary.
+Refer to the product data sheet for package details.
+VQFN - 1 mm max heightRRV 36
+PLASTIC QUAD FLATPACK - NO LEAD5 x 6, 0.5 mm pitch
+4229484/A
+NOTES:
+1. All linear dimensions are in millimeters. Any dimensions in parenthesis are for reference only. Dimensioning and tolerancing
+per ASME Y14.5M.
+2. This drawing is subject to change without notice.
+3. The package thermal pad must be soldered to the printed circuit board for optimal thermal and mechanical performance.
+PACKAGE OUTLINE
+4226422/A   11/2020
+VQFN - 1 mm max height
+PLASTIC QUAD FLATPACK-NO LEAD
+RRV0036A
+A
+0.08 C
+0.1 C A B
+0.05 C
+B
+SYMM
+SYMM
+PIN 1 INDEX AREA
+5.1
+4.9
+6.1
+5.9
+0.05
+0.00
+1.0
+0.8
+SEATING PLANE
+C
+(0.1) TYP
+2X 3.5
+3.7
+3.5
+2X
+4.5
+4.7
+4.5
+32X 0.5
+36X 0.5
+0.3
+36X 0.3
+0.2
+PIN 1 ID
+(OPTIONAL)
+1
+10
+11 18
+19
+28
+37
+2936
+NOTES: (continued)
+4. This package is designed to be soldered to a thermal pad on the board. For more information, see Texas Instruments literature
+number SLUA271 (www.ti.com/lit/slua271) .
+5. Vias are optional depending on application, refer to device data sheet. If any vias are implemented, refer to their locations shown
+          on this view. It is recommended that vias under paste be filled, plugged or tented.
+EXAMPLE BOARD LAYOUT
+4226422/A   11/2020
+VQFN - 1 mm max heightRRV0036A
+PLASTIC QUAD FLATPACK-NO LEAD
+SYMM
+SYMM
+LAND PATTERN EXAMPLE
+EXPOSED METAL SHOWN
+SCALE: 15X
+SOLDER MASK DETAILS
+NON- SOLDER MASK
+DEFINED
+(PREFERRED)
+SOLDER MASK
+DEFINED
+EXPOSED METAL
+METAL
+SOLDER MASK
+OPENING
+EXPOSED METAL
+METAL UNDER
+SOLDER MASK
+SOLDER MASK
+OPENING
+0.07 MIN
+ALL AROUND
+0.07 MAX
+ALL ROUND
+(3.6)
+(0.615)
+(4.8)
+(0.935)
+(1.16)
+(0.89)
+(4.6)(5.8)
+32X (0.5)
+36X (0.25)
+36X (0.6)
+(R 0.05)
+TYP
+(Ø 0.2) VIA
+TYP
+10
+1
+36 29
+28
+19
+1811
+37
+NOTES: (continued)
+6.  Laser cutting apertures with trapezoidal walls and rounded corners may offer better paste release. IPC-7525 may have alternate
+design recommendations.
+EXAMPLE STENCIL DESIGN
+4226422/A   11/2020
+VQFN - 1 mm max heightRRV0036A
+PLASTIC QUAD FLATPACK-NO LEAD
+SOLDER PASTE EXAMPLE
+BASED ON 0.125 mm THICK STENCIL
+EXPOSED PAD
+72% PRINTED COVERAGE BY AREA
+SCALE: 15X
+SYMM
+SYMM
+12X
+(1.03)
+(1.23)
+(4.8)
+(0.58)
+(1.16)
+12X (0.96)
+(5.8)
+32X (0.5)
+36X (0.25)
+36X (0.6)
+(R 0.05)
+TYP
+(Ø 0.2) VIA
+TYP
+10
+1
+36 29
+28
+19
+1811
+37
+IMPORTANT NOTICE AND DISCLAIMER
+TI PROVIDES TECHNICAL AND RELIABILITY DATA (INCLUDING DATASHEETS), DESIGN RESOURCES (INCLUDING REFERENCE
+DESIGNS), APPLICATION OR OTHER DESIGN ADVICE, WEB TOOLS, SAFETY INFORMATION, AND OTHER RESOURCES “AS IS”
+AND WITH ALL FAULTS, AND DISCLAIMS ALL WARRANTIES, EXPRESS AND IMPLIED, INCLUDING WITHOUT LIMITATION ANY
+IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE OR NON-INFRINGEMENT OF THIRD
+PARTY INTELLECTUAL PROPERTY RIGHTS.
+These resources are intended for skilled developers designing with TI products. You are solely responsible for (1) selecting the appropriate
+TI products for your application, (2) designing, validating and testing your application, and (3) ensuring your application meets applicable
+standards, and any other safety, security, regulatory or other requirements.
+These resources are subject to change without notice. TI grants you permission to use these resources only for development of an
+application that uses the TI products described in the resource. Other reproduction and display of these resources is prohibited. No license
+is granted to any other TI intellectual property right or to any third party intellectual property right. TI disclaims responsibility for, and you fully
+indemnify TI and its representatives against any claims, damages, costs, losses, and liabilities arising out of your use of these resources.
+TI’s products are provided subject to TI’s Terms of Sale, TI’s General Quality Guidelines, or other applicable terms available either on
+ti.com or provided in conjunction with such TI products. TI’s provision of these resources does not expand or otherwise alter TI’s applicable
+warranties or warranty disclaimers for TI products. Unless TI explicitly designates a product as custom or customer-specified, TI products
+are standard, catalog, general purpose devices.
+TI objects to and rejects any additional or different terms you may propose.
+IMPORTANT NOTICE
+Last updated 10/2025
