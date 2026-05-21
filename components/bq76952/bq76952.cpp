@@ -180,6 +180,7 @@ void BQ76952Component::setup() {
       this->regulator_config_deferred_ = this->has_regulator_config_();
       this->current_limit_config_deferred_ = this->has_current_limit_config_();
       this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
+      this->predischarge_config_deferred_ = this->has_predischarge_config_();
       this->deferred_boot_config_log_ms_ = 0;
       this->deferred_boot_config_apply_ms_ = millis() + 10000;
       ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
@@ -204,6 +205,7 @@ void BQ76952Component::setup() {
     this->regulator_config_deferred_ = false;
     this->current_limit_config_deferred_ = false;
     this->ts_pin_config_deferred_ = false;
+    this->predischarge_config_deferred_ = false;
     if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
         this->has_predischarge_config_() ||
         this->has_boot_mode_config_()) {
@@ -213,7 +215,8 @@ void BQ76952Component::setup() {
 }
 
 void BQ76952Component::update() {
-  if (this->regulator_config_deferred_ || this->current_limit_config_deferred_ || this->ts_pin_config_deferred_) {
+  if (this->regulator_config_deferred_ || this->current_limit_config_deferred_ || this->ts_pin_config_deferred_ ||
+      this->predischarge_config_deferred_) {
     const uint32_t now = millis();
     if (now < this->deferred_boot_config_apply_ms_) {
       if (now >= this->deferred_boot_config_log_ms_) {
@@ -228,7 +231,7 @@ void BQ76952Component::update() {
       if (this->ts_pin_config_deferred_ && !this->apply_ts_pin_config_()) {
         this->status_set_warning();
       }
-      if (!this->apply_predischarge_config_()) {
+      if (this->predischarge_config_deferred_ && !this->apply_predischarge_config_()) {
         this->status_set_warning();
       }
       if (!this->apply_current_limit_config_()) {
@@ -237,6 +240,7 @@ void BQ76952Component::update() {
       this->regulator_config_deferred_ = false;
       this->current_limit_config_deferred_ = false;
       this->ts_pin_config_deferred_ = false;
+      this->predischarge_config_deferred_ = false;
     }
   }
 
@@ -1041,6 +1045,7 @@ bool BQ76952Component::apply_requested_configuration_() {
   this->regulator_config_deferred_ = false;
   this->current_limit_config_deferred_ = false;
   this->ts_pin_config_deferred_ = false;
+  this->predischarge_config_deferred_ = false;
 
   bool ok = true;
   if (!this->apply_regulator_config_()) {

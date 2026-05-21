@@ -13,6 +13,7 @@ Component-scoped notes for `components/bq76952`.
 - `REG12 Config (0x9236)` encodes `REG1_EN` in bit `0` and `REG1V[2:0]` in bits `3:1` (not bits `3` and `2:0` respectively). YAML voltage option values and C++ masks/shifts must match that layout.
 - Matching `REG0 Config` / `REG12 Config` bytes do not prove the live preregulator state is active; when `reg0_enabled` is requested, the component should force a reapply/reset path instead of trusting the pre-check match alone.
 - Boot-time regulator/TS/current-limit writes now use a fixed 10-second post-boot delay instead of waiting for ESP32 OTA pending-verify to clear.
+- If `predischarge_enabled` is requested, deferred boot-apply bookkeeping must include a dedicated predischarge flag; otherwise a `PDSG_EN`-only configuration will be scheduled for delayed apply but never actually written.
 - `apply_configuration_on_boot: false` disables all automatic regulator/TS/current-limit/boot-mode writes; the `apply_configuration` button then becomes the single manual path that applies the requested config set.
 - `program_factory_otp` is a separate one-time factory button: it first applies the requested live config, then writes startup-default boot-mode bits (`Power Config[SLEEP]`, `Mfg Status Init[FET_EN]`) and runs `OTP_WR_CHECK()` / `OTP_WRITE()` while still in `CONFIG_UPDATE`.
 - Keep normal runtime controls under the config entity category; keep `program_factory_otp` separate as a diagnostic/factory-only action and label example names with an `OTP` prefix.

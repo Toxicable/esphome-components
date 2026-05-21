@@ -273,6 +273,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool regulator_config_deferred_{false};
   bool current_limit_config_deferred_{false};
   bool ts_pin_config_deferred_{false};
+  bool predischarge_config_deferred_{false};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
 
