@@ -25,68 +25,75 @@ i2c:
 
 bq25756:
   id: charger
-  i2c_id: i2c2_bus
+  i2c_id: i2c_ext
   address: 0x6B
   update_interval: 1s
   disable_watchdog: true
-  # iac_current:
-  #   name: "IAC Current"
-  # ibat_current:
-  #   name: "IBAT Current"
-  # vac_voltage:
-  #   name: "VAC Voltage"
-  # vbat_voltage:
-  #   name: "VBAT Voltage"
-  # ts_percent:
-  #   name: "TS Percent"
+  # disable_ce_pin: true
+  # disable_ilim_hiz_pin: true
+  # disable_ichg_pin: true
+  # charge_voltage_limit_mv: 1536
+  # charge_current_limit_ma: 5000
+  # input_current_dpm_limit_ma: 3000
+  # input_voltage_dpm_limit_mv: 12000
+  iac_current:
+    name: "Charger Input Current"
+  vac_voltage:
+    name: "Charger Input Voltage"
+  ibat_current:
+    name: "Charger Output Current"
+  vbat_voltage:
+    name: "Charger Output Voltage"
+  ts_percent:
+    name: "Charger TS Percent"
   # vfb_voltage:
-  #   name: "VFB Voltage"
-  # charge_status:
-  #   name: "Charge Status"
-  # ts_status:
-  #   name: "TS Status"
-  # mppt_status:
-  #   name: "MPPT Status"
-  # status_flags:
-  #   name: "Status Flags"
-  # pg_good:
-  #   name: "PG Good"
-  # watchdog_expired:
-  #   name: "Watchdog Expired"
-  # iac_dpm_active:
-  #   name: "IAC DPM Active"
-  # vac_dpm_active:
-  #   name: "VAC DPM Active"
-  # reverse_active:
-  #   name: "Reverse Active"
-  # cv_timer_expired:
-  #   name: "CV Timer Expired"
-  # charge_timer_expired:
-  #   name: "Charge Timer Expired"
-  # vac_uv_fault:
-  #   name: "VAC UV Fault"
-  # vac_ov_fault:
-  #   name: "VAC OV Fault"
-  # ibat_ocp_fault:
-  #   name: "IBAT OCP Fault"
-  # vbat_ov_fault:
-  #   name: "VBAT OV Fault"
-  # thermal_shutdown:
-  #   name: "Thermal Shutdown"
-  # drv_sup_fault:
-  #   name: "DRV_SUP Fault"
-  # charge_enable:
-  #   name: "Charge Enable"
-  # hiz_mode:
-  #   name: "HIZ Mode"
-  # reverse_mode:
-  #   name: "Reverse Mode"
-  # watchdog:
-  #   name: "Watchdog"
-  # watchdog_reset:
-  #   name: "Watchdog Reset"
+  #   name: "Charger VFB Voltage"
+  charge_status:
+    name: "Charge Status"
+  ts_status:
+    name: "Charger TS Status"
+  mppt_status:
+    name: "Charger MPPT Status"
+  status_flags:
+    name: "Charger Status Flags"
+  pg_good:
+    name: "Charger PG Good"
+  watchdog_expired:
+    name: "Charger Watchdog Expired"
+  iac_dpm_active:
+    name: "Charger IAC DPM Active"
+  vac_dpm_active:
+    name: "Charger VAC DPM Active"
+  reverse_active:
+    name: "Charger Reverse Active"
+  cv_timer_expired:
+    name: "Charger CV Timer Expired"
+  charge_timer_expired:
+    name: "Charger Charge Timer Expired"
+  vac_uv_fault:
+    name: "Charger VAC UV Fault"
+  vac_ov_fault:
+    name: "Charger VAC OV Fault"
+  ibat_ocp_fault:
+    name: "Charger IBAT OCP Fault"
+  vbat_ov_fault:
+    name: "Charger VBAT OV Fault"
+  thermal_shutdown:
+    name: "Charger Thermal Shutdown"
+  drv_sup_fault:
+    name: "Charger DRV_SUP Fault"
+  charge_enable:
+    name: "Charger Charge Enable"
+  hiz_mode:
+    name: "Charger HIZ Mode"
+  reverse_mode:
+    name: "Charger Reverse Mode"
+  watchdog:
+    name: "Charger Watchdog"
+  watchdog_reset:
+    name: "Charger Watchdog Reset"
   # dump_registers:
-  #   name: "Dump Registers"
+  #   name: "Charger Dump Registers"
 ```
 
 ## Entities
@@ -103,3 +110,6 @@ bq25756:
 - The BQ25756 ADC result registers are little-endian in the I2C map: the low byte is at the base register and the high byte is at the next address.
 - `vfb_voltage` is optional and stays disabled unless configured, matching the datasheet recommendation to avoid unnecessary VFB ADC use during charging.
 - `ILIM_HIZ` and `CE` are still hardware-active by default. If `ILIM_HIZ` is left floating or driven high, the charger can enter HIZ and stop switching even though this component never sets `EN_HIZ` during startup. If `CE` is left floating or high, charging can stay blocked even when `charge_enable` reports on.
+- Set `disable_ce_pin: true` to force software-only control of charging (`REG0x17.DIS_CE_PIN = 1`).
+- Set `disable_ilim_hiz_pin: true` and `disable_ichg_pin: true` to ignore external ILIM/ICHG pin limits and use I2C charge/input limits.
+- Periodic charger telemetry is logged at `DEBUG` level (not `INFO`).

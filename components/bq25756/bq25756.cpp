@@ -14,6 +14,7 @@ static const char *const TAG = "bq25756";
 
 constexpr uint8_t REG15_TIMER_CONTROL = 0x15;
 constexpr uint8_t REG17_CHARGER_CONTROL = 0x17;
+constexpr uint8_t REG18_PIN_CONTROL = 0x18;
 constexpr uint8_t REG19_POWER_PATH_CONTROL = 0x19;
 constexpr uint8_t REG21_CHARGER_STATUS_1 = 0x21;
 constexpr uint8_t REG22_CHARGER_STATUS_2 = 0x22;
@@ -31,8 +32,11 @@ constexpr uint8_t REG3D_PART_INFORMATION = 0x3D;
 
 constexpr uint8_t REG15_WATCHDOG_MASK = 0x30;
 constexpr uint8_t REG17_WD_RST_MASK = 0x20;
+constexpr uint8_t REG17_DIS_CE_PIN_MASK = 0x10;
 constexpr uint8_t REG17_EN_HIZ_MASK = 0x04;
 constexpr uint8_t REG17_EN_CHG_MASK = 0x01;
+constexpr uint8_t REG18_EN_ICHG_PIN_MASK = 0x80;
+constexpr uint8_t REG18_EN_ILIM_HIZ_PIN_MASK = 0x40;
 constexpr uint8_t REG19_EN_REV_MASK = 0x01;
 
 constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;
@@ -51,6 +55,11 @@ constexpr float IAC_CURRENT_LSB_MA = 0.8f;
 constexpr float IBAT_CURRENT_LSB_MA = 2.0f;
 constexpr float VOLTAGE_LSB_MV = 2.0f;
 constexpr float TS_PERCENT_LSB = 0.09765625f;
+
+constexpr uint16_t REG00_VFB_REG_MASK = 0x001F;
+constexpr uint16_t REG02_ICHG_REG_MASK = 0x07FC;
+constexpr uint16_t REG06_IAC_DPM_MASK = 0x07FC;
+constexpr uint16_t REG08_VAC_DPM_MASK = 0x3FFC;
 }  // namespace
 
 bool BQ25756Component::set_charge_enabled(bool enabled) {
@@ -130,6 +139,14 @@ bool BQ25756Component::initialize_() {
     ESP_LOGW(TAG, "ADC configuration failed; readings may be stale or zero");
     return false;
   }
+  if (!this->apply_configured_limits_()) {
+    ESP_LOGW(TAG, "Failed to apply configured charge/input limits");
+    return false;
+  }
+  if (!this->apply_configured_pin_overrides_()) {
+    ESP_LOGW(TAG, "Failed to apply configured pin control overrides");
+    return false;
+  }
 
   this->publish_control_states_();
   this->initialized_ = true;
@@ -184,8 +201,8 @@ void BQ25756Component::update() {
   const float ts_percent = static_cast<float>(ts.raw_le) * TS_PERCENT_LSB;
   const float vfb_mv = static_cast<float>(vfb.raw_le);
 
-  ESP_LOGI(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status1, status2, status3, fault);
-  ESP_LOGI(
+  ESP_LOGD(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status1, status2, status3, fault);
+  ESP_LOGD(
     TAG,
     "IAC=%.1f mA (0x%04X [%02X %02X]), IBAT=%.0f mA (0x%04X [%02X %02X]), "
     "VAC=%.0f mV (0x%04X [%02X %02X]), VBAT=%.0f mV (0x%04X [%02X %02X]), "
@@ -213,7 +230,7 @@ void BQ25756Component::update() {
     need_vfb ? "" : ", VFB=disabled"
   );
   if (need_vfb) {
-    ESP_LOGI(TAG, "VFB=%.0f mV (0x%04X [%02X %02X])", vfb_mv, vfb.raw_le, vfb.lsb, vfb.msb);
+    ESP_LOGD(TAG, "VFB=%.0f mV (0x%04X [%02X %02X])", vfb_mv, vfb.raw_le, vfb.lsb, vfb.msb);
   }
 
   if (this->iac_current_sensor_ != nullptr) {
@@ -245,6 +262,21 @@ void BQ25756Component::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  disable_watchdog: %s", this->disable_watchdog_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  disable_ce_pin: %s", this->disable_ce_pin_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  disable_ilim_hiz_pin: %s", this->disable_ilim_hiz_pin_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  disable_ichg_pin: %s", this->disable_ichg_pin_ ? "true" : "false");
+  if (this->has_charge_voltage_limit_mv_) {
+    ESP_LOGCONFIG(TAG, "  charge_voltage_limit_mv: %u", this->charge_voltage_limit_mv_);
+  }
+  if (this->has_charge_current_limit_ma_) {
+    ESP_LOGCONFIG(TAG, "  charge_current_limit_ma: %u", this->charge_current_limit_ma_);
+  }
+  if (this->has_input_current_dpm_limit_ma_) {
+    ESP_LOGCONFIG(TAG, "  input_current_dpm_limit_ma: %u", this->input_current_dpm_limit_ma_);
+  }
+  if (this->has_input_voltage_dpm_limit_mv_) {
+    ESP_LOGCONFIG(TAG, "  input_voltage_dpm_limit_mv: %u", this->input_voltage_dpm_limit_mv_);
+  }
   LOG_SENSOR("  ", "IAC Current", this->iac_current_sensor_);
   LOG_SENSOR("  ", "IBAT Current", this->ibat_current_sensor_);
   LOG_SENSOR("  ", "VAC Voltage", this->vac_voltage_sensor_);
@@ -325,6 +357,14 @@ bool BQ25756Component::read_bytes_(uint8_t reg, uint8_t *data, size_t len) {
 
 bool BQ25756Component::write_byte_(uint8_t reg, uint8_t value) {
   return this->write_bytes(reg, &value, 1);
+}
+
+bool BQ25756Component::write_u16_le_(uint8_t reg, uint16_t value) {
+  const uint8_t raw[2] = {
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+  };
+  return this->write_bytes(reg, raw, sizeof(raw));
 }
 
 bool BQ25756Component::read_u16_le_(uint8_t reg, Reg16Value &value) {
@@ -603,6 +643,70 @@ bool BQ25756Component::ensure_adc_enabled_() {
   }
 
   ESP_LOGD(TAG, "ADC config REG2B: 0x%02X -> 0x%02X, REG2C: 0x%02X -> 0x%02X", reg2b, reg2b_new, reg2c, reg2c_new);
+  return true;
+}
+
+bool BQ25756Component::apply_configured_limits_() {
+  if (this->has_charge_voltage_limit_mv_) {
+    const uint16_t code = static_cast<uint16_t>((this->charge_voltage_limit_mv_ - 1504) / 2);
+    const uint16_t raw = static_cast<uint16_t>(code & REG00_VFB_REG_MASK);
+    if (!this->write_u16_le_(0x00, raw)) {
+      ESP_LOGW(TAG, "Failed writing REG0x00 (charge_voltage_limit_mv)");
+      return false;
+    }
+  }
+
+  if (this->has_charge_current_limit_ma_) {
+    const uint16_t code = static_cast<uint16_t>(this->charge_current_limit_ma_ / 50);
+    const uint16_t raw = static_cast<uint16_t>((code << 2) & REG02_ICHG_REG_MASK);
+    if (!this->write_u16_le_(0x02, raw)) {
+      ESP_LOGW(TAG, "Failed writing REG0x02 (charge_current_limit_ma)");
+      return false;
+    }
+  }
+
+  if (this->has_input_current_dpm_limit_ma_) {
+    const uint16_t code = static_cast<uint16_t>(this->input_current_dpm_limit_ma_ / 50);
+    const uint16_t raw = static_cast<uint16_t>((code << 2) & REG06_IAC_DPM_MASK);
+    if (!this->write_u16_le_(0x06, raw)) {
+      ESP_LOGW(TAG, "Failed writing REG0x06 (input_current_dpm_limit_ma)");
+      return false;
+    }
+  }
+
+  if (this->has_input_voltage_dpm_limit_mv_) {
+    const uint16_t code = static_cast<uint16_t>(this->input_voltage_dpm_limit_mv_ / 20);
+    const uint16_t raw = static_cast<uint16_t>((code << 2) & REG08_VAC_DPM_MASK);
+    if (!this->write_u16_le_(0x08, raw)) {
+      ESP_LOGW(TAG, "Failed writing REG0x08 (input_voltage_dpm_limit_mv)");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool BQ25756Component::apply_configured_pin_overrides_() {
+  if (this->disable_ce_pin_) {
+    if (!this->update_register_bits_(REG17_CHARGER_CONTROL, REG17_DIS_CE_PIN_MASK, REG17_DIS_CE_PIN_MASK)) {
+      ESP_LOGW(TAG, "Failed setting REG17.DIS_CE_PIN");
+      return false;
+    }
+  }
+
+  if (this->disable_ilim_hiz_pin_) {
+    if (!this->update_register_bits_(REG18_PIN_CONTROL, REG18_EN_ILIM_HIZ_PIN_MASK, 0x00)) {
+      ESP_LOGW(TAG, "Failed clearing REG18.EN_ILIM_HIZ_PIN");
+      return false;
+    }
+  }
+
+  if (this->disable_ichg_pin_) {
+    if (!this->update_register_bits_(REG18_PIN_CONTROL, REG18_EN_ICHG_PIN_MASK, 0x00)) {
+      ESP_LOGW(TAG, "Failed clearing REG18.EN_ICHG_PIN");
+      return false;
+    }
+  }
   return true;
 }
 

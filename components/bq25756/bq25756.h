@@ -21,6 +21,31 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   void set_disable_watchdog(bool disable_watchdog) {
     disable_watchdog_ = disable_watchdog;
   }
+  void set_disable_ce_pin(bool disable_ce_pin) {
+    disable_ce_pin_ = disable_ce_pin;
+  }
+  void set_disable_ilim_hiz_pin(bool disable_ilim_hiz_pin) {
+    disable_ilim_hiz_pin_ = disable_ilim_hiz_pin;
+  }
+  void set_disable_ichg_pin(bool disable_ichg_pin) {
+    disable_ichg_pin_ = disable_ichg_pin;
+  }
+  void set_charge_voltage_limit_mv(uint16_t charge_voltage_limit_mv) {
+    charge_voltage_limit_mv_ = charge_voltage_limit_mv;
+    has_charge_voltage_limit_mv_ = true;
+  }
+  void set_charge_current_limit_ma(uint16_t charge_current_limit_ma) {
+    charge_current_limit_ma_ = charge_current_limit_ma;
+    has_charge_current_limit_ma_ = true;
+  }
+  void set_input_current_dpm_limit_ma(uint16_t input_current_dpm_limit_ma) {
+    input_current_dpm_limit_ma_ = input_current_dpm_limit_ma;
+    has_input_current_dpm_limit_ma_ = true;
+  }
+  void set_input_voltage_dpm_limit_mv(uint16_t input_voltage_dpm_limit_mv) {
+    input_voltage_dpm_limit_mv_ = input_voltage_dpm_limit_mv;
+    has_input_voltage_dpm_limit_mv_ = true;
+  }
 
   void set_iac_current_sensor(sensor::Sensor *sensor) {
     iac_current_sensor_ = sensor;
@@ -129,6 +154,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   bool read_byte_(uint8_t reg, uint8_t &value);
   bool read_bytes_(uint8_t reg, uint8_t *data, size_t len);
   bool write_byte_(uint8_t reg, uint8_t value);
+  bool write_u16_le_(uint8_t reg, uint16_t value);
   bool read_u16_le_(uint8_t reg, Reg16Value &value);
   bool update_register_bits_(uint8_t reg, uint8_t mask, uint8_t value_bits);
   bool read_control_states_(bool &charge_enabled, bool &hiz_mode, bool &reverse_mode, uint8_t &watchdog_code);
@@ -138,6 +164,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   const char *ts_status_to_string_(uint8_t ts_status) const;
   const char *mppt_status_to_string_(uint8_t mppt_status) const;
   bool initialize_();
+  bool apply_configured_limits_();
+  bool apply_configured_pin_overrides_();
   bool ensure_adc_enabled_();
 
   sensor::Sensor *iac_current_sensor_{nullptr};
@@ -176,6 +204,17 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
 
   bool disable_watchdog_{true};
+  bool disable_ce_pin_{false};
+  bool disable_ilim_hiz_pin_{false};
+  bool disable_ichg_pin_{false};
+  bool has_charge_voltage_limit_mv_{false};
+  bool has_charge_current_limit_ma_{false};
+  bool has_input_current_dpm_limit_ma_{false};
+  bool has_input_voltage_dpm_limit_mv_{false};
+  uint16_t charge_voltage_limit_mv_{1536};
+  uint16_t charge_current_limit_ma_{20000};
+  uint16_t input_current_dpm_limit_ma_{20000};
+  uint16_t input_voltage_dpm_limit_mv_{4200};
 };
 
 class BQ25756ChargeEnableSwitch : public switch_::Switch, public Parented<BQ25756Component> {

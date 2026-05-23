@@ -45,6 +45,13 @@ BQ25756WatchdogResetButton = bq25756_ns.class_("BQ25756WatchdogResetButton", but
 BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
 
 CONF_DISABLE_WATCHDOG = "disable_watchdog"
+CONF_DISABLE_CE_PIN = "disable_ce_pin"
+CONF_DISABLE_ILIM_HIZ_PIN = "disable_ilim_hiz_pin"
+CONF_DISABLE_ICHG_PIN = "disable_ichg_pin"
+CONF_CHARGE_VOLTAGE_LIMIT_MV = "charge_voltage_limit_mv"
+CONF_CHARGE_CURRENT_LIMIT_MA = "charge_current_limit_ma"
+CONF_INPUT_CURRENT_DPM_LIMIT_MA = "input_current_dpm_limit_ma"
+CONF_INPUT_VOLTAGE_DPM_LIMIT_MV = "input_voltage_dpm_limit_mv"
 CONF_IAC_CURRENT = "iac_current"
 CONF_IBAT_CURRENT = "ibat_current"
 CONF_VAC_VOLTAGE = "vac_voltage"
@@ -87,6 +94,13 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(BQ25756Component),
             cv.Optional(CONF_DISABLE_WATCHDOG, default=True): cv.boolean,
+            cv.Optional(CONF_DISABLE_CE_PIN, default=False): cv.boolean,
+            cv.Optional(CONF_DISABLE_ILIM_HIZ_PIN, default=False): cv.boolean,
+            cv.Optional(CONF_DISABLE_ICHG_PIN, default=False): cv.boolean,
+            cv.Optional(CONF_CHARGE_VOLTAGE_LIMIT_MV): cv.int_range(min=1504, max=1566),
+            cv.Optional(CONF_CHARGE_CURRENT_LIMIT_MA): cv.int_range(min=400, max=20000),
+            cv.Optional(CONF_INPUT_CURRENT_DPM_LIMIT_MA): cv.int_range(min=400, max=20000),
+            cv.Optional(CONF_INPUT_VOLTAGE_DPM_LIMIT_MV): cv.int_range(min=4200, max=65000),
             cv.Optional(CONF_IAC_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_MILLIAMP,
                 accuracy_decimals=1,
@@ -208,6 +222,17 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
 
     cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
+    cg.add(var.set_disable_ce_pin(config[CONF_DISABLE_CE_PIN]))
+    cg.add(var.set_disable_ilim_hiz_pin(config[CONF_DISABLE_ILIM_HIZ_PIN]))
+    cg.add(var.set_disable_ichg_pin(config[CONF_DISABLE_ICHG_PIN]))
+    if CONF_CHARGE_VOLTAGE_LIMIT_MV in config:
+        cg.add(var.set_charge_voltage_limit_mv(config[CONF_CHARGE_VOLTAGE_LIMIT_MV]))
+    if CONF_CHARGE_CURRENT_LIMIT_MA in config:
+        cg.add(var.set_charge_current_limit_ma(config[CONF_CHARGE_CURRENT_LIMIT_MA]))
+    if CONF_INPUT_CURRENT_DPM_LIMIT_MA in config:
+        cg.add(var.set_input_current_dpm_limit_ma(config[CONF_INPUT_CURRENT_DPM_LIMIT_MA]))
+    if CONF_INPUT_VOLTAGE_DPM_LIMIT_MV in config:
+        cg.add(var.set_input_voltage_dpm_limit_mv(config[CONF_INPUT_VOLTAGE_DPM_LIMIT_MV]))
 
     if CONF_IAC_CURRENT in config:
         sens = await sensor.new_sensor(config[CONF_IAC_CURRENT])
