@@ -201,6 +201,8 @@ void BQ25756Component::update() {
   const float ts_percent = static_cast<float>(ts.raw_le) * TS_PERCENT_LSB;
   const float vfb_mv = static_cast<float>(vfb.raw_le);
 
+  this->maybe_log_event_(status1, status2, status3, fault, iac_ma, ibat_ma, vac_mv, vbat_mv);
+
   ESP_LOGD(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status1, status2, status3, fault);
   ESP_LOGD(
     TAG,
@@ -262,6 +264,7 @@ void BQ25756Component::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  disable_watchdog: %s", this->disable_watchdog_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  event_logging: %s", this->event_logging_ ? "true" : "false");
   ESP_LOGCONFIG(TAG, "  disable_ce_pin: %s", this->disable_ce_pin_ ? "true" : "false");
   ESP_LOGCONFIG(TAG, "  disable_ilim_hiz_pin: %s", this->disable_ilim_hiz_pin_ ? "true" : "false");
   ESP_LOGCONFIG(TAG, "  disable_ichg_pin: %s", this->disable_ichg_pin_ ? "true" : "false");
@@ -644,6 +647,48 @@ bool BQ25756Component::ensure_adc_enabled_() {
 
   ESP_LOGD(TAG, "ADC config REG2B: 0x%02X -> 0x%02X, REG2C: 0x%02X -> 0x%02X", reg2b, reg2b_new, reg2c, reg2c_new);
   return true;
+}
+
+void BQ25756Component::maybe_log_event_(
+  uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault, float iac_ma, float ibat_ma, float vac_mv, float vbat_mv
+) {
+  if (!this->event_logging_) {
+    return;
+  }
+
+  const bool changed = !this->has_last_event_status_ || status1 != this->last_status1_ || status2 != this->last_status2_ ||
+                       status3 != this->last_status3_ || fault != this->last_fault_;
+  if (!changed) {
+    return;
+  }
+
+  const char *const charge = this->charge_status_to_string_(status1 & 0x07);
+  const char *const ts = this->ts_status_to_string_((status2 >> 4) & 0x07);
+  const char *const mppt = this->mppt_status_to_string_(status2 & 0x03);
+  const bool pg_good = (status2 & 0x80) != 0;
+
+  ESP_LOGI(
+    TAG,
+    "Event: status=%02X/%02X/%02X fault=%02X charge=%s ts=%s mppt=%s pg=%d iac=%.1fmA ibat=%.0fmA vac=%.0fmV vbat=%.0fmV",
+    status1,
+    status2,
+    status3,
+    fault,
+    charge,
+    ts,
+    mppt,
+    pg_good ? 1 : 0,
+    iac_ma,
+    ibat_ma,
+    vac_mv,
+    vbat_mv
+  );
+
+  this->has_last_event_status_ = true;
+  this->last_status1_ = status1;
+  this->last_status2_ = status2;
+  this->last_status3_ = status3;
+  this->last_fault_ = fault;
 }
 
 bool BQ25756Component::apply_configured_limits_() {

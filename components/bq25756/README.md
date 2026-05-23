@@ -29,6 +29,7 @@ bq25756:
   address: 0x6B
   update_interval: 1s
   disable_watchdog: true
+  event_logging: true
   # disable_ce_pin: true
   # disable_ilim_hiz_pin: true
   # disable_ichg_pin: true
@@ -112,4 +113,5 @@ bq25756:
 - `ILIM_HIZ` and `CE` are still hardware-active by default. If `ILIM_HIZ` is left floating or driven high, the charger can enter HIZ and stop switching even though this component never sets `EN_HIZ` during startup. If `CE` is left floating or high, charging can stay blocked even when `charge_enable` reports on.
 - Set `disable_ce_pin: true` to force software-only control of charging (`REG0x17.DIS_CE_PIN = 1`).
 - Set `disable_ilim_hiz_pin: true` and `disable_ichg_pin: true` to ignore external ILIM/ICHG pin limits and use I2C charge/input limits.
-- Periodic charger telemetry is logged at `DEBUG` level (not `INFO`).
+- Set `event_logging: true` to emit `INFO` event lines only when charger status/fault bits change.
+- Periodic charger telemetry is logged at `DEBUG` level.

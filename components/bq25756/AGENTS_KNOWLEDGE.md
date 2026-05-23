@@ -3,6 +3,7 @@
 Component-scoped notes for `components/bq25756`.
 
 - Top-level polling component defaults: address `0x6B`, `update_interval: 1s`, `disable_watchdog: true`.
+- `event_logging` defaults to `true` and emits concise `INFO` event lines when charger status/fault bytes change (not every polling interval).
 - Setup validates `REG0x3D` `PART_NUM[6:3] == 0b0010` before treating the device as a BQ25756.
 - ADC data registers are little-endian in the I2C address space (`REGx` = low byte, `REGx+1` = high byte).
 - Implemented ADC channels: `iac_current`, `ibat_current`, `vac_voltage`, `vbat_voltage`, `ts_percent`, optional `vfb_voltage`.

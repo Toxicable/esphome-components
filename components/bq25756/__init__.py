@@ -45,6 +45,7 @@ BQ25756WatchdogResetButton = bq25756_ns.class_("BQ25756WatchdogResetButton", but
 BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
 
 CONF_DISABLE_WATCHDOG = "disable_watchdog"
+CONF_EVENT_LOGGING = "event_logging"
 CONF_DISABLE_CE_PIN = "disable_ce_pin"
 CONF_DISABLE_ILIM_HIZ_PIN = "disable_ilim_hiz_pin"
 CONF_DISABLE_ICHG_PIN = "disable_ichg_pin"
@@ -94,6 +95,7 @@ CONFIG_SCHEMA = (
         {
             cv.GenerateID(): cv.declare_id(BQ25756Component),
             cv.Optional(CONF_DISABLE_WATCHDOG, default=True): cv.boolean,
+            cv.Optional(CONF_EVENT_LOGGING, default=True): cv.boolean,
             cv.Optional(CONF_DISABLE_CE_PIN, default=False): cv.boolean,
             cv.Optional(CONF_DISABLE_ILIM_HIZ_PIN, default=False): cv.boolean,
             cv.Optional(CONF_DISABLE_ICHG_PIN, default=False): cv.boolean,
@@ -222,6 +224,7 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
 
     cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
+    cg.add(var.set_event_logging(config[CONF_EVENT_LOGGING]))
     cg.add(var.set_disable_ce_pin(config[CONF_DISABLE_CE_PIN]))
     cg.add(var.set_disable_ilim_hiz_pin(config[CONF_DISABLE_ILIM_HIZ_PIN]))
     cg.add(var.set_disable_ichg_pin(config[CONF_DISABLE_ICHG_PIN]))
