@@ -756,24 +756,30 @@ bool BQ25756Component::apply_configured_pin_overrides_() {
 }
 
 void BQ25756ChargeEnableSwitch::write_state(bool state) {
+  ESP_LOGI(TAG, "Action: charge_enable -> %s", state ? "on" : "off");
   if (this->parent_ != nullptr && this->parent_->set_charge_enabled(state)) {
     this->publish_state(state);
+    ESP_LOGI(TAG, "Action result: charge_enable=%s", state ? "on" : "off");
     return;
   }
   ESP_LOGW(TAG, "Failed to set charge_enable to %s", state ? "on" : "off");
 }
 
 void BQ25756HizModeSwitch::write_state(bool state) {
+  ESP_LOGI(TAG, "Action: hiz_mode -> %s", state ? "on" : "off");
   if (this->parent_ != nullptr && this->parent_->set_hiz_mode(state)) {
     this->publish_state(state);
+    ESP_LOGI(TAG, "Action result: hiz_mode=%s", state ? "on" : "off");
     return;
   }
   ESP_LOGW(TAG, "Failed to set hiz_mode to %s", state ? "on" : "off");
 }
 
 void BQ25756ReverseModeSwitch::write_state(bool state) {
+  ESP_LOGI(TAG, "Action: reverse_mode -> %s", state ? "on" : "off");
   if (this->parent_ != nullptr && this->parent_->set_reverse_mode(state)) {
     this->publish_state(state);
+    ESP_LOGI(TAG, "Action result: reverse_mode=%s", state ? "on" : "off");
     return;
   }
   ESP_LOGW(TAG, "Failed to set reverse_mode to %s", state ? "on" : "off");
@@ -783,14 +789,17 @@ void BQ25756WatchdogSelect::control(size_t index) {
   if (index > 0x03) {
     return;
   }
+  ESP_LOGI(TAG, "Action: watchdog -> %u", static_cast<unsigned>(index));
   if (this->parent_ != nullptr && this->parent_->set_watchdog_code(static_cast<uint8_t>(index))) {
     this->publish_state(index);
+    ESP_LOGI(TAG, "Action result: watchdog=%u", static_cast<unsigned>(index));
     return;
   }
   ESP_LOGW(TAG, "Failed to set watchdog option index %u", static_cast<unsigned>(index));
 }
 
 void BQ25756WatchdogResetButton::press_action() {
+  ESP_LOGI(TAG, "Action: watchdog_reset");
   if (this->parent_ != nullptr && this->parent_->reset_watchdog()) {
     ESP_LOGI(TAG, "Watchdog reset requested");
     return;
@@ -799,6 +808,7 @@ void BQ25756WatchdogResetButton::press_action() {
 }
 
 void BQ25756DumpRegistersButton::press_action() {
+  ESP_LOGI(TAG, "Action: dump_registers");
   if (this->parent_ != nullptr && this->parent_->dump_registers_0x00_0x3D()) {
     return;
   }

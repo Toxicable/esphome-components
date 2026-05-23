@@ -707,6 +707,7 @@ void BQ76952Component::dump_config() {
 }
 
 bool BQ76952Component::set_power_path_mode(const char* mode) {
+  ESP_LOGI(TAG, "Action: power_path -> %s", mode);
   uint16_t manufacturing_status = 0;
   if (!this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status)) {
     ESP_LOGW(TAG, "Failed to read Manufacturing Status before power-path change");
@@ -770,22 +771,101 @@ bool BQ76952Component::set_power_path_mode(const char* mode) {
   const bool actual_chg = (fet_status & FET_STATUS_CHG) != 0;
   const bool actual_dsg = (fet_status & FET_STATUS_DSG) != 0;
   if (actual_chg != expected_chg || actual_dsg != expected_dsg) {
+    uint16_t current_mfg_status = manufacturing_status;
+    (void) this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, current_mfg_status);
+
+    uint16_t alarm_status = 0;
+    const bool have_alarm_status = this->read_u16_(REG_ALARM_STATUS, alarm_status);
+
+    uint8_t safety_status_a = 0;
+    uint8_t safety_status_b = 0;
+    uint8_t safety_status_c = 0;
+    const bool have_safety_status = this->read_byte_(REG_SAFETY_STATUS_A, safety_status_a) &&
+                                    this->read_byte_(REG_SAFETY_STATUS_B, safety_status_b) &&
+                                    this->read_byte_(REG_SAFETY_STATUS_C, safety_status_c);
+
+    std::string blockers;
+    auto append_blocker = [&](const char *value) {
+      if (!blockers.empty()) {
+        blockers += ',';
+      }
+      blockers += value;
+    };
+
+    if ((current_mfg_status & MANUFACTURING_STATUS_FET_EN) == 0) {
+      append_blocker("fet_en=0");
+    }
+    if ((battery_status & BATTERY_STATUS_CFGUPDATE) != 0) {
+      append_blocker("cfgupdate=1");
+    }
+    if ((battery_status & BATTERY_STATUS_SLEEP) != 0) {
+      append_blocker("sleep=1");
+    }
+    if ((battery_status & BATTERY_STATUS_SS) != 0) {
+      append_blocker("ss=1");
+    }
+    if ((battery_status & BATTERY_STATUS_PF) != 0) {
+      append_blocker("pf=1");
+    }
+    if (have_alarm_status) {
+      if ((alarm_status & ALARM_STATUS_XCHG) != 0) {
+        append_blocker("xchg");
+      }
+      if ((alarm_status & ALARM_STATUS_XDSG) != 0) {
+        append_blocker("xdsg");
+      }
+    }
+    if (!actual_chg && expected_chg) {
+      append_blocker("chg_off");
+    }
+    if (!actual_dsg && expected_dsg) {
+      append_blocker("dsg_off");
+    }
+    if (actual_chg && !expected_chg) {
+      append_blocker("chg_on_unexpected");
+    }
+    if (actual_dsg && !expected_dsg) {
+      append_blocker("dsg_on_unexpected");
+    }
+    if (blockers.empty()) {
+      append_blocker("none_identified");
+    }
+
+    const std::string alarm_flags = have_alarm_status ? this->alarm_flags_to_string_(alarm_status) : "unread";
+    const std::string safety_flags =
+      have_safety_status ? this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c) : "unread";
+
     ESP_LOGW(
       TAG,
-      "Power-path request '%s' blocked by device conditions. CHG=%s DSG=%s SS=%s PF=%s",
+      "Power-path request '%s' blocked. expected=CHG:%s DSG:%s actual=CHG:%s DSG:%s FET_EN=%s SS=%s PF=%s "
+      "alarm=%s safety=%s blockers=%s",
       mode,
+      expected_chg ? "on" : "off",
+      expected_dsg ? "on" : "off",
       actual_chg ? "on" : "off",
       actual_dsg ? "on" : "off",
+      (current_mfg_status & MANUFACTURING_STATUS_FET_EN) ? "1" : "0",
       (battery_status & BATTERY_STATUS_SS) ? "1" : "0",
-      (battery_status & BATTERY_STATUS_PF) ? "1" : "0"
+      (battery_status & BATTERY_STATUS_PF) ? "1" : "0",
+      alarm_flags.c_str(),
+      safety_flags.c_str(),
+      blockers.c_str()
     );
     return false;
   }
 
+  ESP_LOGI(
+    TAG,
+    "Action result: power_path=%s (CHG=%s DSG=%s)",
+    this->power_path_to_string_(fet_status),
+    actual_chg ? "on" : "off",
+    actual_dsg ? "on" : "off"
+  );
   return true;
 }
 
 bool BQ76952Component::set_autonomous_fet_control(bool enabled) {
+  ESP_LOGI(TAG, "Action: autonomous_fet_control -> %s", enabled ? "on" : "off");
   uint16_t manufacturing_status = 0;
   if (!this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status)) {
     ESP_LOGW(TAG, "Failed to read Manufacturing Status");
@@ -819,16 +899,19 @@ bool BQ76952Component::set_autonomous_fet_control(bool enabled) {
     return false;
   }
 
+  ESP_LOGI(TAG, "Action result: autonomous_fet_control=%s", current_enabled ? "on" : "off");
   return true;
 }
 
 bool BQ76952Component::set_sleep_allowed(bool allowed) {
+  ESP_LOGI(TAG, "Action: sleep_allowed -> %s", allowed ? "on" : "off");
   const uint16_t command = allowed ? SUBCMD_SLEEP_ENABLE : SUBCMD_SLEEP_DISABLE;
   if (!this->write_subcommand_(command)) {
     ESP_LOGW(TAG, "Failed to send sleep mode subcommand 0x%04X", static_cast<unsigned>(command));
     return false;
   }
   delay_microseconds_safe(800);
+  ESP_LOGI(TAG, "Action result: sleep_allowed=%s", allowed ? "on" : "off");
   return true;
 }
 
@@ -2442,27 +2525,47 @@ void BQ76952SleepAllowedSwitch::write_state(bool state) {
 }
 
 void BQ76952ClearAlarmsButton::press_action() {
+  ESP_LOGI(TAG, "Action: clear_alarms");
   if (this->parent_ != nullptr) {
-    this->parent_->clear_alarm_latches();
+    if (this->parent_->clear_alarm_latches()) {
+      ESP_LOGI(TAG, "Action result: clear_alarms=ok");
+      return;
+    }
   }
+  ESP_LOGW(TAG, "Action result: clear_alarms=failed");
 }
 
 void BQ76952ResetPassedChargeButton::press_action() {
+  ESP_LOGI(TAG, "Action: reset_passed_charge");
   if (this->parent_ != nullptr) {
-    this->parent_->reset_passed_charge_counter();
+    if (this->parent_->reset_passed_charge_counter()) {
+      ESP_LOGI(TAG, "Action result: reset_passed_charge=ok");
+      return;
+    }
   }
+  ESP_LOGW(TAG, "Action result: reset_passed_charge=failed");
 }
 
 void BQ76952ApplyConfigurationButton::press_action() {
+  ESP_LOGI(TAG, "Action: apply_configuration");
   if (this->parent_ != nullptr) {
-    this->parent_->apply_requested_configuration();
+    if (this->parent_->apply_requested_configuration()) {
+      ESP_LOGI(TAG, "Action result: apply_configuration=ok");
+      return;
+    }
   }
+  ESP_LOGW(TAG, "Action result: apply_configuration=failed");
 }
 
 void BQ76952ProgramFactoryOtpButton::press_action() {
+  ESP_LOGI(TAG, "Action: program_factory_otp");
   if (this->parent_ != nullptr) {
-    this->parent_->program_factory_otp_defaults();
+    if (this->parent_->program_factory_otp_defaults()) {
+      ESP_LOGI(TAG, "Action result: program_factory_otp=ok");
+      return;
+    }
   }
+  ESP_LOGW(TAG, "Action result: program_factory_otp=failed");
 }
 
 }  // namespace bq76952

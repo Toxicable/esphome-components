@@ -9,6 +9,7 @@ Component-scoped notes for `components/bq25756`.
 - Implemented ADC channels: `iac_current`, `ibat_current`, `vac_voltage`, `vbat_voltage`, `ts_percent`, optional `vfb_voltage`.
 - Implemented status text sensors: `charge_status`, `ts_status`, `mppt_status`, `status_flags`.
 - Implemented controls: `charge_enable`, `hiz_mode`, `reverse_mode`, `watchdog`, `watchdog_reset`, `dump_registers`.
+- Control entities now emit explicit `Action:` / `Action result:` INFO logs so HA clicks can be correlated with subsequent status/fault transitions.
 - Optional init-time configuration now supports:
   - `charge_voltage_limit_mv` -> `REG0x00.VFB_REG`
   - `charge_current_limit_ma` -> `REG0x02.ICHG_REG`

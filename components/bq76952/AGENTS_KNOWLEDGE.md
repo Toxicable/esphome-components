@@ -29,4 +29,6 @@ Component-scoped notes for `components/bq76952`.
 - `predischarge_enabled` writes `Settings:FET:FET Options (0x9308)[PDSG_EN]`; `pdsg_fet_on` reads `FET Status (0x7F)[PDSG_FET]`.
 - `fet_status_flags` decodes the full live `FET Status (0x7F)` register, including `DDSG_PIN` and `DCHG_PIN`, which is useful when debugging why PDSG/DSG or CHG/PCHG are being held off.
 - `event_logging` emits an edge-triggered INFO log whenever `FET Status`, `Alarm Status`, `Safety Status`, or `Battery Status[SS/PF]` changes, and snapshots PACK/LD/current at that moment.
+- When `power_path` commands are blocked, logs now include expected vs actual CHG/DSG state plus `FET_EN`, decoded `alarm`/`safety` flags, and a derived `blockers=` list (`fet_en=0`, `ss=1`, `pf=1`, `xchg`, `xdsg`, `chg_off`, `dsg_off`, etc.).
+- Runtime controls/buttons (`power_path`, `autonomous_fet_control`, `sleep_allowed`, `clear_alarms`, `reset_passed_charge`, `apply_configuration`, `program_factory_otp`) emit explicit `Action:` / `Action result:` INFO logs.
 - `scd_threshold_mv`, `scd_delay_us`, and `scd_recovery_time_s` program `Protections:SCD` at `0x9286/0x9287/0x9294` and ensure `Enabled Protections A[SCD]` plus `DSG FET Protections A[SCD]` remain set.
