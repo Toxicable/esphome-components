@@ -74,6 +74,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_event_logging(bool value) {
     event_logging_ = value;
   }
+  void set_xchg_debug_burst(bool value) {
+    xchg_debug_burst_ = value;
+  }
   void set_scd_threshold_mv(uint16_t value) {
     scd_threshold_mv_ = value;
     has_scd_threshold_ = true;
@@ -273,6 +276,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
   bool event_logging_{false};
+  bool xchg_debug_burst_{false};
   bool apply_configuration_on_boot_{true};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool cell_map_initialized_{false};
@@ -287,6 +291,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t last_safety_status_b_{0};
   uint8_t last_safety_status_c_{0};
   uint16_t last_battery_status_fault_bits_{0};
+  bool last_xchg_raw_valid_{false};
+  bool last_xchg_raw_{false};
   uint16_t last_fet_control_subcommand_{0};
   uint32_t last_fet_control_subcommand_ms_{0};
   uint32_t deferred_boot_config_log_ms_{0};

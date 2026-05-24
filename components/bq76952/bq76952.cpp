@@ -564,6 +564,7 @@ void BQ76952Component::dump_config() {
     ESP_LOGCONFIG(TAG, "  predischarge_enabled: %s", YESNO(predischarge_enabled_));
   }
   ESP_LOGCONFIG(TAG, "  event_logging: %s", YESNO(event_logging_));
+  ESP_LOGCONFIG(TAG, "  xchg_debug_burst: %s", YESNO(xchg_debug_burst_));
   if (has_reg0_config_) {
     ESP_LOGCONFIG(TAG, "  reg0_enabled: %s", YESNO(reg0_enabled_));
   }
@@ -1986,6 +1987,78 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const bool deepsleep = (control_status & CONTROL_STATUS_DEEPSLEEP) != 0;
   const bool xchg = have_alarm_raw_status && ((alarm_raw_status & ALARM_STATUS_XCHG) != 0);
   const bool xdsg = have_alarm_raw_status && ((alarm_raw_status & ALARM_STATUS_XDSG) != 0);
+  if (xchg_debug_burst_) {
+    const bool edge = !last_xchg_raw_valid_ || (xchg != last_xchg_raw_);
+    if (edge) {
+      constexpr uint16_t sample_count = 64;
+      constexpr uint32_t sample_dt_ms = 2;
+      int first_active_idx = -1;
+      uint16_t xchg_hits = 0;
+      uint16_t xdsg_hits = 0;
+      uint16_t first_alarm_raw = 0;
+      uint8_t first_sal_a = 0;
+      uint8_t first_sal_b = 0;
+      uint8_t first_sal_c = 0;
+      uint8_t first_ss_a = 0;
+      uint8_t first_ss_b = 0;
+      uint8_t first_ss_c = 0;
+      for (uint16_t i = 0; i < sample_count; i++) {
+        uint16_t ar = 0;
+        uint8_t sa = 0;
+        uint8_t sb = 0;
+        uint8_t sc = 0;
+        uint8_t ssa = 0;
+        uint8_t ssb = 0;
+        uint8_t ssc = 0;
+        const bool got_ar = this->read_u16_(REG_ALARM_RAW_STATUS, ar);
+        const bool got_sal = this->read_byte_(REG_SAFETY_ALERT_A, sa) && this->read_byte_(REG_SAFETY_ALERT_B, sb) &&
+                             this->read_byte_(REG_SAFETY_ALERT_C, sc);
+        const bool got_ss = this->read_byte_(REG_SAFETY_STATUS_A, ssa) && this->read_byte_(REG_SAFETY_STATUS_B, ssb) &&
+                            this->read_byte_(REG_SAFETY_STATUS_C, ssc);
+        if (got_ar) {
+          if ((ar & ALARM_STATUS_XCHG) != 0) {
+            xchg_hits++;
+          }
+          if ((ar & ALARM_STATUS_XDSG) != 0) {
+            xdsg_hits++;
+          }
+        }
+        const bool active = (got_ar && ((ar & (ALARM_STATUS_XCHG | ALARM_STATUS_XDSG)) != 0)) ||
+                            (got_sal && (sa != 0 || sb != 0 || sc != 0)) ||
+                            (got_ss && (ssa != 0 || ssb != 0 || ssc != 0));
+        if (active && first_active_idx < 0) {
+          first_active_idx = static_cast<int>(i);
+          first_alarm_raw = got_ar ? ar : 0;
+          first_sal_a = got_sal ? sa : 0;
+          first_sal_b = got_sal ? sb : 0;
+          first_sal_c = got_sal ? sc : 0;
+          first_ss_a = got_ss ? ssa : 0;
+          first_ss_b = got_ss ? ssb : 0;
+          first_ss_c = got_ss ? ssc : 0;
+        }
+        delay(sample_dt_ms);
+      }
+      ESP_LOGI(
+        TAG,
+        "XCHG burst: edge=%s samples=%u dt_ms=%u xchg_hits=%u xdsg_hits=%u first_active_idx=%d first{alarm_raw=0x%04X salA=0x%02X salB=0x%02X salC=0x%02X ssA=0x%02X ssB=0x%02X ssC=0x%02X}",
+        xchg ? "rise" : "fall",
+        static_cast<unsigned>(sample_count),
+        static_cast<unsigned>(sample_dt_ms),
+        static_cast<unsigned>(xchg_hits),
+        static_cast<unsigned>(xdsg_hits),
+        first_active_idx,
+        static_cast<unsigned>(first_alarm_raw),
+        static_cast<unsigned>(first_sal_a),
+        static_cast<unsigned>(first_sal_b),
+        static_cast<unsigned>(first_sal_c),
+        static_cast<unsigned>(first_ss_a),
+        static_cast<unsigned>(first_ss_b),
+        static_cast<unsigned>(first_ss_c)
+      );
+    }
+    last_xchg_raw_ = xchg;
+    last_xchg_raw_valid_ = true;
+  }
   uint8_t chg_fet_prot_a = 0;
   uint8_t chg_fet_prot_b = 0;
   uint8_t chg_fet_prot_c = 0;

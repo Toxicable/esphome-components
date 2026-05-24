@@ -35,6 +35,7 @@ CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
 CONF_SLEEP_MODE = "sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
 CONF_EVENT_LOGGING = "event_logging"
+CONF_XCHG_DEBUG_BURST = "xchg_debug_burst"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
 CONF_NOMINAL_CAPACITY_AH = "nominal_capacity_ah"
 CONF_SCD_THRESHOLD_MV = "scd_threshold_mv"
@@ -169,6 +170,7 @@ schema = {
     cv.Optional(CONF_SLEEP_MODE, default="preserve"): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
     cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_EVENT_LOGGING, default=False): cv.boolean,
+    cv.Optional(CONF_XCHG_DEBUG_BURST, default=False): cv.boolean,
     cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
     cv.Optional(CONF_NOMINAL_CAPACITY_AH): cv.float_range(min=0.001),
     cv.Optional(CONF_SCD_THRESHOLD_MV): cv.one_of(*SCD_THRESHOLD_OPTIONS.keys(), int=True),
@@ -308,6 +310,7 @@ async def to_code(config):
     if CONF_PREDISCHARGE_ENABLED in config:
         cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
     cg.add(var.set_event_logging(config[CONF_EVENT_LOGGING]))
+    cg.add(var.set_xchg_debug_burst(config[CONF_XCHG_DEBUG_BURST]))
     if CONF_SCD_THRESHOLD_MV in config:
         cg.add(var.set_scd_threshold_mv(config[CONF_SCD_THRESHOLD_MV]))
     if CONF_SCD_DELAY_US in config:
