@@ -1,8 +1,9 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, button, i2c, select, sensor, switch as switch_, text_sensor
+from esphome.components import button, i2c, select, sensor, switch as switch_, text_sensor
 from esphome.const import (
     CONF_ID,
+    DEVICE_CLASS_BATTERY,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
@@ -11,12 +12,13 @@ from esphome.const import (
     STATE_CLASS_MEASUREMENT,
     UNIT_AMPERE,
     UNIT_CELSIUS,
+    UNIT_PERCENT,
     UNIT_SECOND,
     UNIT_VOLT,
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["binary_sensor", "button", "select", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["button", "select", "sensor", "switch", "text_sensor"]
 
 bq76952_ns = cg.esphome_ns.namespace("bq76952")
 BQ76952Component = bq76952_ns.class_("BQ76952Component", cg.PollingComponent, i2c.I2CDevice)
@@ -34,6 +36,7 @@ CONF_SLEEP_MODE = "sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
 CONF_EVENT_LOGGING = "event_logging"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
+CONF_NOMINAL_CAPACITY_AH = "nominal_capacity_ah"
 CONF_SCD_THRESHOLD_MV = "scd_threshold_mv"
 CONF_SCD_DELAY_US = "scd_delay_us"
 CONF_SCD_RECOVERY_TIME_S = "scd_recovery_time_s"
@@ -53,6 +56,7 @@ CONF_STACK_VOLTAGE = "stack_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
 CONF_LD_VOLTAGE = "ld_voltage"
 CONF_CURRENT = "current"
+CONF_STATE_OF_CHARGE = "state_of_charge"
 CONF_PASSED_CHARGE = "passed_charge"
 CONF_PASSED_CHARGE_TIME = "passed_charge_time"
 CONF_DIE_TEMPERATURE = "die_temperature"
@@ -67,18 +71,6 @@ CONF_ALARM_FLAGS = "alarm_flags"
 CONF_SAFETY_STATUS_FLAGS = "safety_status_flags"
 CONF_FET_STATUS_FLAGS = "fet_status_flags"
 
-CONF_SLEEP_MODE_ACTIVE = "sleep_mode_active"
-CONF_CFGUPDATE_MODE = "cfgupdate_mode"
-CONF_PROTECTION_FAULT = "protection_fault"
-CONF_PERMANENT_FAIL = "permanent_fail"
-CONF_SLEEP_ALLOWED_STATE = "sleep_allowed_state"
-CONF_ALERT_PIN = "alert_pin"
-CONF_DDSG_PIN = "ddsg_pin"
-CONF_DCHG_PIN = "dchg_pin"
-CONF_CHG_FET_ON = "chg_fet_on"
-CONF_DSG_FET_ON = "dsg_fet_on"
-CONF_PDSG_FET_ON = "pdsg_fet_on"
-CONF_AUTONOMOUS_FET_ENABLED = "autonomous_fet_enabled"
 
 CONF_POWER_PATH = "power_path"
 CONF_AUTONOMOUS_FET_CONTROL = "autonomous_fet_control"
@@ -163,6 +155,8 @@ def _validate_config(config):
     for key in (CONF_TS1_TEMPERATURE, CONF_TS2_TEMPERATURE, CONF_TS3_TEMPERATURE):
         if key in config and isinstance(config[key], dict):
             continue
+    if CONF_STATE_OF_CHARGE in config and CONF_NOMINAL_CAPACITY_AH not in config:
+        raise cv.Invalid("'nominal_capacity_ah' is required when 'state_of_charge' is configured")
     return config
 
 
@@ -176,6 +170,7 @@ schema = {
     cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_EVENT_LOGGING, default=False): cv.boolean,
     cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
+    cv.Optional(CONF_NOMINAL_CAPACITY_AH): cv.float_range(min=0.001),
     cv.Optional(CONF_SCD_THRESHOLD_MV): cv.one_of(*SCD_THRESHOLD_OPTIONS.keys(), int=True),
     cv.Optional(CONF_SCD_DELAY_US): _validate_scd_delay_us,
     cv.Optional(CONF_SCD_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
@@ -197,6 +192,12 @@ schema = {
         unit_of_measurement=UNIT_AMPERE,
         accuracy_decimals=3,
         device_class=DEVICE_CLASS_CURRENT,
+        state_class=STATE_CLASS_MEASUREMENT,
+    ),
+    cv.Optional(CONF_STATE_OF_CHARGE): sensor.sensor_schema(
+        unit_of_measurement=UNIT_PERCENT,
+        accuracy_decimals=1,
+        device_class=DEVICE_CLASS_BATTERY,
         state_class=STATE_CLASS_MEASUREMENT,
     ),
     cv.Optional(CONF_PASSED_CHARGE): sensor.sensor_schema(
@@ -251,42 +252,6 @@ schema = {
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
     cv.Optional(CONF_FET_STATUS_FLAGS): text_sensor.text_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_SLEEP_MODE_ACTIVE): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_CFGUPDATE_MODE): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_PROTECTION_FAULT): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_PERMANENT_FAIL): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_SLEEP_ALLOWED_STATE): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_ALERT_PIN): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_DDSG_PIN): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_DCHG_PIN): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_CHG_FET_ON): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_DSG_FET_ON): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_PDSG_FET_ON): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_AUTONOMOUS_FET_ENABLED): binary_sensor.binary_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
     cv.Optional(CONF_POWER_PATH): select.select_schema(
@@ -366,6 +331,8 @@ async def to_code(config):
         cg.add(var.set_reg1_enabled(config[CONF_REG1_ENABLED]))
     if CONF_REG1_VOLTAGE in config:
         cg.add(var.set_reg1_voltage(config[CONF_REG1_VOLTAGE]))
+    if CONF_NOMINAL_CAPACITY_AH in config:
+        cg.add(var.set_nominal_capacity_ah(config[CONF_NOMINAL_CAPACITY_AH]))
 
     if CONF_BAT_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])
@@ -388,6 +355,9 @@ async def to_code(config):
     if CONF_CURRENT in config:
         sens = await sensor.new_sensor(config[CONF_CURRENT])
         cg.add(var.set_current_sensor(sens))
+    if CONF_STATE_OF_CHARGE in config:
+        sens = await sensor.new_sensor(config[CONF_STATE_OF_CHARGE])
+        cg.add(var.set_state_of_charge_sensor(sens))
     if CONF_PASSED_CHARGE in config:
         sens = await sensor.new_sensor(config[CONF_PASSED_CHARGE])
         cg.add(var.set_passed_charge_sensor(sens))
@@ -428,43 +398,6 @@ async def to_code(config):
     if CONF_FET_STATUS_FLAGS in config:
         ts = await text_sensor.new_text_sensor(config[CONF_FET_STATUS_FLAGS])
         cg.add(var.set_fet_status_flags_sensor(ts))
-
-    if CONF_SLEEP_MODE_ACTIVE in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_SLEEP_MODE_ACTIVE])
-        cg.add(var.set_sleep_mode_binary_sensor(bs))
-    if CONF_CFGUPDATE_MODE in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_CFGUPDATE_MODE])
-        cg.add(var.set_cfgupdate_binary_sensor(bs))
-    if CONF_PROTECTION_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_PROTECTION_FAULT])
-        cg.add(var.set_protection_fault_binary_sensor(bs))
-    if CONF_PERMANENT_FAIL in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_PERMANENT_FAIL])
-        cg.add(var.set_permanent_fail_binary_sensor(bs))
-    if CONF_SLEEP_ALLOWED_STATE in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_SLEEP_ALLOWED_STATE])
-        cg.add(var.set_sleep_allowed_state_binary_sensor(bs))
-    if CONF_ALERT_PIN in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_ALERT_PIN])
-        cg.add(var.set_alert_pin_binary_sensor(bs))
-    if CONF_DDSG_PIN in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_DDSG_PIN])
-        cg.add(var.set_ddsg_pin_binary_sensor(bs))
-    if CONF_DCHG_PIN in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_DCHG_PIN])
-        cg.add(var.set_dchg_pin_binary_sensor(bs))
-    if CONF_CHG_FET_ON in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_CHG_FET_ON])
-        cg.add(var.set_chg_fet_on_binary_sensor(bs))
-    if CONF_DSG_FET_ON in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_DSG_FET_ON])
-        cg.add(var.set_dsg_fet_on_binary_sensor(bs))
-    if CONF_PDSG_FET_ON in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_PDSG_FET_ON])
-        cg.add(var.set_pdsg_fet_on_binary_sensor(bs))
-    if CONF_AUTONOMOUS_FET_ENABLED in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_AUTONOMOUS_FET_ENABLED])
-        cg.add(var.set_autonomous_fet_enabled_binary_sensor(bs))
 
     if CONF_POWER_PATH in config:
         power_path_select = await select.new_select(

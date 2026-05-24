@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/select/select.h"
@@ -101,46 +100,6 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
     status_flags_text_sensor_ = sensor;
   }
 
-  void set_pg_good_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    pg_good_binary_sensor_ = sensor;
-  }
-  void set_watchdog_expired_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    watchdog_expired_binary_sensor_ = sensor;
-  }
-  void set_iac_dpm_active_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    iac_dpm_active_binary_sensor_ = sensor;
-  }
-  void set_vac_dpm_active_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    vac_dpm_active_binary_sensor_ = sensor;
-  }
-  void set_reverse_active_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    reverse_active_binary_sensor_ = sensor;
-  }
-  void set_cv_timer_expired_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    cv_timer_expired_binary_sensor_ = sensor;
-  }
-  void set_charge_timer_expired_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    charge_timer_expired_binary_sensor_ = sensor;
-  }
-  void set_vac_uv_fault_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    vac_uv_fault_binary_sensor_ = sensor;
-  }
-  void set_vac_ov_fault_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    vac_ov_fault_binary_sensor_ = sensor;
-  }
-  void set_ibat_ocp_fault_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    ibat_ocp_fault_binary_sensor_ = sensor;
-  }
-  void set_vbat_ov_fault_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    vbat_ov_fault_binary_sensor_ = sensor;
-  }
-  void set_thermal_shutdown_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    thermal_shutdown_binary_sensor_ = sensor;
-  }
-  void set_drv_sup_fault_binary_sensor(binary_sensor::BinarySensor *sensor) {
-    drv_sup_fault_binary_sensor_ = sensor;
-  }
-
   void set_charge_enable_switch(switch_::Switch *sw) {
     charge_enable_switch_ = sw;
   }
@@ -209,20 +168,6 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor *ts_status_text_sensor_{nullptr};
   text_sensor::TextSensor *mppt_status_text_sensor_{nullptr};
   text_sensor::TextSensor *status_flags_text_sensor_{nullptr};
-
-  binary_sensor::BinarySensor *pg_good_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *watchdog_expired_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *iac_dpm_active_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *vac_dpm_active_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *reverse_active_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *cv_timer_expired_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *charge_timer_expired_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *vac_uv_fault_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *vac_ov_fault_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *ibat_ocp_fault_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *vbat_ov_fault_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *thermal_shutdown_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor *drv_sup_fault_binary_sensor_{nullptr};
 
   switch_::Switch *charge_enable_switch_{nullptr};
   switch_::Switch *hiz_mode_switch_{nullptr};

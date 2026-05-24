@@ -291,44 +291,9 @@ void BQ76952Component::update() {
     power_path_select_->publish_state(power_path);
   }
 
-  if (sleep_mode_binary_sensor_ != nullptr) {
-    sleep_mode_binary_sensor_->publish_state((battery_status & BATTERY_STATUS_SLEEP) != 0);
-  }
-  if (cfgupdate_binary_sensor_ != nullptr) {
-    cfgupdate_binary_sensor_->publish_state((battery_status & BATTERY_STATUS_CFGUPDATE) != 0);
-  }
-  if (protection_fault_binary_sensor_ != nullptr) {
-    protection_fault_binary_sensor_->publish_state((battery_status & BATTERY_STATUS_SS) != 0);
-  }
-  if (permanent_fail_binary_sensor_ != nullptr) {
-    permanent_fail_binary_sensor_->publish_state((battery_status & BATTERY_STATUS_PF) != 0);
-  }
-
   const bool sleep_allowed = (battery_status & BATTERY_STATUS_SLEEP_EN) != 0;
-  if (sleep_allowed_state_binary_sensor_ != nullptr) {
-    sleep_allowed_state_binary_sensor_->publish_state(sleep_allowed);
-  }
   if (sleep_allowed_switch_ != nullptr) {
     sleep_allowed_switch_->publish_state(sleep_allowed);
-  }
-
-  if (alert_pin_binary_sensor_ != nullptr) {
-    alert_pin_binary_sensor_->publish_state((fet_status & FET_STATUS_ALRT_PIN) != 0);
-  }
-  if (ddsg_pin_binary_sensor_ != nullptr) {
-    ddsg_pin_binary_sensor_->publish_state((fet_status & FET_STATUS_DDSG_PIN) != 0);
-  }
-  if (dchg_pin_binary_sensor_ != nullptr) {
-    dchg_pin_binary_sensor_->publish_state((fet_status & FET_STATUS_DCHG_PIN) != 0);
-  }
-  if (chg_fet_on_binary_sensor_ != nullptr) {
-    chg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_CHG) != 0);
-  }
-  if (dsg_fet_on_binary_sensor_ != nullptr) {
-    dsg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_DSG) != 0);
-  }
-  if (pdsg_fet_on_binary_sensor_ != nullptr) {
-    pdsg_fet_on_binary_sensor_->publish_state((fet_status & FET_STATUS_PDSG) != 0);
   }
   if (fet_status_flags_sensor_ != nullptr) {
     fet_status_flags_sensor_->publish_state(this->fet_status_flags_to_string_(fet_status));
@@ -365,7 +330,7 @@ void BQ76952Component::update() {
     need_safety_status
   );
 
-  if (autonomous_fet_enabled_binary_sensor_ != nullptr || autonomous_fet_switch_ != nullptr) {
+  if (autonomous_fet_switch_ != nullptr) {
     uint16_t manufacturing_status = 0;
     if (!this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status)) {
       ESP_LOGW(TAG, "Failed to read Manufacturing Status");
@@ -373,9 +338,6 @@ void BQ76952Component::update() {
       return;
     }
     const bool autonomous_fet_enabled = (manufacturing_status & MANUFACTURING_STATUS_FET_EN) != 0;
-    if (autonomous_fet_enabled_binary_sensor_ != nullptr) {
-      autonomous_fet_enabled_binary_sensor_->publish_state(autonomous_fet_enabled);
-    }
     if (autonomous_fet_switch_ != nullptr) {
       autonomous_fet_switch_->publish_state(autonomous_fet_enabled);
     }
@@ -485,7 +447,7 @@ void BQ76952Component::update() {
     current_sensor_->publish_state(current_a);
   }
 
-  if (passed_charge_sensor_ != nullptr || passed_charge_time_sensor_ != nullptr) {
+  if (passed_charge_sensor_ != nullptr || passed_charge_time_sensor_ != nullptr || state_of_charge_sensor_ != nullptr) {
     uint8_t dastatus6[12]{};
     if (!this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6))) {
       ESP_LOGW(TAG, "Failed to read DASTATUS6 passed charge");
@@ -505,6 +467,15 @@ void BQ76952Component::update() {
     }
     if (passed_charge_time_sensor_ != nullptr) {
       passed_charge_time_sensor_->publish_state(static_cast<float>(accum_time_s));
+    }
+    if (state_of_charge_sensor_ != nullptr) {
+      if (!has_nominal_capacity_ah_ || nominal_capacity_ah_ <= 0.0f) {
+        ESP_LOGW(TAG, "nominal_capacity_ah must be configured to publish state_of_charge");
+      } else {
+        const float soc_percent = static_cast<float>(100.0 - (total_user_ah * user_ah_to_ah * 100.0 /
+                                                               static_cast<double>(nominal_capacity_ah_)));
+        state_of_charge_sensor_->publish_state(std::fmax(0.0f, std::fmin(100.0f, soc_percent)));
+      }
     }
   }
 
@@ -561,6 +532,9 @@ void BQ76952Component::dump_config() {
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  cell_count: %u", static_cast<unsigned>(cell_count_));
   ESP_LOGCONFIG(TAG, "  sense_resistor_milliohm: %.3f", sense_resistor_milliohm_);
+  if (has_nominal_capacity_ah_) {
+    ESP_LOGCONFIG(TAG, "  nominal_capacity_ah: %.3f", nominal_capacity_ah_);
+  }
   if (has_charge_current_limit_) {
     ESP_LOGCONFIG(TAG, "  charge_current_limit_a: %.3f", charge_current_limit_a_);
   }
@@ -616,6 +590,7 @@ void BQ76952Component::dump_config() {
     LOG_SENSOR("  ", label, cell_voltage_sensors_[i]);
   }
   LOG_SENSOR("  ", "Current", current_sensor_);
+  LOG_SENSOR("  ", "State of Charge", state_of_charge_sensor_);
   LOG_SENSOR("  ", "Int Temperature", die_temperature_sensor_);
   LOG_SENSOR("  ", "TS1 Temperature", ts1_temperature_sensor_);
   LOG_SENSOR("  ", "TS2 Temperature", ts2_temperature_sensor_);
@@ -687,19 +662,6 @@ void BQ76952Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "Alarm Flags", alarm_flags_sensor_);
   LOG_TEXT_SENSOR("  ", "Safety Status Flags", safety_status_flags_sensor_);
   LOG_TEXT_SENSOR("  ", "FET Status Flags", fet_status_flags_sensor_);
-
-  LOG_BINARY_SENSOR("  ", "Sleep Mode Active", sleep_mode_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Config Update Mode", cfgupdate_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Protection Fault", protection_fault_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Permanent Fail", permanent_fail_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Sleep Allowed State", sleep_allowed_state_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Alert Pin", alert_pin_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "DDSG Pin", ddsg_pin_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "DCHG Pin", dchg_pin_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "CHG FET On", chg_fet_on_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "DSG FET On", dsg_fet_on_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "PDSG FET On", pdsg_fet_on_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Autonomous FET Enabled", autonomous_fet_enabled_binary_sensor_);
 
   LOG_SELECT("  ", "Power Path", power_path_select_);
   LOG_SWITCH("  ", "Autonomous FET Control", autonomous_fet_switch_);

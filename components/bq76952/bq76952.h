@@ -6,7 +6,6 @@
 #include <limits>
 #include <string>
 
-#include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/select/select.h"
@@ -25,6 +24,10 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   }
   void set_sense_resistor_milliohm(float value) {
     sense_resistor_milliohm_ = value;
+  }
+  void set_nominal_capacity_ah(float value) {
+    nominal_capacity_ah_ = value;
+    has_nominal_capacity_ah_ = true;
   }
   void set_charge_current_limit_a(float value) {
     charge_current_limit_a_ = value;
@@ -112,6 +115,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_current_sensor(sensor::Sensor* sensor) {
     current_sensor_ = sensor;
   }
+  void set_state_of_charge_sensor(sensor::Sensor* sensor) {
+    state_of_charge_sensor_ = sensor;
+  }
   void set_passed_charge_sensor(sensor::Sensor* sensor) {
     passed_charge_sensor_ = sensor;
   }
@@ -148,43 +154,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   }
   void set_fet_status_flags_sensor(text_sensor::TextSensor* sensor) {
     fet_status_flags_sensor_ = sensor;
-  }
-
-  void set_sleep_mode_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    sleep_mode_binary_sensor_ = sensor;
-  }
-  void set_cfgupdate_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    cfgupdate_binary_sensor_ = sensor;
-  }
-  void set_protection_fault_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    protection_fault_binary_sensor_ = sensor;
-  }
-  void set_permanent_fail_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    permanent_fail_binary_sensor_ = sensor;
-  }
-  void set_sleep_allowed_state_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    sleep_allowed_state_binary_sensor_ = sensor;
-  }
-  void set_alert_pin_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    alert_pin_binary_sensor_ = sensor;
-  }
-  void set_ddsg_pin_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    ddsg_pin_binary_sensor_ = sensor;
-  }
-  void set_dchg_pin_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    dchg_pin_binary_sensor_ = sensor;
-  }
-  void set_chg_fet_on_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    chg_fet_on_binary_sensor_ = sensor;
-  }
-  void set_dsg_fet_on_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    dsg_fet_on_binary_sensor_ = sensor;
-  }
-  void set_pdsg_fet_on_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    pdsg_fet_on_binary_sensor_ = sensor;
-  }
-  void set_autonomous_fet_enabled_binary_sensor(binary_sensor::BinarySensor* sensor) {
-    autonomous_fet_enabled_binary_sensor_ = sensor;
   }
 
   void set_power_path_select(select::Select* sel) {
@@ -269,6 +238,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   int32_t current_lsb_ua_{1000};
   bool user_volts_cv_{true};
   float sense_resistor_milliohm_{1.0f};
+  float nominal_capacity_ah_{0.0f};
   uint16_t scd_threshold_mv_{0};
   uint16_t scd_delay_us_{0};
   uint8_t scd_recovery_time_s_{0};
@@ -280,6 +250,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t reg1_voltage_code_{0};
   bool has_charge_current_limit_{false};
   bool has_discharge_current_limit_{false};
+  bool has_nominal_capacity_ah_{false};
   bool has_scd_threshold_{false};
   bool has_scd_delay_{false};
   bool has_scd_recovery_time_{false};
@@ -324,6 +295,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* ld_voltage_sensor_{nullptr};
   std::array<sensor::Sensor*, 16> cell_voltage_sensors_{};
   sensor::Sensor* current_sensor_{nullptr};
+  sensor::Sensor* state_of_charge_sensor_{nullptr};
   sensor::Sensor* passed_charge_sensor_{nullptr};
   sensor::Sensor* passed_charge_time_sensor_{nullptr};
   sensor::Sensor* die_temperature_sensor_{nullptr};
@@ -337,19 +309,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* alarm_flags_sensor_{nullptr};
   text_sensor::TextSensor* safety_status_flags_sensor_{nullptr};
   text_sensor::TextSensor* fet_status_flags_sensor_{nullptr};
-
-  binary_sensor::BinarySensor* sleep_mode_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* cfgupdate_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* protection_fault_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* permanent_fail_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* sleep_allowed_state_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* alert_pin_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* ddsg_pin_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* dchg_pin_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* chg_fet_on_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* dsg_fet_on_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* pdsg_fet_on_binary_sensor_{nullptr};
-  binary_sensor::BinarySensor* autonomous_fet_enabled_binary_sensor_{nullptr};
 
   select::Select* power_path_select_{nullptr};
   switch_::Switch* autonomous_fet_switch_{nullptr};

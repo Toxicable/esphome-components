@@ -95,6 +95,9 @@ bq76952:
   #   name: "Cell 16"
   # current:
   #   name: "Current"
+  # nominal_capacity_ah: 100.0
+  # state_of_charge:
+  #   name: "State of Charge"
   # passed_charge:
   #   name: "Passed Charge"
   # passed_charge_time:
@@ -124,32 +127,6 @@ bq76952:
   #   name: "Safety Status Flags"
   # fet_status_flags:
   #   name: "FET Status Flags"
-
-  ## Optional binary sensors:
-  # sleep_mode_active:
-  #   name: "Sleep Active"
-  # cfgupdate_mode:
-  #   name: "Config Update"
-  # protection_fault:
-  #   name: "Safety Fault"
-  # permanent_fail:
-  #   name: "Permanent Fail"
-  # sleep_allowed_state:
-  #   name: "Sleep Allowed"
-  # alert_pin:
-  #   name: "ALERT Pin"
-  # ddsg_pin:
-  #   name: "DDSG Pin"
-  # dchg_pin:
-  #   name: "DCHG Pin"
-  # chg_fet_on:
-  #   name: "CHG FET"
-  # dsg_fet_on:
-  #   name: "DSG FET"
-  # pdsg_fet_on:
-  #   name: "PDSG FET"
-  # autonomous_fet_enabled:
-  #   name: "Autonomous FET"
 
   ## Optional controls:
   # power_path:
@@ -191,6 +168,7 @@ bq76952:
 - `reg1_enabled`: enable the REG1 LDO output
 - `reg1_voltage`: set REG1 to `1.8V`, `2.5V`, `3.0V`, `3.3V`, or `5.0V`
 - `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
+- `nominal_capacity_ah`: pack nominal capacity used for derived `state_of_charge` (%) from the passed-charge accumulator
 - `passed_charge`: accumulated coulomb-count total converted to amp-hours using the chip's configured user-current scale
 - `passed_charge_time`: integration interval reported by the chip in seconds
 - `ts1/ts2/ts3_temperature.pullup`: select `18k` or `180k` internal pull-up for the BQ thermistor bias
@@ -201,6 +179,8 @@ No manual unit settings are needed.
 Passed charge notes:
 - `passed_charge` reads `DASTATUS6` and reports the integrated passed charge in signed amp-hours.
 - `passed_charge_time` reports the same accumulator window in seconds.
+- `state_of_charge` is derived as `100 - (passed_charge / nominal_capacity_ah) * 100`, clamped to `0..100`.
+- Configure `nominal_capacity_ah` when using `state_of_charge`, and reset passed charge at full charge to align the derived SoC baseline.
 - `reset_passed_charge` sends the chip's `RESET_PASSQ()` subcommand to zero the integration state and restart timing.
 - The device reports passed charge in `userAh`, so this component converts through the detected `userA` scaling from `DA Configuration`.
 
@@ -211,8 +191,7 @@ Diagnostic notes:
 - `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.
 - `safety_status_flags` is the live decoded protection cause from `Safety Status A/B/C (0x03/0x05/0x07)`, for example `ocd1`, `scd`, `cuv`, `otd`, or `hwdf`.
 - `fet_status_flags` is the live decoded `FET Status (0x7F)` register, for example `ddsg,pdsg` or `dchg,chg`.
-- `pdsg_fet_on` shows whether the predischarge PFET is currently being driven during a load bring-up event.
-- `ddsg_pin` and `dchg_pin` show whether the BQ76952's disable-output pins are asserted during the event.
+- `fet_status_flags` aggregates the live pin/FET state (`alrt`, `ddsg`, `dchg`, `pdsg`, `dsg`, `pchg`, `chg`) without creating one entity per bit.
 
 REG1 notes:
 - `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.

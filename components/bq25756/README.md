@@ -68,32 +68,6 @@ bq25756:
     name: "Charger MPPT Status"
   status_flags:
     name: "Charger Status Flags"
-  pg_good:
-    name: "Charger PG Good"
-  watchdog_expired:
-    name: "Charger Watchdog Expired"
-  iac_dpm_active:
-    name: "Charger IAC DPM Active"
-  vac_dpm_active:
-    name: "Charger VAC DPM Active"
-  reverse_active:
-    name: "Charger Reverse Active"
-  cv_timer_expired:
-    name: "Charger CV Timer Expired"
-  charge_timer_expired:
-    name: "Charger Charge Timer Expired"
-  vac_uv_fault:
-    name: "Charger VAC UV Fault"
-  vac_ov_fault:
-    name: "Charger VAC OV Fault"
-  ibat_ocp_fault:
-    name: "Charger IBAT OCP Fault"
-  vbat_ov_fault:
-    name: "Charger VBAT OV Fault"
-  thermal_shutdown:
-    name: "Charger Thermal Shutdown"
-  drv_sup_fault:
-    name: "Charger DRV_SUP Fault"
   charge_enable:
     name: "Charger Charge Enable"
   hiz_mode:
@@ -112,7 +86,6 @@ bq25756:
 
 - Sensors: `iac_current`, `ibat_current`, `vac_voltage`, `vbat_voltage`, `ts_percent`, `vfb_voltage`
 - Text sensors: `charge_status`, `ts_status`, `mppt_status`, `status_flags`
-- Binary sensors: `pg_good`, `watchdog_expired`, `iac_dpm_active`, `vac_dpm_active`, `reverse_active`, `cv_timer_expired`, `charge_timer_expired`, `vac_uv_fault`, `vac_ov_fault`, `ibat_ocp_fault`, `vbat_ov_fault`, `thermal_shutdown`, `drv_sup_fault`
 - Switches: `charge_enable`, `hiz_mode`, `reverse_mode`
 - Select: `watchdog` (`disable`, `40s`, `80s`, `160s`)
 - Buttons: `watchdog_reset`, `dump_registers`

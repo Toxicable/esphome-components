@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, button, i2c, select, sensor, switch as switch_, text_sensor
+from esphome.components import button, i2c, select, sensor, switch as switch_, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
@@ -33,7 +33,7 @@ from esphome.const import (
 #   disable_watchdog: true
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["binary_sensor", "button", "select", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["button", "select", "sensor", "switch", "text_sensor"]
 
 bq25756_ns = cg.esphome_ns.namespace("bq25756")
 BQ25756Component = bq25756_ns.class_("BQ25756Component", cg.PollingComponent, i2c.I2CDevice)
@@ -69,19 +69,6 @@ CONF_CHARGE_STATUS = "charge_status"
 CONF_TS_STATUS = "ts_status"
 CONF_MPPT_STATUS = "mppt_status"
 CONF_STATUS_FLAGS = "status_flags"
-CONF_PG_GOOD = "pg_good"
-CONF_WATCHDOG_EXPIRED = "watchdog_expired"
-CONF_IAC_DPM_ACTIVE = "iac_dpm_active"
-CONF_VAC_DPM_ACTIVE = "vac_dpm_active"
-CONF_REVERSE_ACTIVE = "reverse_active"
-CONF_CV_TIMER_EXPIRED = "cv_timer_expired"
-CONF_CHARGE_TIMER_EXPIRED = "charge_timer_expired"
-CONF_VAC_UV_FAULT = "vac_uv_fault"
-CONF_VAC_OV_FAULT = "vac_ov_fault"
-CONF_IBAT_OCP_FAULT = "ibat_ocp_fault"
-CONF_VBAT_OV_FAULT = "vbat_ov_fault"
-CONF_THERMAL_SHUTDOWN = "thermal_shutdown"
-CONF_DRV_SUP_FAULT = "drv_sup_fault"
 CONF_CHARGE_ENABLE = "charge_enable"
 CONF_HIZ_MODE = "hiz_mode"
 CONF_REVERSE_MODE = "reverse_mode"
@@ -190,45 +177,6 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_STATUS_FLAGS): text_sensor.text_sensor_schema(
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC
             ),
-            cv.Optional(CONF_PG_GOOD): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_WATCHDOG_EXPIRED): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_IAC_DPM_ACTIVE): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_VAC_DPM_ACTIVE): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_REVERSE_ACTIVE): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_CV_TIMER_EXPIRED): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_CHARGE_TIMER_EXPIRED): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_VAC_UV_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_VAC_OV_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_IBAT_OCP_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_VBAT_OV_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_THERMAL_SHUTDOWN): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_DRV_SUP_FAULT): binary_sensor.binary_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
             cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(
                 BQ25756ChargeEnableSwitch,
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -327,46 +275,6 @@ async def to_code(config):
     if CONF_STATUS_FLAGS in config:
         ts = await text_sensor.new_text_sensor(config[CONF_STATUS_FLAGS])
         cg.add(var.set_status_flags_text_sensor(ts))
-
-    if CONF_PG_GOOD in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_PG_GOOD])
-        cg.add(var.set_pg_good_binary_sensor(bs))
-    if CONF_WATCHDOG_EXPIRED in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_WATCHDOG_EXPIRED])
-        cg.add(var.set_watchdog_expired_binary_sensor(bs))
-    if CONF_IAC_DPM_ACTIVE in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_IAC_DPM_ACTIVE])
-        cg.add(var.set_iac_dpm_active_binary_sensor(bs))
-    if CONF_VAC_DPM_ACTIVE in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_VAC_DPM_ACTIVE])
-        cg.add(var.set_vac_dpm_active_binary_sensor(bs))
-    if CONF_REVERSE_ACTIVE in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_REVERSE_ACTIVE])
-        cg.add(var.set_reverse_active_binary_sensor(bs))
-    if CONF_CV_TIMER_EXPIRED in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_CV_TIMER_EXPIRED])
-        cg.add(var.set_cv_timer_expired_binary_sensor(bs))
-    if CONF_CHARGE_TIMER_EXPIRED in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_CHARGE_TIMER_EXPIRED])
-        cg.add(var.set_charge_timer_expired_binary_sensor(bs))
-    if CONF_VAC_UV_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_VAC_UV_FAULT])
-        cg.add(var.set_vac_uv_fault_binary_sensor(bs))
-    if CONF_VAC_OV_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_VAC_OV_FAULT])
-        cg.add(var.set_vac_ov_fault_binary_sensor(bs))
-    if CONF_IBAT_OCP_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_IBAT_OCP_FAULT])
-        cg.add(var.set_ibat_ocp_fault_binary_sensor(bs))
-    if CONF_VBAT_OV_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_VBAT_OV_FAULT])
-        cg.add(var.set_vbat_ov_fault_binary_sensor(bs))
-    if CONF_THERMAL_SHUTDOWN in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_THERMAL_SHUTDOWN])
-        cg.add(var.set_thermal_shutdown_binary_sensor(bs))
-    if CONF_DRV_SUP_FAULT in config:
-        bs = await binary_sensor.new_binary_sensor(config[CONF_DRV_SUP_FAULT])
-        cg.add(var.set_drv_sup_fault_binary_sensor(bs))
 
     if CONF_CHARGE_ENABLE in config:
         sw = await switch_.new_switch(config[CONF_CHARGE_ENABLE])

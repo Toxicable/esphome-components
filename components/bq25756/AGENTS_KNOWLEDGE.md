@@ -7,7 +7,8 @@ Component-scoped notes for `components/bq25756`.
 - Setup validates `REG0x3D` `PART_NUM[6:3] == 0b0010` before treating the device as a BQ25756.
 - ADC data registers are little-endian in the I2C address space (`REGx` = low byte, `REGx+1` = high byte).
 - Implemented ADC channels: `iac_current`, `ibat_current`, `vac_voltage`, `vbat_voltage`, `ts_percent`, optional `vfb_voltage`.
-- Implemented status text sensors: `charge_status`, `ts_status`, `mppt_status`, `status_flags`.
+- Implemented status text sensors: `charge_status`, `ts_status`, `mppt_status`, `status_flags` (fault/state detail is intentionally aggregated here).
+- Per-fault/per-flag binary status entities were removed to reduce duplicate entity noise; use `status_flags` for fault summary.
 - Implemented controls: `charge_enable`, `hiz_mode`, `reverse_mode`, `watchdog`, `watchdog_reset`, `dump_registers`.
 - Control entities now emit explicit `Action:` / `Action result:` INFO logs so HA clicks can be correlated with subsequent status/fault transitions.
 - Optional init-time configuration now supports:

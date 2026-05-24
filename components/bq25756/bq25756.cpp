@@ -332,19 +332,6 @@ void BQ25756Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "TS Status", this->ts_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "MPPT Status", this->mppt_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Status Flags", this->status_flags_text_sensor_);
-  LOG_BINARY_SENSOR("  ", "PG Good", this->pg_good_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Watchdog Expired", this->watchdog_expired_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "IAC DPM Active", this->iac_dpm_active_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "VAC DPM Active", this->vac_dpm_active_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Reverse Active", this->reverse_active_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "CV Timer Expired", this->cv_timer_expired_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Charge Timer Expired", this->charge_timer_expired_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "VAC UV Fault", this->vac_uv_fault_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "VAC OV Fault", this->vac_ov_fault_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "IBAT OCP Fault", this->ibat_ocp_fault_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "VBAT OV Fault", this->vbat_ov_fault_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "Thermal Shutdown", this->thermal_shutdown_binary_sensor_);
-  LOG_BINARY_SENSOR("  ", "DRV_SUP Fault", this->drv_sup_fault_binary_sensor_);
   LOG_SWITCH("  ", "Charge Enable", this->charge_enable_switch_);
   LOG_SWITCH("  ", "HIZ Mode", this->hiz_mode_switch_);
   LOG_SWITCH("  ", "Reverse Mode", this->reverse_mode_switch_);
@@ -476,46 +463,6 @@ void BQ25756Component::publish_status_texts_(uint8_t status1, uint8_t status2, u
   }
   if (this->mppt_status_text_sensor_ != nullptr) {
     this->mppt_status_text_sensor_->publish_state(this->mppt_status_to_string_(status2 & 0x03));
-  }
-
-  if (this->pg_good_binary_sensor_ != nullptr) {
-    this->pg_good_binary_sensor_->publish_state(pg_good);
-  }
-  if (this->watchdog_expired_binary_sensor_ != nullptr) {
-    this->watchdog_expired_binary_sensor_->publish_state(watchdog_expired);
-  }
-  if (this->iac_dpm_active_binary_sensor_ != nullptr) {
-    this->iac_dpm_active_binary_sensor_->publish_state(iac_dpm_active);
-  }
-  if (this->vac_dpm_active_binary_sensor_ != nullptr) {
-    this->vac_dpm_active_binary_sensor_->publish_state(vac_dpm_active);
-  }
-  if (this->reverse_active_binary_sensor_ != nullptr) {
-    this->reverse_active_binary_sensor_->publish_state(reverse_active);
-  }
-  if (this->cv_timer_expired_binary_sensor_ != nullptr) {
-    this->cv_timer_expired_binary_sensor_->publish_state(cv_timer_expired);
-  }
-  if (this->charge_timer_expired_binary_sensor_ != nullptr) {
-    this->charge_timer_expired_binary_sensor_->publish_state(charge_timer_expired);
-  }
-  if (this->vac_uv_fault_binary_sensor_ != nullptr) {
-    this->vac_uv_fault_binary_sensor_->publish_state(vac_uv_fault);
-  }
-  if (this->vac_ov_fault_binary_sensor_ != nullptr) {
-    this->vac_ov_fault_binary_sensor_->publish_state(vac_ov_fault);
-  }
-  if (this->ibat_ocp_fault_binary_sensor_ != nullptr) {
-    this->ibat_ocp_fault_binary_sensor_->publish_state(ibat_ocp_fault);
-  }
-  if (this->vbat_ov_fault_binary_sensor_ != nullptr) {
-    this->vbat_ov_fault_binary_sensor_->publish_state(vbat_ov_fault);
-  }
-  if (this->thermal_shutdown_binary_sensor_ != nullptr) {
-    this->thermal_shutdown_binary_sensor_->publish_state(thermal_shutdown);
-  }
-  if (this->drv_sup_fault_binary_sensor_ != nullptr) {
-    this->drv_sup_fault_binary_sensor_->publish_state(drv_sup_fault);
   }
 
   if (this->status_flags_text_sensor_ != nullptr) {
