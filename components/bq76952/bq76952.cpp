@@ -1968,11 +1968,15 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const bool deepsleep = (control_status & CONTROL_STATUS_DEEPSLEEP) != 0;
   const bool xchg = have_alarm_status && ((alarm_status & ALARM_STATUS_XCHG) != 0);
   const bool xdsg = have_alarm_status && ((alarm_status & ALARM_STATUS_XDSG) != 0);
+  uint8_t fet_options = 0;
+  const bool have_fet_options = this->read_data_memory_u8_(DM_FET_OPTIONS, fet_options);
+  const bool sleepchg = have_fet_options && ((fet_options & 0x02u) != 0);
   const char* power_path = this->power_path_to_string_(fet_status);
   ESP_LOGI(
     TAG,
     "Event: fet=%s path=%s safety=%s alarm=%s ss=%u pf=%u cfgupdate=%u sleep=%u sleep_en=%u deepsleep=%u "
-    "fet_en=%s xchg=%u xdsg=%u pack=%.3fV ld=%.3fV current=%.3fA",
+    "fet_en=%s xchg=%u xdsg=%u sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X} "
+    "pack=%.3fV ld=%.3fV current=%.3fA",
     fet_flags.c_str(),
     power_path,
     safety_flags.c_str(),
@@ -1986,6 +1990,13 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
     have_mfg_status ? (fet_en ? "1" : "0") : "unread",
     xchg ? 1 : 0,
     xdsg ? 1 : 0,
+    have_fet_options ? (sleepchg ? "1" : "0") : "unread",
+    static_cast<unsigned>(battery_status),
+    static_cast<unsigned>(fet_status),
+    have_alarm_status ? static_cast<unsigned>(alarm_status) : 0u,
+    have_safety_status ? static_cast<unsigned>(safety_status_a) : 0u,
+    have_safety_status ? static_cast<unsigned>(safety_status_b) : 0u,
+    have_safety_status ? static_cast<unsigned>(safety_status_c) : 0u,
     static_cast<double>(pack_v),
     static_cast<double>(ld_v),
     static_cast<double>(current_a)

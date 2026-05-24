@@ -32,6 +32,7 @@ Component-scoped notes for `components/bq76952`.
 - Per-bit binary status entities were removed to reduce duplicate entity noise; use `alarm_flags`, `safety_status_flags`, and `fet_status_flags` for aggregate diagnostics.
 - `event_logging` emits an edge-triggered INFO log whenever `FET Status`, `Alarm Status`, `Safety Status`, or `Battery Status[SS/PF]` changes, and snapshots PACK/LD/current at that moment.
 - Event logs now include gating context (`path`, `cfgupdate`, `sleep`, `sleep_en`, `deepsleep`, `fet_en`, `xchg`, `xdsg`) to help explain autonomous FET transitions.
+- Event logs now also include `sleepchg` (decoded from `Settings:FET:FET Options (0x9308)` bit1) plus raw register snapshots (`bat/fet/alarm/safety A/B/C`) so CHG/DSG flips can be tied directly to source bits.
 - When `power_path` commands are blocked, logs now include expected vs actual CHG/DSG state plus `FET_EN`, decoded `alarm`/`safety` flags, and a derived `blockers=` list (`fet_en=0`, `ss=1`, `pf=1`, `xchg`, `xdsg`, `chg_off`, `dsg_off`, etc.).
 - Runtime controls/buttons (`power_path`, `autonomous_fet_control`, `sleep_allowed`, `clear_alarms`, `reset_passed_charge`, `apply_configuration`, `program_factory_otp`) emit explicit `Action:` / `Action result:` INFO logs.
 - `scd_threshold_mv`, `scd_delay_us`, and `scd_recovery_time_s` program `Protections:SCD` at `0x9286/0x9287/0x9294` and ensure `Enabled Protections A[SCD]` plus `DSG FET Protections A[SCD]` remain set.
