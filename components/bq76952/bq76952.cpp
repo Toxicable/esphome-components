@@ -326,8 +326,8 @@ void BQ76952Component::update() {
     );
   }
   this->maybe_log_event_(
-    battery_status, fet_status, alarm_status, need_alarm_status, safety_status_a, safety_status_b, safety_status_c,
-    need_safety_status
+    control_status, battery_status, fet_status, alarm_status, need_alarm_status, safety_status_a, safety_status_b,
+    safety_status_c, need_safety_status
   );
 
   if (autonomous_fet_switch_ != nullptr) {
@@ -1906,9 +1906,9 @@ bool BQ76952Component::apply_current_limit_config_() {
   return ok;
 }
 
-void BQ76952Component::maybe_log_event_(uint16_t battery_status, uint8_t fet_status, uint16_t alarm_status,
-                                        bool have_alarm_status, uint8_t safety_status_a, uint8_t safety_status_b,
-                                        uint8_t safety_status_c, bool have_safety_status) {
+void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t battery_status, uint8_t fet_status,
+                                        uint16_t alarm_status, bool have_alarm_status, uint8_t safety_status_a,
+                                        uint8_t safety_status_b, uint8_t safety_status_c, bool have_safety_status) {
   if (!event_logging_) {
     return;
   }
@@ -1959,14 +1959,33 @@ void BQ76952Component::maybe_log_event_(uint16_t battery_status, uint8_t fet_sta
   const std::string safety_flags = have_safety_status
                                      ? this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
                                      : "unread";
+  uint16_t manufacturing_status = 0;
+  const bool have_mfg_status = this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status);
+  const bool fet_en = have_mfg_status && ((manufacturing_status & MANUFACTURING_STATUS_FET_EN) != 0);
+  const bool cfgupdate = (battery_status & BATTERY_STATUS_CFGUPDATE) != 0;
+  const bool sleep = (battery_status & BATTERY_STATUS_SLEEP) != 0;
+  const bool sleep_en = (battery_status & BATTERY_STATUS_SLEEP_EN) != 0;
+  const bool deepsleep = (control_status & CONTROL_STATUS_DEEPSLEEP) != 0;
+  const bool xchg = have_alarm_status && ((alarm_status & ALARM_STATUS_XCHG) != 0);
+  const bool xdsg = have_alarm_status && ((alarm_status & ALARM_STATUS_XDSG) != 0);
+  const char* power_path = this->power_path_to_string_(fet_status);
   ESP_LOGI(
     TAG,
-    "Event: fet=%s safety=%s alarm=%s ss=%u pf=%u pack=%.3fV ld=%.3fV current=%.3fA",
+    "Event: fet=%s path=%s safety=%s alarm=%s ss=%u pf=%u cfgupdate=%u sleep=%u sleep_en=%u deepsleep=%u "
+    "fet_en=%s xchg=%u xdsg=%u pack=%.3fV ld=%.3fV current=%.3fA",
     fet_flags.c_str(),
+    power_path,
     safety_flags.c_str(),
     alarm_flags.c_str(),
     (battery_status & BATTERY_STATUS_SS) ? 1 : 0,
     (battery_status & BATTERY_STATUS_PF) ? 1 : 0,
+    cfgupdate ? 1 : 0,
+    sleep ? 1 : 0,
+    sleep_en ? 1 : 0,
+    deepsleep ? 1 : 0,
+    have_mfg_status ? (fet_en ? "1" : "0") : "unread",
+    xchg ? 1 : 0,
+    xdsg ? 1 : 0,
     static_cast<double>(pack_v),
     static_cast<double>(ld_v),
     static_cast<double>(current_a)

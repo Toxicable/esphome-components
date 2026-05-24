@@ -215,9 +215,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool apply_ts_pin_config_();
   bool apply_predischarge_config_();
   bool apply_current_limit_config_();
-  void maybe_log_event_(uint16_t battery_status, uint8_t fet_status, uint16_t alarm_status, bool have_alarm_status,
-                        uint8_t safety_status_a, uint8_t safety_status_b, uint8_t safety_status_c,
-                        bool have_safety_status);
+  void maybe_log_event_(uint16_t control_status, uint16_t battery_status, uint8_t fet_status, uint16_t alarm_status,
+                        bool have_alarm_status, uint8_t safety_status_a, uint8_t safety_status_b,
+                        uint8_t safety_status_c, bool have_safety_status);
   uint8_t encode_current_threshold_code_(float current_a, uint8_t min_code, uint8_t max_code, const char* label);
   uint8_t encode_current_delay_code_(uint16_t delay_ms, const char* label);
   bool precheck_data_memory_mask_(uint16_t address, uint8_t required_bits, const char* label, bool& needs_write);
