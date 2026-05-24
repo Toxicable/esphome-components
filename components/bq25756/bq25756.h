@@ -49,6 +49,10 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
     input_voltage_dpm_limit_mv_ = input_voltage_dpm_limit_mv;
     has_input_voltage_dpm_limit_mv_ = true;
   }
+  void set_fb_to_pack_voltage_scale(float fb_to_pack_voltage_scale) {
+    fb_to_pack_voltage_scale_ = fb_to_pack_voltage_scale;
+    has_fb_to_pack_voltage_scale_ = true;
+  }
 
   void set_iac_current_sensor(sensor::Sensor *sensor) {
     iac_current_sensor_ = sensor;
@@ -67,6 +71,21 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   }
   void set_vfb_voltage_sensor(sensor::Sensor *sensor) {
     vfb_voltage_sensor_ = sensor;
+  }
+  void set_vfb_reg_target_sensor(sensor::Sensor *sensor) {
+    vfb_reg_target_sensor_ = sensor;
+  }
+  void set_vbat_ov_rising_fb_sensor(sensor::Sensor *sensor) {
+    vbat_ov_rising_fb_sensor_ = sensor;
+  }
+  void set_vbat_ov_falling_fb_sensor(sensor::Sensor *sensor) {
+    vbat_ov_falling_fb_sensor_ = sensor;
+  }
+  void set_vbat_ov_rising_pack_sensor(sensor::Sensor *sensor) {
+    vbat_ov_rising_pack_sensor_ = sensor;
+  }
+  void set_vbat_ov_falling_pack_sensor(sensor::Sensor *sensor) {
+    vbat_ov_falling_pack_sensor_ = sensor;
   }
 
   void set_charge_status_text_sensor(text_sensor::TextSensor *sensor) {
@@ -180,6 +199,11 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor *vbat_voltage_sensor_{nullptr};
   sensor::Sensor *ts_percent_sensor_{nullptr};
   sensor::Sensor *vfb_voltage_sensor_{nullptr};
+  sensor::Sensor *vfb_reg_target_sensor_{nullptr};
+  sensor::Sensor *vbat_ov_rising_fb_sensor_{nullptr};
+  sensor::Sensor *vbat_ov_falling_fb_sensor_{nullptr};
+  sensor::Sensor *vbat_ov_rising_pack_sensor_{nullptr};
+  sensor::Sensor *vbat_ov_falling_pack_sensor_{nullptr};
 
   text_sensor::TextSensor *charge_status_text_sensor_{nullptr};
   text_sensor::TextSensor *ts_status_text_sensor_{nullptr};
@@ -222,6 +246,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   uint16_t charge_current_limit_ma_{20000};
   uint16_t input_current_dpm_limit_ma_{20000};
   uint16_t input_voltage_dpm_limit_mv_{4200};
+  bool has_fb_to_pack_voltage_scale_{false};
+  float fb_to_pack_voltage_scale_{1.0f};
   bool has_last_event_status_{false};
   uint8_t last_status1_{0};
   uint8_t last_status2_{0};

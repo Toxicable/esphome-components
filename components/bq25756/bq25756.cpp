@@ -60,6 +60,8 @@ constexpr uint16_t REG00_VFB_REG_MASK = 0x001F;
 constexpr uint16_t REG02_ICHG_REG_MASK = 0x07FC;
 constexpr uint16_t REG06_IAC_DPM_MASK = 0x07FC;
 constexpr uint16_t REG08_VAC_DPM_MASK = 0x3FFC;
+constexpr float VBAT_OV_RISING_MULTIPLIER = 1.04f;
+constexpr float VBAT_OV_FALLING_MULTIPLIER = 1.02f;
 }  // namespace
 
 bool BQ25756Component::set_charge_enabled(bool enabled) {
@@ -254,6 +256,38 @@ void BQ25756Component::update() {
     this->vfb_voltage_sensor_->publish_state(vfb_mv);
   }
 
+  if (this->vfb_reg_target_sensor_ != nullptr || this->vbat_ov_rising_fb_sensor_ != nullptr ||
+      this->vbat_ov_falling_fb_sensor_ != nullptr || this->vbat_ov_rising_pack_sensor_ != nullptr ||
+      this->vbat_ov_falling_pack_sensor_ != nullptr) {
+    Reg16Value vfb_reg{};
+    if (!this->read_u16_le_(0x00, vfb_reg)) {
+      ESP_LOGW(TAG, "Failed reading REG0x00 for VFB/VBAT_OV threshold diagnostics");
+    } else {
+      const float vfb_reg_mv = 1504.0f + static_cast<float>(vfb_reg.raw_le & REG00_VFB_REG_MASK) * 2.0f;
+      const float vbat_ov_rising_fb_mv = vfb_reg_mv * VBAT_OV_RISING_MULTIPLIER;
+      const float vbat_ov_falling_fb_mv = vfb_reg_mv * VBAT_OV_FALLING_MULTIPLIER;
+      if (this->vfb_reg_target_sensor_ != nullptr) {
+        this->vfb_reg_target_sensor_->publish_state(vfb_reg_mv);
+      }
+      if (this->vbat_ov_rising_fb_sensor_ != nullptr) {
+        this->vbat_ov_rising_fb_sensor_->publish_state(vbat_ov_rising_fb_mv);
+      }
+      if (this->vbat_ov_falling_fb_sensor_ != nullptr) {
+        this->vbat_ov_falling_fb_sensor_->publish_state(vbat_ov_falling_fb_mv);
+      }
+      if (this->has_fb_to_pack_voltage_scale_) {
+        const float rising_pack_mv = vbat_ov_rising_fb_mv * this->fb_to_pack_voltage_scale_;
+        const float falling_pack_mv = vbat_ov_falling_fb_mv * this->fb_to_pack_voltage_scale_;
+        if (this->vbat_ov_rising_pack_sensor_ != nullptr) {
+          this->vbat_ov_rising_pack_sensor_->publish_state(rising_pack_mv);
+        }
+        if (this->vbat_ov_falling_pack_sensor_ != nullptr) {
+          this->vbat_ov_falling_pack_sensor_->publish_state(falling_pack_mv);
+        }
+      }
+    }
+  }
+
   this->publish_status_texts_(status1, status2, status3, fault);
   this->publish_control_states_();
   this->status_clear_warning();
@@ -280,12 +314,20 @@ void BQ25756Component::dump_config() {
   if (this->has_input_voltage_dpm_limit_mv_) {
     ESP_LOGCONFIG(TAG, "  input_voltage_dpm_limit_mv: %u", this->input_voltage_dpm_limit_mv_);
   }
+  if (this->has_fb_to_pack_voltage_scale_) {
+    ESP_LOGCONFIG(TAG, "  fb_to_pack_voltage_scale: %.6f", this->fb_to_pack_voltage_scale_);
+  }
   LOG_SENSOR("  ", "IAC Current", this->iac_current_sensor_);
   LOG_SENSOR("  ", "IBAT Current", this->ibat_current_sensor_);
   LOG_SENSOR("  ", "VAC Voltage", this->vac_voltage_sensor_);
   LOG_SENSOR("  ", "VBAT Voltage", this->vbat_voltage_sensor_);
   LOG_SENSOR("  ", "TS Percent", this->ts_percent_sensor_);
   LOG_SENSOR("  ", "VFB Voltage", this->vfb_voltage_sensor_);
+  LOG_SENSOR("  ", "VFB REG Target", this->vfb_reg_target_sensor_);
+  LOG_SENSOR("  ", "VBAT OV Rising (FB)", this->vbat_ov_rising_fb_sensor_);
+  LOG_SENSOR("  ", "VBAT OV Falling (FB)", this->vbat_ov_falling_fb_sensor_);
+  LOG_SENSOR("  ", "VBAT OV Rising (Pack)", this->vbat_ov_rising_pack_sensor_);
+  LOG_SENSOR("  ", "VBAT OV Falling (Pack)", this->vbat_ov_falling_pack_sensor_);
   LOG_TEXT_SENSOR("  ", "Charge Status", this->charge_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "TS Status", this->ts_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "MPPT Status", this->mppt_status_text_sensor_);

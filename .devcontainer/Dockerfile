@@ -33,3 +33,12 @@ RUN git clone --depth 1 --branch v5.1.2 https://github.com/espressif/esp-idf.git
     && printf 'source /opt/esp-idf/export.sh\n' > /etc/profile.d/esp-idf.sh \
     && . ${IDF_PATH}/export.sh \
     && python -m pip install --no-cache-dir pypdf
+
+    # Install Oh My Pi via the official installer.
+RUN apt-get update; \
+    apt-get install -y --no-install-recommends curl ca-certificates; \
+    rm -rf /var/lib/apt/lists/*; \
+    export PI_INSTALL_DIR=/usr/local/bin; \
+    curl -fsSL https://omp.sh/install | sh -s -- --binary; \
+    command -v omp; \
+    omp --version

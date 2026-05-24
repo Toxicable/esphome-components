@@ -37,6 +37,7 @@ bq25756:
   # charge_current_limit_ma: 5000
   # input_current_dpm_limit_ma: 3000
   # input_voltage_dpm_limit_mv: 12000
+  # fb_to_pack_voltage_scale: 10.94
   iac_current:
     name: "Charger Input Current"
   vac_voltage:
@@ -49,6 +50,16 @@ bq25756:
     name: "Charger TS Percent"
   # vfb_voltage:
   #   name: "Charger VFB Voltage"
+  # vfb_reg_target:
+  #   name: "Charger VFB REG Target"
+  # vbat_ov_rising_fb:
+  #   name: "Charger VBAT OV Rising FB"
+  # vbat_ov_falling_fb:
+  #   name: "Charger VBAT OV Falling FB"
+  # vbat_ov_rising_pack:
+  #   name: "Charger VBAT OV Rising Pack"
+  # vbat_ov_falling_pack:
+  #   name: "Charger VBAT OV Falling Pack"
   charge_status:
     name: "Charge Status"
   ts_status:
@@ -115,3 +126,5 @@ bq25756:
 - Set `disable_ilim_hiz_pin: true` and `disable_ichg_pin: true` to ignore external ILIM/ICHG pin limits and use I2C charge/input limits.
 - Set `event_logging: true` to emit `INFO` event lines only when charger status/fault bits change.
 - Periodic charger telemetry is logged at `DEBUG` level.
+- `vfb_reg_target`, `vbat_ov_rising_fb`, and `vbat_ov_falling_fb` are computed from live `REG0x00.VFB_REG`.
+- If `fb_to_pack_voltage_scale` is set, `vbat_ov_rising_pack` and `vbat_ov_falling_pack` publish the same thresholds mapped to pack voltage.

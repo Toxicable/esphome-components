@@ -53,12 +53,18 @@ CONF_CHARGE_VOLTAGE_LIMIT_MV = "charge_voltage_limit_mv"
 CONF_CHARGE_CURRENT_LIMIT_MA = "charge_current_limit_ma"
 CONF_INPUT_CURRENT_DPM_LIMIT_MA = "input_current_dpm_limit_ma"
 CONF_INPUT_VOLTAGE_DPM_LIMIT_MV = "input_voltage_dpm_limit_mv"
+CONF_FB_TO_PACK_VOLTAGE_SCALE = "fb_to_pack_voltage_scale"
 CONF_IAC_CURRENT = "iac_current"
 CONF_IBAT_CURRENT = "ibat_current"
 CONF_VAC_VOLTAGE = "vac_voltage"
 CONF_VBAT_VOLTAGE = "vbat_voltage"
 CONF_TS_PERCENT = "ts_percent"
 CONF_VFB_VOLTAGE = "vfb_voltage"
+CONF_VFB_REG_TARGET = "vfb_reg_target"
+CONF_VBAT_OV_RISING_FB = "vbat_ov_rising_fb"
+CONF_VBAT_OV_FALLING_FB = "vbat_ov_falling_fb"
+CONF_VBAT_OV_RISING_PACK = "vbat_ov_rising_pack"
+CONF_VBAT_OV_FALLING_PACK = "vbat_ov_falling_pack"
 CONF_CHARGE_STATUS = "charge_status"
 CONF_TS_STATUS = "ts_status"
 CONF_MPPT_STATUS = "mppt_status"
@@ -103,6 +109,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_CHARGE_CURRENT_LIMIT_MA): cv.int_range(min=400, max=20000),
             cv.Optional(CONF_INPUT_CURRENT_DPM_LIMIT_MA): cv.int_range(min=400, max=20000),
             cv.Optional(CONF_INPUT_VOLTAGE_DPM_LIMIT_MV): cv.int_range(min=4200, max=65000),
+            cv.Optional(CONF_FB_TO_PACK_VOLTAGE_SCALE): cv.float_range(min=0.000001),
             cv.Optional(CONF_IAC_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_MILLIAMP,
                 accuracy_decimals=1,
@@ -137,6 +144,41 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_VFB_REG_TARGET): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLIVOLT,
+                accuracy_decimals=0,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_VBAT_OV_RISING_FB): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLIVOLT,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_VBAT_OV_FALLING_FB): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLIVOLT,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_VBAT_OV_RISING_PACK): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLIVOLT,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_VBAT_OV_FALLING_PACK): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLIVOLT,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_CHARGE_STATUS): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_TS_STATUS): text_sensor.text_sensor_schema(
@@ -236,6 +278,8 @@ async def to_code(config):
         cg.add(var.set_input_current_dpm_limit_ma(config[CONF_INPUT_CURRENT_DPM_LIMIT_MA]))
     if CONF_INPUT_VOLTAGE_DPM_LIMIT_MV in config:
         cg.add(var.set_input_voltage_dpm_limit_mv(config[CONF_INPUT_VOLTAGE_DPM_LIMIT_MV]))
+    if CONF_FB_TO_PACK_VOLTAGE_SCALE in config:
+        cg.add(var.set_fb_to_pack_voltage_scale(config[CONF_FB_TO_PACK_VOLTAGE_SCALE]))
 
     if CONF_IAC_CURRENT in config:
         sens = await sensor.new_sensor(config[CONF_IAC_CURRENT])
@@ -255,6 +299,21 @@ async def to_code(config):
     if CONF_VFB_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_VFB_VOLTAGE])
         cg.add(var.set_vfb_voltage_sensor(sens))
+    if CONF_VFB_REG_TARGET in config:
+        sens = await sensor.new_sensor(config[CONF_VFB_REG_TARGET])
+        cg.add(var.set_vfb_reg_target_sensor(sens))
+    if CONF_VBAT_OV_RISING_FB in config:
+        sens = await sensor.new_sensor(config[CONF_VBAT_OV_RISING_FB])
+        cg.add(var.set_vbat_ov_rising_fb_sensor(sens))
+    if CONF_VBAT_OV_FALLING_FB in config:
+        sens = await sensor.new_sensor(config[CONF_VBAT_OV_FALLING_FB])
+        cg.add(var.set_vbat_ov_falling_fb_sensor(sens))
+    if CONF_VBAT_OV_RISING_PACK in config:
+        sens = await sensor.new_sensor(config[CONF_VBAT_OV_RISING_PACK])
+        cg.add(var.set_vbat_ov_rising_pack_sensor(sens))
+    if CONF_VBAT_OV_FALLING_PACK in config:
+        sens = await sensor.new_sensor(config[CONF_VBAT_OV_FALLING_PACK])
+        cg.add(var.set_vbat_ov_falling_pack_sensor(sens))
 
     if CONF_CHARGE_STATUS in config:
         ts = await text_sensor.new_text_sensor(config[CONF_CHARGE_STATUS])

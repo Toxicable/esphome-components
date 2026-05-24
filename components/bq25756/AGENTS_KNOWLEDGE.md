@@ -18,6 +18,9 @@ Component-scoped notes for `components/bq25756`.
   - `disable_ce_pin` -> `REG0x17.DIS_CE_PIN`
   - `disable_ilim_hiz_pin` -> clear `REG0x18.EN_ILIM_HIZ_PIN`
   - `disable_ichg_pin` -> clear `REG0x18.EN_ICHG_PIN`
+- Diagnostics now include live `VFB_REG` / `VBAT_OV` threshold sensors:
+  - `vfb_reg_target`, `vbat_ov_rising_fb`, `vbat_ov_falling_fb`
+  - optional pack-domain mapping with `fb_to_pack_voltage_scale` plus `vbat_ov_rising_pack` / `vbat_ov_falling_pack`
 - `vfb_voltage` should stay disabled unless explicitly configured; the datasheet recommends disabling that ADC channel during charging when it is not needed.
 - `ILIM_HIZ` remains hardware-active unless the board or firmware explicitly disables that pin function; if the pin is left floating or pulled above its HIZ threshold, the charger enters HIZ even when `REG0x17.EN_HIZ` is 0.
 - `CE` is still a hardware gate for charging unless `DIS_CE_PIN` is set; a floating/high CE pin can block charging while the I2C `EN_CHG` bit still reads enabled.
