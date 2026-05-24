@@ -65,6 +65,7 @@ constexpr float VBAT_OV_FALLING_MULTIPLIER = 1.02f;
 }  // namespace
 
 bool BQ25756Component::set_charge_enabled(bool enabled) {
+  this->log_charge_enable_precheck_(enabled);
   return this->update_register_bits_(
     REG17_CHARGER_CONTROL, REG17_EN_CHG_MASK, enabled ? REG17_EN_CHG_MASK : 0x00
   );
@@ -742,6 +743,60 @@ bool BQ25756Component::apply_configured_pin_overrides_() {
     }
   }
   return true;
+}
+
+void BQ25756Component::log_charge_enable_precheck_(bool requested_on) {
+  uint8_t reg17 = 0;
+  uint8_t reg19 = 0;
+  uint8_t status1 = 0;
+  uint8_t status2 = 0;
+  uint8_t status3 = 0;
+  uint8_t fault = 0;
+  Reg16Value iac{};
+  Reg16Value ibat{};
+  Reg16Value vac{};
+  Reg16Value vbat{};
+
+  const bool ok = this->read_byte_(REG17_CHARGER_CONTROL, reg17) && this->read_byte_(REG19_POWER_PATH_CONTROL, reg19) &&
+                  this->read_byte_(REG21_CHARGER_STATUS_1, status1) && this->read_byte_(REG22_CHARGER_STATUS_2, status2) &&
+                  this->read_byte_(REG23_CHARGER_STATUS_3, status3) && this->read_byte_(REG24_FAULT_STATUS, fault) &&
+                  this->read_u16_le_(REG2D_IAC_ADC, iac) && this->read_u16_le_(REG2F_IBAT_ADC, ibat) &&
+                  this->read_u16_le_(REG31_VAC_ADC, vac) && this->read_u16_le_(REG33_VBAT_ADC, vbat);
+
+  if (!ok) {
+    ESP_LOGW(TAG, "Precheck: charge_enable->%s snapshot unavailable (read failed)", requested_on ? "on" : "off");
+    return;
+  }
+
+  const float iac_ma = static_cast<float>(static_cast<int16_t>(iac.raw_le)) * IAC_CURRENT_LSB_MA;
+  const float ibat_ma = static_cast<float>(static_cast<int16_t>(ibat.raw_le)) * IBAT_CURRENT_LSB_MA;
+  const float vac_mv = static_cast<float>(vac.raw_le) * VOLTAGE_LSB_MV;
+  const float vbat_mv = static_cast<float>(vbat.raw_le) * VOLTAGE_LSB_MV;
+  const bool en_chg = (reg17 & REG17_EN_CHG_MASK) != 0;
+  const bool en_hiz = (reg17 & REG17_EN_HIZ_MASK) != 0;
+  const bool dis_ce_pin = (reg17 & REG17_DIS_CE_PIN_MASK) != 0;
+  const bool en_rev = (reg19 & REG19_EN_REV_MASK) != 0;
+
+  ESP_LOGI(
+    TAG,
+    "Precheck: req_charge_enable=%s reg17=0x%02X en_chg=%u en_hiz=%u dis_ce_pin=%u reg19=0x%02X en_rev=%u "
+    "status=%02X/%02X/%02X fault=%02X vac=%.0fmV vbat=%.0fmV iac=%.1fmA ibat=%.0fmA",
+    requested_on ? "on" : "off",
+    reg17,
+    en_chg ? 1 : 0,
+    en_hiz ? 1 : 0,
+    dis_ce_pin ? 1 : 0,
+    reg19,
+    en_rev ? 1 : 0,
+    status1,
+    status2,
+    status3,
+    fault,
+    vac_mv,
+    vbat_mv,
+    iac_ma,
+    ibat_ma
+  );
 }
 
 void BQ25756ChargeEnableSwitch::write_state(bool state) {

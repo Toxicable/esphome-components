@@ -118,6 +118,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   bool set_reverse_mode(bool enabled);
   bool set_watchdog_code(uint8_t code);
   bool reset_watchdog();
+  void log_charge_enable_precheck_(bool requested_on);
 
   void setup() override;
   void update() override;
