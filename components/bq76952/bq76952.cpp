@@ -25,6 +25,7 @@ constexpr uint8_t REG_PACK_VOLTAGE = 0x36;
 constexpr uint8_t REG_LD_VOLTAGE = 0x38;
 constexpr uint8_t REG_CC2_CURRENT = 0x3A;
 constexpr uint8_t REG_ALARM_STATUS = 0x62;
+constexpr uint8_t REG_ALARM_RAW_STATUS = 0x64;
 constexpr uint8_t REG_INT_TEMPERATURE = 0x68;
 constexpr uint8_t REG_TS1_TEMPERATURE = 0x70;
 constexpr uint8_t REG_TS2_TEMPERATURE = 0x72;
@@ -1959,6 +1960,8 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const std::string safety_flags = have_safety_status
                                      ? this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
                                      : "unread";
+  uint16_t alarm_raw_status = 0;
+  const bool have_alarm_raw_status = this->read_u16_(REG_ALARM_RAW_STATUS, alarm_raw_status);
   uint16_t manufacturing_status = 0;
   const bool have_mfg_status = this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status);
   const bool fet_en = have_mfg_status && ((manufacturing_status & MANUFACTURING_STATUS_FET_EN) != 0);
@@ -1966,8 +1969,8 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const bool sleep = (battery_status & BATTERY_STATUS_SLEEP) != 0;
   const bool sleep_en = (battery_status & BATTERY_STATUS_SLEEP_EN) != 0;
   const bool deepsleep = (control_status & CONTROL_STATUS_DEEPSLEEP) != 0;
-  const bool xchg = have_alarm_status && ((alarm_status & ALARM_STATUS_XCHG) != 0);
-  const bool xdsg = have_alarm_status && ((alarm_status & ALARM_STATUS_XDSG) != 0);
+  const bool xchg = have_alarm_raw_status && ((alarm_raw_status & ALARM_STATUS_XCHG) != 0);
+  const bool xdsg = have_alarm_raw_status && ((alarm_raw_status & ALARM_STATUS_XDSG) != 0);
   uint8_t fet_options = 0;
   const bool have_fet_options = this->read_data_memory_u8_(DM_FET_OPTIONS, fet_options);
   const bool sleepchg = have_fet_options && ((fet_options & 0x02u) != 0);
@@ -1975,7 +1978,7 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   ESP_LOGI(
     TAG,
     "Event: fet=%s path=%s safety=%s alarm=%s ss=%u pf=%u cfgupdate=%u sleep=%u sleep_en=%u deepsleep=%u "
-    "fet_en=%s xchg=%u xdsg=%u sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X} "
+    "fet_en=%s xchg_raw=%u xdsg_raw=%u sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X alarm_raw=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X} "
     "pack=%.3fV ld=%.3fV current=%.3fA",
     fet_flags.c_str(),
     power_path,
@@ -1994,6 +1997,7 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
     static_cast<unsigned>(battery_status),
     static_cast<unsigned>(fet_status),
     have_alarm_status ? static_cast<unsigned>(alarm_status) : 0u,
+    have_alarm_raw_status ? static_cast<unsigned>(alarm_raw_status) : 0u,
     have_safety_status ? static_cast<unsigned>(safety_status_a) : 0u,
     have_safety_status ? static_cast<unsigned>(safety_status_b) : 0u,
     have_safety_status ? static_cast<unsigned>(safety_status_c) : 0u,
