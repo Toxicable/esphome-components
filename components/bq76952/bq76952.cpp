@@ -34,6 +34,8 @@ constexpr uint8_t REG_TS1_TEMPERATURE = 0x70;
 constexpr uint8_t REG_TS2_TEMPERATURE = 0x72;
 constexpr uint8_t REG_TS3_TEMPERATURE = 0x74;
 constexpr uint8_t REG_FET_STATUS = 0x7F;
+constexpr uint8_t REG_CFETOFF_TEMPERATURE = 0x6A;
+constexpr uint8_t REG_DFETOFF_TEMPERATURE = 0x6C;
 
 constexpr uint8_t REG_SUBCMD_LO = 0x3E;
 constexpr uint8_t REG_SUBCMD_DATA = 0x40;
@@ -92,6 +94,8 @@ constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
 constexpr uint16_t DM_FET_OPTIONS = 0x9308;
 constexpr uint16_t DM_POWER_CONFIG = 0x9234;
+constexpr uint16_t DM_CFETOFF_PIN_CONFIG = 0x92FA;
+constexpr uint16_t DM_DFETOFF_PIN_CONFIG = 0x92FB;
 constexpr uint16_t DM_REG12_CONFIG = 0x9236;
 constexpr uint16_t DM_REG0_CONFIG = 0x9237;
 constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
@@ -1988,6 +1992,14 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const bool have_chg_fet_prot = this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, chg_fet_prot_a) &&
                                  this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_B, chg_fet_prot_b) &&
                                  this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_C, chg_fet_prot_c);
+  uint8_t cfetoff_pin_cfg = 0;
+  uint8_t dfetoff_pin_cfg = 0;
+  const bool have_fetoff_cfg = this->read_data_memory_u8_(DM_CFETOFF_PIN_CONFIG, cfetoff_pin_cfg) &&
+                               this->read_data_memory_u8_(DM_DFETOFF_PIN_CONFIG, dfetoff_pin_cfg);
+  int16_t cfetoff_mv_raw = 0;
+  int16_t dfetoff_mv_raw = 0;
+  const bool have_fetoff_mv = this->read_i16_(REG_CFETOFF_TEMPERATURE, cfetoff_mv_raw) &&
+                              this->read_i16_(REG_DFETOFF_TEMPERATURE, dfetoff_mv_raw);
   uint8_t fet_options = 0;
   const bool have_fet_options = this->read_data_memory_u8_(DM_FET_OPTIONS, fet_options);
   const bool sleepchg = have_fet_options && ((fet_options & 0x02u) != 0);
@@ -2031,14 +2043,39 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
         if ((chg_fet_prot_c & (1u << 2)) && (safety_alert_c & (1u << 2))) append_reason("pto_alert");
         if ((chg_fet_prot_c & (1u << 1)) && (safety_alert_c & (1u << 1))) append_reason("hwdf_alert");
       }
-      xchg_reason = reasons.empty() ? "host_or_pin_or_transient" : reasons;
+      if (!reasons.empty()) {
+        xchg_reason = reasons;
+      } else {
+        bool pin_cfg_possible = false;
+        bool bothoff_mode = false;
+        if (have_fetoff_cfg) {
+          const uint8_t cfetoff_pin_fxn = cfetoff_pin_cfg & 0x03u;
+          const uint8_t dfetoff_pin_fxn = dfetoff_pin_cfg & 0x03u;
+          const bool cfetoff_mode = cfetoff_pin_fxn == 0x02u;
+          const bool dfetoff_mode = dfetoff_pin_fxn == 0x02u;
+          bothoff_mode = dfetoff_mode && ((dfetoff_pin_cfg & (1u << 4)) != 0);
+          pin_cfg_possible = cfetoff_mode || dfetoff_mode;
+        }
+        const bool host_cmd_recent = last_fet_control_subcommand_ == SUBCMD_DSG_PDSG_OFF ||
+                                     last_fet_control_subcommand_ == SUBCMD_CHG_PCHG_OFF ||
+                                     last_fet_control_subcommand_ == SUBCMD_ALL_FETS_OFF ||
+                                     last_fet_control_subcommand_ == SUBCMD_ALL_FETS_ON;
+        const bool host_cmd_very_recent = host_cmd_recent && ((millis() - last_fet_control_subcommand_ms_) < 2000u);
+        if (host_cmd_very_recent) {
+          xchg_reason = "host_fet_subcmd_recent";
+        } else if (pin_cfg_possible) {
+          xchg_reason = bothoff_mode ? "pin_block_possible_bothoff" : "pin_block_possible_cfetoff_dfetoff";
+        } else {
+          xchg_reason = "transient_or_unknown";
+        }
+      }
     }
   }
   const char* power_path = this->power_path_to_string_(fet_status);
   ESP_LOGI(
     TAG,
     "Event: fet=%s path=%s safety=%s alarm=%s ss=%u pf=%u cfgupdate=%u sleep=%u sleep_en=%u deepsleep=%u "
-    "fet_en=%s xchg_raw=%u xdsg_raw=%u xchg_reason=%s sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X alarm_raw=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X salA=0x%02X salB=0x%02X salC=0x%02X chgprotA=0x%02X chgprotB=0x%02X chgprotC=0x%02X} "
+    "fet_en=%s xchg_raw=%u xdsg_raw=%u xchg_reason=%s sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X alarm_raw=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X salA=0x%02X salB=0x%02X salC=0x%02X chgprotA=0x%02X chgprotB=0x%02X chgprotC=0x%02X cfetcfg=0x%02X dfetcfg=0x%02X cfetmv=%d dfetmv=%d lastfetsub=0x%04X lastfetsub_ms=%u} "
     "pack=%.3fV ld=%.3fV current=%.3fA",
     fet_flags.c_str(),
     power_path,
@@ -2068,6 +2105,12 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
     have_chg_fet_prot ? static_cast<unsigned>(chg_fet_prot_a) : 0u,
     have_chg_fet_prot ? static_cast<unsigned>(chg_fet_prot_b) : 0u,
     have_chg_fet_prot ? static_cast<unsigned>(chg_fet_prot_c) : 0u,
+    have_fetoff_cfg ? static_cast<unsigned>(cfetoff_pin_cfg) : 0u,
+    have_fetoff_cfg ? static_cast<unsigned>(dfetoff_pin_cfg) : 0u,
+    have_fetoff_mv ? static_cast<int>(cfetoff_mv_raw) : 0,
+    have_fetoff_mv ? static_cast<int>(dfetoff_mv_raw) : 0,
+    static_cast<unsigned>(last_fet_control_subcommand_),
+    static_cast<unsigned>(last_fet_control_subcommand_ms_),
     static_cast<double>(pack_v),
     static_cast<double>(ld_v),
     static_cast<double>(current_a)
@@ -2235,6 +2278,11 @@ bool BQ76952Component::write_u16_(uint8_t reg, uint16_t value) {
 }
 
 bool BQ76952Component::write_subcommand_(uint16_t subcommand) {
+  if (subcommand == SUBCMD_DSG_PDSG_OFF || subcommand == SUBCMD_CHG_PCHG_OFF || subcommand == SUBCMD_ALL_FETS_OFF ||
+      subcommand == SUBCMD_ALL_FETS_ON) {
+    last_fet_control_subcommand_ = subcommand;
+    last_fet_control_subcommand_ms_ = millis();
+  }
   const uint8_t payload[2] = {
     static_cast<uint8_t>(subcommand & 0xFF),
     static_cast<uint8_t>((subcommand >> 8) & 0xFF),

@@ -287,6 +287,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t last_safety_status_b_{0};
   uint8_t last_safety_status_c_{0};
   uint16_t last_battery_status_fault_bits_{0};
+  uint16_t last_fet_control_subcommand_{0};
+  uint32_t last_fet_control_subcommand_ms_{0};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
 
