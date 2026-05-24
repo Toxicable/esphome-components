@@ -18,6 +18,9 @@ constexpr uint8_t REG_CONTROL_STATUS = 0x00;
 constexpr uint8_t REG_SAFETY_STATUS_A = 0x03;
 constexpr uint8_t REG_SAFETY_STATUS_B = 0x05;
 constexpr uint8_t REG_SAFETY_STATUS_C = 0x07;
+constexpr uint8_t REG_SAFETY_ALERT_A = 0x02;
+constexpr uint8_t REG_SAFETY_ALERT_B = 0x04;
+constexpr uint8_t REG_SAFETY_ALERT_C = 0x06;
 constexpr uint8_t REG_BATTERY_STATUS = 0x12;
 constexpr uint8_t REG_CELL1_VOLTAGE = 0x14;
 constexpr uint8_t REG_STACK_VOLTAGE = 0x34;
@@ -95,6 +98,8 @@ constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
 constexpr uint16_t DM_TS2_CONFIG = 0x92FE;
 constexpr uint16_t DM_TS3_CONFIG = 0x92FF;
 constexpr uint16_t DM_CHG_FET_PROTECTIONS_A = 0x9265;
+constexpr uint16_t DM_CHG_FET_PROTECTIONS_B = 0x9266;
+constexpr uint16_t DM_CHG_FET_PROTECTIONS_C = 0x9267;
 constexpr uint16_t DM_DSG_FET_PROTECTIONS_A = 0x9269;
 constexpr uint16_t DM_OCC_THRESHOLD = 0x9280;
 constexpr uint16_t DM_OCC_DELAY = 0x9281;
@@ -1960,6 +1965,12 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const std::string safety_flags = have_safety_status
                                      ? this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
                                      : "unread";
+  uint8_t safety_alert_a = 0;
+  uint8_t safety_alert_b = 0;
+  uint8_t safety_alert_c = 0;
+  const bool have_safety_alert = this->read_byte_(REG_SAFETY_ALERT_A, safety_alert_a) &&
+                                 this->read_byte_(REG_SAFETY_ALERT_B, safety_alert_b) &&
+                                 this->read_byte_(REG_SAFETY_ALERT_C, safety_alert_c);
   uint16_t alarm_raw_status = 0;
   const bool have_alarm_raw_status = this->read_u16_(REG_ALARM_RAW_STATUS, alarm_raw_status);
   uint16_t manufacturing_status = 0;
@@ -1971,14 +1982,63 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
   const bool deepsleep = (control_status & CONTROL_STATUS_DEEPSLEEP) != 0;
   const bool xchg = have_alarm_raw_status && ((alarm_raw_status & ALARM_STATUS_XCHG) != 0);
   const bool xdsg = have_alarm_raw_status && ((alarm_raw_status & ALARM_STATUS_XDSG) != 0);
+  uint8_t chg_fet_prot_a = 0;
+  uint8_t chg_fet_prot_b = 0;
+  uint8_t chg_fet_prot_c = 0;
+  const bool have_chg_fet_prot = this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_A, chg_fet_prot_a) &&
+                                 this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_B, chg_fet_prot_b) &&
+                                 this->read_data_memory_u8_(DM_CHG_FET_PROTECTIONS_C, chg_fet_prot_c);
   uint8_t fet_options = 0;
   const bool have_fet_options = this->read_data_memory_u8_(DM_FET_OPTIONS, fet_options);
   const bool sleepchg = have_fet_options && ((fet_options & 0x02u) != 0);
+  std::string xchg_reason = "none";
+  if (xchg) {
+    if (sleep && have_fet_options && !sleepchg) {
+      xchg_reason = "sleep_policy";
+    } else {
+      std::string reasons;
+      auto append_reason = [&](const char *value) {
+        if (!reasons.empty()) {
+          reasons += ",";
+        }
+        reasons += value;
+      };
+      if (have_chg_fet_prot && have_safety_status) {
+        if ((chg_fet_prot_a & (1u << 7)) && (safety_status_a & (1u << 7))) append_reason("scd");
+        if ((chg_fet_prot_a & (1u << 4)) && (safety_status_a & (1u << 4))) append_reason("occ");
+        if ((chg_fet_prot_a & (1u << 3)) && (safety_status_a & (1u << 3))) append_reason("cov");
+        if ((chg_fet_prot_b & (1u << 7)) && (safety_status_b & (1u << 7))) append_reason("otf");
+        if ((chg_fet_prot_b & (1u << 6)) && (safety_status_b & (1u << 6))) append_reason("otint");
+        if ((chg_fet_prot_b & (1u << 4)) && (safety_status_b & (1u << 4))) append_reason("otc");
+        if ((chg_fet_prot_b & (1u << 2)) && (safety_status_b & (1u << 2))) append_reason("utint");
+        if ((chg_fet_prot_b & (1u << 0)) && (safety_status_b & (1u << 0))) append_reason("utc");
+        if ((chg_fet_prot_c & (1u << 6)) && (safety_status_c & (1u << 6))) append_reason("scdl");
+        if ((chg_fet_prot_c & (1u << 4)) && (safety_status_c & (1u << 4))) append_reason("covl");
+        if ((chg_fet_prot_c & (1u << 2)) && (safety_status_c & (1u << 2))) append_reason("pto");
+        if ((chg_fet_prot_c & (1u << 1)) && (safety_status_c & (1u << 1))) append_reason("hwdf");
+      }
+      if (reasons.empty() && have_chg_fet_prot && have_safety_alert) {
+        if ((chg_fet_prot_a & (1u << 7)) && (safety_alert_a & (1u << 7))) append_reason("scd_alert");
+        if ((chg_fet_prot_a & (1u << 4)) && (safety_alert_a & (1u << 4))) append_reason("occ_alert");
+        if ((chg_fet_prot_a & (1u << 3)) && (safety_alert_a & (1u << 3))) append_reason("cov_alert");
+        if ((chg_fet_prot_b & (1u << 7)) && (safety_alert_b & (1u << 7))) append_reason("otf_alert");
+        if ((chg_fet_prot_b & (1u << 6)) && (safety_alert_b & (1u << 6))) append_reason("otint_alert");
+        if ((chg_fet_prot_b & (1u << 4)) && (safety_alert_b & (1u << 4))) append_reason("otc_alert");
+        if ((chg_fet_prot_b & (1u << 2)) && (safety_alert_b & (1u << 2))) append_reason("utint_alert");
+        if ((chg_fet_prot_b & (1u << 0)) && (safety_alert_b & (1u << 0))) append_reason("utc_alert");
+        if ((chg_fet_prot_c & (1u << 6)) && (safety_alert_c & (1u << 6))) append_reason("scdl_alert");
+        if ((chg_fet_prot_c & (1u << 4)) && (safety_alert_c & (1u << 4))) append_reason("covl_alert");
+        if ((chg_fet_prot_c & (1u << 2)) && (safety_alert_c & (1u << 2))) append_reason("pto_alert");
+        if ((chg_fet_prot_c & (1u << 1)) && (safety_alert_c & (1u << 1))) append_reason("hwdf_alert");
+      }
+      xchg_reason = reasons.empty() ? "host_or_pin_or_transient" : reasons;
+    }
+  }
   const char* power_path = this->power_path_to_string_(fet_status);
   ESP_LOGI(
     TAG,
     "Event: fet=%s path=%s safety=%s alarm=%s ss=%u pf=%u cfgupdate=%u sleep=%u sleep_en=%u deepsleep=%u "
-    "fet_en=%s xchg_raw=%u xdsg_raw=%u sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X alarm_raw=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X} "
+    "fet_en=%s xchg_raw=%u xdsg_raw=%u xchg_reason=%s sleepchg=%s regs{bat=0x%04X fet=0x%02X alarm=0x%04X alarm_raw=0x%04X safA=0x%02X safB=0x%02X safC=0x%02X salA=0x%02X salB=0x%02X salC=0x%02X chgprotA=0x%02X chgprotB=0x%02X chgprotC=0x%02X} "
     "pack=%.3fV ld=%.3fV current=%.3fA",
     fet_flags.c_str(),
     power_path,
@@ -1993,6 +2053,7 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
     have_mfg_status ? (fet_en ? "1" : "0") : "unread",
     xchg ? 1 : 0,
     xdsg ? 1 : 0,
+    xchg_reason.c_str(),
     have_fet_options ? (sleepchg ? "1" : "0") : "unread",
     static_cast<unsigned>(battery_status),
     static_cast<unsigned>(fet_status),
@@ -2001,6 +2062,12 @@ void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t batter
     have_safety_status ? static_cast<unsigned>(safety_status_a) : 0u,
     have_safety_status ? static_cast<unsigned>(safety_status_b) : 0u,
     have_safety_status ? static_cast<unsigned>(safety_status_c) : 0u,
+    have_safety_alert ? static_cast<unsigned>(safety_alert_a) : 0u,
+    have_safety_alert ? static_cast<unsigned>(safety_alert_b) : 0u,
+    have_safety_alert ? static_cast<unsigned>(safety_alert_c) : 0u,
+    have_chg_fet_prot ? static_cast<unsigned>(chg_fet_prot_a) : 0u,
+    have_chg_fet_prot ? static_cast<unsigned>(chg_fet_prot_b) : 0u,
+    have_chg_fet_prot ? static_cast<unsigned>(chg_fet_prot_c) : 0u,
     static_cast<double>(pack_v),
     static_cast<double>(ld_v),
     static_cast<double>(current_a)
