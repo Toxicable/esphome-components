@@ -306,7 +306,7 @@ void BQ76952Component::update() {
     fet_status_flags_sensor_->publish_state(this->fet_status_flags_to_string_(fet_status));
   }
 
-  const bool need_alarm_status = event_logging_;
+  const bool need_alarm_status = true;
   if (need_alarm_status) {
     if (!this->read_u16_(REG_ALARM_STATUS, alarm_status)) {
       ESP_LOGW(TAG, "Failed to read Alarm Status");
@@ -314,7 +314,7 @@ void BQ76952Component::update() {
       return;
     }
   }
-  const bool need_safety_status = fault_sensor_ != nullptr || event_logging_;
+  const bool need_safety_status = true;
   if (need_safety_status) {
     if (!this->read_byte_(REG_SAFETY_STATUS_A, safety_status_a) ||
         !this->read_byte_(REG_SAFETY_STATUS_B, safety_status_b) ||
@@ -2227,10 +2227,6 @@ bool BQ76952Component::apply_current_limit_config_() {
 void BQ76952Component::maybe_log_event_(uint16_t control_status, uint16_t battery_status, uint8_t fet_status,
                                         uint16_t alarm_status, bool have_alarm_status, uint8_t safety_status_a,
                                         uint8_t safety_status_b, uint8_t safety_status_c, bool have_safety_status) {
-  if (!event_logging_) {
-    return;
-  }
-
   const uint16_t battery_fault_bits = static_cast<uint16_t>(battery_status & (BATTERY_STATUS_SS | BATTERY_STATUS_PF));
   const bool changed = !event_log_initialized_ || fet_status != last_fet_status_ ||
                        battery_fault_bits != last_battery_status_fault_bits_ ||
