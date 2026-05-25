@@ -32,6 +32,8 @@ BQ76952ProgramFactoryOtpButton = bq76952_ns.class_("BQ76952ProgramFactoryOtpButt
 CONF_CELL_COUNT = "cell_count"
 CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
 CONF_SLEEP_MODE = "sleep_mode"
+CONF_OTP_AUTONOMOUS_FET_MODE = "otp_autonomous_fet_mode"
+CONF_OTP_SLEEP_MODE = "otp_sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
 CONF_SLEEP_CHARGE_ENABLED = "sleep_charge_enabled"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
@@ -84,7 +86,6 @@ CONF_OUTPUT_ENABLED_CONTROL = "output_enabled_control"
 CONF_AUTONOMOUS_FET_CONTROL = "autonomous_fet_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
 CONF_RESET_PASSED_CHARGE = "reset_passed_charge"
-CONF_APPLY_CONFIGURATION = "apply_configuration"
 CONF_PROGRAM_FACTORY_OTP = "program_factory_otp"
 
 CELL_VOLTAGE_KEYS = [f"cell{index}_voltage" for index in range(1, 17)]
@@ -171,6 +172,8 @@ def _validate_config(config):
         if legacy_key in config and clear_key in config:
             raise cv.Invalid(f"Use only one of '{legacy_key}' or '{clear_key}'")
     alias_pairs = (
+        (CONF_AUTONOMOUS_FET_MODE, CONF_OTP_AUTONOMOUS_FET_MODE),
+        (CONF_SLEEP_MODE, CONF_OTP_SLEEP_MODE),
         (CONF_SCD_THRESHOLD_MV, CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV),
         (CONF_SCD_DELAY_US, CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US),
         (CONF_SCD_RECOVERY_TIME_S, CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S),
@@ -187,7 +190,11 @@ schema = {
     cv.Optional(CONF_AUTONOMOUS_FET_MODE, default="preserve"): cv.enum(
         AUTONOMOUS_FET_MODE_OPTIONS, lower=True
     ),
+    cv.Optional(CONF_OTP_AUTONOMOUS_FET_MODE): cv.enum(
+        AUTONOMOUS_FET_MODE_OPTIONS, lower=True
+    ),
     cv.Optional(CONF_SLEEP_MODE, default="preserve"): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
+    cv.Optional(CONF_OTP_SLEEP_MODE): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
     cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_SLEEP_CHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
@@ -279,15 +286,9 @@ schema = {
         device_class=DEVICE_CLASS_TEMPERATURE,
         state_class=STATE_CLASS_MEASUREMENT,
     ).extend({cv.Optional(CONF_PULLUP, default="18k"): cv.enum(TS_PULLUP_OPTIONS, lower=True)}),
-    cv.Optional(CONF_BMS_STATE): text_sensor.text_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_FAULT): text_sensor.text_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
-    cv.Optional(CONF_FET_STATUS_FLAGS): text_sensor.text_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
+    cv.Optional(CONF_BMS_STATE): text_sensor.text_sensor_schema(),
+    cv.Optional(CONF_FAULT): text_sensor.text_sensor_schema(),
+    cv.Optional(CONF_FET_STATUS_FLAGS): text_sensor.text_sensor_schema(),
     cv.Optional(CONF_OUTPUT_ENABLED_CONTROL): switch_.switch_schema(
         BQ76952OutputEnabledSwitch, entity_category=ENTITY_CATEGORY_CONFIG
     ),
@@ -301,10 +302,6 @@ schema = {
     ),
     cv.Optional(CONF_RESET_PASSED_CHARGE): button.button_schema(
         BQ76952ResetPassedChargeButton,
-        entity_category=ENTITY_CATEGORY_CONFIG,
-    ),
-    cv.Optional(CONF_APPLY_CONFIGURATION): button.button_schema(
-        BQ76952ApplyConfigurationButton,
         entity_category=ENTITY_CATEGORY_CONFIG,
     ),
     cv.Optional(CONF_PROGRAM_FACTORY_OTP): button.button_schema(
@@ -332,8 +329,14 @@ async def to_code(config):
 
     cg.add(var.set_cell_count(config[CONF_CELL_COUNT]))
     cg.add(var.set_sense_resistor_milliohm(config[CONF_SENSE_RESISTOR_MILLIOHM]))
-    cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
-    cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
+    if CONF_OTP_AUTONOMOUS_FET_MODE in config:
+        cg.add(var.set_autonomous_fet_mode(config[CONF_OTP_AUTONOMOUS_FET_MODE]))
+    else:
+        cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
+    if CONF_OTP_SLEEP_MODE in config:
+        cg.add(var.set_sleep_mode(config[CONF_OTP_SLEEP_MODE]))
+    else:
+        cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
     if CONF_PREDISCHARGE_ENABLED in config:
         cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
     if CONF_SLEEP_CHARGE_ENABLED in config:
@@ -473,9 +476,6 @@ async def to_code(config):
         await cg.register_parented(btn, var)
     if CONF_RESET_PASSED_CHARGE in config:
         btn = await button.new_button(config[CONF_RESET_PASSED_CHARGE])
-        await cg.register_parented(btn, var)
-    if CONF_APPLY_CONFIGURATION in config:
-        btn = await button.new_button(config[CONF_APPLY_CONFIGURATION])
         await cg.register_parented(btn, var)
     if CONF_PROGRAM_FACTORY_OTP in config:
         btn = await button.new_button(config[CONF_PROGRAM_FACTORY_OTP])

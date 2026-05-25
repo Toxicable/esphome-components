@@ -31,9 +31,11 @@ bq76952:
   cell_count: 4
   update_interval: 20ms
 
-  ## Boot-applied RAM config
-  autonomous_fet_mode: enable
-  sleep_mode: enable
+  ## OTP-backed startup defaults
+  otp_autonomous_fet_mode: enable
+  otp_sleep_mode: enable
+
+  ## Boot-applied live config
   # sleep_charge_enabled: true
   # predischarge_enabled: true
 
@@ -64,8 +66,6 @@ bq76952:
   nominal_capacity_ah: 5
 
   ## Buttons
-  apply_configuration:
-    name: "BMS Apply Configuration"
   program_factory_otp:
     name: "BMS OTP Program Factory Config"
   clear_alarms:
@@ -175,15 +175,11 @@ Entities intentionally not exposed:
 
 ## Boot-Applied RAM Config
 
-These settings are normal YAML config and are written into the chip's live RAM configuration:
-- automatically on boot
-- or again when you press the `apply_configuration` button
+These settings are normal YAML config and are written into the chip's live RAM configuration automatically on boot.
 
 These writes are not permanent across a full hardware reset or a chip that boots from different OTP defaults.
 
 Boot-applied RAM config includes:
-- `autonomous_fet_mode`
-- `sleep_mode`
 - `sleep_charge_enabled`
 - `predischarge_enabled`
 - `reg0_enabled`
@@ -211,33 +207,40 @@ Notes:
 - these writes require `FULLACCESS`
 - the component may enter `CONFIG_UPDATE` to apply them
 - entering `CONFIG_UPDATE` briefly turns FETs off, so do not power the ESP from a path that depends on switched PACK output during configuration writes
-- `autonomous_fet_control` is the live state/control entity for `FET_EN`; `autonomous_fet_mode` is only the boot-time target the component applies
 - `reg1_voltage` implies `REG1` should be enabled if you do not explicitly set `reg1_enabled`
 - `reg0_enabled` remains explicit because whether the external BREG preregulator path is populated is board-specific and cannot be inferred safely
 - the chip has a persistent `PDSG_EN` option for predischarge, but it does not expose a separate matching persistent `PCHG_EN` bit for precharge
+
+## OTP Settings
+
+These config keys are specifically for OTP-backed startup defaults:
+- `otp_autonomous_fet_mode`
+- `otp_sleep_mode`
+
+They control what the chip should boot up doing after OTP programming, not just what the running device does right now.
 
 ## Factory OTP
 
 `program_factory_otp` is separate because it changes what the chip boots with after a power cycle, and it is irreversible.
 
 What `program_factory_otp` persists into OTP:
-1. startup-default boot bits for `sleep_mode` and `autonomous_fet_mode`
+1. startup-default boot bits from `otp_sleep_mode` and `otp_autonomous_fet_mode`
 2. the current data-memory configuration that the component has already applied live, including regulator, FET-option, TS-pin, and protection settings
 
 What it does not mean:
 - normal YAML changes are not persistent by themselves
-- `apply_configuration` only writes live RAM/data-memory state for the current running device
 - persistence happens only when `program_factory_otp` is pressed successfully
 
 Safe mental model:
 - boot: component applies your YAML into the running chip
-- apply button: re-applies the same live config again
-- OTP button: burns the currently requested config and startup defaults so the chip powers up that way by itself later
+- OTP button: burns the currently requested live config plus the explicit `otp_*` startup defaults so the chip powers up that way later
 
 ## Key Options
 
 - `sleep_charge_enabled`: sets `FET Options[SLEEPCHG]` so charging can remain allowed while the chip is in `sleep`
 - `predischarge_enabled`: sets `FET Options[PDSG_EN]`
+- `otp_autonomous_fet_mode`: startup-default autonomous FET behavior to burn into OTP
+- `otp_sleep_mode`: startup-default sleep-allow behavior to burn into OTP
 - `cell_undervoltage_limit_mv` / `cell_overvoltage_limit_mv`: configure `CUV` / `COV`
 - `discharge_current_limit_a`, `discharge_current_limit_2_a`, `discharge_current_limit_3_a`: configure `OCD1`, `OCD2`, and `OCD3`
 - `charge_current_limit_a`: configures `OCC`
@@ -279,6 +282,8 @@ Cell mapping:
 
 If you are updating from an older config:
 - `operating_mode` -> `bms_state`
+- `autonomous_fet_mode` -> `otp_autonomous_fet_mode`
+- `sleep_mode` -> `otp_sleep_mode`
 - `security_state` -> remove
 - `passed_charge` -> `energy`
 - `passed_charge_time` -> `energy_time`
