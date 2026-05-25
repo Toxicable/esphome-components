@@ -1,15 +1,16 @@
 # BQ76952 Battery Monitor BMS
 
-ESPHome external component for TI BQ76952 (3S to 16S packs over I2C).
+ESPHome external component for TI `BQ76952` battery monitor / protector devices on I2C.
 
-It provides:
-- core telemetry (cell voltages, BAT voltage, PACK voltage, load-detect pin voltage, current, die temperature, TS1/TS2/TS3 temperatures)
-- accumulated passed-charge telemetry from the on-chip coulomb counter
-- battery/FET/alarm status entities
-- host controls for FET path, sleep-allow, and alarm-clear
-- startup policy options for autonomous FET control and sleep mode
+It exposes:
+- pack telemetry: BAT, PACK, LD, cell voltages, current, die temperature, TS1/TS2/TS3
+- derived metrics: state of charge and energy-style throughput from `DASTATUS6`
+- concise status entities: BMS state, current fault, FET status
+- live controls: output enabled, autonomous FET control, clear alarms
+- boot-applied protection and regulator configuration
+- a separate factory-only OTP programming action
 
-## Configuration (optional items commented out)
+## Configuration
 
 ```yaml
 external_components:
@@ -26,49 +27,75 @@ i2c:
 bq76952:
   i2c_id: i2c_bus
 
-  ## Number of cells in series (3 to 16):
-  cell_count: 16
+  ## Core
+  cell_count: 4
+  update_interval: 20ms
 
-  ## Startup behavior:
-  ## preserve = don't change device state on boot
-  ## enable/disable send startup subcommands
-  # apply_configuration_on_boot: false
-  # event_logging: true
-  autonomous_fet_mode: preserve
-  sleep_mode: preserve
+  ## Boot-applied RAM config
+  autonomous_fet_mode: enable
+  sleep_mode: enable
+  # sleep_charge_enabled: true
+  # predischarge_enabled: true
 
-  ## Optional current protection thresholds (applied at boot):
-  # sense_resistor_milliohm: 1.0
-  # scd_threshold_mv: 100
-  # scd_delay_us: 60
-  # scd_recovery_time_s: 5
-  # charge_current_limit_a: 20.0
-  # discharge_current_limit_a: 40.0
+  ## Regulator config
+  # reg1_voltage: 3.3V
+  # reg0_enabled: true
+
+  ## Current / protection config
+  sense_resistor_milliohm: 1.0
+  # cell_undervoltage_limit_mv: 2800
+  # cell_undervoltage_delay_ms: 200
+  # cell_overvoltage_limit_mv: 4200
+  # cell_overvoltage_delay_ms: 200
+  # charge_current_limit_a: 20
   # charge_current_delay_ms: 23
+  # discharge_current_limit_a: 40
   # discharge_current_delay_ms: 23
+  # discharge_current_limit_2_a: 60
+  # discharge_current_delay_2_ms: 23
+  # discharge_current_limit_3_a: 100
+  # discharge_current_delay_3_s: 1
+  # short_circuit_in_discharge_threshold_mv: 100
+  # short_circuit_in_discharge_delay_us: 210
+  # short_circuit_in_discharge_recovery_time_s: 5
   # current_recovery_time_s: 3
 
-  ## Optional REG0/REG1 supply setup (applied at boot):
-  ## Set reg0_enabled when using the BREG + external NPN preregulator route.
-  # reg0_enabled: true
-  # reg1_enabled: true
-  # reg1_voltage: 3.3V
+  ## Derived metrics
+  nominal_capacity_ah: 5
 
-  ## Optional sensors:
-  # bat_voltage:
-  #   name: "BAT Voltage"
-  # pack_voltage:
-  #   name: "Pack Voltage"
-  # ld_voltage:
-  #   name: "Load Detect Pin Voltage"
-  # cell1_voltage:
-  #   name: "Cell 1"
-  # cell2_voltage:
-  #   name: "Cell 2"
-  # cell3_voltage:
-  #   name: "Cell 3"
-  # cell4_voltage:
-  #   name: "Cell 4"
+  ## Buttons
+  apply_configuration:
+    name: "BMS Apply Configuration"
+  program_factory_otp:
+    name: "BMS OTP Program Factory Config"
+  clear_alarms:
+    name: "BMS Clear Alarms"
+  reset_passed_charge:
+    name: "BMS Reset Energy Counter"
+
+  ## Status text sensors
+  bms_state:
+    name: "BMS State"
+  fault:
+    name: "BMS Fault"
+  fet_status_flags:
+    name: "BMS FET Status"
+
+  ## Voltage sensors
+  bat_voltage:
+    name: "BMS BAT Voltage"
+  pack_voltage:
+    name: "BMS Pack Voltage"
+  ld_voltage:
+    name: "BMS Load Detect Pin Voltage"
+  cell1_voltage:
+    name: "BMS Cell 1"
+  cell2_voltage:
+    name: "BMS Cell 2"
+  cell3_voltage:
+    name: "BMS Cell 3"
+  cell4_voltage:
+    name: "BMS Cell 4"
   # cell5_voltage:
   #   name: "Cell 5"
   # cell6_voltage:
@@ -93,185 +120,172 @@ bq76952:
   #   name: "Cell 15"
   # cell16_voltage:
   #   name: "Cell 16"
-  # current:
-  #   name: "Current"
-  # nominal_capacity_ah: 100.0
-  # state_of_charge:
-  #   name: "State of Charge"
-  # passed_charge:
-  #   name: "Passed Charge"
-  # passed_charge_time:
-  #   name: "Passed Charge Time"
-  # die_temperature:
-  #   name: "Die Temperature"
-  # ts1_temperature:
-  #   name: "TS1 Temperature"
-  #   pullup: 18k
+
+  ## Current / derived sensors
+  current:
+    name: "BMS Current"
+  state_of_charge:
+    name: "BMS State of Charge"
+  energy:
+    name: "BMS Energy"
+  # energy_time:
+  #   name: "BMS Energy Time"
+
+  ## Temperature sensors
+  ts1_temperature:
+    name: "BMS TS1 Temperature"
+    pullup: 18k
   # ts2_temperature:
-  #   name: "TS2 Temperature"
+  #   name: "BMS TS2 Temperature"
   #   pullup: 18k
   # ts3_temperature:
-  #   name: "TS3 Temperature"
+  #   name: "BMS TS3 Temperature"
   #   pullup: 18k
+  die_temperature:
+    name: "BMS Die Temperature"
 
-  ## Optional text sensors:
-  # security_state:
-  #   name: "Security State"
-  # operating_mode:
-  #   name: "Operating Mode"
-  # power_path_state:
-  #   name: "Power Path State"
-  # alarm_flags:
-  #   name: "Alarm Flags"
-  # safety_status_flags:
-  #   name: "Safety Status Flags"
-  # fet_status_flags:
-  #   name: "FET Status Flags"
-
-  ## Optional controls:
-  # power_path:
-  #   name: "Power Path"
-  # autonomous_fet_control:
-  #   name: "Autonomous FET Control"
-  # sleep_allowed_control:
-  #   name: "Sleep Allowed Control"
-  # clear_alarms:
-  #   name: "Clear Alarms"
-  # reset_passed_charge:
-  #   name: "Reset Passed Charge"
-  # apply_configuration:
-  #   name: "Apply Configuration"
-  # program_factory_otp:
-  #   name: "OTP Program Factory Defaults"
+  ## Live controls
+  output_enabled_control:
+    name: "BMS Output Enabled"
+  autonomous_fet_control:
+    name: "BMS Autonomous FET Control"
 ```
 
-## Config Options You’ll Likely Tune
+## Entity Set
 
-- `i2c_id`: required whenever your ESPHome node defines more than one I2C bus
-- `cell_count`: match your physical stack (`3..16`)
-- `autonomous_fet_mode`: boot policy for FET firmware control (`preserve`, `enable`, `disable`)
-- `sleep_mode`: boot policy for sleep allow (`preserve`, `enable`, `disable`)
-- `predischarge_enabled`: boot-time setting for `Settings:FET:FET Options[PDSG_EN]` so the chip can turn on PDSG before DSG
-- `event_logging`: emit an `INFO` log line whenever live FET/fault state changes, including a PACK/LD/current snapshot
-- `apply_configuration_on_boot`: when `false`, skip all boot-time config writes and use the `apply_configuration` button instead
-- `program_factory_otp` button: one-time factory operation that stages the requested config in RAM and then burns it into OTP startup storage; exposed as a diagnostic/factory action rather than a normal config control
-- `sense_resistor_milliohm`: shunt resistor value used to convert current limits to chip thresholds
-- `scd_threshold_mv`: short-circuit-in-discharge comparator threshold across `SRN-SRP`; allowed values are `10, 20, 40, 60, 80, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500`
-- `scd_delay_us`: SCD detection delay; use `0` for no added delay, or a multiple of `15` from `15` to `450`
-- `scd_recovery_time_s`: SCD recovery delay in seconds
-- `charge_current_limit_a`: charge overcurrent protection threshold
-- `discharge_current_limit_a`: discharge overcurrent protection threshold (OCD1)
-- `charge_current_delay_ms`: OCC trip delay (10ms to 426ms)
-- `discharge_current_delay_ms`: OCD1 trip delay (10ms to 426ms)
-- `current_recovery_time_s`: shared recovery timer for OCC/OCD protections (0s to 255s)
-- `reg0_enabled`: enable the on-chip preregulator that drives the external BREG transistor
-- `reg1_enabled`: enable the REG1 LDO output
-- `reg1_voltage`: set REG1 to `1.8V`, `2.5V`, `3.0V`, `3.3V`, or `5.0V`
-- `power_path` entity: runtime host command for `off`, `charge`, `discharge`, `bidirectional`
-- `nominal_capacity_ah`: pack nominal capacity used for derived `state_of_charge` (%) from the passed-charge accumulator
-- `passed_charge`: accumulated coulomb-count total converted to amp-hours using the chip's configured user-current scale
-- `passed_charge_time`: integration interval reported by the chip in seconds
-- `ts1/ts2/ts3_temperature.pullup`: select `18k` or `180k` internal pull-up for the BQ thermistor bias
+Recommended user-facing entities:
+- `pack_voltage`: actual pack terminal voltage
+- `current`: positive for discharge, negative for charge
+- `state_of_charge`: host-derived estimate from the charge accumulator and `nominal_capacity_ah`
+- `fault`: active protection or permanent-failure reason using expanded names
+- `bms_state`: high-level device state such as `normal`, `sleep`, `deep_sleep`, or `config_update`
+- `output_enabled_control`: simple on/off path control where `on` means both `CHG` and `DSG` are enabled
 
-Current and voltage scaling are automatically detected from the chip configuration.
-No manual unit settings are needed.
+Useful diagnostics to keep:
+- `bat_voltage`: top-of-stack battery reading
+- `ld_voltage`: load-detect pin voltage
+- `fet_status_flags`: raw live FET and pin state summary
+- `energy_time`: accumulator integration time window
+- `die_temperature` and any TS thermistor inputs you actually wire
 
-Passed charge notes:
-- `passed_charge` reads `DASTATUS6` and reports the integrated passed charge in signed amp-hours.
-- `passed_charge_time` reports the same accumulator window in seconds.
-- `state_of_charge` is derived as `100 - (passed_charge / nominal_capacity_ah) * 100`, clamped to `0..100`.
-- Configure `nominal_capacity_ah` when using `state_of_charge`, and reset passed charge at full charge to align the derived SoC baseline.
-- `reset_passed_charge` sends the chip's `RESET_PASSQ()` subcommand to zero the integration state and restart timing.
-- The device reports passed charge in `userAh`, so this component converts through the detected `userA` scaling from `DA Configuration`.
+Entities intentionally not exposed:
+- raw `alarm_flags` and `safety_status_flags`: replaced by the clearer `fault` sensor
+- `power_path_state`: redundant once `output_enabled_control`, `fault`, and `fet_status_flags` exist
+- a mode select for `off` / `charge` / `discharge` / `bidirectional`: replaced by a simpler output on/off control
 
-Current sign note:
-- The BQ76952 reports discharge current as more-negative in `CC2 Current()`. This component flips the sign for the user-facing `current` sensor so discharge is positive and charge is negative.
+## Boot-Applied RAM Config
 
-Diagnostic notes:
-- `alarm_flags` is the coarse, latched alarm summary from `Alarm Status (0x62)`.
-- `safety_status_flags` is the live decoded protection cause from `Safety Status A/B/C (0x03/0x05/0x07)`, for example `ocd1`, `scd`, `cuv`, `otd`, or `hwdf`.
-- `fet_status_flags` is the live decoded `FET Status (0x7F)` register, for example `ddsg,pdsg` or `dchg,chg`.
-- `fet_status_flags` aggregates the live pin/FET state (`alrt`, `ddsg`, `dchg`, `pdsg`, `dsg`, `pchg`, `chg`) without creating one entity per bit.
+These settings are normal YAML config and are written into the chip's live RAM configuration:
+- automatically on boot
+- or again when you press the `apply_configuration` button
 
-REG1 notes:
-- `reg1_enabled` and `reg1_voltage` program `Settings:Configuration:REG12 Config`.
-- `reg0_enabled` programs `Settings:Configuration:REG0 Config`.
-- If you use the BREG + external NPN preregulator route, enable both `reg0_enabled` and `reg1_enabled`.
-- If REGIN is supplied externally, leave `reg0_enabled: false` and only enable `reg1_enabled`.
-- These writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`.
-- Boot-time regulator, TS-pin, and current-limit writes are intentionally delayed by 10 seconds after startup when `apply_configuration_on_boot: true`.
-- If `apply_configuration_on_boot: false`, use the `apply_configuration` button to push regulator, TS-pin, current-limit, and boot-mode settings in one shot.
-- `program_factory_otp` is separate from `apply_configuration` because OTP writes are irreversible bit-programming operations.
+These writes are not permanent across a full hardware reset or a chip that boots from different OTP defaults.
 
-`bat_voltage` is the top-of-stack battery reading (legacy alias: `stack_voltage`).
+Boot-applied RAM config includes:
+- `autonomous_fet_mode`
+- `sleep_mode`
+- `sleep_charge_enabled`
+- `predischarge_enabled`
+- `reg0_enabled`
+- `reg1_voltage`
+- `ts1_temperature` / `ts2_temperature` / `ts3_temperature` thermistor pin setup
+- `sense_resistor_milliohm`
+- `cell_undervoltage_limit_mv`
+- `cell_undervoltage_delay_ms`
+- `cell_overvoltage_limit_mv`
+- `cell_overvoltage_delay_ms`
+- `charge_current_limit_a`
+- `charge_current_delay_ms`
+- `discharge_current_limit_a`
+- `discharge_current_delay_ms`
+- `discharge_current_limit_2_a`
+- `discharge_current_delay_2_ms`
+- `discharge_current_limit_3_a`
+- `discharge_current_delay_3_s`
+- `short_circuit_in_discharge_threshold_mv`
+- `short_circuit_in_discharge_delay_us`
+- `short_circuit_in_discharge_recovery_time_s`
+- `current_recovery_time_s`
 
-Cell voltage entities are mapped to the first `cell_count` populated cell-voltage commands seen at startup, in
-ascending command order. This supports sparse layouts such as `VC1-VC0`, `VC2-VC1`, `VC3-VC2`, and `VC16-VC15`
-for a 4S pack, so `cell1..cell4` follow the actual populated differential measurements.
-
-When `ts1_temperature`, `ts2_temperature`, or `ts3_temperature` is configured, this component programs that BQ76952
-pin into thermistor mode at boot using the selected internal pull-up (`18k` default, or `180k`). The measurement
-is configured as report-only thermistor data and is not assigned to cell/FET protections by this component.
-
-`ts2_temperature` shares the TS2 pin with the BQ76952 SHUTDOWN wake function. If your design uses TS2 for wake,
-do not also use it as a thermistor input.
-
-Thermistor wiring:
-- Wire the thermistor directly between `TS1`/`TS2`/`TS3` and `VSS`.
-- Do not add an external pull-up on the TS pin; the BQ76952 biases the thermistor with its internal pull-up.
-- Set `pullup: 18k` for a typical `10 kOhm NTC`.
-- Set `pullup: 180k` for higher-value thermistors such as `100 kOhm`/`200 kOhm`.
-- These boot writes require `FULLACCESS` and briefly enter `CONFIG_UPDATE`, just like the current-limit settings.
-
-Current limit notes:
-- These values are written when boot auto-apply runs, or when `apply_configuration` is pressed.
-- Setting `charge_current_limit_a` automatically enables OCC and CHG-FET trip-on-OCC.
-- Setting `discharge_current_limit_a` automatically enables OCD1 and DSG-FET trip-on-OCD1.
-- They require the chip to be in `FULLACCESS`.
-- Applying them enters `CONFIG_UPDATE` briefly, which turns FETs off during that short window.
-- If requested values are already present in data memory, the component skips `CONFIG_UPDATE` and
-  does not re-apply them.
-- This component now uses a fixed 10-second post-boot delay for automatic writes instead of waiting on OTA state.
-
-Control grouping:
-- The runtime controls (`power_path`, `autonomous_fet_control`, `sleep_allowed_control`, `clear_alarms`, `reset_passed_charge`, `apply_configuration`) are normal config entities.
-- `program_factory_otp` is intentionally separate and should be labeled with an `OTP` prefix because it is an irreversible factory-only action.
-
-## Autonomous Mode
-
-For BQ76952, autonomous FET operation corresponds to `Manufacturing Status[FET_EN] = 1`
-(firmware controls CHG/DSG based on protections/recovery).
-
-Use either approach:
-
-1. Startup policy in YAML:
-   - `autonomous_fet_mode: enable`
-2. Runtime control entity:
-   - enable `autonomous_fet_control` and turn it ON
-
-Important:
-- `FET_ENABLE()` is a toggle subcommand and requires `UNSEALED` or `FULLACCESS`.
-- If the device is `SEALED`, the component will not be able to change this bit.
-- For persistence across full resets/SHUTDOWN, use `program_factory_otp` during manufacturing.
+Notes:
+- these writes require `FULLACCESS`
+- the component may enter `CONFIG_UPDATE` to apply them
+- entering `CONFIG_UPDATE` briefly turns FETs off, so do not power the ESP from a path that depends on switched PACK output during configuration writes
+- `autonomous_fet_control` is the live state/control entity for `FET_EN`; `autonomous_fet_mode` is only the boot-time target the component applies
+- `reg1_voltage` implies `REG1` should be enabled if you do not explicitly set `reg1_enabled`
+- `reg0_enabled` remains explicit because whether the external BREG preregulator path is populated is board-specific and cannot be inferred safely
+- the chip has a persistent `PDSG_EN` option for predischarge, but it does not expose a separate matching persistent `PCHG_EN` bit for precharge
 
 ## Factory OTP
 
-`program_factory_otp` is intended for one-time factory use.
+`program_factory_otp` is separate because it changes what the chip boots with after a power cycle, and it is irreversible.
 
-What it does:
-- applies the requested live configuration first
-- writes startup-default boot-mode bits for `autonomous_fet_mode` and `sleep_mode`
-- runs `OTP_WR_CHECK()`
-- runs `OTP_WRITE()`
+What `program_factory_otp` persists into OTP:
+1. startup-default boot bits for `sleep_mode` and `autonomous_fet_mode`
+2. the current data-memory configuration that the component has already applied live, including regulator, FET-option, TS-pin, and protection settings
 
-What persists after a full BQ power cycle:
-- regulator settings already written into data memory
-- TS pin config already written into data memory
-- current-limit data-memory settings
-- startup default for autonomous FET mode via `Mfg Status Init[FET_EN]`
-- startup default for sleep allow via `Power Config[SLEEP]`
+What it does not mean:
+- normal YAML changes are not persistent by themselves
+- `apply_configuration` only writes live RAM/data-memory state for the current running device
+- persistence happens only when `program_factory_otp` is pressed successfully
 
-Caution:
-- OTP programming is not a normal runtime control path
-- OTP bits are one-way programmed and cannot be reverted back to `0`
-- run this only when the board is in its intended final factory configuration
+Safe mental model:
+- boot: component applies your YAML into the running chip
+- apply button: re-applies the same live config again
+- OTP button: burns the currently requested config and startup defaults so the chip powers up that way by itself later
+
+## Key Options
+
+- `sleep_charge_enabled`: sets `FET Options[SLEEPCHG]` so charging can remain allowed while the chip is in `sleep`
+- `predischarge_enabled`: sets `FET Options[PDSG_EN]`
+- `cell_undervoltage_limit_mv` / `cell_overvoltage_limit_mv`: configure `CUV` / `COV`
+- `discharge_current_limit_a`, `discharge_current_limit_2_a`, `discharge_current_limit_3_a`: configure `OCD1`, `OCD2`, and `OCD3`
+- `charge_current_limit_a`: configures `OCC`
+- `short_circuit_in_discharge_threshold_mv`: configures short-circuit-in-discharge threshold
+- `nominal_capacity_ah`: required only if you want `state_of_charge`
+
+## Sensor Notes
+
+Charge accumulator:
+- `energy` is derived from the same integrated charge accumulator in `DASTATUS6`
+- it is still reported in amp-hours because the chip exposes charge accumulation, not true watt-hours
+- `reset_passed_charge` sends `RESET_PASSQ()`
+
+Current sign:
+- the chip reports discharge as negative in `CC2 Current()`
+- this component flips the sign so the exposed `current` sensor is positive for discharge and negative for charge
+
+BMS state:
+- `normal`: awake and not in a special mode
+- `sleep`: `Battery Status[SLEEP]=1`
+- `deep_sleep`: `CONTROL_STATUS[DEEPSLEEP]=1`
+- `config_update`: `Battery Status[CFGUPDATE]=1`
+- `shutdown_pending`: shutdown command latched
+
+Fault naming:
+- `fault` expands safety causes into names such as `cell_overvoltage`, `cell_undervoltage`, `overcurrent_in_charge`, `short_circuit_in_discharge`, or `permanent_failure`
+- if multiple active causes are present, they are reported as a comma-separated list
+
+Thermistors:
+- use `pullup: 18k` for a typical `10 kOhm NTC`
+- use `pullup: 180k` for higher-value thermistors such as `100 kOhm`
+- `ts2_temperature` shares the TS2 pin with the BQ76952 wake function, so do not use it as a thermistor if your hardware uses TS2 for wake
+
+Cell mapping:
+- `cell1_voltage` through `cell16_voltage` are mapped to the first populated differential cell-voltage commands seen at startup
+- this supports sparse physical layouts such as a 4S pack wired onto higher-numbered VC pins
+
+## Migration
+
+If you are updating from an older config:
+- `operating_mode` -> `bms_state`
+- `security_state` -> remove
+- `passed_charge` -> `energy`
+- `passed_charge_time` -> `energy_time`
+- `power_path` -> `output_enabled_control`
+- `scd_threshold_mv` -> `short_circuit_in_discharge_threshold_mv`
+- `scd_delay_us` -> `short_circuit_in_discharge_delay_us`
+- `scd_recovery_time_s` -> `short_circuit_in_discharge_recovery_time_s`
+- remove `power_path_state`
+- remove `alarm_flags` and `safety_status_flags`; use `fault` instead
+- remove `sleep_allowed_control`

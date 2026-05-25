@@ -8,7 +8,6 @@
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
-#include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
@@ -25,6 +24,22 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_sense_resistor_milliohm(float value) {
     sense_resistor_milliohm_ = value;
   }
+  void set_cell_undervoltage_limit_mv(uint16_t value) {
+    cell_undervoltage_limit_mv_ = value;
+    has_cell_undervoltage_limit_ = true;
+  }
+  void set_cell_undervoltage_delay_ms(uint16_t value) {
+    cell_undervoltage_delay_ms_ = value;
+    has_cell_undervoltage_delay_ = true;
+  }
+  void set_cell_overvoltage_limit_mv(uint16_t value) {
+    cell_overvoltage_limit_mv_ = value;
+    has_cell_overvoltage_limit_ = true;
+  }
+  void set_cell_overvoltage_delay_ms(uint16_t value) {
+    cell_overvoltage_delay_ms_ = value;
+    has_cell_overvoltage_delay_ = true;
+  }
   void set_nominal_capacity_ah(float value) {
     nominal_capacity_ah_ = value;
     has_nominal_capacity_ah_ = true;
@@ -37,6 +52,14 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     discharge_current_limit_a_ = value;
     has_discharge_current_limit_ = true;
   }
+  void set_discharge_current_limit_2_a(float value) {
+    discharge_current_limit_2_a_ = value;
+    has_discharge_current_limit_2_ = true;
+  }
+  void set_discharge_current_limit_3_a(float value) {
+    discharge_current_limit_3_a_ = value;
+    has_discharge_current_limit_3_ = true;
+  }
   void set_charge_current_delay_ms(uint16_t value) {
     charge_current_delay_ms_ = value;
     has_charge_current_delay_ = true;
@@ -44,6 +67,14 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_discharge_current_delay_ms(uint16_t value) {
     discharge_current_delay_ms_ = value;
     has_discharge_current_delay_ = true;
+  }
+  void set_discharge_current_delay_2_ms(uint16_t value) {
+    discharge_current_delay_2_ms_ = value;
+    has_discharge_current_delay_2_ = true;
+  }
+  void set_discharge_current_delay_3_s(uint8_t value) {
+    discharge_current_delay_3_s_ = value;
+    has_discharge_current_delay_3_ = true;
   }
   void set_current_recovery_time_s(uint8_t value) {
     current_recovery_time_s_ = value;
@@ -71,6 +102,10 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     predischarge_enabled_ = value;
     has_predischarge_setting_ = true;
   }
+  void set_sleep_charge_enabled(bool value) {
+    sleep_charge_enabled_ = value;
+    has_sleep_charge_setting_ = true;
+  }
   void set_event_logging(bool value) {
     event_logging_ = value;
   }
@@ -88,9 +123,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_scd_recovery_time_s(uint8_t value) {
     scd_recovery_time_s_ = value;
     has_scd_recovery_time_ = true;
-  }
-  void set_apply_configuration_on_boot(bool value) {
-    apply_configuration_on_boot_ = value;
   }
   void set_ts1_pullup_180k(bool value) {
     has_ts1_config_ = true;
@@ -121,11 +153,11 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_state_of_charge_sensor(sensor::Sensor* sensor) {
     state_of_charge_sensor_ = sensor;
   }
-  void set_passed_charge_sensor(sensor::Sensor* sensor) {
-    passed_charge_sensor_ = sensor;
+  void set_charge_throughput_sensor(sensor::Sensor* sensor) {
+    charge_throughput_sensor_ = sensor;
   }
-  void set_passed_charge_time_sensor(sensor::Sensor* sensor) {
-    passed_charge_time_sensor_ = sensor;
+  void set_charge_throughput_time_sensor(sensor::Sensor* sensor) {
+    charge_throughput_time_sensor_ = sensor;
   }
   void set_die_temperature_sensor(sensor::Sensor* sensor) {
     die_temperature_sensor_ = sensor;
@@ -140,40 +172,28 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     ts3_temperature_sensor_ = sensor;
   }
 
-  void set_security_state_sensor(text_sensor::TextSensor* sensor) {
-    security_state_sensor_ = sensor;
+  void set_bms_state_sensor(text_sensor::TextSensor* sensor) {
+    bms_state_sensor_ = sensor;
   }
-  void set_operating_mode_sensor(text_sensor::TextSensor* sensor) {
-    operating_mode_sensor_ = sensor;
-  }
-  void set_power_path_state_sensor(text_sensor::TextSensor* sensor) {
-    power_path_state_sensor_ = sensor;
-  }
-  void set_alarm_flags_sensor(text_sensor::TextSensor* sensor) {
-    alarm_flags_sensor_ = sensor;
-  }
-  void set_safety_status_flags_sensor(text_sensor::TextSensor* sensor) {
-    safety_status_flags_sensor_ = sensor;
+  void set_fault_sensor(text_sensor::TextSensor* sensor) {
+    fault_sensor_ = sensor;
   }
   void set_fet_status_flags_sensor(text_sensor::TextSensor* sensor) {
     fet_status_flags_sensor_ = sensor;
   }
 
-  void set_power_path_select(select::Select* sel) {
-    power_path_select_ = sel;
+  void set_output_enabled_switch(switch_::Switch* sw) {
+    output_enabled_switch_ = sw;
   }
   void set_autonomous_fet_switch(switch_::Switch* sw) {
     autonomous_fet_switch_ = sw;
-  }
-  void set_sleep_allowed_switch(switch_::Switch* sw) {
-    sleep_allowed_switch_ = sw;
   }
 
   void setup() override;
   void update() override;
   void dump_config() override;
 
-  bool set_power_path_mode(const char* mode);
+  bool set_output_enabled(bool enabled);
   bool set_autonomous_fet_control(bool enabled);
   bool set_sleep_allowed(bool allowed);
   bool clear_alarm_latches();
@@ -223,14 +243,19 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
                         uint8_t safety_status_c, bool have_safety_status);
   uint8_t encode_current_threshold_code_(float current_a, uint8_t min_code, uint8_t max_code, const char* label);
   uint8_t encode_current_delay_code_(uint16_t delay_ms, const char* label);
+  uint8_t encode_cell_voltage_threshold_code_(uint16_t threshold_mv, uint8_t min_code, uint8_t max_code,
+                                              const char* label);
+  uint16_t encode_voltage_delay_code_(uint16_t delay_ms, uint16_t min_code, uint16_t max_code, const char* label);
   bool precheck_data_memory_mask_(uint16_t address, uint8_t required_bits, const char* label, bool& needs_write);
   bool precheck_data_memory_value_(uint16_t address, uint8_t desired_value, const char* label, bool& needs_write);
+  bool precheck_data_memory_value_u16_(uint16_t address, uint16_t desired_value, const char* label, bool& needs_write);
   bool ensure_data_memory_mask_(uint16_t address, uint8_t required_bits, const char* label, bool& ok);
   bool write_data_memory_value_if_needed_(uint16_t address, uint8_t desired_value, const char* label, bool& ok);
+  bool write_data_memory_value_u16_if_needed_(uint16_t address, uint16_t desired_value, const char* label, bool& ok);
 
-  const char* security_state_to_string_(uint16_t battery_status) const;
-  const char* operating_mode_to_string_(uint16_t battery_status, uint16_t control_status) const;
+  const char* bms_state_to_string_(uint16_t battery_status, uint16_t control_status) const;
   const char* power_path_to_string_(uint8_t fet_status) const;
+  std::string fault_to_string_(uint16_t battery_status, uint8_t status_a, uint8_t status_b, uint8_t status_c) const;
   std::string alarm_flags_to_string_(uint16_t alarm_status) const;
   std::string safety_status_flags_to_string_(uint8_t status_a, uint8_t status_b, uint8_t status_c) const;
   std::string fet_status_flags_to_string_(uint8_t fet_status) const;
@@ -241,27 +266,45 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   int32_t current_lsb_ua_{1000};
   bool user_volts_cv_{true};
   float sense_resistor_milliohm_{1.0f};
+  uint16_t cell_undervoltage_limit_mv_{0};
+  uint16_t cell_undervoltage_delay_ms_{0};
+  uint16_t cell_overvoltage_limit_mv_{0};
+  uint16_t cell_overvoltage_delay_ms_{0};
   float nominal_capacity_ah_{0.0f};
   uint16_t scd_threshold_mv_{0};
   uint16_t scd_delay_us_{0};
   uint8_t scd_recovery_time_s_{0};
   float charge_current_limit_a_{0.0f};
   float discharge_current_limit_a_{0.0f};
+  float discharge_current_limit_2_a_{0.0f};
+  float discharge_current_limit_3_a_{0.0f};
   uint16_t charge_current_delay_ms_{0};
   uint16_t discharge_current_delay_ms_{0};
+  uint16_t discharge_current_delay_2_ms_{0};
+  uint8_t discharge_current_delay_3_s_{0};
   uint8_t current_recovery_time_s_{0};
   uint8_t reg1_voltage_code_{0};
+  bool has_cell_undervoltage_limit_{false};
+  bool has_cell_undervoltage_delay_{false};
+  bool has_cell_overvoltage_limit_{false};
+  bool has_cell_overvoltage_delay_{false};
   bool has_charge_current_limit_{false};
   bool has_discharge_current_limit_{false};
+  bool has_discharge_current_limit_2_{false};
+  bool has_discharge_current_limit_3_{false};
   bool has_nominal_capacity_ah_{false};
   bool has_scd_threshold_{false};
   bool has_scd_delay_{false};
   bool has_scd_recovery_time_{false};
   bool has_charge_current_delay_{false};
   bool has_discharge_current_delay_{false};
+  bool has_discharge_current_delay_2_{false};
+  bool has_discharge_current_delay_3_{false};
   bool has_current_recovery_time_{false};
   bool has_predischarge_setting_{false};
   bool predischarge_enabled_{false};
+  bool has_sleep_charge_setting_{false};
+  bool sleep_charge_enabled_{false};
   bool has_reg0_config_{false};
   bool has_reg1_enabled_config_{false};
   bool has_reg1_voltage_config_{false};
@@ -277,7 +320,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint8_t sleep_mode_{BOOT_PRESERVE};
   bool event_logging_{false};
   bool xchg_debug_burst_{false};
-  bool apply_configuration_on_boot_{true};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool cell_map_initialized_{false};
   bool regulator_config_deferred_{false};
@@ -304,37 +346,28 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   std::array<sensor::Sensor*, 16> cell_voltage_sensors_{};
   sensor::Sensor* current_sensor_{nullptr};
   sensor::Sensor* state_of_charge_sensor_{nullptr};
-  sensor::Sensor* passed_charge_sensor_{nullptr};
-  sensor::Sensor* passed_charge_time_sensor_{nullptr};
+  sensor::Sensor* charge_throughput_sensor_{nullptr};
+  sensor::Sensor* charge_throughput_time_sensor_{nullptr};
   sensor::Sensor* die_temperature_sensor_{nullptr};
   sensor::Sensor* ts1_temperature_sensor_{nullptr};
   sensor::Sensor* ts2_temperature_sensor_{nullptr};
   sensor::Sensor* ts3_temperature_sensor_{nullptr};
 
-  text_sensor::TextSensor* security_state_sensor_{nullptr};
-  text_sensor::TextSensor* operating_mode_sensor_{nullptr};
-  text_sensor::TextSensor* power_path_state_sensor_{nullptr};
-  text_sensor::TextSensor* alarm_flags_sensor_{nullptr};
-  text_sensor::TextSensor* safety_status_flags_sensor_{nullptr};
+  text_sensor::TextSensor* bms_state_sensor_{nullptr};
+  text_sensor::TextSensor* fault_sensor_{nullptr};
   text_sensor::TextSensor* fet_status_flags_sensor_{nullptr};
 
-  select::Select* power_path_select_{nullptr};
+  switch_::Switch* output_enabled_switch_{nullptr};
   switch_::Switch* autonomous_fet_switch_{nullptr};
-  switch_::Switch* sleep_allowed_switch_{nullptr};
 };
 
-class BQ76952PowerPathSelect : public select::Select, public Parented<BQ76952Component> {
- protected:
-  void control(size_t index) override;
-};
-
-class BQ76952AutonomousFetSwitch : public switch_::Switch, public Parented<BQ76952Component> {
+class BQ76952OutputEnabledSwitch : public switch_::Switch, public Parented<BQ76952Component> {
  protected:
   void write_state(bool state) override;
 };
 
-class BQ76952SleepAllowedSwitch : public switch_::Switch, public Parented<BQ76952Component> {
- protected:
+class BQ76952AutonomousFetSwitch : public switch_::Switch, public Parented<BQ76952Component> {
+protected:
   void write_state(bool state) override;
 };
 

@@ -92,6 +92,7 @@ constexpr uint16_t MANUFACTURING_STATUS_FET_EN = 1u << 4;
 constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
+constexpr uint16_t DM_ENABLED_PROTECTIONS_C = 0x9263;
 constexpr uint16_t DM_FET_OPTIONS = 0x9308;
 constexpr uint16_t DM_POWER_CONFIG = 0x9234;
 constexpr uint16_t DM_CFETOFF_PIN_CONFIG = 0x92FA;
@@ -105,23 +106,42 @@ constexpr uint16_t DM_CHG_FET_PROTECTIONS_A = 0x9265;
 constexpr uint16_t DM_CHG_FET_PROTECTIONS_B = 0x9266;
 constexpr uint16_t DM_CHG_FET_PROTECTIONS_C = 0x9267;
 constexpr uint16_t DM_DSG_FET_PROTECTIONS_A = 0x9269;
+constexpr uint16_t DM_DSG_FET_PROTECTIONS_B = 0x926A;
+constexpr uint16_t DM_DSG_FET_PROTECTIONS_C = 0x926B;
+constexpr uint16_t DM_CUV_THRESHOLD = 0x9275;
+constexpr uint16_t DM_CUV_DELAY = 0x9276;
+constexpr uint16_t DM_COV_THRESHOLD = 0x9278;
+constexpr uint16_t DM_COV_DELAY = 0x9279;
 constexpr uint16_t DM_OCC_THRESHOLD = 0x9280;
 constexpr uint16_t DM_OCC_DELAY = 0x9281;
 constexpr uint16_t DM_OCD1_THRESHOLD = 0x9282;
 constexpr uint16_t DM_OCD1_DELAY = 0x9283;
+constexpr uint16_t DM_OCD2_THRESHOLD = 0x9284;
+constexpr uint16_t DM_OCD2_DELAY = 0x9285;
 constexpr uint16_t DM_SCD_THRESHOLD = 0x9286;
 constexpr uint16_t DM_SCD_DELAY = 0x9287;
+constexpr uint16_t DM_OCD3_THRESHOLD = 0x928A;
+constexpr uint16_t DM_OCD3_DELAY = 0x928C;
 constexpr uint16_t DM_PROTECTION_RECOVERY_TIME = 0x92AF;
 constexpr uint16_t DM_SCD_RECOVERY_TIME = 0x9294;
 constexpr uint16_t DM_MFG_STATUS_INIT = 0x9343;
 
+constexpr uint8_t PROTECTION_A_CUV = 1u << 2;
+constexpr uint8_t PROTECTION_A_COV = 1u << 3;
 constexpr uint8_t PROTECTION_A_OCD1 = 1u << 5;
+constexpr uint8_t PROTECTION_A_OCD2 = 1u << 6;
 constexpr uint8_t PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t PROTECTION_A_SCD = 1u << 7;
+constexpr uint8_t PROTECTION_C_OCD3 = 1u << 7;
+constexpr uint8_t FET_OPTIONS_SLEEPCHG = 1u << 1;
 constexpr uint8_t FET_OPTIONS_PDSG_EN = 1u << 4;
+constexpr uint8_t CHG_FET_PROTECTION_A_COV = 1u << 3;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
+constexpr uint8_t DSG_FET_PROTECTION_A_CUV = 1u << 2;
 constexpr uint8_t DSG_FET_PROTECTION_A_SCD = 1u << 7;
 constexpr uint8_t DSG_FET_PROTECTION_A_OCD1 = 1u << 5;
+constexpr uint8_t DSG_FET_PROTECTION_A_OCD2 = 1u << 6;
+constexpr uint8_t DSG_FET_PROTECTION_C_OCD3 = 1u << 7;
 constexpr uint16_t POWER_CONFIG_SLEEP = 1u << 8;
 constexpr uint8_t REG12_CONFIG_REG1V_MASK = 0x0E;
 constexpr uint8_t REG12_CONFIG_REG1_EN = 1u << 0;
@@ -192,43 +212,31 @@ void BQ76952Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if (this->apply_configuration_on_boot_) {
-    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
-        this->has_predischarge_config_()) {
-      this->regulator_config_deferred_ = this->has_regulator_config_();
-      this->current_limit_config_deferred_ = this->has_current_limit_config_();
-      this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
-      this->predischarge_config_deferred_ = this->has_predischarge_config_();
-      this->deferred_boot_config_log_ms_ = 0;
-      this->deferred_boot_config_apply_ms_ = millis() + 10000;
-      ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
-    } else {
-      if (!this->apply_regulator_config_()) {
-        this->status_set_warning();
-      }
-      if (!this->apply_ts_pin_config_()) {
-        this->status_set_warning();
-      }
-      if (!this->apply_predischarge_config_()) {
-        this->status_set_warning();
-      }
-      if (!this->apply_current_limit_config_()) {
-        this->status_set_warning();
-      }
-    }
-    if (!this->apply_boot_modes_()) {
+  if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+      this->has_predischarge_config_()) {
+    this->regulator_config_deferred_ = this->has_regulator_config_();
+    this->current_limit_config_deferred_ = this->has_current_limit_config_();
+    this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
+    this->predischarge_config_deferred_ = this->has_predischarge_config_();
+    this->deferred_boot_config_log_ms_ = 0;
+    this->deferred_boot_config_apply_ms_ = millis() + 10000;
+    ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
+  } else {
+    if (!this->apply_regulator_config_()) {
       this->status_set_warning();
     }
-  } else {
-    this->regulator_config_deferred_ = false;
-    this->current_limit_config_deferred_ = false;
-    this->ts_pin_config_deferred_ = false;
-    this->predischarge_config_deferred_ = false;
-    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
-        this->has_predischarge_config_() ||
-        this->has_boot_mode_config_()) {
-      ESP_LOGI(TAG, "Boot auto-apply disabled; use the Apply Configuration button to push requested settings");
+    if (!this->apply_ts_pin_config_()) {
+      this->status_set_warning();
     }
+    if (!this->apply_predischarge_config_()) {
+      this->status_set_warning();
+    }
+    if (!this->apply_current_limit_config_()) {
+      this->status_set_warning();
+    }
+  }
+  if (!this->apply_boot_modes_()) {
+    this->status_set_warning();
   }
 }
 
@@ -286,30 +294,19 @@ void BQ76952Component::update() {
     return;
   }
 
-  if (security_state_sensor_ != nullptr) {
-    security_state_sensor_->publish_state(this->security_state_to_string_(battery_status));
-  }
-  if (operating_mode_sensor_ != nullptr) {
-    operating_mode_sensor_->publish_state(this->operating_mode_to_string_(battery_status, control_status));
+  if (bms_state_sensor_ != nullptr) {
+    bms_state_sensor_->publish_state(this->bms_state_to_string_(battery_status, control_status));
   }
 
-  const char* power_path = this->power_path_to_string_(fet_status);
-  if (power_path_state_sensor_ != nullptr) {
-    power_path_state_sensor_->publish_state(power_path);
-  }
-  if (power_path_select_ != nullptr) {
-    power_path_select_->publish_state(power_path);
-  }
-
-  const bool sleep_allowed = (battery_status & BATTERY_STATUS_SLEEP_EN) != 0;
-  if (sleep_allowed_switch_ != nullptr) {
-    sleep_allowed_switch_->publish_state(sleep_allowed);
+  const bool output_enabled = (fet_status & FET_STATUS_CHG) != 0 && (fet_status & FET_STATUS_DSG) != 0;
+  if (output_enabled_switch_ != nullptr) {
+    output_enabled_switch_->publish_state(output_enabled);
   }
   if (fet_status_flags_sensor_ != nullptr) {
     fet_status_flags_sensor_->publish_state(this->fet_status_flags_to_string_(fet_status));
   }
 
-  const bool need_alarm_status = alarm_flags_sensor_ != nullptr || event_logging_;
+  const bool need_alarm_status = event_logging_;
   if (need_alarm_status) {
     if (!this->read_u16_(REG_ALARM_STATUS, alarm_status)) {
       ESP_LOGW(TAG, "Failed to read Alarm Status");
@@ -317,10 +314,7 @@ void BQ76952Component::update() {
       return;
     }
   }
-  if (alarm_flags_sensor_ != nullptr) {
-    alarm_flags_sensor_->publish_state(this->alarm_flags_to_string_(alarm_status));
-  }
-  const bool need_safety_status = safety_status_flags_sensor_ != nullptr || event_logging_;
+  const bool need_safety_status = fault_sensor_ != nullptr || event_logging_;
   if (need_safety_status) {
     if (!this->read_byte_(REG_SAFETY_STATUS_A, safety_status_a) ||
         !this->read_byte_(REG_SAFETY_STATUS_B, safety_status_b) ||
@@ -330,10 +324,8 @@ void BQ76952Component::update() {
       return;
     }
   }
-  if (safety_status_flags_sensor_ != nullptr) {
-    safety_status_flags_sensor_->publish_state(
-      this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c)
-    );
+  if (fault_sensor_ != nullptr) {
+    fault_sensor_->publish_state(this->fault_to_string_(battery_status, safety_status_a, safety_status_b, safety_status_c));
   }
   this->maybe_log_event_(
     control_status, battery_status, fet_status, alarm_status, need_alarm_status, safety_status_a, safety_status_b,
@@ -457,7 +449,8 @@ void BQ76952Component::update() {
     current_sensor_->publish_state(current_a);
   }
 
-  if (passed_charge_sensor_ != nullptr || passed_charge_time_sensor_ != nullptr || state_of_charge_sensor_ != nullptr) {
+  if (charge_throughput_sensor_ != nullptr || charge_throughput_time_sensor_ != nullptr ||
+      state_of_charge_sensor_ != nullptr) {
     uint8_t dastatus6[12]{};
     if (!this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6))) {
       ESP_LOGW(TAG, "Failed to read DASTATUS6 passed charge");
@@ -472,11 +465,11 @@ void BQ76952Component::update() {
                                  static_cast<double>(accum_user_ah_fraction) / 4294967296.0;
     const double user_ah_to_ah = static_cast<double>(current_lsb_ua_) / 1000000.0;
 
-    if (passed_charge_sensor_ != nullptr) {
-      passed_charge_sensor_->publish_state(static_cast<float>(total_user_ah * user_ah_to_ah));
+    if (charge_throughput_sensor_ != nullptr) {
+      charge_throughput_sensor_->publish_state(static_cast<float>(total_user_ah * user_ah_to_ah));
     }
-    if (passed_charge_time_sensor_ != nullptr) {
-      passed_charge_time_sensor_->publish_state(static_cast<float>(accum_time_s));
+    if (charge_throughput_time_sensor_ != nullptr) {
+      charge_throughput_time_sensor_->publish_state(static_cast<float>(accum_time_s));
     }
     if (state_of_charge_sensor_ != nullptr) {
       if (!has_nominal_capacity_ah_ || nominal_capacity_ah_ <= 0.0f) {
@@ -542,6 +535,18 @@ void BQ76952Component::dump_config() {
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  cell_count: %u", static_cast<unsigned>(cell_count_));
   ESP_LOGCONFIG(TAG, "  sense_resistor_milliohm: %.3f", sense_resistor_milliohm_);
+  if (has_cell_undervoltage_limit_) {
+    ESP_LOGCONFIG(TAG, "  cell_undervoltage_limit_mv: %u", static_cast<unsigned>(cell_undervoltage_limit_mv_));
+  }
+  if (has_cell_undervoltage_delay_) {
+    ESP_LOGCONFIG(TAG, "  cell_undervoltage_delay_ms: %u", static_cast<unsigned>(cell_undervoltage_delay_ms_));
+  }
+  if (has_cell_overvoltage_limit_) {
+    ESP_LOGCONFIG(TAG, "  cell_overvoltage_limit_mv: %u", static_cast<unsigned>(cell_overvoltage_limit_mv_));
+  }
+  if (has_cell_overvoltage_delay_) {
+    ESP_LOGCONFIG(TAG, "  cell_overvoltage_delay_ms: %u", static_cast<unsigned>(cell_overvoltage_delay_ms_));
+  }
   if (has_nominal_capacity_ah_) {
     ESP_LOGCONFIG(TAG, "  nominal_capacity_ah: %.3f", nominal_capacity_ah_);
   }
@@ -551,17 +556,32 @@ void BQ76952Component::dump_config() {
   if (has_discharge_current_limit_) {
     ESP_LOGCONFIG(TAG, "  discharge_current_limit_a: %.3f", discharge_current_limit_a_);
   }
+  if (has_discharge_current_limit_2_) {
+    ESP_LOGCONFIG(TAG, "  discharge_current_limit_2_a: %.3f", discharge_current_limit_2_a_);
+  }
+  if (has_discharge_current_limit_3_) {
+    ESP_LOGCONFIG(TAG, "  discharge_current_limit_3_a: %.3f", discharge_current_limit_3_a_);
+  }
   if (has_charge_current_delay_) {
     ESP_LOGCONFIG(TAG, "  charge_current_delay_ms: %u", static_cast<unsigned>(charge_current_delay_ms_));
   }
   if (has_discharge_current_delay_) {
     ESP_LOGCONFIG(TAG, "  discharge_current_delay_ms: %u", static_cast<unsigned>(discharge_current_delay_ms_));
   }
+  if (has_discharge_current_delay_2_) {
+    ESP_LOGCONFIG(TAG, "  discharge_current_delay_2_ms: %u", static_cast<unsigned>(discharge_current_delay_2_ms_));
+  }
+  if (has_discharge_current_delay_3_) {
+    ESP_LOGCONFIG(TAG, "  discharge_current_delay_3_s: %u", static_cast<unsigned>(discharge_current_delay_3_s_));
+  }
   if (has_current_recovery_time_) {
     ESP_LOGCONFIG(TAG, "  current_recovery_time_s: %u", static_cast<unsigned>(current_recovery_time_s_));
   }
   if (has_predischarge_setting_) {
     ESP_LOGCONFIG(TAG, "  predischarge_enabled: %s", YESNO(predischarge_enabled_));
+  }
+  if (has_sleep_charge_setting_) {
+    ESP_LOGCONFIG(TAG, "  sleep_charge_enabled: %s", YESNO(sleep_charge_enabled_));
   }
   ESP_LOGCONFIG(TAG, "  event_logging: %s", YESNO(event_logging_));
   ESP_LOGCONFIG(TAG, "  xchg_debug_burst: %s", YESNO(xchg_debug_burst_));
@@ -602,6 +622,8 @@ void BQ76952Component::dump_config() {
   }
   LOG_SENSOR("  ", "Current", current_sensor_);
   LOG_SENSOR("  ", "State of Charge", state_of_charge_sensor_);
+  LOG_SENSOR("  ", "Energy", charge_throughput_sensor_);
+  LOG_SENSOR("  ", "Energy Time", charge_throughput_time_sensor_);
   LOG_SENSOR("  ", "Int Temperature", die_temperature_sensor_);
   LOG_SENSOR("  ", "TS1 Temperature", ts1_temperature_sensor_);
   LOG_SENSOR("  ", "TS2 Temperature", ts2_temperature_sensor_);
@@ -667,69 +689,35 @@ void BQ76952Component::dump_config() {
     }
   }
 
-  LOG_TEXT_SENSOR("  ", "Security State", security_state_sensor_);
-  LOG_TEXT_SENSOR("  ", "Operating Mode", operating_mode_sensor_);
-  LOG_TEXT_SENSOR("  ", "Power Path State", power_path_state_sensor_);
-  LOG_TEXT_SENSOR("  ", "Alarm Flags", alarm_flags_sensor_);
-  LOG_TEXT_SENSOR("  ", "Safety Status Flags", safety_status_flags_sensor_);
+  LOG_TEXT_SENSOR("  ", "BMS State", bms_state_sensor_);
+  LOG_TEXT_SENSOR("  ", "Fault", fault_sensor_);
   LOG_TEXT_SENSOR("  ", "FET Status Flags", fet_status_flags_sensor_);
 
-  LOG_SELECT("  ", "Power Path", power_path_select_);
+  LOG_SWITCH("  ", "Output Enabled Control", output_enabled_switch_);
   LOG_SWITCH("  ", "Autonomous FET Control", autonomous_fet_switch_);
-  LOG_SWITCH("  ", "Sleep Allowed Control", sleep_allowed_switch_);
 }
 
-bool BQ76952Component::set_power_path_mode(const char* mode) {
-  ESP_LOGI(TAG, "Action: power_path -> %s", mode);
+bool BQ76952Component::set_output_enabled(bool enabled) {
+  ESP_LOGI(TAG, "Action: output_enabled -> %s", enabled ? "on" : "off");
   uint16_t manufacturing_status = 0;
   if (!this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, manufacturing_status)) {
-    ESP_LOGW(TAG, "Failed to read Manufacturing Status before power-path change");
+    ESP_LOGW(TAG, "Failed to read Manufacturing Status before output change");
     return false;
   }
   if ((manufacturing_status & MANUFACTURING_STATUS_FET_EN) == 0) {
     ESP_LOGW(
       TAG,
-      "Power-path control blocked: FET_EN=0 (FET test mode). Enable autonomous_fet_control first."
+      "Output control blocked: FET_EN=0 (FET test mode). Enable autonomous_fet_control first."
     );
     return false;
   }
 
-  uint16_t command = 0;
-  bool clear_host_blocks_first = false;
-  bool expected_chg = false;
-  bool expected_dsg = false;
-  if (std::strcmp(mode, "off") == 0) {
-    command = SUBCMD_ALL_FETS_OFF;
-    expected_chg = false;
-    expected_dsg = false;
-  } else if (std::strcmp(mode, "charge") == 0) {
-    command = SUBCMD_DSG_PDSG_OFF;
-    clear_host_blocks_first = true;
-    expected_chg = true;
-    expected_dsg = false;
-  } else if (std::strcmp(mode, "discharge") == 0) {
-    command = SUBCMD_CHG_PCHG_OFF;
-    clear_host_blocks_first = true;
-    expected_chg = false;
-    expected_dsg = true;
-  } else if (std::strcmp(mode, "bidirectional") == 0) {
-    command = SUBCMD_ALL_FETS_ON;
-    expected_chg = true;
-    expected_dsg = true;
-  } else {
-    return false;
-  }
-
-  if (clear_host_blocks_first) {
-    if (!this->write_subcommand_(SUBCMD_ALL_FETS_ON)) {
-      ESP_LOGW(TAG, "Failed to clear host FET blocks before power-path change");
-      return false;
-    }
-    delay_microseconds_safe(800);
-  }
+  const uint16_t command = enabled ? SUBCMD_ALL_FETS_ON : SUBCMD_ALL_FETS_OFF;
+  const bool expected_chg = enabled;
+  const bool expected_dsg = enabled;
 
   if (!this->write_subcommand_(command)) {
-    ESP_LOGW(TAG, "Failed to send power path subcommand 0x%04X", static_cast<unsigned>(command));
+    ESP_LOGW(TAG, "Failed to send output control subcommand 0x%04X", static_cast<unsigned>(command));
     return false;
   }
   delay_microseconds_safe(800);
@@ -737,7 +725,7 @@ bool BQ76952Component::set_power_path_mode(const char* mode) {
   uint8_t fet_status = 0;
   uint16_t battery_status = 0;
   if (!this->read_byte_(REG_FET_STATUS, fet_status) || !this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
-    ESP_LOGW(TAG, "Failed to verify FET state after power-path command");
+    ESP_LOGW(TAG, "Failed to verify FET state after output command");
     return false;
   }
 
@@ -810,9 +798,9 @@ bool BQ76952Component::set_power_path_mode(const char* mode) {
 
     ESP_LOGW(
       TAG,
-      "Power-path request '%s' blocked. expected=CHG:%s DSG:%s actual=CHG:%s DSG:%s FET_EN=%s SS=%s PF=%s "
+      "Output request '%s' blocked. expected=CHG:%s DSG:%s actual=CHG:%s DSG:%s FET_EN=%s SS=%s PF=%s "
       "alarm=%s safety=%s blockers=%s",
-      mode,
+      enabled ? "on" : "off",
       expected_chg ? "on" : "off",
       expected_dsg ? "on" : "off",
       actual_chg ? "on" : "off",
@@ -829,8 +817,8 @@ bool BQ76952Component::set_power_path_mode(const char* mode) {
 
   ESP_LOGI(
     TAG,
-    "Action result: power_path=%s (CHG=%s DSG=%s)",
-    this->power_path_to_string_(fet_status),
+    "Action result: output_enabled=%s (CHG=%s DSG=%s)",
+    actual_chg && actual_dsg ? "on" : "off",
     actual_chg ? "on" : "off",
     actual_dsg ? "on" : "off"
   );
@@ -1104,9 +1092,11 @@ bool BQ76952Component::write_data_memory_u16_(uint16_t address, uint16_t value) 
 }
 
 bool BQ76952Component::has_current_limit_config_() const {
-  return has_charge_current_limit_ || has_discharge_current_limit_ || has_scd_threshold_ || has_scd_delay_ ||
+  return has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_ || has_cell_overvoltage_limit_ ||
+         has_cell_overvoltage_delay_ || has_charge_current_limit_ || has_discharge_current_limit_ ||
+         has_discharge_current_limit_2_ || has_discharge_current_limit_3_ || has_scd_threshold_ || has_scd_delay_ ||
          has_scd_recovery_time_ || has_charge_current_delay_ || has_discharge_current_delay_ ||
-         has_current_recovery_time_;
+         has_discharge_current_delay_2_ || has_discharge_current_delay_3_ || has_current_recovery_time_;
 }
 
 bool BQ76952Component::has_regulator_config_() const {
@@ -1118,7 +1108,7 @@ bool BQ76952Component::has_ts_pin_config_() const {
 }
 
 bool BQ76952Component::has_predischarge_config_() const {
-  return has_predischarge_setting_;
+  return has_predischarge_setting_ || has_sleep_charge_setting_;
 }
 
 bool BQ76952Component::has_boot_mode_config_() const {
@@ -1533,10 +1523,17 @@ bool BQ76952Component::apply_predischarge_config_() {
     return false;
   }
 
-  const uint8_t desired = predischarge_enabled_ ? static_cast<uint8_t>(current | FET_OPTIONS_PDSG_EN)
-                                                : static_cast<uint8_t>(current & ~FET_OPTIONS_PDSG_EN);
+  uint8_t desired = current;
+  if (has_predischarge_setting_) {
+    desired = predischarge_enabled_ ? static_cast<uint8_t>(desired | FET_OPTIONS_PDSG_EN)
+                                    : static_cast<uint8_t>(desired & ~FET_OPTIONS_PDSG_EN);
+  }
+  if (has_sleep_charge_setting_) {
+    desired = sleep_charge_enabled_ ? static_cast<uint8_t>(desired | FET_OPTIONS_SLEEPCHG)
+                                    : static_cast<uint8_t>(desired & ~FET_OPTIONS_SLEEPCHG);
+  }
   if (desired == current) {
-    ESP_LOGI(TAG, "Predischarge configuration already matches requested value");
+    ESP_LOGI(TAG, "FET Options configuration already matches requested values");
     return true;
   }
 
@@ -1547,10 +1544,16 @@ bool BQ76952Component::apply_predischarge_config_() {
 
   bool ok = true;
   if (!this->write_data_memory_u8_(DM_FET_OPTIONS, desired)) {
-    ESP_LOGW(TAG, "Failed writing FET Options for predischarge");
+    ESP_LOGW(TAG, "Failed writing FET Options");
     ok = false;
   } else {
-    ESP_LOGI(TAG, "Configured predischarge %s (FET Options=0x%02X)", YESNO(predischarge_enabled_), desired);
+    ESP_LOGI(
+      TAG,
+      "Configured FET Options (predischarge=%s sleep_charge=%s FET Options=0x%02X)",
+      has_predischarge_setting_ ? YESNO(predischarge_enabled_) : "preserve",
+      has_sleep_charge_setting_ ? YESNO(sleep_charge_enabled_) : "preserve",
+      desired
+    );
   }
 
   if (!this->set_cfgupdate_mode_(false)) {
@@ -1582,15 +1585,54 @@ bool BQ76952Component::apply_current_limit_config_() {
     return false;
   }
 
+  uint8_t cuv_threshold_code = 0;
+  uint16_t cuv_delay_code = 0;
+  uint8_t cov_threshold_code = 0;
+  uint16_t cov_delay_code = 0;
+  if (has_cell_undervoltage_limit_) {
+    cuv_threshold_code =
+      this->encode_cell_voltage_threshold_code_(cell_undervoltage_limit_mv_, 20, 80, "Cell undervoltage");
+  }
+  if (has_cell_undervoltage_delay_) {
+    cuv_delay_code = this->encode_voltage_delay_code_(cell_undervoltage_delay_ms_, 1, 2047, "Cell undervoltage");
+  }
+  if (has_cell_overvoltage_limit_) {
+    cov_threshold_code =
+      this->encode_cell_voltage_threshold_code_(cell_overvoltage_limit_mv_, 20, 110, "Cell overvoltage");
+  }
+  if (has_cell_overvoltage_delay_) {
+    cov_delay_code = this->encode_voltage_delay_code_(cell_overvoltage_delay_ms_, 1, 2047, "Cell overvoltage");
+  }
+
   // OCC/OCD thresholds are stored as 2 mV steps across the sense resistor.
   uint8_t occ_threshold_code = 0;
   uint8_t ocd1_threshold_code = 0;
+  uint8_t ocd2_threshold_code = 0;
+  int16_t ocd3_threshold_code = 0;
   if (has_charge_current_limit_) {
     occ_threshold_code = this->encode_current_threshold_code_(charge_current_limit_a_, 2, 62, "Charge");
   }
   if (has_discharge_current_limit_) {
     ocd1_threshold_code =
       this->encode_current_threshold_code_(discharge_current_limit_a_, 2, 100, "Discharge");
+  }
+  if (has_discharge_current_limit_2_) {
+    ocd2_threshold_code =
+      this->encode_current_threshold_code_(discharge_current_limit_2_a_, 2, 100, "Discharge tier 2");
+  }
+  if (has_discharge_current_limit_3_) {
+    const int raw_code =
+      -static_cast<int>(std::lround(discharge_current_limit_3_a_ * 1000000.0f / static_cast<float>(current_lsb_ua_)));
+    int clamped_code = raw_code;
+    if (clamped_code < std::numeric_limits<int16_t>::min()) {
+      clamped_code = std::numeric_limits<int16_t>::min();
+    } else if (clamped_code > 0) {
+      clamped_code = 0;
+    }
+    if (clamped_code != raw_code) {
+      ESP_LOGW(TAG, "Discharge tier 3 current limit clipped to device range: code=%d", clamped_code);
+    }
+    ocd3_threshold_code = static_cast<int16_t>(clamped_code);
   }
   uint8_t scd_threshold_code = 0;
   if (has_scd_threshold_) {
@@ -1620,11 +1662,19 @@ bool BQ76952Component::apply_current_limit_config_() {
   // Delay encoding uses roughly 3.3 ms steps with a +2 code offset.
   uint8_t occ_delay_code = 0;
   uint8_t ocd1_delay_code = 0;
+  uint8_t ocd2_delay_code = 0;
+  uint8_t ocd3_delay_code = 0;
   if (has_charge_current_delay_) {
     occ_delay_code = this->encode_current_delay_code_(charge_current_delay_ms_, "Charge");
   }
   if (has_discharge_current_delay_) {
     ocd1_delay_code = this->encode_current_delay_code_(discharge_current_delay_ms_, "Discharge");
+  }
+  if (has_discharge_current_delay_2_) {
+    ocd2_delay_code = this->encode_current_delay_code_(discharge_current_delay_2_ms_, "Discharge tier 2");
+  }
+  if (has_discharge_current_delay_3_) {
+    ocd3_delay_code = discharge_current_delay_3_s_;
   }
   uint8_t scd_delay_code = 0;
   if (has_scd_delay_) {
@@ -1635,14 +1685,27 @@ bool BQ76952Component::apply_current_limit_config_() {
   bool precheck_ok = true;
 
   uint8_t required_enabled_protections_bits = 0;
+  uint8_t required_enabled_protections_c_bits = 0;
+  if (has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_) {
+    required_enabled_protections_bits |= PROTECTION_A_CUV;
+  }
+  if (has_cell_overvoltage_limit_ || has_cell_overvoltage_delay_) {
+    required_enabled_protections_bits |= PROTECTION_A_COV;
+  }
   if (has_charge_current_limit_) {
     required_enabled_protections_bits |= PROTECTION_A_OCC;
   }
   if (has_discharge_current_limit_) {
     required_enabled_protections_bits |= PROTECTION_A_OCD1;
   }
+  if (has_discharge_current_limit_2_ || has_discharge_current_delay_2_) {
+    required_enabled_protections_bits |= PROTECTION_A_OCD2;
+  }
   if (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_) {
     required_enabled_protections_bits |= PROTECTION_A_SCD;
+  }
+  if (has_discharge_current_limit_3_ || has_discharge_current_delay_3_) {
+    required_enabled_protections_c_bits |= PROTECTION_C_OCD3;
   }
 
   if (required_enabled_protections_bits != 0) {
@@ -1650,24 +1713,63 @@ bool BQ76952Component::apply_current_limit_config_() {
       DM_ENABLED_PROTECTIONS_A, required_enabled_protections_bits, "Enabled Protections A", needs_write
     );
   }
-
-  if (!needs_write && has_charge_current_limit_) {
+  if (!needs_write && required_enabled_protections_c_bits != 0) {
     precheck_ok &= this->precheck_data_memory_mask_(
-      DM_CHG_FET_PROTECTIONS_A, CHG_FET_PROTECTION_A_OCC, "CHG FET Protections A", needs_write
+      DM_ENABLED_PROTECTIONS_C, required_enabled_protections_c_bits, "Enabled Protections C", needs_write
     );
   }
 
-  if (!needs_write && has_discharge_current_limit_) {
+  if (!needs_write && (has_charge_current_limit_ || has_cell_overvoltage_limit_ || has_cell_overvoltage_delay_)) {
+    uint8_t chg_fet_bits = 0;
+    if (has_charge_current_limit_) {
+      chg_fet_bits |= CHG_FET_PROTECTION_A_OCC;
+    }
+    if (has_cell_overvoltage_limit_ || has_cell_overvoltage_delay_) {
+      chg_fet_bits |= CHG_FET_PROTECTION_A_COV;
+    }
     precheck_ok &= this->precheck_data_memory_mask_(
-      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_OCD1, "DSG FET Protections A", needs_write
-    );
-  }
-  if (!needs_write && (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_)) {
-    precheck_ok &= this->precheck_data_memory_mask_(
-      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_SCD, "DSG FET Protections A", needs_write
+      DM_CHG_FET_PROTECTIONS_A, chg_fet_bits, "CHG FET Protections A", needs_write
     );
   }
 
+  if (!needs_write &&
+      (has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_ || has_discharge_current_limit_ ||
+       has_discharge_current_limit_2_ || has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_)) {
+    uint8_t dsg_fet_a_bits = 0;
+    if (has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_CUV;
+    }
+    if (has_discharge_current_limit_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_OCD1;
+    }
+    if (has_discharge_current_limit_2_ || has_discharge_current_delay_2_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_OCD2;
+    }
+    if (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_SCD;
+    }
+    precheck_ok &= this->precheck_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_A, dsg_fet_a_bits, "DSG FET Protections A", needs_write
+    );
+  }
+  if (!needs_write && (has_discharge_current_limit_3_ || has_discharge_current_delay_3_)) {
+    precheck_ok &= this->precheck_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_C, DSG_FET_PROTECTION_C_OCD3, "DSG FET Protections C", needs_write
+    );
+  }
+
+  if (!needs_write && has_cell_undervoltage_limit_) {
+    precheck_ok &= this->precheck_data_memory_value_(DM_CUV_THRESHOLD, cuv_threshold_code, "CUV threshold", needs_write);
+  }
+  if (!needs_write && has_cell_undervoltage_delay_) {
+    precheck_ok &= this->precheck_data_memory_value_u16_(DM_CUV_DELAY, cuv_delay_code, "CUV delay", needs_write);
+  }
+  if (!needs_write && has_cell_overvoltage_limit_) {
+    precheck_ok &= this->precheck_data_memory_value_(DM_COV_THRESHOLD, cov_threshold_code, "COV threshold", needs_write);
+  }
+  if (!needs_write && has_cell_overvoltage_delay_) {
+    precheck_ok &= this->precheck_data_memory_value_u16_(DM_COV_DELAY, cov_delay_code, "COV delay", needs_write);
+  }
   if (!needs_write && has_charge_current_limit_) {
     precheck_ok &= this->precheck_data_memory_value_(
       DM_OCC_THRESHOLD, occ_threshold_code, "OCC threshold", needs_write
@@ -1683,10 +1785,30 @@ bool BQ76952Component::apply_current_limit_config_() {
       DM_OCD1_THRESHOLD, ocd1_threshold_code, "OCD1 threshold", needs_write
     );
   }
+  if (!needs_write && has_discharge_current_limit_2_) {
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_OCD2_THRESHOLD, ocd2_threshold_code, "OCD2 threshold", needs_write
+    );
+  }
+  if (!needs_write && has_discharge_current_limit_3_) {
+    precheck_ok &=
+      this->precheck_data_memory_value_u16_(DM_OCD3_THRESHOLD, static_cast<uint16_t>(ocd3_threshold_code),
+                                            "OCD3 threshold", needs_write);
+  }
 
   if (!needs_write && has_discharge_current_delay_) {
     precheck_ok &= this->precheck_data_memory_value_(
       DM_OCD1_DELAY, ocd1_delay_code, "OCD1 delay", needs_write
+    );
+  }
+  if (!needs_write && has_discharge_current_delay_2_) {
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_OCD2_DELAY, ocd2_delay_code, "OCD2 delay", needs_write
+    );
+  }
+  if (!needs_write && has_discharge_current_delay_3_) {
+    precheck_ok &= this->precheck_data_memory_value_(
+      DM_OCD3_DELAY, ocd3_delay_code, "OCD3 delay", needs_write
     );
   }
   if (!needs_write && has_scd_threshold_) {
@@ -1734,27 +1856,134 @@ bool BQ76952Component::apply_current_limit_config_() {
 
   bool ok = true;
 
-  if (has_charge_current_limit_ || has_discharge_current_limit_) {
+  if (required_enabled_protections_bits != 0) {
     this->ensure_data_memory_mask_(
       DM_ENABLED_PROTECTIONS_A, required_enabled_protections_bits, "Enabled Protections A", ok
     );
   }
-
-  if (has_charge_current_limit_) {
+  if (required_enabled_protections_c_bits != 0) {
     this->ensure_data_memory_mask_(
-      DM_CHG_FET_PROTECTIONS_A, CHG_FET_PROTECTION_A_OCC, "CHG FET Protections A", ok
+      DM_ENABLED_PROTECTIONS_C, required_enabled_protections_c_bits, "Enabled Protections C", ok
     );
   }
 
-  if (has_discharge_current_limit_) {
+  if (has_charge_current_limit_ || has_cell_overvoltage_limit_ || has_cell_overvoltage_delay_) {
+    uint8_t chg_fet_bits = 0;
+    if (has_charge_current_limit_) {
+      chg_fet_bits |= CHG_FET_PROTECTION_A_OCC;
+    }
+    if (has_cell_overvoltage_limit_ || has_cell_overvoltage_delay_) {
+      chg_fet_bits |= CHG_FET_PROTECTION_A_COV;
+    }
     this->ensure_data_memory_mask_(
-      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_OCD1, "DSG FET Protections A", ok
+      DM_CHG_FET_PROTECTIONS_A, chg_fet_bits, "CHG FET Protections A", ok
     );
   }
-  if (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_) {
+
+  if (has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_ || has_discharge_current_limit_ ||
+      has_discharge_current_limit_2_ || has_discharge_current_delay_2_ || has_scd_threshold_ || has_scd_delay_ ||
+      has_scd_recovery_time_) {
+    uint8_t dsg_fet_a_bits = 0;
+    if (has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_CUV;
+    }
+    if (has_discharge_current_limit_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_OCD1;
+    }
+    if (has_discharge_current_limit_2_ || has_discharge_current_delay_2_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_OCD2;
+    }
+    if (has_scd_threshold_ || has_scd_delay_ || has_scd_recovery_time_) {
+      dsg_fet_a_bits |= DSG_FET_PROTECTION_A_SCD;
+    }
     this->ensure_data_memory_mask_(
-      DM_DSG_FET_PROTECTIONS_A, DSG_FET_PROTECTION_A_SCD, "DSG FET Protections A", ok
+      DM_DSG_FET_PROTECTIONS_A, dsg_fet_a_bits, "DSG FET Protections A", ok
     );
+  }
+  if (has_discharge_current_limit_3_ || has_discharge_current_delay_3_) {
+    this->ensure_data_memory_mask_(
+      DM_DSG_FET_PROTECTIONS_C, DSG_FET_PROTECTION_C_OCD3, "DSG FET Protections C", ok
+    );
+  }
+
+  if (has_cell_undervoltage_limit_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_CUV_THRESHOLD, current)) {
+      ESP_LOGW(TAG, "Failed reading CUV threshold");
+      ok = false;
+    } else {
+      const bool changed = current != cuv_threshold_code;
+      this->write_data_memory_value_if_needed_(DM_CUV_THRESHOLD, cuv_threshold_code, "CUV threshold", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured cell undervoltage limit %u mV (CUV threshold code=%u)",
+          static_cast<unsigned>(cell_undervoltage_limit_mv_),
+          static_cast<unsigned>(cuv_threshold_code)
+        );
+      }
+    }
+  }
+
+  if (has_cell_undervoltage_delay_) {
+    uint16_t current = 0;
+    if (!this->read_data_memory_u16_(DM_CUV_DELAY, current)) {
+      ESP_LOGW(TAG, "Failed reading CUV delay");
+      ok = false;
+    } else {
+      const bool changed = current != cuv_delay_code;
+      this->write_data_memory_value_u16_if_needed_(DM_CUV_DELAY, cuv_delay_code, "CUV delay", ok);
+      if (ok && changed) {
+        const float effective_ms = static_cast<float>(cuv_delay_code) * 3.3f;
+        ESP_LOGI(
+          TAG,
+          "Configured cell undervoltage delay %u ms (CUV delay code=%u, effective=%.1f ms)",
+          static_cast<unsigned>(cell_undervoltage_delay_ms_),
+          static_cast<unsigned>(cuv_delay_code),
+          effective_ms
+        );
+      }
+    }
+  }
+
+  if (has_cell_overvoltage_limit_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_COV_THRESHOLD, current)) {
+      ESP_LOGW(TAG, "Failed reading COV threshold");
+      ok = false;
+    } else {
+      const bool changed = current != cov_threshold_code;
+      this->write_data_memory_value_if_needed_(DM_COV_THRESHOLD, cov_threshold_code, "COV threshold", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured cell overvoltage limit %u mV (COV threshold code=%u)",
+          static_cast<unsigned>(cell_overvoltage_limit_mv_),
+          static_cast<unsigned>(cov_threshold_code)
+        );
+      }
+    }
+  }
+
+  if (has_cell_overvoltage_delay_) {
+    uint16_t current = 0;
+    if (!this->read_data_memory_u16_(DM_COV_DELAY, current)) {
+      ESP_LOGW(TAG, "Failed reading COV delay");
+      ok = false;
+    } else {
+      const bool changed = current != cov_delay_code;
+      this->write_data_memory_value_u16_if_needed_(DM_COV_DELAY, cov_delay_code, "COV delay", ok);
+      if (ok && changed) {
+        const float effective_ms = static_cast<float>(cov_delay_code) * 3.3f;
+        ESP_LOGI(
+          TAG,
+          "Configured cell overvoltage delay %u ms (COV delay code=%u, effective=%.1f ms)",
+          static_cast<unsigned>(cell_overvoltage_delay_ms_),
+          static_cast<unsigned>(cov_delay_code),
+          effective_ms
+        );
+      }
+    }
   }
 
   if (has_charge_current_limit_) {
@@ -1832,6 +2061,84 @@ bool BQ76952Component::apply_current_limit_config_() {
           static_cast<unsigned>(discharge_current_delay_ms_),
           static_cast<unsigned>(ocd1_delay_code),
           effective_ms
+        );
+      }
+    }
+  }
+
+  if (has_discharge_current_limit_2_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCD2_THRESHOLD, current)) {
+      ESP_LOGW(TAG, "Failed reading OCD2 threshold");
+      ok = false;
+    } else {
+      const bool changed = current != ocd2_threshold_code;
+      this->write_data_memory_value_if_needed_(DM_OCD2_THRESHOLD, ocd2_threshold_code, "OCD2 threshold", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured discharge current limit tier 2 %.3f A (OCD2 threshold code=%u)",
+          discharge_current_limit_2_a_,
+          static_cast<unsigned>(ocd2_threshold_code)
+        );
+      }
+    }
+  }
+
+  if (has_discharge_current_delay_2_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCD2_DELAY, current)) {
+      ESP_LOGW(TAG, "Failed reading OCD2 delay");
+      ok = false;
+    } else {
+      const bool changed = current != ocd2_delay_code;
+      this->write_data_memory_value_if_needed_(DM_OCD2_DELAY, ocd2_delay_code, "OCD2 delay", ok);
+      if (ok && changed) {
+        const float effective_ms = static_cast<float>(ocd2_delay_code + 2) * 3.3f;
+        ESP_LOGI(
+          TAG,
+          "Configured discharge current delay tier 2 %u ms (OCD2 delay code=%u, effective=%.1f ms)",
+          static_cast<unsigned>(discharge_current_delay_2_ms_),
+          static_cast<unsigned>(ocd2_delay_code),
+          effective_ms
+        );
+      }
+    }
+  }
+
+  if (has_discharge_current_limit_3_) {
+    uint16_t current = 0;
+    const uint16_t desired = static_cast<uint16_t>(ocd3_threshold_code);
+    if (!this->read_data_memory_u16_(DM_OCD3_THRESHOLD, current)) {
+      ESP_LOGW(TAG, "Failed reading OCD3 threshold");
+      ok = false;
+    } else {
+      const bool changed = current != desired;
+      this->write_data_memory_value_u16_if_needed_(DM_OCD3_THRESHOLD, desired, "OCD3 threshold", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured discharge current limit tier 3 %.3f A (OCD3 threshold code=%d)",
+          discharge_current_limit_3_a_,
+          static_cast<int>(ocd3_threshold_code)
+        );
+      }
+    }
+  }
+
+  if (has_discharge_current_delay_3_) {
+    uint8_t current = 0;
+    if (!this->read_data_memory_u8_(DM_OCD3_DELAY, current)) {
+      ESP_LOGW(TAG, "Failed reading OCD3 delay");
+      ok = false;
+    } else {
+      const bool changed = current != ocd3_delay_code;
+      this->write_data_memory_value_if_needed_(DM_OCD3_DELAY, ocd3_delay_code, "OCD3 delay", ok);
+      if (ok && changed) {
+        ESP_LOGI(
+          TAG,
+          "Configured discharge current delay tier 3 %u s",
+          static_cast<unsigned>(discharge_current_delay_3_s_)
         );
       }
     }
@@ -2221,6 +2528,38 @@ uint8_t BQ76952Component::encode_current_delay_code_(uint16_t delay_ms, const ch
   return static_cast<uint8_t>(clamped_code);
 }
 
+uint8_t BQ76952Component::encode_cell_voltage_threshold_code_(
+  uint16_t threshold_mv, uint8_t min_code, uint8_t max_code, const char* label
+) {
+  const int raw_code = static_cast<int>(std::lround(static_cast<float>(threshold_mv) / 50.6f));
+  int clamped_code = raw_code;
+  if (clamped_code < min_code) {
+    clamped_code = min_code;
+  } else if (clamped_code > max_code) {
+    clamped_code = max_code;
+  }
+  if (clamped_code != raw_code) {
+    ESP_LOGW(TAG, "%s threshold clipped to device range: code=%d", label, clamped_code);
+  }
+  return static_cast<uint8_t>(clamped_code);
+}
+
+uint16_t BQ76952Component::encode_voltage_delay_code_(
+  uint16_t delay_ms, uint16_t min_code, uint16_t max_code, const char* label
+) {
+  const int raw_code = static_cast<int>(std::lround(static_cast<float>(delay_ms) / 3.3f));
+  int clamped_code = raw_code;
+  if (clamped_code < min_code) {
+    clamped_code = min_code;
+  } else if (clamped_code > max_code) {
+    clamped_code = max_code;
+  }
+  if (clamped_code != raw_code) {
+    ESP_LOGW(TAG, "%s delay clipped to device range: code=%d", label, clamped_code);
+  }
+  return static_cast<uint16_t>(clamped_code);
+}
+
 bool BQ76952Component::precheck_data_memory_mask_(
   uint16_t address, uint8_t required_bits, const char* label, bool& needs_write
 ) {
@@ -2240,6 +2579,20 @@ bool BQ76952Component::precheck_data_memory_value_(
 ) {
   uint8_t value = 0;
   if (!this->read_data_memory_u8_(address, value)) {
+    ESP_LOGW(TAG, "Failed pre-check read of %s", label);
+    return false;
+  }
+  if (value != desired_value) {
+    needs_write = true;
+  }
+  return true;
+}
+
+bool BQ76952Component::precheck_data_memory_value_u16_(
+  uint16_t address, uint16_t desired_value, const char* label, bool& needs_write
+) {
+  uint16_t value = 0;
+  if (!this->read_data_memory_u16_(address, value)) {
     ESP_LOGW(TAG, "Failed pre-check read of %s", label);
     return false;
   }
@@ -2286,6 +2639,26 @@ bool BQ76952Component::write_data_memory_value_if_needed_(
     return true;
   }
   if (!this->write_data_memory_u8_(address, desired_value)) {
+    ESP_LOGW(TAG, "Failed writing %s", label);
+    ok = false;
+    return false;
+  }
+  return true;
+}
+
+bool BQ76952Component::write_data_memory_value_u16_if_needed_(
+  uint16_t address, uint16_t desired_value, const char* label, bool& ok
+) {
+  uint16_t current = 0;
+  if (!this->read_data_memory_u16_(address, current)) {
+    ESP_LOGW(TAG, "Failed reading %s", label);
+    ok = false;
+    return false;
+  }
+  if (current == desired_value) {
+    return true;
+  }
+  if (!this->write_data_memory_u16_(address, desired_value)) {
     ESP_LOGW(TAG, "Failed writing %s", label);
     ok = false;
     return false;
@@ -2482,29 +2855,14 @@ bool BQ76952Component::load_unit_scaling_() {
   return true;
 }
 
-const char* BQ76952Component::security_state_to_string_(uint16_t battery_status) const {
-  switch ((battery_status >> 8) & 0x3) {
-    case 0:
-      return "not_initialized";
-    case 1:
-      return "fullaccess";
-    case 2:
-      return "unsealed";
-    case 3:
-      return "sealed";
-    default:
-      return "unknown";
-  }
-}
-
-const char* BQ76952Component::operating_mode_to_string_(
+const char* BQ76952Component::bms_state_to_string_(
   uint16_t battery_status, uint16_t control_status
 ) const {
   if ((battery_status & BATTERY_STATUS_CFGUPDATE) != 0) {
     return "config_update";
   }
   if ((control_status & CONTROL_STATUS_DEEPSLEEP) != 0) {
-    return "deepsleep";
+    return "deep_sleep";
   }
   if ((battery_status & BATTERY_STATUS_SD_CMD) != 0) {
     return "shutdown_pending";
@@ -2574,65 +2932,80 @@ std::string BQ76952Component::safety_status_flags_to_string_(
   std::string flags;
 
   if ((status_a & (1u << 7)) != 0) {
-    this->append_flag_(flags, "scd");
+    this->append_flag_(flags, "short_circuit_in_discharge");
   }
   if ((status_a & (1u << 6)) != 0) {
-    this->append_flag_(flags, "ocd2");
+    this->append_flag_(flags, "overcurrent_in_discharge_tier_2");
   }
   if ((status_a & (1u << 5)) != 0) {
-    this->append_flag_(flags, "ocd1");
+    this->append_flag_(flags, "overcurrent_in_discharge");
   }
   if ((status_a & (1u << 4)) != 0) {
-    this->append_flag_(flags, "occ");
+    this->append_flag_(flags, "overcurrent_in_charge");
   }
   if ((status_a & (1u << 3)) != 0) {
-    this->append_flag_(flags, "cov");
+    this->append_flag_(flags, "cell_overvoltage");
   }
   if ((status_a & (1u << 2)) != 0) {
-    this->append_flag_(flags, "cuv");
+    this->append_flag_(flags, "cell_undervoltage");
   }
 
   if ((status_b & (1u << 7)) != 0) {
-    this->append_flag_(flags, "otf");
+    this->append_flag_(flags, "fet_overtemperature");
   }
   if ((status_b & (1u << 6)) != 0) {
-    this->append_flag_(flags, "otint");
+    this->append_flag_(flags, "internal_overtemperature");
   }
   if ((status_b & (1u << 5)) != 0) {
-    this->append_flag_(flags, "otd");
+    this->append_flag_(flags, "discharge_overtemperature");
   }
   if ((status_b & (1u << 4)) != 0) {
-    this->append_flag_(flags, "otc");
+    this->append_flag_(flags, "charge_overtemperature");
   }
   if ((status_b & (1u << 2)) != 0) {
-    this->append_flag_(flags, "utint");
+    this->append_flag_(flags, "internal_undertemperature");
   }
   if ((status_b & (1u << 1)) != 0) {
-    this->append_flag_(flags, "utd");
+    this->append_flag_(flags, "discharge_undertemperature");
   }
   if ((status_b & (1u << 0)) != 0) {
-    this->append_flag_(flags, "utc");
+    this->append_flag_(flags, "charge_undertemperature");
   }
 
   if ((status_c & (1u << 7)) != 0) {
-    this->append_flag_(flags, "ocd3");
+    this->append_flag_(flags, "overcurrent_in_discharge_tier_3");
   }
   if ((status_c & (1u << 6)) != 0) {
-    this->append_flag_(flags, "scdl");
+    this->append_flag_(flags, "short_circuit_in_discharge_latched");
   }
   if ((status_c & (1u << 5)) != 0) {
-    this->append_flag_(flags, "ocdl");
+    this->append_flag_(flags, "overcurrent_in_discharge_latched");
   }
   if ((status_c & (1u << 4)) != 0) {
-    this->append_flag_(flags, "covl");
+    this->append_flag_(flags, "cell_overvoltage_latched");
   }
   if ((status_c & (1u << 2)) != 0) {
-    this->append_flag_(flags, "pto");
+    this->append_flag_(flags, "precharge_timeout");
   }
   if ((status_c & (1u << 1)) != 0) {
-    this->append_flag_(flags, "hwdf");
+    this->append_flag_(flags, "host_watchdog_timeout");
   }
 
+  if (flags.empty()) {
+    return "none";
+  }
+  return flags;
+}
+
+std::string BQ76952Component::fault_to_string_(
+  uint16_t battery_status, uint8_t status_a, uint8_t status_b, uint8_t status_c
+) const {
+  std::string flags = this->safety_status_flags_to_string_(status_a, status_b, status_c);
+  if ((battery_status & BATTERY_STATUS_PF) != 0) {
+    this->append_flag_(flags, "permanent_failure");
+  } else if ((battery_status & BATTERY_STATUS_SS) != 0 && flags.empty()) {
+    this->append_flag_(flags, "safety_fault_active");
+  }
   if (flags.empty()) {
     return "none";
   }
@@ -2677,14 +3050,13 @@ void BQ76952Component::append_flag_(std::string& flags, const char* flag) const 
   flags += flag;
 }
 
-void BQ76952PowerPathSelect::control(size_t index) {
-  const char* option = this->option_at(index);
-  if (option == nullptr || this->parent_ == nullptr) {
+void BQ76952OutputEnabledSwitch::write_state(bool state) {
+  if (this->parent_ == nullptr) {
     return;
   }
 
-  if (this->parent_->set_power_path_mode(option)) {
-    this->publish_state(index);
+  if (this->parent_->set_output_enabled(state)) {
+    this->publish_state(state);
   }
 }
 
@@ -2694,16 +3066,6 @@ void BQ76952AutonomousFetSwitch::write_state(bool state) {
   }
 
   if (this->parent_->set_autonomous_fet_control(state)) {
-    this->publish_state(state);
-  }
-}
-
-void BQ76952SleepAllowedSwitch::write_state(bool state) {
-  if (this->parent_ == nullptr) {
-    return;
-  }
-
-  if (this->parent_->set_sleep_allowed(state)) {
     this->publish_state(state);
   }
 }
