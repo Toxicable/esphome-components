@@ -32,8 +32,8 @@ bq76952:
   update_interval: 20ms
 
   ## OTP-backed startup defaults
-  otp_autonomous_fet_mode: enable
-  otp_sleep_mode: enable
+  # otp_autonomous_fet_mode: enable
+  # otp_sleep_mode: enable
 
   ## Boot-applied live config
   # sleep_charge_enabled: true

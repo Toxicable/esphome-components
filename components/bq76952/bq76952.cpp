@@ -3015,15 +3015,6 @@ std::string BQ76952Component::fault_to_string_(
 std::string BQ76952Component::fet_status_flags_to_string_(uint8_t fet_status) const {
   std::string flags;
 
-  if ((fet_status & FET_STATUS_ALRT_PIN) != 0) {
-    this->append_flag_(flags, "alrt");
-  }
-  if ((fet_status & FET_STATUS_DDSG_PIN) != 0) {
-    this->append_flag_(flags, "ddsg");
-  }
-  if ((fet_status & FET_STATUS_DCHG_PIN) != 0) {
-    this->append_flag_(flags, "dchg");
-  }
   if ((fet_status & FET_STATUS_PDSG) != 0) {
     this->append_flag_(flags, "pdsg");
   }
