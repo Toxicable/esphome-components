@@ -185,7 +185,7 @@ These settings are normal YAML config and are written into the chip's live RAM c
 These writes are not permanent across a full hardware reset or a chip that boots from different OTP defaults.
 
 Boot-applied RAM config includes:
-- `cell_count`-derived `Settings:Configuration:Vcell Mode` mask (`Cell 1..N` enabled, higher cells disabled for protection)
+- `Settings:Configuration:Vcell Mode` is auto-detected from active cell channels at boot-time apply so protections match real wired VC inputs
 - `sleep_charge_enabled`
 - `predischarge_enabled`
 - `reg0_enabled`

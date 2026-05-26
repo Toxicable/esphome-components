@@ -48,4 +48,4 @@ Component-scoped notes for `components/bq76952`.
 - Public YAML should prefer `short_circuit_in_discharge_threshold_mv`, `short_circuit_in_discharge_delay_us`, and `short_circuit_in_discharge_recovery_time_s`; legacy `scd_*` keys remain accepted as compatibility aliases.
 - Those short-circuit-in-discharge settings program `Protections:SCD` at `0x9286/0x9287/0x9294` and ensure `Enabled Protections A[SCD]` plus `DSG FET Protections A[SCD]` remain set.
 - `cell_undervoltage_*`, `cell_overvoltage_*`, `discharge_current_limit_2_a`, `discharge_current_delay_2_ms`, `discharge_current_limit_3_a`, and `discharge_current_delay_3_s` program `CUV`, `COV`, `OCD2`, and `OCD3` using the TI TRM (`sluuby2b`) data-memory addresses.
-- Boot-applied `Settings:Configuration:Vcell Mode (0x9304)` is derived from `cell_count` with `Cell 1..N` enabled and higher cells disabled for protection logic.
+- Boot-applied `Settings:Configuration:Vcell Mode (0x9304)` is auto-detected from live direct-cell channels above the present threshold so CUV/COV protections track actual wired VC inputs.
