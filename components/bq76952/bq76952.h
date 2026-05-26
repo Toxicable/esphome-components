@@ -106,6 +106,10 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     sleep_charge_enabled_ = value;
     has_sleep_charge_setting_ = true;
   }
+  void set_autonomous_balancing_enabled(bool value) {
+    autonomous_balancing_enabled_ = value;
+    has_autonomous_balancing_setting_ = true;
+  }
   void set_event_logging(bool value) {
     event_logging_ = value;
   }
@@ -235,6 +239,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_regulator_config_() const;
   bool has_ts_pin_config_() const;
   bool has_predischarge_config_() const;
+  bool has_autonomous_balancing_config_() const;
   bool has_boot_mode_config_() const;
   bool apply_boot_modes_();
   bool apply_requested_configuration_();
@@ -243,6 +248,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
   bool apply_predischarge_config_();
+  bool apply_autonomous_balancing_config_();
   bool apply_current_limit_config_();
   void maybe_log_event_(uint16_t control_status, uint16_t battery_status, uint8_t fet_status, uint16_t alarm_status,
                         bool have_alarm_status, uint8_t safety_status_a, uint8_t safety_status_b,
@@ -311,6 +317,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool predischarge_enabled_{false};
   bool has_sleep_charge_setting_{false};
   bool sleep_charge_enabled_{false};
+  bool has_autonomous_balancing_setting_{false};
+  bool autonomous_balancing_enabled_{false};
   bool has_reg0_config_{false};
   bool has_reg1_enabled_config_{false};
   bool has_reg1_voltage_config_{false};
@@ -332,6 +340,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool current_limit_config_deferred_{false};
   bool ts_pin_config_deferred_{false};
   bool predischarge_config_deferred_{false};
+  bool autonomous_balancing_config_deferred_{false};
   bool event_log_initialized_{false};
   uint8_t last_fet_status_{0};
   uint16_t last_alarm_status_{0};

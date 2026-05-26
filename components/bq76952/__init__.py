@@ -36,6 +36,7 @@ CONF_OTP_AUTONOMOUS_FET_MODE = "otp_autonomous_fet_mode"
 CONF_OTP_SLEEP_MODE = "otp_sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
 CONF_SLEEP_CHARGE_ENABLED = "sleep_charge_enabled"
+CONF_AUTONOMOUS_BALANCING_ENABLED = "autonomous_balancing_enabled"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
 CONF_CELL_UNDERVOLTAGE_LIMIT_MV = "cell_undervoltage_limit_mv"
 CONF_CELL_UNDERVOLTAGE_DELAY_MS = "cell_undervoltage_delay_ms"
@@ -199,6 +200,7 @@ schema = {
     cv.Optional(CONF_OTP_SLEEP_MODE): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
     cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_SLEEP_CHARGE_ENABLED): cv.boolean,
+    cv.Optional(CONF_AUTONOMOUS_BALANCING_ENABLED): cv.boolean,
     cv.Optional(CONF_SENSE_RESISTOR_MILLIOHM, default=1.0): cv.float_range(min=0.001),
     cv.Optional(CONF_CELL_UNDERVOLTAGE_LIMIT_MV): cv.int_range(min=1000, max=5000),
     cv.Optional(CONF_CELL_UNDERVOLTAGE_DELAY_MS): cv.int_range(min=1, max=7000),
@@ -345,6 +347,8 @@ async def to_code(config):
         cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
     if CONF_SLEEP_CHARGE_ENABLED in config:
         cg.add(var.set_sleep_charge_enabled(config[CONF_SLEEP_CHARGE_ENABLED]))
+    if CONF_AUTONOMOUS_BALANCING_ENABLED in config:
+        cg.add(var.set_autonomous_balancing_enabled(config[CONF_AUTONOMOUS_BALANCING_ENABLED]))
     if CONF_CELL_UNDERVOLTAGE_LIMIT_MV in config:
         cg.add(var.set_cell_undervoltage_limit_mv(config[CONF_CELL_UNDERVOLTAGE_LIMIT_MV]))
     if CONF_CELL_UNDERVOLTAGE_DELAY_MS in config:

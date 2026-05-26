@@ -32,6 +32,7 @@ Component-scoped notes for `components/bq76952`.
 - If you need an extracted text view for ad hoc searching, generate it from `components/bq76952/bq76952.pdf`; the PDF remains canonical.
 - `predischarge_enabled` writes `Settings:FET:FET Options (0x9308)[PDSG_EN]`; `pdsg_fet_on` reads `FET Status (0x7F)[PDSG_FET]`.
 - `sleep_charge_enabled` writes `Settings:FET:FET Options (0x9308)[SLEEPCHG]`; when enabled, the chip may keep CHG allowed while `Battery Status[SLEEP]=1`.
+- `autonomous_balancing_enabled` writes `Settings:Cell Balancing Config:Balancing Configuration (0x9335)` bits `CB_CHG` and `CB_RLX` together.
 - TI exposes a persistent `PDSG_EN` bit for predischarge, but not a separate matching persistent `PCHG_EN` enable bit; precharge behavior is therefore not surfaced as a parallel boolean config.
 - `fault` is the primary user-facing fault sensor; it expands active `Safety Status A/B/C` bits into full names such as `cell_overvoltage` or `overcurrent_in_discharge_tier_2` and appends `permanent_failure` when `Battery Status[PF]=1`.
 - `bms_state` is the primary high-level state sensor; it reports `normal`, `sleep`, `deep_sleep`, `config_update`, or `shutdown_pending`.

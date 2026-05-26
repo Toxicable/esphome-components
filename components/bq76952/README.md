@@ -40,6 +40,7 @@ bq76952:
   ## Boot-applied live config
   sleep_charge_enabled: true
   predischarge_enabled: true
+  autonomous_balancing_enabled: true
 
   ## Regulator config
   reg1_voltage: 3.3V
@@ -188,6 +189,7 @@ Boot-applied RAM config includes:
 - `Settings:Configuration:Vcell Mode` is auto-detected from active cell channels at boot-time apply so protections match real wired VC inputs
 - `sleep_charge_enabled`
 - `predischarge_enabled`
+- `autonomous_balancing_enabled`
 - `reg0_enabled`
 - `reg1_voltage`
 - `ts1_temperature` / `ts2_temperature` / `ts3_temperature` thermistor pin setup
@@ -246,6 +248,7 @@ Safe mental model:
 
 - `sleep_charge_enabled`: sets `FET Options[SLEEPCHG]` so charging can remain allowed while the chip is in `sleep`
 - `predischarge_enabled`: sets `FET Options[PDSG_EN]`
+- `autonomous_balancing_enabled`: sets `Balancing Configuration[CB_CHG]` and `Balancing Configuration[CB_RLX]`
 - `otp_autonomous_fet_mode`: startup-default autonomous FET behavior to burn into OTP
 - `otp_sleep_mode`: startup-default sleep-allow behavior to burn into OTP
 - `cell_undervoltage_limit_mv` / `cell_overvoltage_limit_mv`: configure `CUV` / `COV`

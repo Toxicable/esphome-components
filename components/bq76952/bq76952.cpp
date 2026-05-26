@@ -95,6 +95,7 @@ constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
 constexpr uint16_t DM_ENABLED_PROTECTIONS_C = 0x9263;
 constexpr uint16_t DM_VCELL_MODE = 0x9304;
 constexpr uint16_t DM_FET_OPTIONS = 0x9308;
+constexpr uint16_t DM_BALANCING_CONFIGURATION = 0x9335;
 constexpr uint16_t DM_POWER_CONFIG = 0x9234;
 constexpr uint16_t DM_CFETOFF_PIN_CONFIG = 0x92FA;
 constexpr uint16_t DM_DFETOFF_PIN_CONFIG = 0x92FB;
@@ -136,6 +137,8 @@ constexpr uint8_t PROTECTION_A_SCD = 1u << 7;
 constexpr uint8_t PROTECTION_C_OCD3 = 1u << 7;
 constexpr uint8_t FET_OPTIONS_SLEEPCHG = 1u << 1;
 constexpr uint8_t FET_OPTIONS_PDSG_EN = 1u << 4;
+constexpr uint8_t BALANCING_CONFIGURATION_CB_RLX = 1u << 1;
+constexpr uint8_t BALANCING_CONFIGURATION_CB_CHG = 1u << 0;
 constexpr uint8_t CHG_FET_PROTECTION_A_COV = 1u << 3;
 constexpr uint8_t CHG_FET_PROTECTION_A_OCC = 1u << 4;
 constexpr uint8_t DSG_FET_PROTECTION_A_CUV = 1u << 2;
@@ -214,11 +217,12 @@ void BQ76952Component::setup() {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
   if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
-      this->has_predischarge_config_()) {
+      this->has_predischarge_config_() || this->has_autonomous_balancing_config_()) {
     this->regulator_config_deferred_ = this->has_regulator_config_();
     this->current_limit_config_deferred_ = this->has_current_limit_config_();
     this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
     this->predischarge_config_deferred_ = this->has_predischarge_config_();
+    this->autonomous_balancing_config_deferred_ = this->has_autonomous_balancing_config_();
     this->deferred_boot_config_log_ms_ = 0;
     this->deferred_boot_config_apply_ms_ = millis() + boot_config_apply_delay_ms_;
     ESP_LOGI(
@@ -236,6 +240,9 @@ void BQ76952Component::setup() {
     if (!this->apply_predischarge_config_()) {
       this->status_set_warning();
     }
+    if (!this->apply_autonomous_balancing_config_()) {
+      this->status_set_warning();
+    }
     if (!this->apply_current_limit_config_()) {
       this->status_set_warning();
     }
@@ -247,7 +254,7 @@ void BQ76952Component::setup() {
 
 void BQ76952Component::update() {
   if (this->regulator_config_deferred_ || this->current_limit_config_deferred_ || this->ts_pin_config_deferred_ ||
-      this->predischarge_config_deferred_) {
+      this->predischarge_config_deferred_ || this->autonomous_balancing_config_deferred_) {
     const uint32_t now = millis();
     if (now < this->deferred_boot_config_apply_ms_) {
       if (now >= this->deferred_boot_config_log_ms_) {
@@ -269,6 +276,9 @@ void BQ76952Component::update() {
       if (this->predischarge_config_deferred_ && !this->apply_predischarge_config_()) {
         this->status_set_warning();
       }
+      if (this->autonomous_balancing_config_deferred_ && !this->apply_autonomous_balancing_config_()) {
+        this->status_set_warning();
+      }
       if (!this->apply_current_limit_config_()) {
         this->status_set_warning();
       }
@@ -276,6 +286,7 @@ void BQ76952Component::update() {
       this->current_limit_config_deferred_ = false;
       this->ts_pin_config_deferred_ = false;
       this->predischarge_config_deferred_ = false;
+      this->autonomous_balancing_config_deferred_ = false;
     }
   }
 
@@ -595,6 +606,9 @@ void BQ76952Component::dump_config() {
   }
   if (has_sleep_charge_setting_) {
     ESP_LOGCONFIG(TAG, "  sleep_charge_enabled: %s", YESNO(sleep_charge_enabled_));
+  }
+  if (has_autonomous_balancing_setting_) {
+    ESP_LOGCONFIG(TAG, "  autonomous_balancing_enabled: %s", YESNO(autonomous_balancing_enabled_));
   }
   ESP_LOGCONFIG(TAG, "  event_logging: %s", YESNO(event_logging_));
   ESP_LOGCONFIG(TAG, "  xchg_debug_burst: %s", YESNO(xchg_debug_burst_));
@@ -1125,6 +1139,10 @@ bool BQ76952Component::has_predischarge_config_() const {
   return has_predischarge_setting_ || has_sleep_charge_setting_;
 }
 
+bool BQ76952Component::has_autonomous_balancing_config_() const {
+  return has_autonomous_balancing_setting_;
+}
+
 bool BQ76952Component::has_boot_mode_config_() const {
   return autonomous_fet_mode_ != BOOT_PRESERVE || sleep_mode_ != BOOT_PRESERVE;
 }
@@ -1138,6 +1156,7 @@ bool BQ76952Component::apply_requested_configuration_() {
   this->current_limit_config_deferred_ = false;
   this->ts_pin_config_deferred_ = false;
   this->predischarge_config_deferred_ = false;
+  this->autonomous_balancing_config_deferred_ = false;
 
   bool ok = true;
   if (!this->apply_regulator_config_()) {
@@ -1147,6 +1166,9 @@ bool BQ76952Component::apply_requested_configuration_() {
     ok = false;
   }
   if (!this->apply_predischarge_config_()) {
+    ok = false;
+  }
+  if (!this->apply_autonomous_balancing_config_()) {
     ok = false;
   }
   if (!this->apply_current_limit_config_()) {
@@ -1572,6 +1594,70 @@ bool BQ76952Component::apply_predischarge_config_() {
 
   if (!this->set_cfgupdate_mode_(false)) {
     ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after predischarge configuration");
+    ok = false;
+  }
+
+  return ok;
+}
+
+bool BQ76952Component::apply_autonomous_balancing_config_() {
+  if (!this->has_autonomous_balancing_config_()) {
+    return true;
+  }
+
+  uint16_t battery_status = 0;
+  if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+    ESP_LOGW(TAG, "Failed to read Battery Status before autonomous balancing configuration");
+    return false;
+  }
+
+  const uint8_t security_state = static_cast<uint8_t>((battery_status >> 8) & 0x03);
+  if (security_state != 1) {
+    ESP_LOGW(
+      TAG,
+      "Autonomous balancing configuration requires FULLACCESS (security_state=%u)",
+      static_cast<unsigned>(security_state)
+    );
+    return false;
+  }
+
+  uint8_t current = 0;
+  if (!this->read_data_memory_u8_(DM_BALANCING_CONFIGURATION, current)) {
+    ESP_LOGW(TAG, "Failed reading Balancing Configuration before autonomous balancing configuration");
+    return false;
+  }
+
+  uint8_t desired = current;
+  const uint8_t auto_bits = static_cast<uint8_t>(BALANCING_CONFIGURATION_CB_CHG | BALANCING_CONFIGURATION_CB_RLX);
+  desired = autonomous_balancing_enabled_ ? static_cast<uint8_t>(desired | auto_bits)
+                                          : static_cast<uint8_t>(desired & ~auto_bits);
+  if (desired == current) {
+    ESP_LOGI(TAG, "Balancing Configuration already matches requested autonomous balancing state");
+    return true;
+  }
+
+  if (!this->set_cfgupdate_mode_(true)) {
+    ESP_LOGW(TAG, "Failed to enter CONFIG_UPDATE for autonomous balancing configuration");
+    return false;
+  }
+
+  bool ok = true;
+  if (!this->write_data_memory_u8_(DM_BALANCING_CONFIGURATION, desired)) {
+    ESP_LOGW(TAG, "Failed writing Balancing Configuration");
+    ok = false;
+  } else {
+    ESP_LOGI(
+      TAG,
+      "Configured autonomous balancing: %s (Balancing Configuration=0x%02X, CB_CHG=%s, CB_RLX=%s)",
+      YESNO(autonomous_balancing_enabled_),
+      desired,
+      desired & BALANCING_CONFIGURATION_CB_CHG ? "on" : "off",
+      desired & BALANCING_CONFIGURATION_CB_RLX ? "on" : "off"
+    );
+  }
+
+  if (!this->set_cfgupdate_mode_(false)) {
+    ESP_LOGW(TAG, "Failed to exit CONFIG_UPDATE after autonomous balancing configuration");
     ok = false;
   }
 
