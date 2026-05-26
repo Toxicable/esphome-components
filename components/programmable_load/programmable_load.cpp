@@ -69,7 +69,7 @@ void ProgrammableLoadComponent::dump_config() {
     ESP_LOGW(TAG, "  WARNING: No temperature sensors configured!");
   }
   if (this->ntc_present_sensors_.empty()) {
-    ESP_LOGW(TAG, "  WARNING: No NTC present sensors configured!");
+    ESP_LOGW(TAG, "  WARNING: No NTC present sensor configured; using first temperature sensor state as fallback");
   }
 }
 
@@ -163,27 +163,22 @@ bool ProgrammableLoadComponent::check_safety_() {
     return false;
   }
 
-  // Check NTC present (all must be present).
-  bool all_ntc_present = true;
+  // Check NTC 1 present (only the first NTC is required).
+  bool ntc1_present = true;
   if (!this->ntc_present_sensors_.empty()) {
-    for (binary_sensor::BinarySensor *bs : this->ntc_present_sensors_) {
-      if (bs != nullptr && !bs->state) {
-        all_ntc_present = false;
-        break;
-      }
+    binary_sensor::BinarySensor *bs = this->ntc_present_sensors_[0];
+    if (bs != nullptr && !bs->state) {
+      ntc1_present = false;
     }
   } else if (!this->temperature_sensors_.empty()) {
-    // No explicit NTC-present signals are available, so treat invalid/missing
-    // temperature readings as an NTC fault.
-    for (sensor::Sensor *s : this->temperature_sensors_) {
-      if (s == nullptr || !s->has_state() || std::isnan(s->state)) {
-        all_ntc_present = false;
-        break;
-      }
+    // No explicit NTC-present signals; check first temperature sensor.
+    sensor::Sensor *s = this->temperature_sensors_[0];
+    if (s == nullptr || !s->has_state() || std::isnan(s->state)) {
+      ntc1_present = false;
     }
   }
 
-  if (!all_ntc_present) {
+  if (!ntc1_present) {
     this->fault_ntc_missing_ = true;
     ESP_LOGW(TAG, "FAULT: NTC missing; forcing load off");
     this->force_off();

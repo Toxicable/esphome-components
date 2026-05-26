@@ -76,9 +76,9 @@ def _validate_config(config):
         raise cv.Invalid("fan_full_temp_c must be greater than fan_start_temp_c")
 
     ntc_present_sensors = config[CONF_NTC_PRESENT_SENSORS]
-    if ntc_present_sensors and len(ntc_present_sensors) != len(config[CONF_TEMPERATURE_SENSORS]):
+    if len(ntc_present_sensors) > 1:
         raise cv.Invalid(
-            "ntc_present_sensors must match temperature_sensors count when configured"
+            "Only the first NTC present sensor is used for safety; extra entries are ignored"
         )
 
     return config

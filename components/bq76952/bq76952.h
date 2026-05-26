@@ -146,8 +146,8 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   }
 
 
-  void set_stack_voltage_sensor(sensor::Sensor* sensor) {
-    stack_voltage_sensor_ = sensor;
+  void set_bat_voltage_sensor(sensor::Sensor* sensor) {
+    bat_voltage_sensor_ = sensor;
   }
   void set_pack_voltage_sensor(sensor::Sensor* sensor) {
     pack_voltage_sensor_ = sensor;
@@ -164,12 +164,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   }
   void set_state_of_charge_sensor(sensor::Sensor* sensor) {
     state_of_charge_sensor_ = sensor;
-  }
-  void set_charge_throughput_sensor(sensor::Sensor* sensor) {
-    charge_throughput_sensor_ = sensor;
-  }
-  void set_charge_throughput_time_sensor(sensor::Sensor* sensor) {
-    charge_throughput_time_sensor_ = sensor;
   }
   void set_die_temperature_sensor(sensor::Sensor* sensor) {
     die_temperature_sensor_ = sensor;
@@ -432,15 +426,13 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   decltype(global_preferences->make_preference<SocPersistedState>(0)) soc_pref_{};
   bool soc_pref_valid_{false};
 
-  sensor::Sensor* stack_voltage_sensor_{nullptr};
+  sensor::Sensor* bat_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};
   sensor::Sensor* ld_voltage_sensor_{nullptr};
   sensor::Sensor* largest_intercell_voltage_sensor_{nullptr};
   std::array<sensor::Sensor*, 16> cell_voltage_sensors_{};
   sensor::Sensor* current_sensor_{nullptr};
   sensor::Sensor* state_of_charge_sensor_{nullptr};
-  sensor::Sensor* charge_throughput_sensor_{nullptr};
-  sensor::Sensor* charge_throughput_time_sensor_{nullptr};
   sensor::Sensor* die_temperature_sensor_{nullptr};
   sensor::Sensor* ts1_temperature_sensor_{nullptr};
   sensor::Sensor* ts2_temperature_sensor_{nullptr};

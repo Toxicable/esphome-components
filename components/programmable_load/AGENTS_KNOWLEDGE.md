@@ -7,7 +7,7 @@ Component-scoped notes for `components/programmable_load`.
 - DCR estimation baseline (start voltage/current) is captured when `set_target()` is called with a non-zero value. It is reset when the load is turned off.
 - The `ProgrammableLoadSetpointNumber` class extends `number::Number` and calls `parent_->set_target()` in its `control()` override.
 - Safety checks run in both the tight control loop (before each ramp step) and the slow update (500ms). If a fault is detected, `force_off()` is called immediately.
-- When `ntc_present_sensors` are not configured, the component treats any missing/NaN temperature reading as an NTC-missing fault to stay fail-safe.
+- The safety interlock only requires NTC 1 (the first temperature sensor). If `ntc_present_sensors` is configured, only the first entry is checked. If omitted, the first temperature sensor must have a valid reading or the load faults off as `fault_ntc_missing`.
 - Fan PWM is computed as a linear interpolation between `fan_start_temp_c` (0%) and `fan_full_temp_c` (100%). Returns 0% if no valid temperature reading is available.
 - Optional `ramp_state` is a diagnostic text sensor published from `RampState` (`OFF`, `RAMPING_UP`, `RAMPING_DOWN`, `HOLDING`).
 - The `log_divider_` mechanism limits control loop logging to every 4th iteration unless a notable event occurs (ramping down, near target, large command change, or waiting for response).

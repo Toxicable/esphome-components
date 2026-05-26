@@ -13,7 +13,6 @@ from esphome.const import (
     UNIT_AMPERE,
     UNIT_CELSIUS,
     UNIT_PERCENT,
-    UNIT_SECOND,
     UNIT_VOLT,
 )
 
@@ -21,17 +20,22 @@ DEPENDENCIES = ["i2c"]
 AUTO_LOAD = ["button", "sensor", "switch", "text_sensor"]
 
 bq76952_ns = cg.esphome_ns.namespace("bq76952")
-BQ76952Component = bq76952_ns.class_("BQ76952Component", cg.PollingComponent, i2c.I2CDevice)
-BQ76952OutputEnabledSwitch = bq76952_ns.class_("BQ76952OutputEnabledSwitch", switch_.Switch)
-BQ76952AutonomousFetSwitch = bq76952_ns.class_("BQ76952AutonomousFetSwitch", switch_.Switch)
-BQ76952ClearAlarmsButton = bq76952_ns.class_("BQ76952ClearAlarmsButton", button.Button)
-BQ76952ResetPassedChargeButton = bq76952_ns.class_("BQ76952ResetPassedChargeButton", button.Button)
-BQ76952ApplyConfigurationButton = bq76952_ns.class_("BQ76952ApplyConfigurationButton", button.Button)
-BQ76952ProgramFactoryOtpButton = bq76952_ns.class_("BQ76952ProgramFactoryOtpButton", button.Button)
+BQ76952Component = bq76952_ns.class_(
+    "BQ76952Component", cg.PollingComponent, i2c.I2CDevice)
+BQ76952OutputEnabledSwitch = bq76952_ns.class_(
+    "BQ76952OutputEnabledSwitch", switch_.Switch)
+BQ76952AutonomousFetSwitch = bq76952_ns.class_(
+    "BQ76952AutonomousFetSwitch", switch_.Switch)
+BQ76952ClearAlarmsButton = bq76952_ns.class_(
+    "BQ76952ClearAlarmsButton", button.Button)
+BQ76952ResetPassedChargeButton = bq76952_ns.class_(
+    "BQ76952ResetPassedChargeButton", button.Button)
+BQ76952ApplyConfigurationButton = bq76952_ns.class_(
+    "BQ76952ApplyConfigurationButton", button.Button)
+BQ76952ProgramFactoryOtpButton = bq76952_ns.class_(
+    "BQ76952ProgramFactoryOtpButton", button.Button)
 
 CONF_CELL_COUNT = "cell_count"
-CONF_AUTONOMOUS_FET_MODE = "autonomous_fet_mode"
-CONF_SLEEP_MODE = "sleep_mode"
 CONF_OTP_AUTONOMOUS_FET_MODE = "otp_autonomous_fet_mode"
 CONF_OTP_SLEEP_MODE = "otp_sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
@@ -43,9 +47,6 @@ CONF_CELL_UNDERVOLTAGE_DELAY_MS = "cell_undervoltage_delay_ms"
 CONF_CELL_OVERVOLTAGE_LIMIT_MV = "cell_overvoltage_limit_mv"
 CONF_CELL_OVERVOLTAGE_DELAY_MS = "cell_overvoltage_delay_ms"
 CONF_NOMINAL_CAPACITY_AH = "nominal_capacity_ah"
-CONF_SCD_THRESHOLD_MV = "scd_threshold_mv"
-CONF_SCD_DELAY_US = "scd_delay_us"
-CONF_SCD_RECOVERY_TIME_S = "scd_recovery_time_s"
 CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV = "short_circuit_in_discharge_threshold_mv"
 CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US = "short_circuit_in_discharge_delay_us"
 CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S = "short_circuit_in_discharge_recovery_time_s"
@@ -64,18 +65,12 @@ CONF_REG1_VOLTAGE = "reg1_voltage"
 CONF_PULLUP = "pullup"
 CONF_BOOT_CONFIG_APPLY_DELAY = "boot_config_apply_delay"
 
-
 CONF_BAT_VOLTAGE = "bat_voltage"
-CONF_STACK_VOLTAGE = "stack_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
 CONF_LD_VOLTAGE = "ld_voltage"
 CONF_LARGEST_INTERCELL_VOLTAGE = "largest_intercell_voltage"
 CONF_CURRENT = "current"
 CONF_STATE_OF_CHARGE = "state_of_charge"
-CONF_CHARGE_THROUGHPUT = "charge_throughput"
-CONF_CHARGE_THROUGHPUT_TIME = "charge_throughput_time"
-CONF_ENERGY = "energy"
-CONF_ENERGY_TIME = "energy_time"
 CONF_DIE_TEMPERATURE = "die_temperature"
 CONF_TS1_TEMPERATURE = "ts1_temperature"
 CONF_TS2_TEMPERATURE = "ts2_temperature"
@@ -84,7 +79,6 @@ CONF_TS3_TEMPERATURE = "ts3_temperature"
 CONF_BMS_STATE = "bms_state"
 CONF_FAULT = "fault"
 CONF_FET_STATUS_FLAGS = "fet_status_flags"
-
 
 CONF_OUTPUT_ENABLED_CONTROL = "output_enabled_control"
 CONF_AUTONOMOUS_FET_CONTROL = "autonomous_fet_control"
@@ -118,6 +112,7 @@ TS_PULLUP_OPTIONS = {
     "18k": False,
     "180k": True,
 }
+
 SCD_THRESHOLD_OPTIONS = {
     10: 0,
     20: 1,
@@ -143,7 +138,8 @@ def _validate_scd_delay_us(value):
         return value
     if 15 <= value <= 450 and value % 15 == 0:
         return value
-    raise cv.Invalid("scd_delay_us must be 0 or a multiple of 15 from 15 to 450")
+    raise cv.Invalid(
+        "scd_delay_us must be 0 or a multiple of 15 from 15 to 450")
 
 
 VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
@@ -155,9 +151,6 @@ VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
 
 
 def _validate_config(config):
-    if CONF_BAT_VOLTAGE in config and CONF_STACK_VOLTAGE in config:
-        raise cv.Invalid("Use only one of 'bat_voltage' or legacy alias 'stack_voltage'")
-
     cell_count = config[CONF_CELL_COUNT]
     for index, key in enumerate(CELL_VOLTAGE_KEYS, start=1):
         if key in config and index > cell_count:
@@ -166,37 +159,17 @@ def _validate_config(config):
     for key in (CONF_TS1_TEMPERATURE, CONF_TS2_TEMPERATURE, CONF_TS3_TEMPERATURE):
         if key in config and isinstance(config[key], dict):
             continue
-    energy_pairs = (
-        (CONF_CHARGE_THROUGHPUT, CONF_ENERGY),
-        (CONF_CHARGE_THROUGHPUT_TIME, CONF_ENERGY_TIME),
-    )
-    for legacy_key, clear_key in energy_pairs:
-        if legacy_key in config and clear_key in config:
-            raise cv.Invalid(f"Use only one of '{legacy_key}' or '{clear_key}'")
-    alias_pairs = (
-        (CONF_AUTONOMOUS_FET_MODE, CONF_OTP_AUTONOMOUS_FET_MODE),
-        (CONF_SLEEP_MODE, CONF_OTP_SLEEP_MODE),
-        (CONF_SCD_THRESHOLD_MV, CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV),
-        (CONF_SCD_DELAY_US, CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US),
-        (CONF_SCD_RECOVERY_TIME_S, CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S),
-    )
-    for legacy_key, clear_key in alias_pairs:
-        if legacy_key in config and clear_key in config:
-            raise cv.Invalid(f"Use only one of '{legacy_key}' or '{clear_key}'")
+
     return config
 
 
 schema = {
     cv.GenerateID(): cv.declare_id(BQ76952Component),
     cv.Optional(CONF_CELL_COUNT, default=16): cv.int_range(min=3, max=16),
-    cv.Optional(CONF_AUTONOMOUS_FET_MODE, default="preserve"): cv.enum(
+    cv.Optional(CONF_OTP_AUTONOMOUS_FET_MODE, default="preserve"): cv.enum(
         AUTONOMOUS_FET_MODE_OPTIONS, lower=True
     ),
-    cv.Optional(CONF_OTP_AUTONOMOUS_FET_MODE): cv.enum(
-        AUTONOMOUS_FET_MODE_OPTIONS, lower=True
-    ),
-    cv.Optional(CONF_SLEEP_MODE, default="preserve"): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
-    cv.Optional(CONF_OTP_SLEEP_MODE): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
+    cv.Optional(CONF_OTP_SLEEP_MODE, default="preserve"): cv.enum(SLEEP_MODE_OPTIONS, lower=True),
     cv.Optional(CONF_PREDISCHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_SLEEP_CHARGE_ENABLED): cv.boolean,
     cv.Optional(CONF_AUTONOMOUS_BALANCING_ENABLED): cv.boolean,
@@ -206,13 +179,10 @@ schema = {
     cv.Optional(CONF_CELL_OVERVOLTAGE_LIMIT_MV): cv.int_range(min=1000, max=6000),
     cv.Optional(CONF_CELL_OVERVOLTAGE_DELAY_MS): cv.int_range(min=1, max=7000),
     cv.Optional(CONF_NOMINAL_CAPACITY_AH): cv.float_range(min=0.001),
-    cv.Optional(CONF_SCD_THRESHOLD_MV): cv.one_of(*SCD_THRESHOLD_OPTIONS.keys(), int=True),
     cv.Optional(CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV): cv.one_of(
         *SCD_THRESHOLD_OPTIONS.keys(), int=True
     ),
-    cv.Optional(CONF_SCD_DELAY_US): _validate_scd_delay_us,
     cv.Optional(CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US): _validate_scd_delay_us,
-    cv.Optional(CONF_SCD_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
     cv.Optional(CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
     cv.Optional(CONF_CHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
     cv.Optional(CONF_DISCHARGE_CURRENT_LIMIT_A): cv.float_range(min=0.001),
@@ -228,8 +198,7 @@ schema = {
     cv.Optional(CONF_REG1_VOLTAGE): cv.enum(REG1_VOLTAGE_OPTIONS, lower=True),
     cv.Optional(CONF_BOOT_CONFIG_APPLY_DELAY, default="10s"): cv.positive_time_period_milliseconds,
 
-    # Backward-compatible alias for bat_voltage.
-    cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
+    cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_LD_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_LARGEST_INTERCELL_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -244,28 +213,6 @@ schema = {
         accuracy_decimals=1,
         device_class=DEVICE_CLASS_BATTERY,
         state_class=STATE_CLASS_MEASUREMENT,
-    ),
-    cv.Optional(CONF_CHARGE_THROUGHPUT): sensor.sensor_schema(
-        unit_of_measurement="Ah",
-        accuracy_decimals=6,
-        state_class=STATE_CLASS_MEASUREMENT,
-    ),
-    cv.Optional(CONF_ENERGY): sensor.sensor_schema(
-        unit_of_measurement="Ah",
-        accuracy_decimals=6,
-        state_class=STATE_CLASS_MEASUREMENT,
-    ),
-    cv.Optional(CONF_CHARGE_THROUGHPUT_TIME): sensor.sensor_schema(
-        unit_of_measurement=UNIT_SECOND,
-        accuracy_decimals=0,
-        state_class=STATE_CLASS_MEASUREMENT,
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    ),
-    cv.Optional(CONF_ENERGY_TIME): sensor.sensor_schema(
-        unit_of_measurement=UNIT_SECOND,
-        accuracy_decimals=0,
-        state_class=STATE_CLASS_MEASUREMENT,
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
     cv.Optional(CONF_DIE_TEMPERATURE): sensor.sensor_schema(
         unit_of_measurement=UNIT_CELSIUS,
@@ -333,51 +280,45 @@ async def to_code(config):
     await i2c.register_i2c_device(var, config)
 
     cg.add(var.set_cell_count(config[CONF_CELL_COUNT]))
-    cg.add(var.set_sense_resistor_milliohm(config[CONF_SENSE_RESISTOR_MILLIOHM]))
-    if CONF_OTP_AUTONOMOUS_FET_MODE in config:
-        cg.add(var.set_autonomous_fet_mode(config[CONF_OTP_AUTONOMOUS_FET_MODE]))
-    else:
-        cg.add(var.set_autonomous_fet_mode(config[CONF_AUTONOMOUS_FET_MODE]))
-    if CONF_OTP_SLEEP_MODE in config:
-        cg.add(var.set_sleep_mode(config[CONF_OTP_SLEEP_MODE]))
-    else:
-        cg.add(var.set_sleep_mode(config[CONF_SLEEP_MODE]))
+    cg.add(var.set_sense_resistor_milliohm(
+        config[CONF_SENSE_RESISTOR_MILLIOHM]))
+    cg.add(var.set_autonomous_fet_mode(config[CONF_OTP_AUTONOMOUS_FET_MODE]))
+    cg.add(var.set_sleep_mode(config[CONF_OTP_SLEEP_MODE]))
     if CONF_PREDISCHARGE_ENABLED in config:
         cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
     if CONF_SLEEP_CHARGE_ENABLED in config:
         cg.add(var.set_sleep_charge_enabled(config[CONF_SLEEP_CHARGE_ENABLED]))
     if CONF_AUTONOMOUS_BALANCING_ENABLED in config:
-        cg.add(var.set_autonomous_balancing_enabled(config[CONF_AUTONOMOUS_BALANCING_ENABLED]))
+        cg.add(var.set_autonomous_balancing_enabled(
+            config[CONF_AUTONOMOUS_BALANCING_ENABLED]))
     if CONF_CELL_UNDERVOLTAGE_LIMIT_MV in config:
-        cg.add(var.set_cell_undervoltage_limit_mv(config[CONF_CELL_UNDERVOLTAGE_LIMIT_MV]))
+        cg.add(var.set_cell_undervoltage_limit_mv(
+            config[CONF_CELL_UNDERVOLTAGE_LIMIT_MV]))
     if CONF_CELL_UNDERVOLTAGE_DELAY_MS in config:
-        cg.add(var.set_cell_undervoltage_delay_ms(config[CONF_CELL_UNDERVOLTAGE_DELAY_MS]))
+        cg.add(var.set_cell_undervoltage_delay_ms(
+            config[CONF_CELL_UNDERVOLTAGE_DELAY_MS]))
     if CONF_CELL_OVERVOLTAGE_LIMIT_MV in config:
-        cg.add(var.set_cell_overvoltage_limit_mv(config[CONF_CELL_OVERVOLTAGE_LIMIT_MV]))
+        cg.add(var.set_cell_overvoltage_limit_mv(
+            config[CONF_CELL_OVERVOLTAGE_LIMIT_MV]))
     if CONF_CELL_OVERVOLTAGE_DELAY_MS in config:
-        cg.add(var.set_cell_overvoltage_delay_ms(config[CONF_CELL_OVERVOLTAGE_DELAY_MS]))
+        cg.add(var.set_cell_overvoltage_delay_ms(
+            config[CONF_CELL_OVERVOLTAGE_DELAY_MS]))
     if CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV in config:
         cg.add(
             var.set_scd_threshold_mv(
                 config[CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV]
             )
         )
-    elif CONF_SCD_THRESHOLD_MV in config:
-        cg.add(var.set_scd_threshold_mv(config[CONF_SCD_THRESHOLD_MV]))
     if CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US in config:
         cg.add(
             var.set_scd_delay_us(config[CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US])
         )
-    elif CONF_SCD_DELAY_US in config:
-        cg.add(var.set_scd_delay_us(config[CONF_SCD_DELAY_US]))
     if CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S in config:
         cg.add(
             var.set_scd_recovery_time_s(
                 config[CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S]
             )
         )
-    elif CONF_SCD_RECOVERY_TIME_S in config:
-        cg.add(var.set_scd_recovery_time_s(config[CONF_SCD_RECOVERY_TIME_S]))
     if CONF_CHARGE_CURRENT_LIMIT_A in config:
         cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))
     if CONF_DISCHARGE_CURRENT_LIMIT_A in config:
@@ -410,10 +351,7 @@ async def to_code(config):
 
     if CONF_BAT_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])
-        cg.add(var.set_stack_voltage_sensor(sens))
-    elif CONF_STACK_VOLTAGE in config:
-        sens = await sensor.new_sensor(config[CONF_STACK_VOLTAGE])
-        cg.add(var.set_stack_voltage_sensor(sens))
+        cg.add(var.set_bat_voltage_sensor(sens))
     if CONF_PACK_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_PACK_VOLTAGE])
         cg.add(var.set_pack_voltage_sensor(sens))
@@ -435,18 +373,6 @@ async def to_code(config):
     if CONF_STATE_OF_CHARGE in config:
         sens = await sensor.new_sensor(config[CONF_STATE_OF_CHARGE])
         cg.add(var.set_state_of_charge_sensor(sens))
-    if CONF_ENERGY in config:
-        sens = await sensor.new_sensor(config[CONF_ENERGY])
-        cg.add(var.set_charge_throughput_sensor(sens))
-    elif CONF_CHARGE_THROUGHPUT in config:
-        sens = await sensor.new_sensor(config[CONF_CHARGE_THROUGHPUT])
-        cg.add(var.set_charge_throughput_sensor(sens))
-    if CONF_ENERGY_TIME in config:
-        sens = await sensor.new_sensor(config[CONF_ENERGY_TIME])
-        cg.add(var.set_charge_throughput_time_sensor(sens))
-    elif CONF_CHARGE_THROUGHPUT_TIME in config:
-        sens = await sensor.new_sensor(config[CONF_CHARGE_THROUGHPUT_TIME])
-        cg.add(var.set_charge_throughput_time_sensor(sens))
     if CONF_DIE_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_DIE_TEMPERATURE])
         cg.add(var.set_die_temperature_sensor(sens))

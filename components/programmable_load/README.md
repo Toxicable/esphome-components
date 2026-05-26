@@ -65,10 +65,9 @@ programmable_load:
   temperature_sensors:
     - ts1_temperature
     - ts2_temperature
-  ## Optional: Binary sensors that must be ON for load to run (one per NTC).
+  ## Optional: Binary sensor for NTC 1 presence check (safety interlock).
   # ntc_present_sensors:
   #   - ts1_ntc_present
-  #   - ts2_ntc_present
 
   ## --- Safety limits ---
   # max_current_a: 40.0
@@ -121,6 +120,7 @@ programmable_load:
 - Near the target, the loop waits for visible INA response before adding more DAC command, preventing overshoot.
 - DCR estimation captures the V/I baseline when a new non-zero setpoint is applied and updates continuously during upward ramping.
 - Fan PWM ramps linearly between `fan_start_temp_c` and `fan_full_temp_c`.
+
 - `fan_full_temp_c` must be greater than `fan_start_temp_c`.
-- If `ntc_present_sensors` is omitted, every configured `temperature_sensors` reading must stay valid or the load faults off as `fault_ntc_missing`.
+- Only NTC 1 (the first temperature sensor) is required for the safety interlock. If `ntc_present_sensors` is omitted, the first temperature sensor must have a valid reading or the load faults off as `fault_ntc_missing`.
 - All generated entities are optional; omit any that are not needed.

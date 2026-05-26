@@ -431,7 +431,7 @@ void BQ76952Component::update() {
     largest_intercell_voltage_sensor_->publish_state(static_cast<float>(max_cell_mv - min_cell_mv) / 1000.0f);
   }
 
-  if (stack_voltage_sensor_ != nullptr) {
+  if (bat_voltage_sensor_ != nullptr) {
     int16_t stack_uv = 0;
     if (!this->read_i16_(REG_STACK_VOLTAGE, stack_uv)) {
       ESP_LOGW(TAG, "Failed to read BAT Voltage");
@@ -440,7 +440,7 @@ void BQ76952Component::update() {
     }
     const float stack_v =
       user_volts_cv_ ? (static_cast<float>(stack_uv) / 100.0f) : (static_cast<float>(stack_uv) / 1000.0f);
-    stack_voltage_sensor_->publish_state(stack_v);
+    bat_voltage_sensor_->publish_state(stack_v);
   }
 
   if (pack_voltage_sensor_ != nullptr) {
@@ -483,29 +483,6 @@ void BQ76952Component::update() {
     }
   }
 
-  if (charge_throughput_sensor_ != nullptr || charge_throughput_time_sensor_ != nullptr ||
-      state_of_charge_sensor_ != nullptr) {
-    uint8_t dastatus6[12]{};
-    if (!this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6))) {
-      ESP_LOGW(TAG, "Failed to read DASTATUS6 passed charge");
-      this->status_set_warning();
-      return;
-    }
-
-    const int32_t accum_user_ah_integer = read_le_i32(&dastatus6[0]);
-    const uint32_t accum_user_ah_fraction = read_le_u32(&dastatus6[4]);
-    const uint32_t accum_time_s = read_le_u32(&dastatus6[8]);
-    const double total_user_ah = static_cast<double>(accum_user_ah_integer) +
-                                 static_cast<double>(accum_user_ah_fraction) / 4294967296.0;
-    const double user_ah_to_ah = static_cast<double>(current_lsb_ua_) / 1000000.0;
-
-    if (charge_throughput_sensor_ != nullptr) {
-      charge_throughput_sensor_->publish_state(static_cast<float>(total_user_ah * user_ah_to_ah));
-    }
-    if (charge_throughput_time_sensor_ != nullptr) {
-      charge_throughput_time_sensor_->publish_state(static_cast<float>(accum_time_s));
-    }
-  }
 
   // SoC: always compute min/max/avg cell mv if SoC sensor exists
   if (state_of_charge_sensor_ != nullptr) {
@@ -678,7 +655,7 @@ void BQ76952Component::dump_config() {
   ESP_LOGCONFIG(TAG, "  autonomous_fet_mode: %s", autonomous_mode);
   ESP_LOGCONFIG(TAG, "  sleep_mode: %s", sleep_mode);
 
-  LOG_SENSOR("  ", "BAT Voltage", stack_voltage_sensor_);
+  LOG_SENSOR("  ", "BAT Voltage", bat_voltage_sensor_);
   LOG_SENSOR("  ", "PACK Voltage", pack_voltage_sensor_);
   LOG_SENSOR("  ", "LD Voltage", ld_voltage_sensor_);
   LOG_SENSOR("  ", "Largest Inter-Cell Voltage", largest_intercell_voltage_sensor_);
@@ -689,8 +666,6 @@ void BQ76952Component::dump_config() {
   }
   LOG_SENSOR("  ", "Current", current_sensor_);
   LOG_SENSOR("  ", "State of Charge", state_of_charge_sensor_);
-  LOG_SENSOR("  ", "Energy", charge_throughput_sensor_);
-  LOG_SENSOR("  ", "Energy Time", charge_throughput_time_sensor_);
   LOG_SENSOR("  ", "Int Temperature", die_temperature_sensor_);
   LOG_SENSOR("  ", "TS1 Temperature", ts1_temperature_sensor_);
   LOG_SENSOR("  ", "TS2 Temperature", ts2_temperature_sensor_);
