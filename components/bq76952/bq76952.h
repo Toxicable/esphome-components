@@ -109,6 +109,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_event_logging(bool value) {
     event_logging_ = value;
   }
+  void set_boot_config_apply_delay_ms(uint32_t value) {
+    boot_config_apply_delay_ms_ = value;
+  }
   void set_xchg_debug_burst(bool value) {
     xchg_debug_burst_ = value;
   }
@@ -342,6 +345,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint32_t last_fet_control_subcommand_ms_{0};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
+  uint32_t boot_config_apply_delay_ms_{10000};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};

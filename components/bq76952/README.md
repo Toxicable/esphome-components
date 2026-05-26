@@ -31,6 +31,7 @@ bq76952:
   ## Core
   cell_count: 4
   update_interval: 20ms
+  # boot_config_apply_delay: 60s
 
   ## OTP-backed startup defaults
   # otp_autonomous_fet_mode: enable
@@ -211,6 +212,7 @@ Boot-applied RAM config includes:
 Notes:
 - these writes require `FULLACCESS`
 - the component may enter `CONFIG_UPDATE` to apply them
+- `boot_config_apply_delay` controls when those writes happen after boot (default `10s`)
 - entering `CONFIG_UPDATE` briefly turns FETs off, so do not power the ESP from a path that depends on switched PACK output during configuration writes
 - `reg1_voltage` implies `REG1` should be enabled if you do not explicitly set `reg1_enabled`
 - `reg0_enabled` remains explicit because whether the external BREG preregulator path is populated is board-specific and cannot be inferred safely

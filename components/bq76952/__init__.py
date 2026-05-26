@@ -61,6 +61,7 @@ CONF_REG0_ENABLED = "reg0_enabled"
 CONF_REG1_ENABLED = "reg1_enabled"
 CONF_REG1_VOLTAGE = "reg1_voltage"
 CONF_PULLUP = "pullup"
+CONF_BOOT_CONFIG_APPLY_DELAY = "boot_config_apply_delay"
 
 CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
@@ -224,6 +225,7 @@ schema = {
     cv.Optional(CONF_REG0_ENABLED): cv.boolean,
     cv.Optional(CONF_REG1_ENABLED): cv.boolean,
     cv.Optional(CONF_REG1_VOLTAGE): cv.enum(REG1_VOLTAGE_OPTIONS, lower=True),
+    cv.Optional(CONF_BOOT_CONFIG_APPLY_DELAY, default="10s"): cv.positive_time_period_milliseconds,
     cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     # Backward-compatible alias for bat_voltage.
     cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -399,6 +401,7 @@ async def to_code(config):
         cg.add(var.set_reg1_enabled(True))
     if CONF_REG1_VOLTAGE in config:
         cg.add(var.set_reg1_voltage(config[CONF_REG1_VOLTAGE]))
+    cg.add(var.set_boot_config_apply_delay_ms(config[CONF_BOOT_CONFIG_APPLY_DELAY].total_milliseconds))
     if CONF_NOMINAL_CAPACITY_AH in config:
         cg.add(var.set_nominal_capacity_ah(config[CONF_NOMINAL_CAPACITY_AH]))
 

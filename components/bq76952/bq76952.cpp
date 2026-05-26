@@ -220,8 +220,12 @@ void BQ76952Component::setup() {
     this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
     this->predischarge_config_deferred_ = this->has_predischarge_config_();
     this->deferred_boot_config_log_ms_ = 0;
-    this->deferred_boot_config_apply_ms_ = millis() + 10000;
-    ESP_LOGI(TAG, "Deferring boot configuration writes for 10s after boot");
+    this->deferred_boot_config_apply_ms_ = millis() + boot_config_apply_delay_ms_;
+    ESP_LOGI(
+      TAG,
+      "Deferring boot configuration writes for %u ms after boot",
+      static_cast<unsigned>(boot_config_apply_delay_ms_)
+    );
   } else {
     if (!this->apply_regulator_config_()) {
       this->status_set_warning();
@@ -247,11 +251,15 @@ void BQ76952Component::update() {
     const uint32_t now = millis();
     if (now < this->deferred_boot_config_apply_ms_) {
       if (now >= this->deferred_boot_config_log_ms_) {
-        ESP_LOGI(TAG, "Boot configuration writes still deferred: waiting for 10s post-boot delay");
+        ESP_LOGI(
+          TAG,
+          "Boot configuration writes still deferred: waiting for %u ms post-boot delay",
+          static_cast<unsigned>(boot_config_apply_delay_ms_)
+        );
         this->deferred_boot_config_log_ms_ = now + 15000;
       }
     } else {
-      ESP_LOGI(TAG, "10s post-boot delay elapsed; applying deferred boot configuration writes");
+      ESP_LOGI(TAG, "Post-boot delay elapsed; applying deferred boot configuration writes");
       if (this->regulator_config_deferred_ && !this->apply_regulator_config_()) {
         this->status_set_warning();
       }
@@ -549,6 +557,7 @@ void BQ76952Component::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  cell_count: %u", static_cast<unsigned>(cell_count_));
+  ESP_LOGCONFIG(TAG, "  boot_config_apply_delay_ms: %u", static_cast<unsigned>(boot_config_apply_delay_ms_));
   const uint16_t vcell_mode_mask =
     cell_count_ >= 16 ? 0xFFFFu : static_cast<uint16_t>((static_cast<uint32_t>(1u) << cell_count_) - 1u);
   ESP_LOGCONFIG(TAG, "  vcell_mode_mask (derived): 0x%04X", static_cast<unsigned>(vcell_mode_mask));
