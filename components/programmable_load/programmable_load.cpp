@@ -47,13 +47,10 @@ void ProgrammableLoadComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  Voltage min: %.2f V", this->voltage_min_v_);
   ESP_LOGCONFIG(TAG, "  Max temp: %.1f °C", this->max_temp_c_);
   ESP_LOGCONFIG(TAG, "  Control period: %u ms", this->control_period_ms_);
-  ESP_LOGCONFIG(TAG, "  Deadband min: %.3f A, ratio: %.4f", this->deadband_min_a_, this->deadband_ratio_);
-  ESP_LOGCONFIG(TAG, "  Response min: %.3f A", this->current_response_min_a_);
-  ESP_LOGCONFIG(TAG, "  Near target band: %.3f A", this->near_target_min_band_a_);
+  ESP_LOGCONFIG(TAG, "  Deadband: %.3f A", this->deadband_a_);
   ESP_LOGCONFIG(TAG, "  Max unconfirmed rise: %.3f A, fall: %.3f A",
                 this->max_unconfirmed_rise_a_, this->max_unconfirmed_fall_a_);
   ESP_LOGCONFIG(TAG, "  Ramp fast: %.1f A/s, medium: %.1f A/s", this->ramp_fast_a_per_s_, this->ramp_medium_a_per_s_);
-  ESP_LOGCONFIG(TAG, "  DCR min delta current: %.3f A", this->dcr_min_delta_current_a_);
   ESP_LOGCONFIG(TAG, "  Fan start: %.1f °C, full: %.1f °C", this->fan_start_temp_c_, this->fan_full_temp_c_);
 
   if (this->dac_output_ == nullptr) {
@@ -85,12 +82,11 @@ void ProgrammableLoadComponent::set_target(float amps) {
 
   this->current_target_a_ = target;
 
-  // Reset response tracking.
-  this->waiting_for_response_ = false;
+  // Reset ramping state.
   this->unconfirmed_rise_a_ = 0.0f;
   this->unconfirmed_fall_a_ = 0.0f;
 
-  // Capture DCR baseline.
+  // Capture DCR baseline (start voltage/current at setpoint time).
   bool current_ok = this->current_sensor_ != nullptr
                     && this->current_sensor_->has_state()
                     && !std::isnan(this->current_sensor_->state);
@@ -98,17 +94,15 @@ void ProgrammableLoadComponent::set_target(float amps) {
                     && this->voltage_sensor_->has_state()
                     && !std::isnan(this->voltage_sensor_->state);
 
+  this->reset_dcr_();
+
   if (current_ok && voltage_ok) {
-    this->response_start_current_a_ = this->current_sensor_->state;
     this->dcr_start_current_a_ = this->current_sensor_->state;
     this->dcr_start_voltage_v_ = this->voltage_sensor_->state;
   } else {
-    this->response_start_current_a_ = 0.0f;
     this->dcr_start_current_a_ = std::numeric_limits<float>::quiet_NaN();
     this->dcr_start_voltage_v_ = std::numeric_limits<float>::quiet_NaN();
   }
-
-  this->reset_dcr_();
 
   // Clear faults.
   this->clear_faults_();
@@ -119,7 +113,6 @@ void ProgrammableLoadComponent::set_target(float amps) {
     this->setpoint_number_->publish_state(target);
   }
 
-  // Update ramp state.
   this->ramp_state_ = RampState::HOLDING;
 }
 
@@ -127,8 +120,6 @@ void ProgrammableLoadComponent::force_off() {
   // Stop targeting.
   this->current_target_a_ = 0.0f;
   this->current_command_a_ = 0.0f;
-  this->waiting_for_response_ = false;
-  this->response_start_current_a_ = 0.0f;
   this->unconfirmed_rise_a_ = 0.0f;
   this->unconfirmed_fall_a_ = 0.0f;
 
@@ -221,33 +212,79 @@ void ProgrammableLoadComponent::clear_faults_() {
 }
 
 void ProgrammableLoadComponent::reset_dcr_() {
+  this->dcr_sample_count_ = 0;
   this->dcr_delta_voltage_mv_ = std::numeric_limits<float>::quiet_NaN();
   this->dcr_delta_current_a_ = std::numeric_limits<float>::quiet_NaN();
   this->dcr_mohm_ = std::numeric_limits<float>::quiet_NaN();
 }
 
-void ProgrammableLoadComponent::update_dcr_() {
+// Capture a sample during upward ramping.
+void ProgrammableLoadComponent::capture_dcr_sample_() {
   if (this->current_sensor_ == nullptr || this->voltage_sensor_ == nullptr)
     return;
-
-  float i = this->current_sensor_->state;
-  float vbus = this->voltage_sensor_->state;
-
-  if (std::isnan(i) || std::isnan(vbus))
-    return;
-
-  // Only update DCR during upward ramping with valid baseline.
   if (std::isnan(this->dcr_start_voltage_v_) || std::isnan(this->dcr_start_current_a_))
     return;
 
-  const float dcr_di = i - this->dcr_start_current_a_;
-  const float dcr_dv = this->dcr_start_voltage_v_ - vbus;
+  float i = this->current_sensor_->state;
+  float v = this->voltage_sensor_->state;
 
-  if (dcr_di >= this->dcr_min_delta_current_a_ && dcr_dv >= 0.0f) {
-    this->dcr_delta_current_a_ = dcr_di;
-    this->dcr_delta_voltage_mv_ = dcr_dv * 1000.0f;
-    this->dcr_mohm_ = 1000.0f * dcr_dv / dcr_di;
+  if (std::isnan(i) || std::isnan(v))
+    return;
+
+  // Only record samples where current has moved up from baseline.
+  if (i <= this->dcr_start_current_a_)
+    return;
+
+  DcrSample &s = this->dcr_samples_[this->dcr_sample_count_ % DCR_SAMPLE_MAX];
+  s.current_a = i;
+  s.voltage_v = v;
+  if (this->dcr_sample_count_ < DCR_SAMPLE_MAX)
+    this->dcr_sample_count_++;
+}
+
+// Compute DCR from the sample buffer using least-squares fit.
+void ProgrammableLoadComponent::compute_dcr_() {
+  if (this->dcr_sample_count_ < 2)
+    return;
+
+  // Accumulate sums over all samples.
+  float sum_di = 0.0f;
+  float sum_dv = 0.0f;
+  float sum_di2 = 0.0f;
+  float sum_di_dv = 0.0f;
+  int n = 0;
+
+  for (int j = 0; j < this->dcr_sample_count_; j++) {
+    const float di = this->dcr_samples_[j].current_a - this->dcr_start_current_a_;
+    const float dv = this->dcr_start_voltage_v_ - this->dcr_samples_[j].voltage_v;
+    if (di < 0.0f || dv < 0.0f)
+      continue;  // skip invalid samples
+    n++;
+    sum_di += di;
+    sum_dv += dv;
+    sum_di2 += di * di;
+    sum_di_dv += di * dv;
   }
+
+  if (n < 2)
+    return;
+
+  // Least-squares: R = (n*sum(di*dv) - sum_di*sum_dv) / (n*sum_di2 - sum_di*sum_di)
+  const float denom = n * sum_di2 - sum_di * sum_di;
+  if (denom <= 0.0f)
+    return;
+
+  const float r_ohm = (n * sum_di_dv - sum_di * sum_dv) / denom;
+  if (r_ohm < 0.0f)
+    return;
+
+  this->dcr_mohm_ = r_ohm * 1000.0f;
+
+  // Also publish the last sample's deltas.
+  int last = (this->dcr_sample_count_ - 1) % DCR_SAMPLE_MAX;
+  const DcrSample &ls = this->dcr_samples_[last];
+  this->dcr_delta_current_a_ = ls.current_a - this->dcr_start_current_a_;
+  this->dcr_delta_voltage_mv_ = (this->dcr_start_voltage_v_ - ls.voltage_v) * 1000.0f;
 }
 
 float ProgrammableLoadComponent::get_max_temp_() const {
@@ -273,11 +310,9 @@ void ProgrammableLoadComponent::update_fan_() {
   float t = this->get_max_temp_();
 
   if (std::isnan(t)) {
-    // No temperature reading — default to off.
     this->fan_output_->set_level(0.0f);
     return;
   }
-
   if (t <= this->fan_start_temp_c_) {
     this->fan_output_->set_level(0.0f);
     return;
@@ -354,46 +389,19 @@ void ProgrammableLoadComponent::control_loop_() {
   const float i = this->current_sensor_->state;
   const float vbus = this->voltage_sensor_->state;
 
-  // Update DCR estimation.
-  this->update_dcr_();
+  const float err = target - i;
+  const float abs_err = fabsf(err);
+
+  const float control_period_s = (float) this->control_period_ms_ / 1000.0f;
 
   // Clamp current command.
   float cmd = this->current_command_a_;
   if (std::isnan(cmd) || cmd < 0.0f) cmd = 0.0f;
   if (cmd > this->max_current_a_) cmd = this->max_current_a_;
 
-  const float err = target - i;
-  const float abs_err = fabsf(err);
-
-  const float control_period_s = (float) this->control_period_ms_ / 1000.0f;
-
-  const float deadband =
-    std::max<float>(this->deadband_min_a_,
-                    target * this->deadband_ratio_);
-
-  const float response_min =
-    std::max<float>(this->current_response_min_a_,
-                    target * 0.002f);
-
-  const float near_band =
-    std::max<float>(this->near_target_min_band_a_,
-                    target * 0.05f);
-
-  const bool near_target = err <= near_band;
-
-  const bool current_has_responded =
-    fabsf(i - this->response_start_current_a_) >= response_min;
-
-  if (current_has_responded) {
-    this->waiting_for_response_ = false;
-    this->response_start_current_a_ = i;
-    this->unconfirmed_rise_a_ = 0.0f;
-    this->unconfirmed_fall_a_ = 0.0f;
-  }
-
   float next_cmd = cmd;
 
-  if (err > deadband) {
+  if (err > this->deadband_a_) {
     // --- RAMPING UP ---
     this->unconfirmed_fall_a_ = 0.0f;
     this->ramp_state_ = RampState::RAMPING_UP;
@@ -402,12 +410,10 @@ void ProgrammableLoadComponent::control_loop_() {
     float rise_remaining = max_rise - this->unconfirmed_rise_a_;
     if (rise_remaining < 0.0f) rise_remaining = 0.0f;
 
-    if ((near_target && this->waiting_for_response_) || rise_remaining <= 0.0005f) {
-      // Wait for current response.
-      this->waiting_for_response_ = true;
+    if (rise_remaining <= 0.0005f) {
+      // Unconfirmed rise cap hit — hold.
       next_cmd = cmd;
       this->ramp_state_ = RampState::HOLDING;
-
     } else {
       float inc = 0.002f;
 
@@ -429,15 +435,9 @@ void ProgrammableLoadComponent::control_loop_() {
 
       next_cmd = cmd + inc;
       this->unconfirmed_rise_a_ += inc;
-
-      if (near_target) {
-        this->waiting_for_response_ = true;
-      } else {
-        this->waiting_for_response_ = false;
-      }
     }
 
-  } else if (err < -deadband) {
+  } else if (err < -this->deadband_a_) {
     // --- RAMPING DOWN ---
     this->unconfirmed_rise_a_ = 0.0f;
     this->ramp_state_ = RampState::RAMPING_DOWN;
@@ -447,10 +447,8 @@ void ProgrammableLoadComponent::control_loop_() {
     if (fall_remaining < 0.0f) fall_remaining = 0.0f;
 
     if (fall_remaining <= 0.0005f) {
-      this->waiting_for_response_ = true;
       next_cmd = cmd;
       this->ramp_state_ = RampState::HOLDING;
-
     } else {
       float dec = 0.002f;
 
@@ -474,23 +472,26 @@ void ProgrammableLoadComponent::control_loop_() {
 
       next_cmd = cmd - dec;
       this->unconfirmed_fall_a_ += dec;
-
-      this->waiting_for_response_ = false;
     }
 
   } else {
     // --- WITHIN DEADBAND ---
-    this->waiting_for_response_ = false;
     this->unconfirmed_rise_a_ = 0.0f;
     this->unconfirmed_fall_a_ = 0.0f;
-    this->response_start_current_a_ = i;
     next_cmd = cmd;
     this->ramp_state_ = RampState::HOLDING;
   }
 
   next_cmd = this->clamp_command_(next_cmd);
-
   this->current_command_a_ = next_cmd;
+
+  // Capture DCR sample during upward ramping.
+  if (this->ramp_state_ == RampState::RAMPING_UP) {
+    this->capture_dcr_sample_();
+  }
+
+  // Compute DCR from accumulated samples (runs every loop but only updates when we have data).
+  this->compute_dcr_();
 
   // Drive DAC (normalized 0..1).
   if (this->dac_output_ != nullptr) {
@@ -499,29 +500,18 @@ void ProgrammableLoadComponent::control_loop_() {
 
   // Conditional logging.
   this->log_divider_++;
-
   const bool log_now =
     this->log_divider_ >= 4
-    || err < -deadband
-    || near_target
-    || fabsf(next_cmd - cmd) >= 0.020f
-    || this->waiting_for_response_;
+    || err < -this->deadband_a_
+    || fabsf(next_cmd - cmd) >= 0.020f;
 
   if (log_now) {
     this->log_divider_ = 0;
     ESP_LOGI(TAG,
-             "CTRL target=%.3fA ina=%.3fA err=%.3fA db=%.3fA near=%.3fA wait=%d rise=%.3f fall=%.3f cmd %.3f->%.3f vbus=%.2fV",
-             target,
-             i,
-             err,
-             deadband,
-             near_band,
-             this->waiting_for_response_,
-             this->unconfirmed_rise_a_,
-             this->unconfirmed_fall_a_,
-             cmd,
-             next_cmd,
-             vbus);
+             "CTRL target=%.3fA ina=%.3fA err=%.3fA db=%.3fA rise=%.3f fall=%.3f cmd %.3f->%.3f vbus=%.2fV",
+             target, i, err, this->deadband_a_,
+             this->unconfirmed_rise_a_, this->unconfirmed_fall_a_,
+             cmd, next_cmd, vbus);
   }
 }
 
@@ -537,7 +527,6 @@ void ProgrammableLoadComponent::slow_update_() {
   // Publish derived sensors.
   this->publish_state_();
 }
-
 
 void ProgrammableLoadSetpointNumber::control(float value) {
   if (this->parent_ == nullptr)

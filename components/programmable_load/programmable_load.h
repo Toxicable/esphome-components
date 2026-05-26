@@ -20,6 +20,14 @@ enum class RampState : int8_t {
   HOLDING = 3,
 };
 
+// Circular buffer of DCR samples taken during ramping.
+static const int DCR_SAMPLE_MAX = 64;
+
+struct DcrSample {
+  float current_a;
+  float voltage_v;
+};
+
 class ProgrammableLoadComponent : public Component {
  public:
   void setup() override;
@@ -38,14 +46,11 @@ class ProgrammableLoadComponent : public Component {
   void set_voltage_min_v(float v) { voltage_min_v_ = v; }
   void set_max_temp_c(float v) { max_temp_c_ = v; }
   void set_control_period_ms(uint32_t ms) { control_period_ms_ = ms; }
-  void set_deadband_min_a(float v) { deadband_min_a_ = v; }
-  void set_deadband_ratio(float v) { deadband_ratio_ = v; }
   void set_deadband_a(float v) { deadband_a_ = v; }
   void set_max_unconfirmed_rise_a(float v) { max_unconfirmed_rise_a_ = v; }
   void set_max_unconfirmed_fall_a(float v) { max_unconfirmed_fall_a_ = v; }
   void set_ramp_fast_a_per_s(float v) { ramp_fast_a_per_s_ = v; }
   void set_ramp_medium_a_per_s(float v) { ramp_medium_a_per_s_ = v; }
-  void set_dcr_min_delta_current_a(float v) { dcr_min_delta_current_a_ = v; }
   void set_fan_start_temp_c(float v) { fan_start_temp_c_ = v; }
   void set_fan_full_temp_c(float v) { fan_full_temp_c_ = v; }
 
@@ -78,7 +83,8 @@ class ProgrammableLoadComponent : public Component {
   void clear_faults_();
 
   // --- DCR tracking ---
-  void update_dcr_();
+  void capture_dcr_sample_();
+  void compute_dcr_();
   void reset_dcr_();
 
   // --- Fan ---
@@ -92,18 +98,23 @@ class ProgrammableLoadComponent : public Component {
   float get_max_temp_() const;
   const char *ramp_state_to_string_(RampState state) const;
 
-  // --- State (replaces globals) ---
+  // --- State ---
   float current_target_a_{0.0f};
   float current_command_a_{0.0f};
-  bool waiting_for_response_{false};
-  float response_start_current_a_{0.0f};
   float unconfirmed_rise_a_{0.0f};
   float unconfirmed_fall_a_{0.0f};
+
+  // DCR: baseline captured when setpoint is set, samples taken during ramp.
   float dcr_start_voltage_v_{std::numeric_limits<float>::quiet_NaN()};
   float dcr_start_current_a_{std::numeric_limits<float>::quiet_NaN()};
+  DcrSample dcr_samples_[DCR_SAMPLE_MAX];
+  int dcr_sample_count_{0};
+
+  // Published DCR values.
   float dcr_delta_voltage_mv_{std::numeric_limits<float>::quiet_NaN()};
   float dcr_delta_current_a_{std::numeric_limits<float>::quiet_NaN()};
   float dcr_mohm_{std::numeric_limits<float>::quiet_NaN()};
+
   bool fault_ntc_missing_{false};
   bool fault_no_voltage_{false};
   bool fault_over_temp_{false};
@@ -114,15 +125,11 @@ class ProgrammableLoadComponent : public Component {
   float voltage_min_v_{1.0f};
   float max_temp_c_{100.0f};
   uint32_t control_period_ms_{50};
-  float deadband_min_a_{0.010f};
-  float deadband_ratio_{0.002f};
-  float current_response_min_a_{0.020f};
-  float near_target_min_band_a_{0.160f};
+  float deadband_a_{0.010f};
   float max_unconfirmed_rise_a_{1.000f};
   float max_unconfirmed_fall_a_{2.000f};
   float ramp_fast_a_per_s_{8.0f};
   float ramp_medium_a_per_s_{4.0f};
-  float dcr_min_delta_current_a_{0.500f};
   float fan_start_temp_c_{35.0f};
   float fan_full_temp_c_{65.0f};
 

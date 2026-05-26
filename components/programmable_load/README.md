@@ -76,17 +76,11 @@ programmable_load:
 
   ## --- Control loop ---
   # control_period_ms: 50
-  # deadband_min_a: 0.010
-  # deadband_ratio: 0.002
-  # current_response_min_a: 0.020
-  # near_target_min_band_a: 0.160
+  # deadband_a: 0.010
   # max_unconfirmed_rise_a: 1.000
   # max_unconfirmed_fall_a: 2.000
   # ramp_fast_a_per_s: 8.0
   # ramp_medium_a_per_s: 4.0
-
-  ## --- DCR estimation ---
-  # dcr_min_delta_current_a: 0.500
 
   ## --- Fan ---
   # fan_start_temp_c: 35.0
@@ -115,8 +109,8 @@ programmable_load:
 
 - The control loop runs at `control_period_ms` (default 50 ms) via an internal interval.
 - Ramp rates are tiered: fast (>5 A error), medium (>2 A), then fixed steps that decrease as the target is approached.
-- Near the target, the loop waits for visible INA response before adding more DAC command, preventing overshoot.
-- DCR estimation captures the V/I baseline when a new non-zero setpoint is applied and updates continuously during upward ramping.
+- Unconfirmed-move tracking limits each ramp step to prevent overshoot when the INA sensor has not yet responded.
+- DCR estimation captures the V/I baseline when a new non-zero setpoint is applied, accumulates samples during upward ramping, and publishes a least-squares fit across all samples.
 - Fan PWM ramps linearly between `fan_start_temp_c` and `fan_full_temp_c`.
 
 - `fan_full_temp_c` must be greater than `fan_start_temp_c`.

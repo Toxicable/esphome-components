@@ -31,16 +31,11 @@ CONF_VOLTAGE_MIN_V = "voltage_min_v"
 CONF_MAX_TEMP_C = "max_temp_c"
 CONF_CONTROL_PERIOD_MS = "control_period_ms"
 
-CONF_DEADBAND_MIN_A = "deadband_min_a"
-CONF_DEADBAND_RATIO = "deadband_ratio"
-CONF_CURRENT_RESPONSE_MIN_A = "current_response_min_a"
-CONF_NEAR_TARGET_MIN_BAND_A = "near_target_min_band_a"
+CONF_DEADBAND_A = "deadband_a"
 CONF_MAX_UNCONFIRMED_RISE_A = "max_unconfirmed_rise_a"
 CONF_MAX_UNCONFIRMED_FALL_A = "max_unconfirmed_fall_a"
 CONF_RAMP_FAST_A_PER_S = "ramp_fast_a_per_s"
 CONF_RAMP_MEDIUM_A_PER_S = "ramp_medium_a_per_s"
-
-CONF_DCR_MIN_DELTA_CURRENT_A = "dcr_min_delta_current_a"
 
 CONF_FAN_START_TEMP_C = "fan_start_temp_c"
 CONF_FAN_FULL_TEMP_C = "fan_full_temp_c"
@@ -108,16 +103,11 @@ CONFIG_SCHEMA = cv.All(
             cv.int_, cv.Range(min=10, max=1000)
         ),
 
-        cv.Optional(CONF_DEADBAND_MIN_A, default=0.010): _validate_non_negative_float,
-        cv.Optional(CONF_DEADBAND_RATIO, default=0.002): _validate_non_negative_float,
-        cv.Optional(CONF_CURRENT_RESPONSE_MIN_A, default=0.020): _validate_non_negative_float,
-        cv.Optional(CONF_NEAR_TARGET_MIN_BAND_A, default=0.160): _validate_non_negative_float,
+        cv.Optional(CONF_DEADBAND_A, default=0.010): _validate_non_negative_float,
         cv.Optional(CONF_MAX_UNCONFIRMED_RISE_A, default=1.0): _validate_positive_float,
         cv.Optional(CONF_MAX_UNCONFIRMED_FALL_A, default=2.0): _validate_positive_float,
         cv.Optional(CONF_RAMP_FAST_A_PER_S, default=8.0): _validate_positive_float,
         cv.Optional(CONF_RAMP_MEDIUM_A_PER_S, default=4.0): _validate_positive_float,
-
-        cv.Optional(CONF_DCR_MIN_DELTA_CURRENT_A, default=0.500): _validate_positive_float,
 
         cv.Optional(CONF_FAN_START_TEMP_C, default=35.0): cv.float_,
         cv.Optional(CONF_FAN_FULL_TEMP_C, default=65.0): cv.float_,
@@ -128,19 +118,18 @@ CONFIG_SCHEMA = cv.All(
             unit_of_measurement=UNIT_AMPERE,
             device_class=DEVICE_CLASS_CURRENT,
         ),
-        # DCR sensor.
         cv.Optional(CONF_DCR): sensor.sensor_schema(
             unit_of_measurement="mΩ",
-            accuracy_decimals=2,
+            accuracy_decimals=1,
         ),
         cv.Optional(CONF_VOLTAGE_DROP): sensor.sensor_schema(
             unit_of_measurement=UNIT_MILLIVOLT,
-            accuracy_decimals=2,
+            accuracy_decimals=1,
             device_class=DEVICE_CLASS_VOLTAGE,
         ),
         cv.Optional(CONF_CURRENT_DELTA): sensor.sensor_schema(
             unit_of_measurement=UNIT_AMPERE,
-            accuracy_decimals=1,
+            accuracy_decimals=2,
             device_class=DEVICE_CLASS_CURRENT,
         ),
         cv.Optional(CONF_RAMP_STATE): text_sensor.text_sensor_schema(
@@ -192,16 +181,11 @@ async def to_code(config):
     cg.add(var.set_max_temp_c(config[CONF_MAX_TEMP_C]))
     cg.add(var.set_control_period_ms(config[CONF_CONTROL_PERIOD_MS]))
 
-    cg.add(var.set_deadband_min_a(config[CONF_DEADBAND_MIN_A]))
-    cg.add(var.set_deadband_ratio(config[CONF_DEADBAND_RATIO]))
-    cg.add(var.set_current_response_min_a(config[CONF_CURRENT_RESPONSE_MIN_A]))
-    cg.add(var.set_near_target_min_band_a(config[CONF_NEAR_TARGET_MIN_BAND_A]))
+    cg.add(var.set_deadband_a(config[CONF_DEADBAND_A]))
     cg.add(var.set_max_unconfirmed_rise_a(config[CONF_MAX_UNCONFIRMED_RISE_A]))
     cg.add(var.set_max_unconfirmed_fall_a(config[CONF_MAX_UNCONFIRMED_FALL_A]))
     cg.add(var.set_ramp_fast_a_per_s(config[CONF_RAMP_FAST_A_PER_S]))
     cg.add(var.set_ramp_medium_a_per_s(config[CONF_RAMP_MEDIUM_A_PER_S]))
-
-    cg.add(var.set_dcr_min_delta_current_a(config[CONF_DCR_MIN_DELTA_CURRENT_A]))
 
     cg.add(var.set_fan_start_temp_c(config[CONF_FAN_START_TEMP_C]))
     cg.add(var.set_fan_full_temp_c(config[CONF_FAN_FULL_TEMP_C]))
