@@ -64,6 +64,7 @@ CONF_REG1_VOLTAGE = "reg1_voltage"
 CONF_PULLUP = "pullup"
 CONF_BOOT_CONFIG_APPLY_DELAY = "boot_config_apply_delay"
 
+
 CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
@@ -165,8 +166,6 @@ def _validate_config(config):
     for key in (CONF_TS1_TEMPERATURE, CONF_TS2_TEMPERATURE, CONF_TS3_TEMPERATURE):
         if key in config and isinstance(config[key], dict):
             continue
-    if CONF_STATE_OF_CHARGE in config and CONF_NOMINAL_CAPACITY_AH not in config:
-        raise cv.Invalid("'nominal_capacity_ah' is required when 'state_of_charge' is configured")
     energy_pairs = (
         (CONF_CHARGE_THROUGHPUT, CONF_ENERGY),
         (CONF_CHARGE_THROUGHPUT_TIME, CONF_ENERGY_TIME),
@@ -228,7 +227,7 @@ schema = {
     cv.Optional(CONF_REG1_ENABLED): cv.boolean,
     cv.Optional(CONF_REG1_VOLTAGE): cv.enum(REG1_VOLTAGE_OPTIONS, lower=True),
     cv.Optional(CONF_BOOT_CONFIG_APPLY_DELAY, default="10s"): cv.positive_time_period_milliseconds,
-    cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
+
     # Backward-compatible alias for bat_voltage.
     cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,

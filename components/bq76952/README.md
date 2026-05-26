@@ -65,9 +65,6 @@ bq76952:
   short_circuit_in_discharge_recovery_time_s: 5
   current_recovery_time_s: 3
 
-  ## Derived metrics
-  nominal_capacity_ah: 5
-
   ## Buttons
   program_factory_otp:
     name: "BMS OTP Program Factory Config"
@@ -161,7 +158,7 @@ bq76952:
 Recommended user-facing entities:
 - `pack_voltage`: actual pack terminal voltage
 - `current`: positive for discharge, negative for charge
-- `state_of_charge`: host-derived estimate from the charge accumulator and `nominal_capacity_ah`
+- `state_of_charge`: host-derived estimate using coulomb counting with learned full/empty endpoints and voltage-curve fallback
 - `fault`: active protection or permanent-failure reason using expanded names
 - `bms_state`: high-level device state such as `normal`, `sleep`, `deep_sleep`, or `config_update`
 - `output_enabled_control`: simple on/off path control where `on` means both `CHG` and `DSG` are enabled
@@ -255,7 +252,6 @@ Safe mental model:
 - `discharge_current_limit_a`, `discharge_current_limit_2_a`, `discharge_current_limit_3_a`: configure `OCD1`, `OCD2`, and `OCD3`
 - `charge_current_limit_a`: configures `OCC`
 - `short_circuit_in_discharge_threshold_mv`: configures short-circuit-in-discharge threshold
-- `nominal_capacity_ah`: required only if you want `state_of_charge`
 
 ## Sensor Notes
 
@@ -298,9 +294,3 @@ If you are updating from an older config:
 - `passed_charge` -> `energy`
 - `passed_charge_time` -> `energy_time`
 - `power_path` -> `output_enabled_control`
-- `scd_threshold_mv` -> `short_circuit_in_discharge_threshold_mv`
-- `scd_delay_us` -> `short_circuit_in_discharge_delay_us`
-- `scd_recovery_time_s` -> `short_circuit_in_discharge_recovery_time_s`
-- remove `power_path_state`
-- remove `alarm_flags` and `safety_status_flags`; use `fault` instead
-- remove `sleep_allowed_control`

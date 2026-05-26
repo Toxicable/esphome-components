@@ -24,7 +24,14 @@ Component-scoped notes for `components/bq76952`.
 - For runtime `REG0`/`REGIN` bring-up, use the minimal sequence without a reset: enter `CONFIG_UPDATE`, write `REG12 Config`, write `REG0 Config`, exit `CONFIG_UPDATE`, send `REG12_CONTROL()` with the same `REG12` byte, then measure `REGIN`.
 - Coulomb-counter accumulation is exposed from `DASTATUS6 (0x0076)` as signed `userAh` plus a 32-bit fractional term and converted through the auto-detected `userA` scale; `RESET_PASSQ (0x0082)` is exposed as a manual button, not a boot-time automatic reset.
 - Public YAML now prefers `energy` / `energy_time` as the accumulator entity names, but the underlying quantity is still charge accumulation in Ah from `DASTATUS6`, not true watt-hours.
-- `state_of_charge` is host-derived (not a native direct command) from `DASTATUS6` passed charge and `nominal_capacity_ah`; this estimate assumes passed charge was reset at a known-full baseline.
+- `state_of_charge` uses a learned-endpoint coulomb counting approach:
+  - No `nominal_capacity_ah` is required; the system learns the charge span between full and empty endpoints.
+  - Full endpoint: detected when max cell voltage is within 20mV of the overvoltage limit, current is near zero, for 30 continuous seconds.
+  - Empty endpoint: detected when min cell voltage is within 20mV of the undervoltage limit after discharge, for 30 continuous seconds.
+  - Between endpoints, a logical accumulator tracks coulomb-count deltas from `DASTATUS6` relative to the learned span.
+  - When no learned span exists, a voltage-curve fallback (`DEFAULT_LIION_CURVE_`) provides an initial estimate.
+  - Persisted state (`SocPersistedState`) is stored via ESPHome preferences so SoC survives reboots.
+  - The provisional span (from one full+empty cycle) is promoted to a learned span on the next full+empty cycle.
 - `largest_intercell_voltage` publishes the active-pack imbalance as `max(cell_n) - min(cell_n)` across mapped cells `1..cell_count`, in volts.
 - TI documents `CC2 Current()` as more-negative for discharge current; publish the user-facing `current` sensor as positive-for-discharge by negating the raw signed register value.
 - Keep the YAML monolithic in `__init__.py`; do not split this component into platform modules unless the repo-wide preference changes.

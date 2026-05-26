@@ -12,6 +12,7 @@
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
+#include "esphome/core/preferences.h"
 
 namespace esphome {
 namespace bq76952 {
@@ -144,6 +145,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     ts3_pullup_180k_ = value;
   }
 
+
   void set_stack_voltage_sensor(sensor::Sensor* sensor) {
     stack_voltage_sensor_ = sensor;
   }
@@ -273,6 +275,19 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   std::string fet_status_flags_to_string_(uint8_t fet_status) const;
   void append_flag_(std::string& flags, const char* flag) const;
 
+  struct SocCurvePoint {
+    uint16_t mv;
+    float soc;
+  };
+
+  float estimate_soc_from_voltage_(int16_t cell_mv) const;
+  float update_soc_(float current_a, float raw_passq_ah, int16_t min_cell_mv, int16_t max_cell_mv,
+                    int16_t avg_cell_mv, uint8_t safety_status_a);
+  void load_soc_state_();
+  void save_soc_state_(bool force);
+  void mark_soc_full_();
+  void mark_soc_empty_();
+
   uint8_t cell_count_{16};
   // Auto-detected from Settings:Configuration:DA Configuration (0x9303).
   int32_t current_lsb_ua_{1000};
@@ -355,6 +370,67 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
   uint32_t boot_config_apply_delay_ms_{10000};
+
+
+  // --- SoC tuning parameters ---
+  static constexpr int16_t SOC_FULL_MARGIN_MV = 20;
+  static constexpr int16_t SOC_EMPTY_MARGIN_MV = 20;
+  static constexpr uint32_t SOC_ENDPOINT_HOLD_S = 30;
+
+  // --- Coulomb counter / logical accumulator ---
+  float soc_logical_ah_{0.0f};
+  float soc_last_raw_passq_ah_{0.0f};
+  bool soc_have_last_raw_{false};
+
+  // --- Endpoint anchors ---
+  float soc_full_ah_{0.0f};
+  float soc_empty_ah_{0.0f};
+  bool soc_have_full_{false};
+  bool soc_have_empty_{false};
+  float soc_learned_span_ah_{0.0f};
+  bool soc_have_span_{false};
+  bool soc_span_provisional_{false};
+
+  // --- Boot voltage estimate ---
+  float soc_boot_estimate_fraction_{0.5f};
+  float soc_boot_logical_ah_{0.0f};
+
+  // --- Endpoint hold timers ---
+  uint32_t soc_full_hold_start_ms_{0};
+  uint32_t soc_empty_hold_start_ms_{0};
+  bool soc_charge_seen_{false};
+  bool soc_discharge_seen_{false};
+
+  // --- Persistence ---
+  uint32_t soc_last_save_ms_{0};
+
+  static constexpr SocCurvePoint DEFAULT_LIION_CURVE_[] = {
+    {2800, 0.0f}, {3000, 3.0f}, {3200, 8.0f}, {3300, 12.0f},
+    {3500, 25.0f}, {3600, 40.0f}, {3700, 58.0f}, {3800, 75.0f},
+    {3900, 86.0f}, {4000, 94.0f}, {4100, 98.0f}, {4200, 100.0f},
+  };
+
+  static constexpr float SOC_MAX_REASONABLE_DELTA_AH = 100.0f;
+
+  static constexpr uint32_t SOC_PREF_NAMESPACE = 0xB7695200u;
+
+  struct SocPersistedState {
+    float logical_ah{std::numeric_limits<float>::quiet_NaN()};
+    float last_raw_passq_ah{std::numeric_limits<float>::quiet_NaN()};
+    float full_ah{std::numeric_limits<float>::quiet_NaN()};
+    float empty_ah{std::numeric_limits<float>::quiet_NaN()};
+    float learned_span_ah{std::numeric_limits<float>::quiet_NaN()};
+    float last_soc_percent{std::numeric_limits<float>::quiet_NaN()};
+    uint8_t flags{0};
+  };
+
+  static constexpr uint8_t SOC_HAVE_FULL = 0x01;
+  static constexpr uint8_t SOC_HAVE_EMPTY = 0x02;
+  static constexpr uint8_t SOC_HAVE_SPAN = 0x04;
+  static constexpr uint8_t SOC_SPAN_PROVISIONAL = 0x08;
+
+  decltype(global_preferences->make_preference<SocPersistedState>(0)) soc_pref_{};
+  bool soc_pref_valid_{false};
 
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};

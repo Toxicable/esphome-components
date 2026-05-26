@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/python:3.11-bookworm
 
 ARG ESPHOME_VERSION=2026.4.5
+ARG OMP_VERSION=v15.3.2
 
 # Remove Yarn repo to avoid expired key during apt-get update; not needed here.
 RUN rm -f /etc/apt/sources.list.d/yarn.list \
@@ -34,11 +35,13 @@ RUN git clone --depth 1 --branch v5.1.2 https://github.com/espressif/esp-idf.git
     && . ${IDF_PATH}/export.sh \
     && python -m pip install --no-cache-dir pypdf
 
-    # Install Oh My Pi via the official installer.
-RUN apt-get update; \
+
+RUN set -eux; \
+    apt-get update; \
     apt-get install -y --no-install-recommends curl ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
     export PI_INSTALL_DIR=/usr/local/bin; \
-    curl -fsSL https://omp.sh/install | sh -s -- --binary; \
+    curl -fsSL "https://raw.githubusercontent.com/can1357/oh-my-pi/${OMP_VERSION}/scripts/install.sh" \
+      | sh -s -- --binary --ref "${OMP_VERSION}"; \
     command -v omp; \
     omp --version

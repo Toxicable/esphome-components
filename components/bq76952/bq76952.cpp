@@ -216,7 +216,14 @@ void BQ76952Component::setup() {
   if (!this->load_unit_scaling_()) {
     ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
   }
-  if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+  if (state_of_charge_sensor_ != nullptr) {
+    const uint32_t pref_key = SOC_PREF_NAMESPACE | static_cast<uint32_t>(this->address_);
+    soc_pref_ = global_preferences->make_preference<SocPersistedState>(pref_key);
+    soc_pref_valid_ = true;
+    load_soc_state_();
+  }
+
+  if (this->has_regulator_config_() || this->has_current_limit_config_() ||
       this->has_predischarge_config_() || this->has_autonomous_balancing_config_()) {
     this->regulator_config_deferred_ = this->has_regulator_config_();
     this->current_limit_config_deferred_ = this->has_current_limit_config_();
@@ -460,15 +467,20 @@ void BQ76952Component::update() {
     ld_voltage_sensor_->publish_state(ld_v);
   }
 
-  if (current_sensor_ != nullptr) {
+
+  // Always read current if needed for SoC or current sensor
+  float current_a = 0.0f;
+  if (current_sensor_ != nullptr || state_of_charge_sensor_ != nullptr) {
     int16_t cc2 = 0;
     if (!this->read_i16_(REG_CC2_CURRENT, cc2)) {
       ESP_LOGW(TAG, "Failed to read CC2 Current");
       this->status_set_warning();
       return;
     }
-    const float current_a = -static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
-    current_sensor_->publish_state(current_a);
+    current_a = -static_cast<float>(cc2) * static_cast<float>(current_lsb_ua_) / 1000000.0f;
+    if (current_sensor_ != nullptr) {
+      current_sensor_->publish_state(current_a);
+    }
   }
 
   if (charge_throughput_sensor_ != nullptr || charge_throughput_time_sensor_ != nullptr ||
@@ -493,15 +505,42 @@ void BQ76952Component::update() {
     if (charge_throughput_time_sensor_ != nullptr) {
       charge_throughput_time_sensor_->publish_state(static_cast<float>(accum_time_s));
     }
-    if (state_of_charge_sensor_ != nullptr) {
-      if (!has_nominal_capacity_ah_ || nominal_capacity_ah_ <= 0.0f) {
-        ESP_LOGW(TAG, "nominal_capacity_ah must be configured to publish state_of_charge");
-      } else {
-        const float soc_percent = static_cast<float>(100.0 - (total_user_ah * user_ah_to_ah * 100.0 /
-                                                               static_cast<double>(nominal_capacity_ah_)));
-        state_of_charge_sensor_->publish_state(std::fmax(0.0f, std::fmin(100.0f, soc_percent)));
+  }
+
+  // SoC: always compute min/max/avg cell mv if SoC sensor exists
+  if (state_of_charge_sensor_ != nullptr) {
+    int16_t min_cell_mv = raw_cell_mv[cell_read_map_[0]];
+    int16_t max_cell_mv = min_cell_mv;
+    int32_t sum_cell_mv = min_cell_mv;
+    for (uint8_t i = 1; i < cell_count_; i++) {
+      const int16_t cell_mv = raw_cell_mv[cell_read_map_[i]];
+      if (cell_mv < min_cell_mv) {
+        min_cell_mv = cell_mv;
       }
+      if (cell_mv > max_cell_mv) {
+        max_cell_mv = cell_mv;
+      }
+      sum_cell_mv += cell_mv;
     }
+    const int16_t avg_cell_mv = static_cast<int16_t>(sum_cell_mv / static_cast<int32_t>(cell_count_));
+
+    // On first call, initialize boot voltage estimate
+    if (!soc_have_last_raw_) {
+      soc_boot_estimate_fraction_ = estimate_soc_from_voltage_(avg_cell_mv) / 100.0f;
+    }
+
+    // Compute raw passed charge in Ah from DASTATUS6
+    uint8_t dastatus6[12]{};
+    if (!this->read_subcommand_(SUBCMD_DASTATUS6, dastatus6, sizeof(dastatus6))) {
+      ESP_LOGW(TAG, "Failed to read DASTATUS6 for SoC");
+      return;
+    }
+    const int32_t accum_user_ah_integer = read_le_i32(&dastatus6[0]);
+    const uint32_t accum_user_ah_fraction = read_le_u32(&dastatus6[4]);
+    const double raw_passq_ah = static_cast<double>(accum_user_ah_integer) +
+                                static_cast<double>(accum_user_ah_fraction) / 4294967296.0;
+    const float soc_percent = update_soc_(current_a, static_cast<float>(raw_passq_ah), min_cell_mv, max_cell_mv, avg_cell_mv, safety_status_a);
+    state_of_charge_sensor_->publish_state(static_cast<float>(soc_percent));
   }
 
   if (die_temperature_sensor_ != nullptr) {
@@ -3246,6 +3285,221 @@ void BQ76952ProgramFactoryOtpButton::press_action() {
   }
   ESP_LOGW(TAG, "Action result: program_factory_otp=failed");
 }
+
+// --- SoC helpers ---
+
+float BQ76952Component::estimate_soc_from_voltage_(int16_t cell_mv) const {
+  int16_t full_cell_mv = has_cell_overvoltage_limit_ ? cell_overvoltage_limit_mv_ : 4200;
+  int16_t empty_cell_mv = has_cell_undervoltage_limit_ ? cell_undervoltage_limit_mv_ : 2800;
+
+  cell_mv = std::max(cell_mv, empty_cell_mv);
+  cell_mv = std::min(cell_mv, full_cell_mv);
+
+  const auto& curve = DEFAULT_LIION_CURVE_;
+  const size_t curve_size = sizeof(curve) / sizeof(curve[0]);
+
+  if (cell_mv <= curve[0].mv) {
+    return curve[0].soc;
+  }
+  if (cell_mv >= curve[curve_size - 1].mv) {
+    return curve[curve_size - 1].soc;
+  }
+
+  for (size_t i = 0; i < curve_size - 1; i++) {
+    if (cell_mv >= curve[i].mv && cell_mv <= curve[i + 1].mv) {
+      const float frac = static_cast<float>(cell_mv - curve[i].mv) / static_cast<float>(curve[i + 1].mv - curve[i].mv);
+      return curve[i].soc + frac * (curve[i + 1].soc - curve[i].soc);
+    }
+  }
+
+  return 50.0f;
+}
+
+float BQ76952Component::update_soc_(float current_a, float raw_passq_ah, int16_t min_cell_mv, int16_t max_cell_mv,
+                                   int16_t avg_cell_mv, uint8_t safety_status_a) {
+  if (soc_have_last_raw_) {
+    const float delta_ah = raw_passq_ah - soc_last_raw_passq_ah_;
+    if (std::fabs(delta_ah) < SOC_MAX_REASONABLE_DELTA_AH) {
+      soc_logical_ah_ += delta_ah;
+    }
+  }
+  soc_last_raw_passq_ah_ = raw_passq_ah;
+  soc_have_last_raw_ = true;
+
+  if (current_a < -0.01f) {
+    soc_charge_seen_ = true;
+  } else if (current_a > 0.01f) {
+    soc_discharge_seen_ = true;
+  }
+
+  const int16_t full_cell_mv = has_cell_overvoltage_limit_ ? cell_overvoltage_limit_mv_ : 4200;
+  const int16_t empty_cell_mv = has_cell_undervoltage_limit_ ? cell_undervoltage_limit_mv_ : 2800;
+  const bool cov_active = (safety_status_a & PROTECTION_A_COV) != 0;
+  const bool cuv_active = (safety_status_a & PROTECTION_A_CUV) != 0;
+
+  const bool full_voltage = max_cell_mv >= (full_cell_mv - SOC_FULL_MARGIN_MV);
+  const bool empty_voltage = min_cell_mv <= (empty_cell_mv + SOC_EMPTY_MARGIN_MV);
+
+  const uint32_t now_ms = millis();
+
+  if (full_voltage && !soc_have_full_) {
+    if (soc_full_hold_start_ms_ == 0) {
+      soc_full_hold_start_ms_ = now_ms;
+    }
+  } else {
+    soc_full_hold_start_ms_ = 0;
+  }
+
+  if (empty_voltage && !soc_have_empty_) {
+    if (soc_empty_hold_start_ms_ == 0) {
+      soc_empty_hold_start_ms_ = now_ms;
+    }
+  } else {
+    soc_empty_hold_start_ms_ = 0;
+  }
+
+  const bool full_now = cov_active ||
+                        (full_voltage && soc_charge_seen_ && std::fabs(current_a) < 0.01f &&
+                         now_ms >= soc_full_hold_start_ms_ &&
+                         (now_ms - soc_full_hold_start_ms_) >= (SOC_ENDPOINT_HOLD_S * 1000u));
+
+  const bool empty_now = cuv_active ||
+                         (empty_voltage && soc_discharge_seen_ &&
+                          now_ms >= soc_empty_hold_start_ms_ &&
+                          (now_ms - soc_empty_hold_start_ms_) >= (SOC_ENDPOINT_HOLD_S * 1000u));
+
+  if (full_now) {
+    mark_soc_full_();
+  }
+  if (empty_now) {
+    mark_soc_empty_();
+  }
+
+  float soc_percent;
+
+  if (soc_have_span_) {
+    soc_percent = 100.0f * (soc_empty_ah_ - soc_logical_ah_) / soc_learned_span_ah_;
+  } else {
+    soc_percent = estimate_soc_from_voltage_(avg_cell_mv);
+  }
+  soc_percent = std::fmax(0.0f, std::fmin(100.0f, soc_percent));
+  save_soc_state_(false);
+
+  return soc_percent;
+}
+
+void BQ76952Component::mark_soc_full_() {
+  if (!soc_have_full_) {
+    soc_have_full_ = true;
+    soc_full_ah_ = soc_logical_ah_;
+    ESP_LOGI(TAG, "SoC: full endpoint detected at logical_ah=%.4f", soc_full_ah_);
+
+    if (!soc_have_empty_ &&
+        soc_boot_estimate_fraction_ >= 0.10f &&
+        soc_boot_estimate_fraction_ <= 0.90f) {
+      soc_learned_span_ah_ = (soc_boot_logical_ah_ - soc_full_ah_) / (1.0f - soc_boot_estimate_fraction_);
+      soc_empty_ah_ = soc_full_ah_ + soc_learned_span_ah_;
+      soc_have_span_ = true;
+      soc_span_provisional_ = true;
+      ESP_LOGI(TAG, "SoC: provisional span=%.4f Ah from boot voltage estimate", soc_learned_span_ah_);
+    }
+    save_soc_state_(true);
+  }
+  soc_full_hold_start_ms_ = 0;
+}
+
+void BQ76952Component::mark_soc_empty_() {
+  if (!soc_have_empty_) {
+    soc_have_empty_ = true;
+    soc_empty_ah_ = soc_logical_ah_;
+    ESP_LOGI(TAG, "SoC: empty endpoint detected at logical_ah=%.4f", soc_empty_ah_);
+
+    if (!soc_have_full_ &&
+        soc_boot_estimate_fraction_ >= 0.10f &&
+        soc_boot_estimate_fraction_ <= 0.90f) {
+      soc_learned_span_ah_ = (soc_empty_ah_ - soc_boot_logical_ah_) / soc_boot_estimate_fraction_;
+      soc_full_ah_ = soc_empty_ah_ - soc_learned_span_ah_;
+      soc_have_span_ = true;
+      soc_span_provisional_ = true;
+      ESP_LOGI(TAG, "SoC: provisional span=%.4f Ah from boot voltage estimate", soc_learned_span_ah_);
+    }
+    save_soc_state_(true);
+  }
+  soc_empty_hold_start_ms_ = 0;
+}
+
+void BQ76952Component::load_soc_state_() {
+  if (!soc_pref_valid_) {
+    return;
+  }
+
+  SocPersistedState state{};
+  if (!soc_pref_.load(&state)) {
+    ESP_LOGD(TAG, "SoC: no persisted state found, starting fresh");
+    return;
+  }
+
+  if (std::isnan(state.logical_ah)) {
+    ESP_LOGD(TAG, "SoC: persisted state invalid, starting fresh");
+    return;
+  }
+
+  soc_logical_ah_ = state.logical_ah;
+  soc_last_raw_passq_ah_ = state.last_raw_passq_ah;
+  soc_have_last_raw_ = true;
+  soc_full_ah_ = state.full_ah;
+  soc_empty_ah_ = state.empty_ah;
+  soc_learned_span_ah_ = state.learned_span_ah;
+  soc_have_full_ = (state.flags & SOC_HAVE_FULL) != 0;
+  soc_have_empty_ = (state.flags & SOC_HAVE_EMPTY) != 0;
+  soc_have_span_ = (state.flags & SOC_HAVE_SPAN) != 0;
+  soc_span_provisional_ = (state.flags & SOC_SPAN_PROVISIONAL) != 0;
+
+  ESP_LOGI(TAG, "SoC: loaded persisted state (logical_ah=%.4f, span=%.4f, flags=0x%02x)",
+           soc_logical_ah_, soc_learned_span_ah_, state.flags);
+}
+
+void BQ76952Component::save_soc_state_(bool force) {
+  if (!soc_pref_valid_) {
+    return;
+  }
+
+  const uint32_t now_ms = millis();
+  if (!force && (now_ms - soc_last_save_ms_) < 60000u) {
+    return;
+  }
+
+  SocPersistedState state{};
+  state.logical_ah = soc_logical_ah_;
+  state.last_raw_passq_ah = soc_last_raw_passq_ah_;
+  state.full_ah = soc_full_ah_;
+  state.empty_ah = soc_empty_ah_;
+  state.learned_span_ah = soc_learned_span_ah_;
+  state.last_soc_percent = 100.0f * (soc_empty_ah_ - soc_logical_ah_) /
+                           (soc_learned_span_ah_ > 0.001f ? soc_learned_span_ah_ : 1.0f);
+  state.flags = 0;
+  if (soc_have_full_) state.flags |= SOC_HAVE_FULL;
+  if (soc_have_empty_) state.flags |= SOC_HAVE_EMPTY;
+  if (soc_have_span_) state.flags |= SOC_HAVE_SPAN;
+  if (soc_span_provisional_) state.flags |= SOC_SPAN_PROVISIONAL;
+
+  if (!soc_pref_.save(&state)) {
+    ESP_LOGW(TAG, "SoC: failed to save persisted state");
+    return;
+  }
+
+  soc_last_save_ms_ = now_ms;
+
+  if (soc_have_full_ && soc_have_empty_ && soc_span_provisional_) {
+    soc_learned_span_ah_ = soc_empty_ah_ - soc_full_ah_;
+    soc_span_provisional_ = false;
+    state.learned_span_ah = soc_learned_span_ah_;
+    state.flags = (state.flags & ~SOC_SPAN_PROVISIONAL) | SOC_HAVE_SPAN;
+    soc_pref_.save(&state);
+    ESP_LOGI(TAG, "SoC: span promoted to learned=%.4f Ah", soc_learned_span_ah_);
+  }
+}
+
 
 }  // namespace bq76952
 }  // namespace esphome
