@@ -85,6 +85,7 @@ void ProgrammableLoadComponent::set_target(float amps) {
   // Reset ramping state.
   this->unconfirmed_rise_a_ = 0.0f;
   this->unconfirmed_fall_a_ = 0.0f;
+  this->last_confirmed_current_a_ = std::numeric_limits<float>::quiet_NaN();
 
   // Capture DCR baseline (start voltage/current at setpoint time).
   bool current_ok = this->current_sensor_ != nullptr
@@ -388,6 +389,24 @@ void ProgrammableLoadComponent::control_loop_() {
   const float target = this->current_target_a_;
   const float i = this->current_sensor_->state;
   const float vbus = this->voltage_sensor_->state;
+  
+  // Credit confirmed current movement back against unconfirmed counters.
+  // This prevents the unconfirmed budget from exhausting and stalling the ramp.
+  if (!std::isnan(this->last_confirmed_current_a_)) {
+    const float i_delta = i - this->last_confirmed_current_a_;
+    if (i_delta > 0.0f) {
+      // Current increased — credit back rise budget.
+      this->unconfirmed_rise_a_ -= i_delta;
+      if (this->unconfirmed_rise_a_ < 0.0f)
+        this->unconfirmed_rise_a_ = 0.0f;
+    } else if (i_delta < 0.0f) {
+      // Current decreased — credit back fall budget.
+      this->unconfirmed_fall_a_ -= (-i_delta);
+      if (this->unconfirmed_fall_a_ < 0.0f)
+        this->unconfirmed_fall_a_ = 0.0f;
+    }
+  }
+  this->last_confirmed_current_a_ = i;
 
   const float err = target - i;
   const float abs_err = fabsf(err);

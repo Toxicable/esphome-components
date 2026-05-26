@@ -103,6 +103,7 @@ class ProgrammableLoadComponent : public Component {
   float current_command_a_{0.0f};
   float unconfirmed_rise_a_{0.0f};
   float unconfirmed_fall_a_{0.0f};
+  float last_confirmed_current_a_{std::numeric_limits<float>::quiet_NaN()};
 
   // DCR: baseline captured when setpoint is set, samples taken during ramp.
   float dcr_start_voltage_v_{std::numeric_limits<float>::quiet_NaN()};
