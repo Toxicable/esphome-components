@@ -112,10 +112,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_boot_config_apply_delay_ms(uint32_t value) {
     boot_config_apply_delay_ms_ = value;
   }
-  void set_vcell_mode_mask(uint16_t value) {
-    vcell_mode_mask_ = value;
-    has_vcell_mode_mask_ = true;
-  }
   void set_xchg_debug_burst(bool value) {
     xchg_debug_burst_ = value;
   }
@@ -318,7 +314,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_reg0_config_{false};
   bool has_reg1_enabled_config_{false};
   bool has_reg1_voltage_config_{false};
-  bool has_vcell_mode_mask_{false};
   bool reg0_enabled_{false};
   bool reg1_enabled_{false};
   bool has_ts1_config_{false};
@@ -329,7 +324,6 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool ts3_pullup_180k_{false};
   uint8_t autonomous_fet_mode_{BOOT_PRESERVE};
   uint8_t sleep_mode_{BOOT_PRESERVE};
-  uint16_t vcell_mode_mask_{0};
   bool event_logging_{false};
   bool xchg_debug_burst_{false};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
