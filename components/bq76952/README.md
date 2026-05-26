@@ -32,6 +32,7 @@ bq76952:
   cell_count: 4
   update_interval: 20ms
   # boot_config_apply_delay: 60s
+  # vcell_mode_mask: 0x000F
 
   ## OTP-backed startup defaults
   # otp_autonomous_fet_mode: enable
@@ -185,7 +186,7 @@ These settings are normal YAML config and are written into the chip's live RAM c
 These writes are not permanent across a full hardware reset or a chip that boots from different OTP defaults.
 
 Boot-applied RAM config includes:
-- `cell_count`-derived `Settings:Configuration:Vcell Mode` mask (`Cell 1..N` enabled, higher cells disabled for protection)
+- `Settings:Configuration:Vcell Mode` from active-cell auto-detect (or `vcell_mode_mask` override), so protections track actual wired VC channels
 - `sleep_charge_enabled`
 - `predischarge_enabled`
 - `reg0_enabled`
