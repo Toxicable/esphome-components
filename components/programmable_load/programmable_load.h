@@ -7,6 +7,7 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/output/float_output.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 
 namespace esphome {
@@ -62,7 +63,7 @@ class ProgrammableLoadComponent : public Component {
   void set_dcr_sensor(sensor::Sensor *s) { dcr_sensor_ = s; }
   void set_voltage_drop_sensor(sensor::Sensor *s) { voltage_drop_sensor_ = s; }
   void set_current_delta_sensor(sensor::Sensor *s) { current_delta_sensor_ = s; }
-  void set_ramp_state_sensor(sensor::Sensor *s) { ramp_state_sensor_ = s; }
+  void set_ramp_state_sensor(text_sensor::TextSensor *s) { ramp_state_sensor_ = s; }
   void set_fault_ntc_missing_sensor(binary_sensor::BinarySensor *s) { fault_ntc_missing_sensor_ = s; }
   void set_fault_no_voltage_sensor(binary_sensor::BinarySensor *s) { fault_no_voltage_sensor_ = s; }
   void set_fault_over_temp_sensor(binary_sensor::BinarySensor *s) { fault_over_temp_sensor_ = s; }
@@ -141,7 +142,7 @@ class ProgrammableLoadComponent : public Component {
   sensor::Sensor *dcr_sensor_{nullptr};
   sensor::Sensor *voltage_drop_sensor_{nullptr};
   sensor::Sensor *current_delta_sensor_{nullptr};
-  sensor::Sensor *ramp_state_sensor_{nullptr};
+  text_sensor::TextSensor *ramp_state_sensor_{nullptr};
   binary_sensor::BinarySensor *fault_ntc_missing_sensor_{nullptr};
   binary_sensor::BinarySensor *fault_no_voltage_sensor_{nullptr};
   binary_sensor::BinarySensor *fault_over_temp_sensor_{nullptr};

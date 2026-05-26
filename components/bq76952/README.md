@@ -24,8 +24,9 @@ i2c:
   scl: GPIO22
   frequency: 400kHz
 
+
 bq76952:
-  i2c_id: i2c_bus
+  i2c_id: i2c_ext
 
   ## Core
   cell_count: 4
@@ -36,31 +37,31 @@ bq76952:
   # otp_sleep_mode: enable
 
   ## Boot-applied live config
-  # sleep_charge_enabled: true
-  # predischarge_enabled: true
+  sleep_charge_enabled: true
+  predischarge_enabled: true
 
   ## Regulator config
-  # reg1_voltage: 3.3V
-  # reg0_enabled: true
+  reg1_voltage: 3.3V
+  reg0_enabled: true
 
   ## Current / protection config
   sense_resistor_milliohm: 1.0
-  # cell_undervoltage_limit_mv: 2800
-  # cell_undervoltage_delay_ms: 200
-  # cell_overvoltage_limit_mv: 4200
-  # cell_overvoltage_delay_ms: 200
-  # charge_current_limit_a: 20
-  # charge_current_delay_ms: 23
-  # discharge_current_limit_a: 40
-  # discharge_current_delay_ms: 23
-  # discharge_current_limit_2_a: 60
-  # discharge_current_delay_2_ms: 23
-  # discharge_current_limit_3_a: 100
-  # discharge_current_delay_3_s: 1
-  # short_circuit_in_discharge_threshold_mv: 100
-  # short_circuit_in_discharge_delay_us: 210
-  # short_circuit_in_discharge_recovery_time_s: 5
-  # current_recovery_time_s: 3
+  cell_undervoltage_limit_mv: 2800
+  cell_undervoltage_delay_ms: 200
+  cell_overvoltage_limit_mv: 4200
+  cell_overvoltage_delay_ms: 200
+  charge_current_limit_a: 20
+  charge_current_delay_ms: 23
+  discharge_current_limit_a: 40
+  discharge_current_delay_ms: 23
+  discharge_current_limit_2_a: 60
+  discharge_current_delay_2_ms: 23
+  discharge_current_limit_3_a: 100
+  discharge_current_delay_3_s: 1
+  short_circuit_in_discharge_threshold_mv: 100
+  short_circuit_in_discharge_delay_us: 210
+  short_circuit_in_discharge_recovery_time_s: 5
+  current_recovery_time_s: 3
 
   ## Derived metrics
   nominal_capacity_ah: 5
@@ -183,6 +184,7 @@ These settings are normal YAML config and are written into the chip's live RAM c
 These writes are not permanent across a full hardware reset or a chip that boots from different OTP defaults.
 
 Boot-applied RAM config includes:
+- `cell_count`-derived `Settings:Configuration:Vcell Mode` mask (`Cell 1..N` enabled, higher cells disabled for protection)
 - `sleep_charge_enabled`
 - `predischarge_enabled`
 - `reg0_enabled`

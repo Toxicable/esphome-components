@@ -1,5 +1,7 @@
 #include "programmable_load.h"
 
+#include <cmath>
+
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -113,6 +115,10 @@ void ProgrammableLoadComponent::set_target(float amps) {
 
   ESP_LOGI(TAG, "SETPOINT %.3fA", target);
 
+  if (this->setpoint_number_ != nullptr) {
+    this->setpoint_number_->publish_state(target);
+  }
+
   // Update ramp state.
   this->ramp_state_ = RampState::HOLDING;
 }
@@ -167,16 +173,14 @@ bool ProgrammableLoadComponent::check_safety_() {
       }
     }
   } else if (!this->temperature_sensors_.empty()) {
-    // No NTC present sensors configured; validate temperatures directly.
+    // No explicit NTC-present signals are available, so treat invalid/missing
+    // temperature readings as an NTC fault.
     for (sensor::Sensor *s : this->temperature_sensors_) {
-      if (s != nullptr && s->has_state() && !std::isnan(s->state)) {
-        // Temperature is valid, consider NTC present.
-      } else if (s != nullptr) {
-        // No valid reading yet — could be missing.
-        // If we have readings, check range.
+      if (s == nullptr || !s->has_state() || std::isnan(s->state)) {
+        all_ntc_present = false;
+        break;
       }
     }
-    // Without explicit NTC present sensors, we rely on temperature range checks.
   }
 
   if (!all_ntc_present) {
@@ -327,6 +331,10 @@ void ProgrammableLoadComponent::publish_state_() {
   // Publish current delta.
   if (this->current_delta_sensor_ != nullptr) {
     this->current_delta_sensor_->publish_state(this->dcr_delta_current_a_);
+  }
+
+  if (this->ramp_state_sensor_ != nullptr) {
+    this->ramp_state_sensor_->publish_state(this->ramp_state_to_string_(this->ramp_state_));
   }
 
   // Publish fault states.
@@ -528,37 +536,9 @@ void ProgrammableLoadComponent::control_loop_() {
 }
 
 void ProgrammableLoadComponent::slow_update_() {
-  // Safety checks even when not actively ramping.
-  if (this->current_command_a_ > 0.01f) {
-    // Check NTC presence.
-    if (!this->ntc_present_sensors_.empty()) {
-      for (binary_sensor::BinarySensor *bs : this->ntc_present_sensors_) {
-        if (bs != nullptr && !bs->state) {
-          this->fault_ntc_missing_ = true;
-          ESP_LOGW(TAG, "FAULT: NTC missing; forcing load off");
-          this->force_off();
-          return;
-        }
-      }
-    }
-
-    // Check voltage.
-    if (this->voltage_sensor_ != nullptr
-        && (this->voltage_sensor_->state <= this->voltage_min_v_)) {
-      this->fault_no_voltage_ = true;
-      ESP_LOGW(TAG, "FAULT: input voltage missing; forcing load off");
-      this->force_off();
-      return;
-    }
-
-    // Check temperature.
-    float t = this->get_max_temp_();
-    if (!std::isnan(t) && t >= this->max_temp_c_) {
-      this->fault_over_temp_ = true;
-      ESP_LOGW(TAG, "FAULT: over temperature (%.1f°C >= %.1f°C); forcing load off", t, this->max_temp_c_);
-      this->force_off();
-      return;
-    }
+  // Safety checks even when not actively ramping, as long as the output is on.
+  if (this->current_command_a_ > 0.01f && !this->check_safety_()) {
+    return;
   }
 
   // Fan control.

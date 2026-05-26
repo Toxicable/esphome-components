@@ -104,6 +104,8 @@ programmable_load:
   #   name: "Battery Ramp Voltage Drop"
   # current_delta:
   #   name: "Battery Ramp Current Delta"
+  # ramp_state:
+  #   name: "Load Ramp State"
   # fault_ntc_missing:
   #   name: "Load Fault NTC Missing"
   # fault_no_voltage:
@@ -119,4 +121,6 @@ programmable_load:
 - Near the target, the loop waits for visible INA response before adding more DAC command, preventing overshoot.
 - DCR estimation captures the V/I baseline when a new non-zero setpoint is applied and updates continuously during upward ramping.
 - Fan PWM ramps linearly between `fan_start_temp_c` and `fan_full_temp_c`.
+- `fan_full_temp_c` must be greater than `fan_start_temp_c`.
+- If `ntc_present_sensors` is omitted, every configured `temperature_sensors` reading must stay valid or the load faults off as `fault_ntc_missing`.
 - All generated entities are optional; omit any that are not needed.

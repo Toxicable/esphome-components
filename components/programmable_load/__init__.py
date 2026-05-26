@@ -1,9 +1,8 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import binary_sensor, number, output, sensor
+from esphome.components import binary_sensor, number, output, sensor, text_sensor
 from esphome.const import (
     CONF_ID,
-    CONF_NAME,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_VOLTAGE,
     ENTITY_CATEGORY_DIAGNOSTIC,
@@ -11,7 +10,7 @@ from esphome.const import (
     UNIT_AMPERE,
     UNIT_MILLIVOLT,
 )
-AUTO_LOAD = ["binary_sensor", "number", "sensor"]
+AUTO_LOAD = ["binary_sensor", "number", "sensor", "text_sensor"]
 programmable_load_ns = cg.esphome_ns.namespace("programmable_load")
 ProgrammableLoadComponent = programmable_load_ns.class_(
     "ProgrammableLoadComponent", cg.Component
@@ -52,6 +51,7 @@ CONF_CURRENT_COMMAND = "current_command"
 CONF_DCR = "dcr"
 CONF_VOLTAGE_DROP = "voltage_drop"
 CONF_CURRENT_DELTA = "current_delta"
+CONF_RAMP_STATE = "ramp_state"
 CONF_FAULT_NTC_MISSING = "fault_ntc_missing"
 CONF_FAULT_NO_VOLTAGE = "fault_no_voltage"
 CONF_FAULT_OVER_TEMP = "fault_over_temp"
@@ -71,72 +71,100 @@ def _validate_non_negative_float(value):
     return value
 
 
+def _validate_config(config):
+    if config[CONF_FAN_FULL_TEMP_C] <= config[CONF_FAN_START_TEMP_C]:
+        raise cv.Invalid("fan_full_temp_c must be greater than fan_start_temp_c")
+
+    ntc_present_sensors = config[CONF_NTC_PRESENT_SENSORS]
+    if ntc_present_sensors and len(ntc_present_sensors) != len(config[CONF_TEMPERATURE_SENSORS]):
+        raise cv.Invalid(
+            "ntc_present_sensors must match temperature_sensors count when configured"
+        )
+
+    return config
+
+
 # --- Main config schema ---
-CONFIG_SCHEMA = cv.Schema({
-    # Required external references.
-    cv.Required(CONF_DAC_OUTPUT): cv.use_id(output.FloatOutput),
-    cv.Required(CONF_FAN_OUTPUT): cv.use_id(output.FloatOutput),
-    cv.Required(CONF_CURRENT_SENSOR): cv.use_id(sensor.Sensor),
-    cv.Required(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
-    cv.Required(CONF_TEMPERATURE_SENSORS): cv.ensure_list(cv.use_id(sensor.Sensor)),
-    cv.Optional(CONF_NTC_PRESENT_SENSORS, default=[]): cv.ensure_list(cv.use_id(binary_sensor.BinarySensor)),
+CONFIG_SCHEMA = cv.All(
+    cv.Schema({
+        cv.GenerateID(): cv.declare_id(ProgrammableLoadComponent),
 
-    # Tunables with defaults.
-    cv.Optional(CONF_MAX_CURRENT_A, default=40.0): _validate_positive_float,
-    cv.Optional(CONF_VOLTAGE_MIN_V, default=1.0): _validate_positive_float,
-    cv.Optional(CONF_MAX_TEMP_C, default=100.0): _validate_positive_float,
-    cv.Optional(CONF_CONTROL_PERIOD_MS, default=50): cv.All(cv.int_, cv.Range(min=10, max=1000)),
+        # Required external references.
+        cv.Required(CONF_DAC_OUTPUT): cv.use_id(output.FloatOutput),
+        cv.Required(CONF_FAN_OUTPUT): cv.use_id(output.FloatOutput),
+        cv.Required(CONF_CURRENT_SENSOR): cv.use_id(sensor.Sensor),
+        cv.Required(CONF_VOLTAGE_SENSOR): cv.use_id(sensor.Sensor),
+        cv.Required(CONF_TEMPERATURE_SENSORS): cv.All(
+            cv.ensure_list(cv.use_id(sensor.Sensor)),
+            cv.Length(min=1),
+        ),
+        cv.Optional(CONF_NTC_PRESENT_SENSORS, default=[]): cv.ensure_list(
+            cv.use_id(binary_sensor.BinarySensor)
+        ),
 
-    cv.Optional(CONF_DEADBAND_MIN_A, default=0.010): _validate_non_negative_float,
-    cv.Optional(CONF_DEADBAND_RATIO, default=0.002): _validate_non_negative_float,
-    cv.Optional(CONF_CURRENT_RESPONSE_MIN_A, default=0.020): _validate_non_negative_float,
-    cv.Optional(CONF_NEAR_TARGET_MIN_BAND_A, default=0.160): _validate_non_negative_float,
-    cv.Optional(CONF_MAX_UNCONFIRMED_RISE_A, default=1.0): _validate_positive_float,
-    cv.Optional(CONF_MAX_UNCONFIRMED_FALL_A, default=2.0): _validate_positive_float,
-    cv.Optional(CONF_RAMP_FAST_A_PER_S, default=8.0): _validate_positive_float,
-    cv.Optional(CONF_RAMP_MEDIUM_A_PER_S, default=4.0): _validate_positive_float,
+        # Tunables with defaults.
+        cv.Optional(CONF_MAX_CURRENT_A, default=40.0): _validate_positive_float,
+        cv.Optional(CONF_VOLTAGE_MIN_V, default=1.0): _validate_positive_float,
+        cv.Optional(CONF_MAX_TEMP_C, default=100.0): _validate_positive_float,
+        cv.Optional(CONF_CONTROL_PERIOD_MS, default=50): cv.All(
+            cv.int_, cv.Range(min=10, max=1000)
+        ),
 
-    cv.Optional(CONF_DCR_MIN_DELTA_CURRENT_A, default=0.500): _validate_positive_float,
+        cv.Optional(CONF_DEADBAND_MIN_A, default=0.010): _validate_non_negative_float,
+        cv.Optional(CONF_DEADBAND_RATIO, default=0.002): _validate_non_negative_float,
+        cv.Optional(CONF_CURRENT_RESPONSE_MIN_A, default=0.020): _validate_non_negative_float,
+        cv.Optional(CONF_NEAR_TARGET_MIN_BAND_A, default=0.160): _validate_non_negative_float,
+        cv.Optional(CONF_MAX_UNCONFIRMED_RISE_A, default=1.0): _validate_positive_float,
+        cv.Optional(CONF_MAX_UNCONFIRMED_FALL_A, default=2.0): _validate_positive_float,
+        cv.Optional(CONF_RAMP_FAST_A_PER_S, default=8.0): _validate_positive_float,
+        cv.Optional(CONF_RAMP_MEDIUM_A_PER_S, default=4.0): _validate_positive_float,
 
-    cv.Optional(CONF_FAN_START_TEMP_C, default=35.0): cv.float_,
-    cv.Optional(CONF_FAN_FULL_TEMP_C, default=65.0): cv.float_,
+        cv.Optional(CONF_DCR_MIN_DELTA_CURRENT_A, default=0.500): _validate_positive_float,
 
-    # Generated entities (optional).
-    cv.Optional(CONF_SETPPOINT): number.number_schema(
-        ProgrammableLoadSetpointNumber,
-        unit_of_measurement=UNIT_AMPERE,
-        device_class=DEVICE_CLASS_CURRENT,
-    ),
-    cv.Optional(CONF_CURRENT_COMMAND): sensor.sensor_schema(
-        unit_of_measurement=UNIT_AMPERE,
-        accuracy_decimals=3,
-        device_class=DEVICE_CLASS_CURRENT,
-        state_class=STATE_CLASS_MEASUREMENT,
-    ),
-    cv.Optional(CONF_DCR): sensor.sensor_schema(
-        unit_of_measurement="mΩ",
-        accuracy_decimals=2,
-    ),
-    cv.Optional(CONF_VOLTAGE_DROP): sensor.sensor_schema(
-        unit_of_measurement=UNIT_MILLIVOLT,
-        accuracy_decimals=2,
-        device_class=DEVICE_CLASS_VOLTAGE,
-    ),
-    cv.Optional(CONF_CURRENT_DELTA): sensor.sensor_schema(
-        unit_of_measurement=UNIT_AMPERE,
-        accuracy_decimals=3,
-        device_class=DEVICE_CLASS_CURRENT,
-    ),
-    cv.Optional(CONF_FAULT_NTC_MISSING): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    ),
-    cv.Optional(CONF_FAULT_NO_VOLTAGE): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    ),
-    cv.Optional(CONF_FAULT_OVER_TEMP): binary_sensor.binary_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    ),
-}).extend(cv.COMPONENT_SCHEMA)
+        cv.Optional(CONF_FAN_START_TEMP_C, default=35.0): cv.float_,
+        cv.Optional(CONF_FAN_FULL_TEMP_C, default=65.0): cv.float_,
+
+        # Generated entities (optional).
+        cv.Optional(CONF_SETPPOINT): number.number_schema(
+            ProgrammableLoadSetpointNumber,
+            unit_of_measurement=UNIT_AMPERE,
+            device_class=DEVICE_CLASS_CURRENT,
+        ),
+        cv.Optional(CONF_CURRENT_COMMAND): sensor.sensor_schema(
+            unit_of_measurement=UNIT_AMPERE,
+            accuracy_decimals=3,
+            device_class=DEVICE_CLASS_CURRENT,
+            state_class=STATE_CLASS_MEASUREMENT,
+        ),
+        cv.Optional(CONF_DCR): sensor.sensor_schema(
+            unit_of_measurement="mΩ",
+            accuracy_decimals=2,
+        ),
+        cv.Optional(CONF_VOLTAGE_DROP): sensor.sensor_schema(
+            unit_of_measurement=UNIT_MILLIVOLT,
+            accuracy_decimals=2,
+            device_class=DEVICE_CLASS_VOLTAGE,
+        ),
+        cv.Optional(CONF_CURRENT_DELTA): sensor.sensor_schema(
+            unit_of_measurement=UNIT_AMPERE,
+            accuracy_decimals=3,
+            device_class=DEVICE_CLASS_CURRENT,
+        ),
+        cv.Optional(CONF_RAMP_STATE): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(CONF_FAULT_NTC_MISSING): binary_sensor.binary_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(CONF_FAULT_NO_VOLTAGE): binary_sensor.binary_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+        cv.Optional(CONF_FAULT_OVER_TEMP): binary_sensor.binary_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+        ),
+    }).extend(cv.COMPONENT_SCHEMA),
+    _validate_config,
+)
 
 
 async def to_code(config):
@@ -215,6 +243,10 @@ async def to_code(config):
     if CONF_CURRENT_DELTA in config:
         sens = await sensor.new_sensor(config[CONF_CURRENT_DELTA])
         cg.add(var.set_current_delta_sensor(sens))
+
+    if CONF_RAMP_STATE in config:
+        ts = await text_sensor.new_text_sensor(config[CONF_RAMP_STATE])
+        cg.add(var.set_ramp_state_sensor(ts))
 
     # Generate fault binary sensors.
     if CONF_FAULT_NTC_MISSING in config:

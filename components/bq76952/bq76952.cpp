@@ -93,6 +93,7 @@ constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
 constexpr uint16_t DM_ENABLED_PROTECTIONS_C = 0x9263;
+constexpr uint16_t DM_VCELL_MODE = 0x9304;
 constexpr uint16_t DM_FET_OPTIONS = 0x9308;
 constexpr uint16_t DM_POWER_CONFIG = 0x9234;
 constexpr uint16_t DM_CFETOFF_PIN_CONFIG = 0x92FA;
@@ -548,6 +549,9 @@ void BQ76952Component::dump_config() {
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  cell_count: %u", static_cast<unsigned>(cell_count_));
+  const uint16_t vcell_mode_mask =
+    cell_count_ >= 16 ? 0xFFFFu : static_cast<uint16_t>((static_cast<uint32_t>(1u) << cell_count_) - 1u);
+  ESP_LOGCONFIG(TAG, "  vcell_mode_mask (derived): 0x%04X", static_cast<unsigned>(vcell_mode_mask));
   ESP_LOGCONFIG(TAG, "  sense_resistor_milliohm: %.3f", sense_resistor_milliohm_);
   if (has_cell_undervoltage_limit_) {
     ESP_LOGCONFIG(TAG, "  cell_undervoltage_limit_mv: %u", static_cast<unsigned>(cell_undervoltage_limit_mv_));
@@ -1107,7 +1111,7 @@ bool BQ76952Component::write_data_memory_u16_(uint16_t address, uint16_t value) 
 }
 
 bool BQ76952Component::has_current_limit_config_() const {
-  return has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_ || has_cell_overvoltage_limit_ ||
+  return cell_count_ < 16 || has_cell_undervoltage_limit_ || has_cell_undervoltage_delay_ || has_cell_overvoltage_limit_ ||
          has_cell_overvoltage_delay_ || has_charge_current_limit_ || has_discharge_current_limit_ ||
          has_discharge_current_limit_2_ || has_discharge_current_limit_3_ || has_scd_threshold_ || has_scd_delay_ ||
          has_scd_recovery_time_ || has_charge_current_delay_ || has_discharge_current_delay_ ||
@@ -1583,6 +1587,8 @@ bool BQ76952Component::apply_current_limit_config_() {
   if (!this->has_current_limit_config_()) {
     return true;
   }
+  const uint16_t vcell_mode_mask =
+    cell_count_ >= 16 ? 0xFFFFu : static_cast<uint16_t>((static_cast<uint32_t>(1u) << cell_count_) - 1u);
 
   uint16_t battery_status = 0;
   if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
@@ -1845,6 +1851,9 @@ bool BQ76952Component::apply_current_limit_config_() {
       DM_PROTECTION_RECOVERY_TIME, current_recovery_time_s_, "current recovery time", needs_write
     );
   }
+  if (!needs_write) {
+    precheck_ok &= this->precheck_data_memory_value_u16_(DM_VCELL_MODE, vcell_mode_mask, "Vcell Mode", needs_write);
+  }
 
   if (precheck_ok && !needs_write) {
     ESP_LOGI(TAG, "Current-limit configuration already matches requested values; skipping CONFIG_UPDATE");
@@ -1870,6 +1879,18 @@ bool BQ76952Component::apply_current_limit_config_() {
   }
 
   bool ok = true;
+
+  if (ok) {
+    this->write_data_memory_value_u16_if_needed_(DM_VCELL_MODE, vcell_mode_mask, "Vcell Mode", ok);
+    if (ok) {
+      ESP_LOGI(
+        TAG,
+        "Configured cell_count=%u -> Vcell Mode mask=0x%04X",
+        static_cast<unsigned>(cell_count_),
+        static_cast<unsigned>(vcell_mode_mask)
+      );
+    }
+  }
 
   if (required_enabled_protections_bits != 0) {
     this->ensure_data_memory_mask_(
