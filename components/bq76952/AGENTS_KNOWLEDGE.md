@@ -25,6 +25,7 @@ Component-scoped notes for `components/bq76952`.
 - Coulomb-counter accumulation is exposed from `DASTATUS6 (0x0076)` as signed `userAh` plus a 32-bit fractional term and converted through the auto-detected `userA` scale; `RESET_PASSQ (0x0082)` is exposed as a manual button, not a boot-time automatic reset.
 - Public YAML now prefers `energy` / `energy_time` as the accumulator entity names, but the underlying quantity is still charge accumulation in Ah from `DASTATUS6`, not true watt-hours.
 - `state_of_charge` is host-derived (not a native direct command) from `DASTATUS6` passed charge and `nominal_capacity_ah`; this estimate assumes passed charge was reset at a known-full baseline.
+- `largest_intercell_voltage` publishes the active-pack imbalance as `max(cell_n) - min(cell_n)` across mapped cells `1..cell_count`, in volts.
 - TI documents `CC2 Current()` as more-negative for discharge current; publish the user-facing `current` sensor as positive-for-discharge by negating the raw signed register value.
 - Keep the YAML monolithic in `__init__.py`; do not split this component into platform modules unless the repo-wide preference changes.
 - Document `i2c_id` in examples; ESPHome requires it for this component when a node defines more than one I2C bus.

@@ -401,6 +401,20 @@ void BQ76952Component::update() {
     const uint8_t raw_index = cell_read_map_[i];
     cell_voltage_sensors_[i]->publish_state(static_cast<float>(raw_cell_mv[raw_index]) / 1000.0f);
   }
+  if (largest_intercell_voltage_sensor_ != nullptr && cell_count_ >= 2) {
+    int16_t min_cell_mv = raw_cell_mv[cell_read_map_[0]];
+    int16_t max_cell_mv = min_cell_mv;
+    for (uint8_t i = 1; i < cell_count_; i++) {
+      const int16_t cell_mv = raw_cell_mv[cell_read_map_[i]];
+      if (cell_mv < min_cell_mv) {
+        min_cell_mv = cell_mv;
+      }
+      if (cell_mv > max_cell_mv) {
+        max_cell_mv = cell_mv;
+      }
+    }
+    largest_intercell_voltage_sensor_->publish_state(static_cast<float>(max_cell_mv - min_cell_mv) / 1000.0f);
+  }
 
   if (stack_voltage_sensor_ != nullptr) {
     int16_t stack_uv = 0;
@@ -615,6 +629,7 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "BAT Voltage", stack_voltage_sensor_);
   LOG_SENSOR("  ", "PACK Voltage", pack_voltage_sensor_);
   LOG_SENSOR("  ", "LD Voltage", ld_voltage_sensor_);
+  LOG_SENSOR("  ", "Largest Inter-Cell Voltage", largest_intercell_voltage_sensor_);
   for (size_t i = 0; i < cell_voltage_sensors_.size(); i++) {
     char label[24];
     std::snprintf(label, sizeof(label), "Cell %u Voltage", static_cast<unsigned>(i + 1));

@@ -66,6 +66,7 @@ CONF_BAT_VOLTAGE = "bat_voltage"
 CONF_STACK_VOLTAGE = "stack_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
 CONF_LD_VOLTAGE = "ld_voltage"
+CONF_LARGEST_INTERCELL_VOLTAGE = "largest_intercell_voltage"
 CONF_CURRENT = "current"
 CONF_STATE_OF_CHARGE = "state_of_charge"
 CONF_CHARGE_THROUGHPUT = "charge_throughput"
@@ -228,6 +229,7 @@ schema = {
     cv.Optional(CONF_STACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_LD_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
+    cv.Optional(CONF_LARGEST_INTERCELL_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_CURRENT): sensor.sensor_schema(
         unit_of_measurement=UNIT_AMPERE,
         accuracy_decimals=3,
@@ -412,6 +414,9 @@ async def to_code(config):
     if CONF_LD_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_LD_VOLTAGE])
         cg.add(var.set_ld_voltage_sensor(sens))
+    if CONF_LARGEST_INTERCELL_VOLTAGE in config:
+        sens = await sensor.new_sensor(config[CONF_LARGEST_INTERCELL_VOLTAGE])
+        cg.add(var.set_largest_intercell_voltage_sensor(sens))
 
     for index, key in enumerate(CELL_VOLTAGE_KEYS, start=1):
         if key in config:

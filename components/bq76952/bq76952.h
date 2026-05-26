@@ -146,6 +146,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   void set_ld_voltage_sensor(sensor::Sensor* sensor) {
     ld_voltage_sensor_ = sensor;
   }
+  void set_largest_intercell_voltage_sensor(sensor::Sensor* sensor) {
+    largest_intercell_voltage_sensor_ = sensor;
+  }
   void set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor);
   void set_current_sensor(sensor::Sensor* sensor) {
     current_sensor_ = sensor;
@@ -343,6 +346,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* stack_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};
   sensor::Sensor* ld_voltage_sensor_{nullptr};
+  sensor::Sensor* largest_intercell_voltage_sensor_{nullptr};
   std::array<sensor::Sensor*, 16> cell_voltage_sensors_{};
   sensor::Sensor* current_sensor_{nullptr};
   sensor::Sensor* state_of_charge_sensor_{nullptr};

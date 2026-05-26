@@ -3,7 +3,7 @@
 ESPHome external component for TI `BQ76952` battery monitor / protector devices on I2C.
 
 It exposes:
-- pack telemetry: BAT, PACK, LD, cell voltages, current, die temperature, TS1/TS2/TS3
+- pack telemetry: BAT, PACK, LD, cell voltages, largest inter-cell spread, current, die temperature, TS1/TS2/TS3
 - derived metrics: state of charge and energy-style throughput from `DASTATUS6`
 - concise status entities: BMS state, current fault, FET status
 - live controls: output enabled, autonomous FET control, clear alarms
@@ -88,6 +88,8 @@ bq76952:
     name: "BMS Pack Voltage"
   ld_voltage:
     name: "BMS Load Detect Pin Voltage"
+  largest_intercell_voltage:
+    name: "BMS Largest Inter-Cell Voltage"
   cell1_voltage:
     name: "BMS Cell 1"
   cell2_voltage:
@@ -164,6 +166,7 @@ Recommended user-facing entities:
 Useful diagnostics to keep:
 - `bat_voltage`: top-of-stack battery reading
 - `ld_voltage`: load-detect pin voltage
+- `largest_intercell_voltage`: max-min spread across active cells (quick imbalance view)
 - `fet_status_flags`: raw live FET and pin state summary
 - `energy_time`: accumulator integration time window
 - `die_temperature` and any TS thermistor inputs you actually wire
