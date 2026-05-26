@@ -40,8 +40,7 @@ class ProgrammableLoadComponent : public Component {
   void set_control_period_ms(uint32_t ms) { control_period_ms_ = ms; }
   void set_deadband_min_a(float v) { deadband_min_a_ = v; }
   void set_deadband_ratio(float v) { deadband_ratio_ = v; }
-  void set_current_response_min_a(float v) { current_response_min_a_ = v; }
-  void set_near_target_min_band_a(float v) { near_target_min_band_a_ = v; }
+  void set_deadband_a(float v) { deadband_a_ = v; }
   void set_max_unconfirmed_rise_a(float v) { max_unconfirmed_rise_a_ = v; }
   void set_max_unconfirmed_fall_a(float v) { max_unconfirmed_fall_a_ = v; }
   void set_ramp_fast_a_per_s(float v) { ramp_fast_a_per_s_ = v; }
@@ -59,7 +58,6 @@ class ProgrammableLoadComponent : public Component {
 
   // --- Generated entity setters ---
   void set_setpoint_number(number::Number *n) { setpoint_number_ = n; }
-  void set_current_command_sensor(sensor::Sensor *s) { current_command_sensor_ = s; }
   void set_dcr_sensor(sensor::Sensor *s) { dcr_sensor_ = s; }
   void set_voltage_drop_sensor(sensor::Sensor *s) { voltage_drop_sensor_ = s; }
   void set_current_delta_sensor(sensor::Sensor *s) { current_delta_sensor_ = s; }
@@ -138,7 +136,6 @@ class ProgrammableLoadComponent : public Component {
 
   // --- Generated entity pointers ---
   number::Number *setpoint_number_{nullptr};
-  sensor::Sensor *current_command_sensor_{nullptr};
   sensor::Sensor *dcr_sensor_{nullptr};
   sensor::Sensor *voltage_drop_sensor_{nullptr};
   sensor::Sensor *current_delta_sensor_{nullptr};

@@ -308,11 +308,6 @@ const char *ProgrammableLoadComponent::ramp_state_to_string_(RampState state) co
 }
 
 void ProgrammableLoadComponent::publish_state_() {
-  // Publish current command.
-  if (this->current_command_sensor_ != nullptr) {
-    this->current_command_sensor_->publish_state(this->current_command_a_);
-  }
-
   // Publish DCR.
   if (this->dcr_sensor_ != nullptr) {
     this->dcr_sensor_->publish_state(this->dcr_mohm_);

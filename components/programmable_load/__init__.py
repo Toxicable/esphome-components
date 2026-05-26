@@ -6,7 +6,6 @@ from esphome.const import (
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_VOLTAGE,
     ENTITY_CATEGORY_DIAGNOSTIC,
-    STATE_CLASS_MEASUREMENT,
     UNIT_AMPERE,
     UNIT_MILLIVOLT,
 )
@@ -47,7 +46,6 @@ CONF_FAN_START_TEMP_C = "fan_start_temp_c"
 CONF_FAN_FULL_TEMP_C = "fan_full_temp_c"
 
 CONF_SETPPOINT = "setpoint"
-CONF_CURRENT_COMMAND = "current_command"
 CONF_DCR = "dcr"
 CONF_VOLTAGE_DROP = "voltage_drop"
 CONF_CURRENT_DELTA = "current_delta"
@@ -130,12 +128,7 @@ CONFIG_SCHEMA = cv.All(
             unit_of_measurement=UNIT_AMPERE,
             device_class=DEVICE_CLASS_CURRENT,
         ),
-        cv.Optional(CONF_CURRENT_COMMAND): sensor.sensor_schema(
-            unit_of_measurement=UNIT_AMPERE,
-            accuracy_decimals=3,
-            device_class=DEVICE_CLASS_CURRENT,
-            state_class=STATE_CLASS_MEASUREMENT,
-        ),
+        # DCR sensor.
         cv.Optional(CONF_DCR): sensor.sensor_schema(
             unit_of_measurement="mΩ",
             accuracy_decimals=2,
@@ -147,7 +140,7 @@ CONFIG_SCHEMA = cv.All(
         ),
         cv.Optional(CONF_CURRENT_DELTA): sensor.sensor_schema(
             unit_of_measurement=UNIT_AMPERE,
-            accuracy_decimals=3,
+            accuracy_decimals=1,
             device_class=DEVICE_CLASS_CURRENT,
         ),
         cv.Optional(CONF_RAMP_STATE): text_sensor.text_sensor_schema(
@@ -219,15 +212,10 @@ async def to_code(config):
             config[CONF_SETPPOINT],
             min_value=0.0,
             max_value=config[CONF_MAX_CURRENT_A],
-            step=0.01,
+            step=0.1,
         )
         cg.add(num.set_parent(var))
         cg.add(var.set_setpoint_number(num))
-
-    # Generate current command sensor.
-    if CONF_CURRENT_COMMAND in config:
-        sens = await sensor.new_sensor(config[CONF_CURRENT_COMMAND])
-        cg.add(var.set_current_command_sensor(sens))
 
     # Generate DCR sensor.
     if CONF_DCR in config:

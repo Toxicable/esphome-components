@@ -95,8 +95,6 @@ programmable_load:
   ## --- Generated entities ---
   # setpoint:
   #   name: "Load Current Setpoint"
-  # current_command:
-  #   name: "Load Current Command"
   # dcr:
   #   name: "Battery Ramp DCR"
   # voltage_drop:
