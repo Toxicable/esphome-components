@@ -223,7 +223,7 @@ void BQ76952Component::setup() {
     load_soc_state_();
   }
 
-  if (this->has_regulator_config_() || this->has_current_limit_config_() ||
+  if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
       this->has_predischarge_config_() || this->has_autonomous_balancing_config_()) {
     this->regulator_config_deferred_ = this->has_regulator_config_();
     this->current_limit_config_deferred_ = this->has_current_limit_config_();
