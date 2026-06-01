@@ -62,6 +62,14 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
       return "busy";
     case 6:
       return "bad_length";
+    case 7:
+      return "not_idle";
+    case 8:
+      return "not_fault_over";
+    case 9:
+      return "faults_still_active";
+    case 10:
+      return "latched_faults_present";
     default:
       return "unknown";
   }
@@ -71,10 +79,17 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
 // MCSDK STM state (motor controller state machine)
 static const char* mc_state_to_cstr(uint8_t v) {
   switch (v) {
-    case 0: return "init";
-    case 1: return "run";
-    case 2: return "ramp";
-    case 3: return "fault";
+    case 0: return "idle";
+    case 4: return "start";
+    case 6: return "run";
+    case 8: return "stop";
+    case 10: return "fault_now";
+    case 11: return "fault_over";
+    case 12: return "iclwait";
+    case 19: return "switch_over";
+    case 20: return "wait_stop_motor";
+    case 21: return "otf_detection";
+    case 22: return "otf_brake";
     default: return "unknown";
   }
 }
