@@ -68,7 +68,15 @@ esc_higher:
   #   name: "Electrical Angle"
   # valpha:
   #   name: "Valpha"
+  # last_command_id:
+  #   name: "Last Command ID"
+  # last_command_result:
+  #   name: "Last Command Result"
 ```
+
+Control note:
+- Updated control protocol uses write-only commands (`0x30` ack fault, `0x31` start, `0x32` stop).
+- Command outcome is exposed via telemetry command `0x26` (`last_command_id`, `last_command_result`).
 
 Example host-side usage:
 

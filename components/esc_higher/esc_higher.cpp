@@ -13,6 +13,8 @@ static constexpr uint8_t STM32_DQ_CURRENT_CMD = 0x22;
 static constexpr uint8_t STM32_DQ_VOLTAGE_CMD = 0x23;
 static constexpr uint8_t STM32_BUS_VOLT_ANGLE_CMD = 0x24;
 static constexpr uint8_t STM32_CTRL_PHASE_CMD = 0x25;
+static constexpr uint8_t STM32_LAST_CMD_RESULT_CMD = 0x26;
+static constexpr uint8_t STM32_SPEED_RAMP_CMD = 0x14;
 static constexpr size_t STM32_TEMP_RESP_LEN = 8;
 static constexpr uint8_t STM32_STATUS_OK = 0;
 static constexpr uint8_t STM32_STATUS_TEMP_FAULT = 1;
@@ -20,6 +22,30 @@ static constexpr uint8_t STM32_MAX_ATTEMPTS = 3;
 
 void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
+}
+
+bool ESCHigherComponent::send_write_only_command_(uint8_t cmd) {
+  const i2c::ErrorCode err = this->write(&cmd, 1);
+  if (err == i2c::ERROR_OK)
+    return true;
+  ESP_LOGW(TAG, "Write-only command 0x%02X failed (err=%d)", cmd, static_cast<int>(err));
+  return false;
+}
+
+bool ESCHigherComponent::send_speed_ramp_(int16_t target_rpm, uint16_t duration_ms) {
+  // 0x14 rr rr dd dd (little-endian int16 + uint16) per i2c_interface.md.
+  const uint8_t payload[5] = {
+    STM32_SPEED_RAMP_CMD,
+    static_cast<uint8_t>(target_rpm & 0xFF),
+    static_cast<uint8_t>((static_cast<uint16_t>(target_rpm) >> 8) & 0xFF),
+    static_cast<uint8_t>(duration_ms & 0xFF),
+    static_cast<uint8_t>((duration_ms >> 8) & 0xFF),
+  };
+  const i2c::ErrorCode err = this->write(payload, sizeof(payload));
+  if (err == i2c::ERROR_OK)
+    return true;
+  ESP_LOGW(TAG, "Speed ramp command failed (err=%d)", static_cast<int>(err));
+  return false;
 }
 
 STM32FrameResult ESCHigherComponent::read_frame_(uint8_t cmd, uint8_t* resp, size_t resp_len) {
@@ -266,6 +292,25 @@ void ESCHigherComponent::update() {
       }
     }
   }
+
+  if (this->last_command_id_sensor_ != nullptr || this->last_command_result_sensor_ != nullptr) {
+    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
+    const STM32FrameResult frame = this->read_frame_(STM32_LAST_CMD_RESULT_CMD, resp, sizeof(resp));
+    if (frame.ok) {
+      if (resp[1] == STM32_STATUS_OK) {
+        if (this->last_command_id_sensor_ != nullptr)
+          this->last_command_id_sensor_->publish_state(resp[2]);
+        if (this->last_command_result_sensor_ != nullptr)
+          this->last_command_result_sensor_->publish_state(resp[3]);
+        if (this->current_fault_sensor_ != nullptr)
+          this->current_fault_sensor_->publish_state(decode_u16_(resp[4], resp[5]));
+        if (this->occurred_fault_sensor_ != nullptr)
+          this->occurred_fault_sensor_->publish_state(decode_u16_(resp[6], resp[7]));
+      } else {
+        ESP_LOGW(TAG, "Last-command status non-zero: %u", static_cast<unsigned>(resp[1]));
+      }
+    }
+  }
 }
 
 void ESCHigherComponent::dump_config() {
@@ -294,6 +339,8 @@ void ESCHigherComponent::dump_config() {
   LOG_SENSOR("  ", "Bus Voltage", this->bus_voltage_sensor_);
   LOG_SENSOR("  ", "Electrical Angle", this->electrical_angle_sensor_);
   LOG_SENSOR("  ", "Valpha", this->valpha_sensor_);
+  LOG_SENSOR("  ", "Last Command ID", this->last_command_id_sensor_);
+  LOG_SENSOR("  ", "Last Command Result", this->last_command_result_sensor_);
 }
 
 }  // namespace esc_higher

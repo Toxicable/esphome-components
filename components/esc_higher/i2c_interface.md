@@ -205,6 +205,35 @@ Useful `MCI_CommandState_t` values:
 - `2`: `MCI_COMMAND_EXECUTED_SUCCESSFULLY`
 - `3`: `MCI_COMMAND_EXECUTED_UNSUCCESSFULLY`
 
+### `0x26` - Telemetry: last write-only command result
+- Host write payload: `26`
+- Host read length: 8 bytes
+
+Response bytes:
+- `resp[0]`: command echo (`0x26`)
+- `resp[1]`: status (`0`)
+- `resp[2]`: last write-only command ID
+- `resp[3]`: last write-only command result
+  - `0`: success
+  - `3`: rejected
+- `resp[4]`: current fault bitfield LSB
+- `resp[5]`: current fault bitfield MSB
+- `resp[6]`: occurred fault bitfield LSB
+- `resp[7]`: occurred fault bitfield MSB
+
+## Write-Only Control Commands
+
+These commands are write-only. The host writes the command byte and does not read immediately from the same transaction. To confirm the result, poll `0x26`, `0x25`, or `0x20`.
+
+### `0x30` - Acknowledge fault
+- Host write payload: `30`
+
+### `0x31` - Start motor
+- Host write payload: `31`
+
+### `0x32` - Stop motor
+- Host write payload: `32`
+
 ## Host Validation Rules
 - Verify address ACK at `0x43`.
 - Verify read length is exactly 8 bytes.

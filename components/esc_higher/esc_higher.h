@@ -31,6 +31,17 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
 
   STM32TempReadResult read_stm32_temp_raw();
   STM32FrameResult read_frame_(uint8_t cmd, uint8_t* resp, size_t resp_len);
+  bool send_write_only_command_(uint8_t cmd);
+  bool send_speed_ramp_(int16_t target_rpm, uint16_t duration_ms);
+  bool acknowledge_fault() {
+    return this->send_write_only_command_(0x30);
+  }
+  bool start_motor() {
+    return this->send_write_only_command_(0x31);
+  }
+  bool stop_motor() {
+    return this->send_write_only_command_(0x32);
+  }
   void set_temperature_c_sensor(sensor::Sensor* s) {
     temperature_c_sensor_ = s;
   }
@@ -97,6 +108,12 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_valpha_sensor(sensor::Sensor* s) {
     valpha_sensor_ = s;
   }
+  void set_last_command_id_sensor(sensor::Sensor* s) {
+    last_command_id_sensor_ = s;
+  }
+  void set_last_command_result_sensor(sensor::Sensor* s) {
+    last_command_result_sensor_ = s;
+  }
 
  protected:
   static int16_t decode_i16_(uint8_t lsb, uint8_t msb) {
@@ -128,6 +145,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* bus_voltage_sensor_{nullptr};
   sensor::Sensor* electrical_angle_sensor_{nullptr};
   sensor::Sensor* valpha_sensor_{nullptr};
+  sensor::Sensor* last_command_id_sensor_{nullptr};
+  sensor::Sensor* last_command_result_sensor_{nullptr};
 };
 
 }  // namespace esc_higher

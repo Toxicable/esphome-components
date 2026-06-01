@@ -38,6 +38,8 @@ CONF_PHASE_VOLTAGE_AMPLITUDE = "phase_voltage_amplitude"
 CONF_BUS_VOLTAGE = "bus_voltage"
 CONF_ELECTRICAL_ANGLE = "electrical_angle"
 CONF_VALPHA = "valpha"
+CONF_LAST_COMMAND_ID = "last_command_id"
+CONF_LAST_COMMAND_RESULT = "last_command_result"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -130,6 +132,14 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
             cv.Optional(CONF_VALPHA): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_LAST_COMMAND_ID): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_LAST_COMMAND_RESULT): sensor.sensor_schema(
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
@@ -232,3 +242,11 @@ async def to_code(config):
     if CONF_VALPHA in config:
         sens = await sensor.new_sensor(config[CONF_VALPHA])
         cg.add(var.set_valpha_sensor(sens))
+
+    if CONF_LAST_COMMAND_ID in config:
+        sens = await sensor.new_sensor(config[CONF_LAST_COMMAND_ID])
+        cg.add(var.set_last_command_id_sensor(sens))
+
+    if CONF_LAST_COMMAND_RESULT in config:
+        sens = await sensor.new_sensor(config[CONF_LAST_COMMAND_RESULT])
+        cg.add(var.set_last_command_result_sensor(sens))
