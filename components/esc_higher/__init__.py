@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, i2c, sensor, text_sensor
+from esphome.components import button, i2c, number, sensor, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
@@ -15,7 +15,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "sensor", "text_sensor"]
+AUTO_LOAD = ["button", "number", "sensor", "text_sensor"]
 
 esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
 ESCHigherComponent = esc_higher_ns.class_(
@@ -27,8 +27,8 @@ ESCHigherClearFaultsButton = esc_higher_ns.class_(
     "ESCHigherClearFaultsButton", button.Button
 )
 ESCHigherEstopButton = esc_higher_ns.class_("ESCHigherEstopButton", button.Button)
-ESCHigherSetSpeedRampButton = esc_higher_ns.class_(
-    "ESCHigherSetSpeedRampButton", button.Button
+ESCHigherSpeedTargetNumber = esc_higher_ns.class_(
+    "ESCHigherSpeedTargetNumber", number.Number
 )
 
 CONF_PROTO_MAJOR = "proto_major"
@@ -63,7 +63,7 @@ CONF_START_MOTOR = "start_motor"
 CONF_STOP_MOTOR = "stop_motor"
 CONF_CLEAR_FAULTS = "clear_faults"
 CONF_ESTOP = "estop"
-CONF_SET_SPEED_RAMP = "set_speed_ramp"
+CONF_SPEED_TARGET_DHZ = "speed_target_dhz"
 CONF_SPEED_RAMP_TARGET_DHZ = "speed_ramp_target_dhz"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
 
@@ -147,8 +147,8 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_ESTOP): button.button_schema(
                 ESCHigherEstopButton, icon="mdi:alert-octagon"
             ),
-            cv.Optional(CONF_SET_SPEED_RAMP): button.button_schema(
-                ESCHigherSetSpeedRampButton, icon="mdi:ramp-right"
+            cv.Optional(CONF_SPEED_TARGET_DHZ): number.number_schema(
+                ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
             ),
             cv.Optional(CONF_SPEED_RAMP_TARGET_DHZ, default=1000): cv.int_,
             cv.Optional(CONF_SPEED_RAMP_TIME_MS, default=1000): cv.int_range(
@@ -227,6 +227,11 @@ async def to_code(config):
     if CONF_ESTOP in config:
         b = await button.new_button(config[CONF_ESTOP])
         await cg.register_parented(b, var)
-    if CONF_SET_SPEED_RAMP in config:
-        b = await button.new_button(config[CONF_SET_SPEED_RAMP])
-        await cg.register_parented(b, var)
+    if CONF_SPEED_TARGET_DHZ in config:
+        n = await number.new_number(
+            config[CONF_SPEED_TARGET_DHZ],
+            min_value=-100000,
+            max_value=100000,
+            step=1,
+        )
+        cg.add(n.set_parent(var))
