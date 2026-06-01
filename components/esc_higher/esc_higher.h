@@ -6,9 +6,10 @@
 namespace esphome {
 namespace esc_higher {
 
-class ESCHigherComponent : public Component, public i2c::I2CDevice {
+class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
+  void update() override;
   void dump_config() override;
 };
 

@@ -6,11 +6,15 @@ from esphome.const import CONF_ID
 DEPENDENCIES = ["i2c"]
 
 esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
-ESCHigherComponent = esc_higher_ns.class_("ESCHigherComponent", cg.Component, i2c.I2CDevice)
+ESCHigherComponent = esc_higher_ns.class_(
+    "ESCHigherComponent", cg.PollingComponent, i2c.I2CDevice
+)
 
-CONFIG_SCHEMA = cv.Schema({cv.GenerateID(): cv.declare_id(ESCHigherComponent)}).extend(
-    cv.COMPONENT_SCHEMA
-).extend(i2c.i2c_device_schema(0x42))
+CONFIG_SCHEMA = (
+    cv.Schema({cv.GenerateID(): cv.declare_id(ESCHigherComponent)})
+    .extend(cv.polling_component_schema("10s"))
+    .extend(i2c.i2c_device_schema(0x43))
+)
 
 
 async def to_code(config):

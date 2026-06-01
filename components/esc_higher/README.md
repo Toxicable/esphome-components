@@ -1,7 +1,8 @@
 # esc_higher
 
 ## What it does
-Provides a monolithic `esc_higher:` ESPHome component for an I2C device at address `0x42`.
+Provides a monolithic `esc_higher:` ESPHome component for an I2C device at address `0x43`.
+It currently performs a periodic I2C address ping and reports warning state when the device does not ACK.
 
 ## How to use it
 
@@ -20,5 +21,6 @@ i2c:
 esc_higher:
   id: esc
   i2c_id: i2c_bus
-  address: 0x42  # Optional / default
+  update_interval: 10s  # Optional / default
+  address: 0x43  # Optional / default
 ```
