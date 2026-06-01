@@ -97,6 +97,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_last_cmd_error_sensor(sensor::Sensor* s) {
     last_cmd_error_sensor_ = s;
   }
+  void set_fault_detail_sensor(sensor::Sensor* s) {
+    fault_detail_sensor_ = s;
+  }
   void set_current_faults_sensor(sensor::Sensor* s) {
     current_faults_sensor_ = s;
   }
@@ -133,6 +136,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
   void set_last_cmd_error_text_sensor(text_sensor::TextSensor* s) {
     last_cmd_error_text_sensor_ = s;
+  }
+  void set_fault_detail_text_sensor(text_sensor::TextSensor* s) {
+    fault_detail_text_sensor_ = s;
   }
   void set_status_flags_text_sensor(text_sensor::TextSensor* s) {
     status_flags_text_sensor_ = s;
@@ -198,6 +204,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* mc_state_sensor_{nullptr};
   sensor::Sensor* last_cmd_seq_sensor_{nullptr};
   sensor::Sensor* last_cmd_error_sensor_{nullptr};
+  sensor::Sensor* fault_detail_sensor_{nullptr};
   sensor::Sensor* current_faults_sensor_{nullptr};
   sensor::Sensor* occurred_faults_sensor_{nullptr};
   sensor::Sensor* status_flags_sensor_{nullptr};
@@ -211,6 +218,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* uptime_s_sensor_{nullptr};
   text_sensor::TextSensor* esc_state_text_sensor_{nullptr};
   text_sensor::TextSensor* last_cmd_error_text_sensor_{nullptr};
+  text_sensor::TextSensor* fault_detail_text_sensor_{nullptr};
   text_sensor::TextSensor* status_flags_text_sensor_{nullptr};
   text_sensor::TextSensor* current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* occurred_faults_text_sensor_{nullptr};

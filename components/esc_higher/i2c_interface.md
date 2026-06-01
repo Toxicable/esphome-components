@@ -75,6 +75,7 @@ Layout matches the guideline:
 - `mc_state`
 - `last_cmd_seq`
 - `last_cmd_error`
+- `fault_detail` (decoded primary fault reason)
 - `current_faults`
 - `occurred_faults`
 - `status_flags`
@@ -109,8 +110,25 @@ Current `last_cmd_error` mapping:
 - `2`: invalid state
 - `3`: parameter out of range
 - `4`: motor fault active
-- `5`: busy
+- `5`: busy (currently unused by `SET_SPEED_RAMP`)
 - `6`: bad length
+- `7`: not idle (operation requires non-idle/idle-specific state)
+- `8`: not fault_over (fault acknowledge only allowed in `FAULT_OVER`)
+- `9`: faults still active (cannot acknowledge yet)
+- `10`: latched faults present (clear/ack required before command)
+
+Current `fault_detail` mapping (`STATUS[5]`, `TELEMETRY[27]`):
+
+- `0`: none
+- `1`: overvoltage
+- `2`: undervoltage
+- `3`: overspeed
+- `4`: overtemperature
+- `5`: startup failed
+- `6`: speed feedback fault
+- `7`: overcurrent
+- `8`: software error
+- `9`: driver protection fault
 
 MCSDK fault bit mapping (`current_faults` / `occurred_faults`):
 
@@ -183,9 +201,9 @@ Current field behavior:
 
 - `vbus_mV`: sampled bus voltage in millivolts; in `idle` the firmware polls ADC on demand
 - `ibus_mA`: `0` for now
-- `speed_dHz`: real mechanical speed from MCSDK speed units
+- `speed_dHz`: real mechanical speed converted from MCSDK speed unit to `dHz`
 - `duty_centi_pct`: `0` for now
-- `temp_mC`: `0` for now
+- `temp_mC`: from MCSDK NTC temperature sensor (`NTC_GetAvTemp_C`) converted to `m°C`
 - `uptime_s`: HAL tick uptime in seconds
 
 ## Notes

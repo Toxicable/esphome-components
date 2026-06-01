@@ -75,6 +75,34 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
   }
 }
 
+// Decoded primary fault detail
+static const char* fault_detail_to_cstr(uint8_t v) {
+  switch (v) {
+    case 0:
+      return "none";
+    case 1:
+      return "overvoltage";
+    case 2:
+      return "undervoltage";
+    case 3:
+      return "overspeed";
+    case 4:
+      return "overtemperature";
+    case 5:
+      return "startup_failed";
+    case 6:
+      return "speed_feedback_fault";
+    case 7:
+      return "overcurrent";
+    case 8:
+      return "software_error";
+    case 9:
+      return "driver_protection_fault";
+    default:
+      return "unknown";
+  }
+}
+
 // Capability bitmask names (6 bits)
 // MCSDK STM state (motor controller state machine)
 static const char* mc_state_to_cstr(uint8_t v) {

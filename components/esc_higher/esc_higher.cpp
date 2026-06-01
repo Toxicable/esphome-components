@@ -150,6 +150,10 @@ void ESCHigherComponent::update() {
         last_cmd_error_sensor_->publish_state(status[4]);
       if (last_cmd_error_text_sensor_ != nullptr)
         last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr(status[4]));
+      if (fault_detail_sensor_ != nullptr)
+        fault_detail_sensor_->publish_state(status[5]);
+      if (fault_detail_text_sensor_ != nullptr)
+        fault_detail_text_sensor_->publish_state(fault_detail_to_cstr(status[5]));
       if (current_faults_sensor_ != nullptr)
         current_faults_sensor_->publish_state(u16_(status, 6));
       if (current_faults_text_sensor_ != nullptr)
@@ -193,6 +197,10 @@ void ESCHigherComponent::update() {
         last_cmd_error_sensor_->publish_state(tel[3]);
       if (last_cmd_error_text_sensor_ != nullptr)
         last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr(tel[3]));
+      if (fault_detail_sensor_ != nullptr)
+        fault_detail_sensor_->publish_state(tel[27]);
+      if (fault_detail_text_sensor_ != nullptr)
+        fault_detail_text_sensor_->publish_state(fault_detail_to_cstr(tel[27]));
       if (status_flags_sensor_ != nullptr)
         status_flags_sensor_->publish_state(u16_(tel, 4));
       if (status_flags_text_sensor_ != nullptr)

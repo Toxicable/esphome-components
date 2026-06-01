@@ -43,6 +43,7 @@ CONF_ESC_STATE = "esc_state"
 CONF_MC_STATE = "mc_state"
 CONF_LAST_CMD_SEQ = "last_cmd_seq"
 CONF_LAST_CMD_ERROR = "last_cmd_error"
+CONF_FAULT_DETAIL = "fault_detail"
 CONF_CURRENT_FAULTS = "current_faults"
 CONF_OCCURRED_FAULTS = "occurred_faults"
 CONF_STATUS_FLAGS = "status_flags"
@@ -55,6 +56,7 @@ CONF_TEMP_MC = "temp_mc"
 CONF_UPTIME_S = "uptime_s"
 CONF_ESC_STATE_TEXT = "esc_state_text"
 CONF_LAST_CMD_ERROR_TEXT = "last_cmd_error_text"
+CONF_FAULT_DETAIL_TEXT = "fault_detail_text"
 CONF_STATUS_FLAGS_TEXT = "status_flags_text"
 CONF_CURRENT_FAULTS_TEXT = "current_faults_text"
 CONF_OCCURRED_FAULTS_TEXT = "occurred_faults_text"
@@ -97,6 +99,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_MC_STATE): _raw_sensor_schema(),
             cv.Optional(CONF_LAST_CMD_SEQ): _raw_sensor_schema(),
             cv.Optional(CONF_LAST_CMD_ERROR): _raw_sensor_schema(),
+            cv.Optional(CONF_FAULT_DETAIL): _raw_sensor_schema(),
             cv.Optional(CONF_CURRENT_FAULTS): _raw_sensor_schema(),
             cv.Optional(CONF_OCCURRED_FAULTS): _raw_sensor_schema(),
             cv.Optional(CONF_STATUS_FLAGS): _raw_sensor_schema(),
@@ -132,6 +135,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_UPTIME_S): _diagnostic_sensor_schema(),
             cv.Optional(CONF_ESC_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_LAST_CMD_ERROR_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_FAULT_DETAIL_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_STATUS_FLAGS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
@@ -188,6 +192,7 @@ async def to_code(config):
     await _bind_sensor(config, CONF_MC_STATE, var.set_mc_state_sensor)
     await _bind_sensor(config, CONF_LAST_CMD_SEQ, var.set_last_cmd_seq_sensor)
     await _bind_sensor(config, CONF_LAST_CMD_ERROR, var.set_last_cmd_error_sensor)
+    await _bind_sensor(config, CONF_FAULT_DETAIL, var.set_fault_detail_sensor)
     await _bind_sensor(config, CONF_CURRENT_FAULTS, var.set_current_faults_sensor)
     await _bind_sensor(config, CONF_OCCURRED_FAULTS, var.set_occurred_faults_sensor)
     await _bind_sensor(config, CONF_STATUS_FLAGS, var.set_status_flags_sensor)
@@ -204,6 +209,9 @@ async def to_code(config):
     if CONF_LAST_CMD_ERROR_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_LAST_CMD_ERROR_TEXT])
         cg.add(var.set_last_cmd_error_text_sensor(s))
+    if CONF_FAULT_DETAIL_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_FAULT_DETAIL_TEXT])
+        cg.add(var.set_fault_detail_text_sensor(s))
     if CONF_STATUS_FLAGS_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_STATUS_FLAGS_TEXT])
         cg.add(var.set_status_flags_text_sensor(s))
