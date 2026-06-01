@@ -23,6 +23,23 @@ static const char* const STATUS_FLAG_NAMES[] = {
   "speed_feedback_unreliable",
 };
 
+static const char* i2c_error_to_cstr_(i2c::ErrorCode err) {
+  switch (err) {
+    case i2c::ERROR_OK:
+      return "ok";
+    case i2c::ERROR_INVALID_ARGUMENT:
+      return "invalid_argument";
+    case i2c::ERROR_NOT_ACKNOWLEDGED:
+      return "not_acknowledged";
+    case i2c::ERROR_TIMEOUT:
+      return "timeout";
+    case i2c::ERROR_NOT_INITIALIZED:
+      return "not_initialized";
+    default:
+      return "unknown";
+  }
+}
+
 void ESCHigherStartButton::press_action() {
   this->parent_->start_motor();
 }
@@ -102,7 +119,7 @@ bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
   const i2c::ErrorCode err = this->write_read(&reg, 1, out, len);
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(TAG, "Read reg 0x%02X failed (err=%d)", reg, static_cast<int>(err));
+  ESP_LOGW(TAG, "Read reg 0x%02X failed (%s)", reg, i2c_error_to_cstr_(err));
   return false;
 }
 
@@ -131,7 +148,7 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
   const i2c::ErrorCode err = this->write(tx, sizeof(tx));
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(TAG, "Write command opcode 0x%02X failed (err=%d)", opcode, static_cast<int>(err));
+  ESP_LOGW(TAG, "Write command opcode 0x%02X failed (%s)", opcode, i2c_error_to_cstr_(err));
   return false;
 }
 
