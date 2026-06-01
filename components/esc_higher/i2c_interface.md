@@ -1,248 +1,148 @@
 # I2C Interface Specification
 
+This firmware now follows the register-based contract in [`i2c_guideline.md`](./i2c_guideline.md).
+
 ## Bus
-- Role: STM32 (`ESPHigher`) acts as I2C slave
-- 7-bit slave address: `0x43`
+
+- Role: STM32 (`ESPHigher`) acts as I2C target / slave
+- 7-bit slave address: `0x34`
 - External slave bus in this project: `I2C2`
-- STM32 pins:
-  - `PC4` = `I2C2_SCL`
-  - `PA8` = `I2C2_SDA`
+- Max block length: `32` bytes
+- Endian: little-endian
 
 ## Transaction Model
-- Host writes a command byte to the slave.
-- Some commands include a small payload immediately after the command byte.
-- Host then reads an 8-byte response from the slave.
-- Multi-byte fields are little-endian.
 
-## Commands
-### `0x01` - Get temperature state
-- Host write payload: `01`
-- Host read length: 8 bytes
+Register pointer write:
 
-Response bytes:
-- `resp[0]`: command echo (`0x01`)
-- `resp[1]`: status
-  - `0`: temperature state valid / no over-temp fault
-  - `1`: temperature fault active (`MC_OVER_TEMP`)
-- `resp[2]`: temperature Celsius LSB (signed int16)
-- `resp[3]`: temperature Celsius MSB (signed int16)
-- `resp[4]`: fault bitfield LSB (`MC_NO_ERROR` or fault mask such as `MC_OVER_TEMP`)
-- `resp[5..7]`: reserved (`0x00`)
+```text
+[addr+w] [register]
+```
 
-Temperature reconstruction:
-- `temp_c = (int16_t)(resp[2] | (resp[3] << 8))`
-- `fault = resp[4]` (bitmask from motor-control fault state, LSB)
+Register read:
 
-### `0x10` - Get motor state
-- Host write payload: `10`
-- Host read length: 8 bytes
+```text
+[addr+w] [register]
+repeated-start
+[addr+r] [payload...]
+```
 
-Response bytes:
-- `resp[0]`: command echo (`0x10`)
-- `resp[1]`: motor state (`MCI_State_t`)
-- `resp[2]`: current fault bitfield LSB
-- `resp[3]`: current fault bitfield MSB
-- `resp[4]`: measured mechanical speed RPM LSB (signed int16)
-- `resp[5]`: measured mechanical speed RPM MSB
-- `resp[6]`: speed reference RPM LSB (signed int16)
-- `resp[7]`: speed reference RPM MSB
+Command write:
 
-### `0x11` - Acknowledge motor fault
-- Host write payload: `11`
-- Host read length: 8 bytes
+```text
+[addr+w] [0x20] [16-byte command payload]
+```
 
-Response bytes:
-- `resp[0]`: command echo (`0x11`)
-- `resp[1]`: result
-  - `0`: success
-  - `3`: rejected by motor-control state machine
-- `resp[2]`: motor state (`MCI_State_t`)
-- `resp[3]`: last motor command state (`MCI_CommandState_t`)
-- `resp[4]`: current fault bitfield LSB
-- `resp[5]`: current fault bitfield MSB
-- `resp[6]`: occurred fault bitfield LSB
-- `resp[7]`: occurred fault bitfield MSB
+## Register Map
 
-### `0x12` - Start motor
-- Host write payload: `12`
-- Host read length: 8 bytes
+| Register | Name        | Access | Size |
+| -------: | ----------- | ------ | ---: |
+|   `0x00` | `ID`        | read   |    8 |
+|   `0x10` | `STATUS`    | read   |   16 |
+|   `0x20` | `COMMAND`   | write  |   16 |
+|   `0x30` | `TELEMETRY` | read   |   32 |
 
-Response format matches `0x11`.
+## `ID` register `0x00`
 
-### `0x13` - Stop motor
-- Host write payload: `13`
-- Host read length: 8 bytes
+| Offset | Field           | Type  | Current value |
+| -----: | --------------- | ----- | ------------: |
+|      0 | `proto_major`   | `u8`  |             1 |
+|      1 | `proto_minor`   | `u8`  |             0 |
+|      2 | `fw_major`      | `u8`  |             1 |
+|      3 | `fw_minor`      | `u8`  |             0 |
+|      4 | `hw_id`         | `u8`  |             1 |
+|      5 | `max_block_len` | `u8`  |            32 |
+|      6 | `capabilities`  | `u16` |       `0x0009` |
 
-Response format matches `0x11`.
+Capability bits currently set:
 
-### `0x14` - Program speed ramp
-- Host write payload: `14 rr rr dd dd`
-  - `rr rr`: target speed in RPM, little-endian signed int16
-  - `dd dd`: ramp duration in ms, little-endian uint16
-- Host read length: 8 bytes
+- bit `0`: speed command supported
+- bit `3`: temperature measurement available
 
-Response bytes:
-- `resp[0]`: command echo (`0x14`)
-- `resp[1]`: result
-  - `0`: success
-  - `2`: invalid parameter
-- `resp[2]`: motor state (`MCI_State_t`)
-- `resp[3]`: last motor command state (`MCI_CommandState_t`)
-- `resp[4]`: current fault bitfield LSB
-- `resp[5]`: current fault bitfield MSB
-- `resp[6]`: occurred fault bitfield LSB
-- `resp[7]`: occurred fault bitfield MSB
+## `STATUS` register `0x10`
 
-### `0x20` - Telemetry: state and RPM
-- Host write payload: `20`
-- Host read length: 8 bytes
+Layout matches the guideline:
 
-Response bytes:
-- `resp[0]`: command echo (`0x20`)
-- `resp[1]`: motor state (`MCI_State_t`)
-- `resp[2]`: current fault bitfield LSB
-- `resp[3]`: current fault bitfield MSB
-- `resp[4]`: measured mechanical speed RPM LSB (signed int16)
-- `resp[5]`: measured mechanical speed RPM MSB
-- `resp[6]`: speed reference RPM LSB (signed int16)
-- `resp[7]`: speed reference RPM MSB
+- `seq`
+- `esc_state`
+- `mc_state`
+- `last_cmd_seq`
+- `last_cmd_error`
+- `current_faults`
+- `occurred_faults`
+- `status_flags`
+- `watchdog_ms_left` = `0`
 
-### `0x21` - Telemetry: phase currents
-- Host write payload: `21`
-- Host read length: 8 bytes
+Current `esc_state` mapping:
 
-Response bytes:
-- `resp[0]`: command echo (`0x21`)
-- `resp[1]`: status (`0`)
-- `resp[2]`: `Ia` LSB (signed int16)
-- `resp[3]`: `Ia` MSB
-- `resp[4]`: `Ib` LSB (signed int16)
-- `resp[5]`: `Ib` MSB
-- `resp[6]`: phase current amplitude LSB (signed int16)
-- `resp[7]`: phase current amplitude MSB
+- `0`: boot
+- `1`: idle
+- `2`: running
+- `3`: stopping
+- `4`: fault
 
-### `0x22` - Telemetry: dq currents
-- Host write payload: `22`
-- Host read length: 8 bytes
+Current `last_cmd_error` mapping:
 
-Response bytes:
-- `resp[0]`: command echo (`0x22`)
-- `resp[1]`: status (`0`)
-- `resp[2]`: `Iq` LSB (signed int16)
-- `resp[3]`: `Iq` MSB
-- `resp[4]`: `Id` LSB (signed int16)
-- `resp[5]`: `Id` MSB
-- `resp[6]`: `Iq_ref` LSB (signed int16)
-- `resp[7]`: `Iq_ref` MSB
+- `0`: OK
+- `1`: unknown opcode
+- `2`: invalid state
+- `3`: parameter out of range
+- `4`: motor fault active
+- `5`: busy
+- `6`: bad length
 
-### `0x23` - Telemetry: dq voltages
-- Host write payload: `23`
-- Host read length: 8 bytes
+Current `status_flags` bits:
 
-Response bytes:
-- `resp[0]`: command echo (`0x23`)
-- `resp[1]`: status (`0`)
-- `resp[2]`: `Vq` LSB (signed int16)
-- `resp[3]`: `Vq` MSB
-- `resp[4]`: `Vd` LSB (signed int16)
-- `resp[5]`: `Vd` MSB
-- `resp[6]`: phase voltage amplitude LSB (signed int16)
-- `resp[7]`: phase voltage amplitude MSB
+- bit `0`: fault present
+- bit `1`: running
+- bit `3`: undervoltage
+- bit `4`: overvoltage
+- bit `5`: overtemperature
+- bit `6`: overcurrent
+- bit `7`: speed feedback unreliable
 
-### `0x24` - Telemetry: bus voltage and angle
-- Host write payload: `24`
-- Host read length: 8 bytes
+## `COMMAND` register `0x20`
 
-Response bytes:
-- `resp[0]`: command echo (`0x24`)
-- `resp[1]`: status (`0`)
-- `resp[2]`: average bus voltage LSB (`uint16`, volts)
-- `resp[3]`: average bus voltage MSB
-- `resp[4]`: electrical angle LSB (`int16`, dpp)
-- `resp[5]`: electrical angle MSB
-- `resp[6]`: `Valpha` LSB (`int16`)
-- `resp[7]`: `Valpha` MSB
+Write exactly `16` payload bytes after the register byte:
 
-### `0x25` - Telemetry: control phase and mode
-- Host write payload: `25`
-- Host read length: 8 bytes
+| Offset | Field      | Type  |
+| -----: | ---------- | ----- |
+|      0 | `seq`      | `u8`  |
+|      1 | `opcode`   | `u8`  |
+|      2 | `flags`    | `u8`  |
+|      3 | `reserved` | `u8`  |
+|      4 | `param0`   | `i32` |
+|      8 | `param1`   | `i32` |
+|     12 | `param2`   | `i32` |
 
-Response bytes:
-- `resp[0]`: command echo (`0x25`)
-- `resp[1]`: motor state (`MCI_State_t`)
-- `resp[2]`: control mode (`MC_ControlMode_t`)
-- `resp[3]`: command state (`MCI_CommandState_t`)
-- `resp[4]`: current fault bitfield LSB
-- `resp[5]`: current fault bitfield MSB
-- `resp[6]`: occurred fault bitfield LSB
-- `resp[7]`: occurred fault bitfield MSB
+Supported opcodes:
 
-Useful `MCI_State_t` values in this project:
-- `0`: `IDLE`
-- `4`: `START`
-- `6`: `RUN`
-- `8`: `STOP`
-- `10`: `FAULT_NOW`
-- `11`: `FAULT_OVER`
-- `16`: `CHARGE_BOOT_CAP`
-- `17`: `OFFSET_CALIB`
-- `19`: `SWITCH_OVER`
+- `0x00`: `NOP`
+- `0x01`: `START`
+- `0x02`: `STOP`
+- `0x03`: `CLEAR_FAULTS`
+- `0x04`: `SET_SPEED_RAMP`
+- `0x05`: `ESTOP`
 
-Startup/loop interpretation:
-- `START`: startup / open-loop startup phase
-- `SWITCH_OVER`: transition from startup to closed-loop
-- `RUN`: normal closed-loop operation
+`SET_SPEED_RAMP` uses:
 
-Useful `MC_ControlMode_t` values:
-- `2`: `MCM_OPEN_LOOP_VOLTAGE_MODE`
-- `3`: `MCM_OPEN_LOOP_CURRENT_MODE`
-- `4`: `MCM_SPEED_MODE`
-- `5`: `MCM_TORQUE_MODE`
+- `param0`: target speed in `dHz`
+- `param1`: ramp time in `ms`
 
-Useful `MCI_CommandState_t` values:
-- `0`: `MCI_BUFFER_EMPTY`
-- `1`: `MCI_COMMAND_NOT_ALREADY_EXECUTED`
-- `2`: `MCI_COMMAND_EXECUTED_SUCCESSFULLY`
-- `3`: `MCI_COMMAND_EXECUTED_UNSUCCESSFULLY`
+## `TELEMETRY` register `0x30`
 
-### `0x26` - Telemetry: last write-only command result
-- Host write payload: `26`
-- Host read length: 8 bytes
+Layout matches the guideline.
 
-Response bytes:
-- `resp[0]`: command echo (`0x26`)
-- `resp[1]`: status (`0`)
-- `resp[2]`: last write-only command ID
-- `resp[3]`: last write-only command result
-  - `0`: success
-  - `3`: rejected
-- `resp[4]`: current fault bitfield LSB
-- `resp[5]`: current fault bitfield MSB
-- `resp[6]`: occurred fault bitfield LSB
-- `resp[7]`: occurred fault bitfield MSB
+Current field behavior:
 
-## Write-Only Control Commands
-
-These commands are write-only. The host writes the command byte and does not read immediately from the same transaction. To confirm the result, poll `0x26`, `0x25`, or `0x20`.
-
-### `0x30` - Acknowledge fault
-- Host write payload: `30`
-
-### `0x31` - Start motor
-- Host write payload: `31`
-
-### `0x32` - Stop motor
-- Host write payload: `32`
-
-## Host Validation Rules
-- Verify address ACK at `0x43`.
-- Verify read length is exactly 8 bytes.
-- Verify `resp[0] == command`.
-- For `0x01`, verify `resp[1] == 0` before using temperature.
-- For motor control commands, inspect `resp[1]`, `resp[2]`, and the returned fault fields.
+- `vbus_mV`: real bus voltage in millivolts
+- `ibus_mA`: `0` for now
+- `speed_dHz`: real mechanical speed from MCSDK speed units
+- `duty_centi_pct`: `0` for now
+- `temp_mC`: averaged temperature in milli-Celsius
+- `uptime_s`: HAL tick uptime in seconds
 
 ## Notes
-- This spec is implemented in:
-  - `Src/app/i2c_slave_app.c`
-  - `Inc/app/i2c_slave_app.h`
-- If protocol changes, update this file and firmware together.
+
+- Motor-control API calls are executed from `I2C_SlaveApp_Task()` in the main loop, not from the I2C callback.
+- If the host writes a bad register length, firmware records `last_cmd_error = 6`.
+- The previous 8-byte command/response protocol is no longer supported.

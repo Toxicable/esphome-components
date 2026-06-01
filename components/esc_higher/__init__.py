@@ -1,252 +1,160 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import i2c, sensor
-from esphome.const import (
-    CONF_ID,
-    DEVICE_CLASS_TEMPERATURE,
-    STATE_CLASS_MEASUREMENT,
-    UNIT_CELSIUS,
-)
+from esphome.components import button, i2c, sensor
+from esphome.const import CONF_ID, STATE_CLASS_MEASUREMENT
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["sensor"]
+AUTO_LOAD = ["button", "sensor"]
 
 esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
 ESCHigherComponent = esc_higher_ns.class_(
     "ESCHigherComponent", cg.PollingComponent, i2c.I2CDevice
 )
+ESCHigherStartButton = esc_higher_ns.class_("ESCHigherStartButton", button.Button)
+ESCHigherStopButton = esc_higher_ns.class_("ESCHigherStopButton", button.Button)
+ESCHigherClearFaultsButton = esc_higher_ns.class_(
+    "ESCHigherClearFaultsButton", button.Button
+)
+ESCHigherEstopButton = esc_higher_ns.class_("ESCHigherEstopButton", button.Button)
+ESCHigherSetSpeedRampButton = esc_higher_ns.class_(
+    "ESCHigherSetSpeedRampButton", button.Button
+)
 
-CONF_TEMPERATURE_C = "temperature_c"
-CONF_STATUS = "status"
-CONF_FAULT = "fault"
-CONF_MOTOR_STATE = "motor_state"
-CONF_CURRENT_FAULT = "current_fault"
-CONF_OCCURRED_FAULT = "occurred_fault"
-CONF_MEASURED_SPEED_RPM = "measured_speed_rpm"
-CONF_SPEED_REFERENCE_RPM = "speed_reference_rpm"
-CONF_CONTROL_MODE = "control_mode"
-CONF_COMMAND_STATE = "command_state"
-CONF_IA = "ia"
-CONF_IB = "ib"
-CONF_PHASE_CURRENT_AMPLITUDE = "phase_current_amplitude"
-CONF_IQ = "iq"
-CONF_ID_CURRENT = "id_current"
-CONF_IQ_REF = "iq_ref"
-CONF_VQ = "vq"
-CONF_VD = "vd"
-CONF_PHASE_VOLTAGE_AMPLITUDE = "phase_voltage_amplitude"
-CONF_BUS_VOLTAGE = "bus_voltage"
-CONF_ELECTRICAL_ANGLE = "electrical_angle"
-CONF_VALPHA = "valpha"
-CONF_LAST_COMMAND_ID = "last_command_id"
-CONF_LAST_COMMAND_RESULT = "last_command_result"
+CONF_PROTO_MAJOR = "proto_major"
+CONF_PROTO_MINOR = "proto_minor"
+CONF_FW_MAJOR = "fw_major"
+CONF_FW_MINOR = "fw_minor"
+CONF_HW_ID = "hw_id"
+CONF_MAX_BLOCK_LEN = "max_block_len"
+CONF_CAPABILITIES = "capabilities"
+CONF_SEQ = "seq"
+CONF_ESC_STATE = "esc_state"
+CONF_MC_STATE = "mc_state"
+CONF_LAST_CMD_SEQ = "last_cmd_seq"
+CONF_LAST_CMD_ERROR = "last_cmd_error"
+CONF_CURRENT_FAULTS = "current_faults"
+CONF_OCCURRED_FAULTS = "occurred_faults"
+CONF_STATUS_FLAGS = "status_flags"
+CONF_WATCHDOG_MS_LEFT = "watchdog_ms_left"
+CONF_VBUS_MV = "vbus_mv"
+CONF_IBUS_MA = "ibus_ma"
+CONF_SPEED_DHZ = "speed_dhz"
+CONF_DUTY_CENTI_PCT = "duty_centi_pct"
+CONF_TEMP_MC = "temp_mc"
+CONF_UPTIME_S = "uptime_s"
+CONF_START_MOTOR = "start_motor"
+CONF_STOP_MOTOR = "stop_motor"
+CONF_CLEAR_FAULTS = "clear_faults"
+CONF_ESTOP = "estop"
+CONF_SET_SPEED_RAMP = "set_speed_ramp"
+CONF_SPEED_RAMP_TARGET_DHZ = "speed_ramp_target_dhz"
+CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
+
+
+def _raw_sensor_schema():
+    return sensor.sensor_schema(accuracy_decimals=0, state_class=STATE_CLASS_MEASUREMENT)
+
 
 CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(ESCHigherComponent),
-            cv.Optional(CONF_TEMPERATURE_C): sensor.sensor_schema(
-                unit_of_measurement=UNIT_CELSIUS,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_TEMPERATURE,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_PROTO_MAJOR): _raw_sensor_schema(),
+            cv.Optional(CONF_PROTO_MINOR): _raw_sensor_schema(),
+            cv.Optional(CONF_FW_MAJOR): _raw_sensor_schema(),
+            cv.Optional(CONF_FW_MINOR): _raw_sensor_schema(),
+            cv.Optional(CONF_HW_ID): _raw_sensor_schema(),
+            cv.Optional(CONF_MAX_BLOCK_LEN): _raw_sensor_schema(),
+            cv.Optional(CONF_CAPABILITIES): _raw_sensor_schema(),
+            cv.Optional(CONF_SEQ): _raw_sensor_schema(),
+            cv.Optional(CONF_ESC_STATE): _raw_sensor_schema(),
+            cv.Optional(CONF_MC_STATE): _raw_sensor_schema(),
+            cv.Optional(CONF_LAST_CMD_SEQ): _raw_sensor_schema(),
+            cv.Optional(CONF_LAST_CMD_ERROR): _raw_sensor_schema(),
+            cv.Optional(CONF_CURRENT_FAULTS): _raw_sensor_schema(),
+            cv.Optional(CONF_OCCURRED_FAULTS): _raw_sensor_schema(),
+            cv.Optional(CONF_STATUS_FLAGS): _raw_sensor_schema(),
+            cv.Optional(CONF_WATCHDOG_MS_LEFT): _raw_sensor_schema(),
+            cv.Optional(CONF_VBUS_MV): _raw_sensor_schema(),
+            cv.Optional(CONF_IBUS_MA): _raw_sensor_schema(),
+            cv.Optional(CONF_SPEED_DHZ): _raw_sensor_schema(),
+            cv.Optional(CONF_DUTY_CENTI_PCT): _raw_sensor_schema(),
+            cv.Optional(CONF_TEMP_MC): _raw_sensor_schema(),
+            cv.Optional(CONF_UPTIME_S): _raw_sensor_schema(),
+            cv.Optional(CONF_START_MOTOR): button.button_schema(
+                ESCHigherStartButton, icon="mdi:play"
             ),
-            cv.Optional(CONF_STATUS): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_STOP_MOTOR): button.button_schema(
+                ESCHigherStopButton, icon="mdi:stop"
             ),
-            cv.Optional(CONF_FAULT): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_CLEAR_FAULTS): button.button_schema(
+                ESCHigherClearFaultsButton, icon="mdi:alert-remove"
             ),
-            cv.Optional(CONF_MOTOR_STATE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_ESTOP): button.button_schema(
+                ESCHigherEstopButton, icon="mdi:alert-octagon"
             ),
-            cv.Optional(CONF_CURRENT_FAULT): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_SET_SPEED_RAMP): button.button_schema(
+                ESCHigherSetSpeedRampButton, icon="mdi:ramp-right"
             ),
-            cv.Optional(CONF_OCCURRED_FAULT): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_MEASURED_SPEED_RPM): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_SPEED_REFERENCE_RPM): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_CONTROL_MODE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_COMMAND_STATE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_IA): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_IB): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_PHASE_CURRENT_AMPLITUDE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_IQ): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_ID_CURRENT): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_IQ_REF): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VQ): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VD): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_PHASE_VOLTAGE_AMPLITUDE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_BUS_VOLTAGE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_ELECTRICAL_ANGLE): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VALPHA): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_LAST_COMMAND_ID): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_LAST_COMMAND_RESULT): sensor.sensor_schema(
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
+            cv.Optional(CONF_SPEED_RAMP_TARGET_DHZ, default=1000): cv.int_,
+            cv.Optional(CONF_SPEED_RAMP_TIME_MS, default=1000): cv.int_range(
+                min=0, max=2147483647
             ),
         }
     )
     .extend(cv.polling_component_schema("10s"))
-    .extend(i2c.i2c_device_schema(0x43))
+    .extend(i2c.i2c_device_schema(0x34))
 )
+
+
+async def _bind_sensor(config, key, setter):
+    if key in config:
+        s = await sensor.new_sensor(config[key])
+        cg.add(setter(s))
 
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
+    cg.add(var.set_speed_ramp_target_dhz(config[CONF_SPEED_RAMP_TARGET_DHZ]))
+    cg.add(var.set_speed_ramp_time_ms(config[CONF_SPEED_RAMP_TIME_MS]))
 
-    if CONF_TEMPERATURE_C in config:
-        sens = await sensor.new_sensor(config[CONF_TEMPERATURE_C])
-        cg.add(var.set_temperature_c_sensor(sens))
+    await _bind_sensor(config, CONF_PROTO_MAJOR, var.set_proto_major_sensor)
+    await _bind_sensor(config, CONF_PROTO_MINOR, var.set_proto_minor_sensor)
+    await _bind_sensor(config, CONF_FW_MAJOR, var.set_fw_major_sensor)
+    await _bind_sensor(config, CONF_FW_MINOR, var.set_fw_minor_sensor)
+    await _bind_sensor(config, CONF_HW_ID, var.set_hw_id_sensor)
+    await _bind_sensor(config, CONF_MAX_BLOCK_LEN, var.set_max_block_len_sensor)
+    await _bind_sensor(config, CONF_CAPABILITIES, var.set_capabilities_sensor)
+    await _bind_sensor(config, CONF_SEQ, var.set_seq_sensor)
+    await _bind_sensor(config, CONF_ESC_STATE, var.set_esc_state_sensor)
+    await _bind_sensor(config, CONF_MC_STATE, var.set_mc_state_sensor)
+    await _bind_sensor(config, CONF_LAST_CMD_SEQ, var.set_last_cmd_seq_sensor)
+    await _bind_sensor(config, CONF_LAST_CMD_ERROR, var.set_last_cmd_error_sensor)
+    await _bind_sensor(config, CONF_CURRENT_FAULTS, var.set_current_faults_sensor)
+    await _bind_sensor(config, CONF_OCCURRED_FAULTS, var.set_occurred_faults_sensor)
+    await _bind_sensor(config, CONF_STATUS_FLAGS, var.set_status_flags_sensor)
+    await _bind_sensor(config, CONF_WATCHDOG_MS_LEFT, var.set_watchdog_ms_left_sensor)
+    await _bind_sensor(config, CONF_VBUS_MV, var.set_vbus_mv_sensor)
+    await _bind_sensor(config, CONF_IBUS_MA, var.set_ibus_ma_sensor)
+    await _bind_sensor(config, CONF_SPEED_DHZ, var.set_speed_dhz_sensor)
+    await _bind_sensor(config, CONF_DUTY_CENTI_PCT, var.set_duty_centi_pct_sensor)
+    await _bind_sensor(config, CONF_TEMP_MC, var.set_temp_mc_sensor)
+    await _bind_sensor(config, CONF_UPTIME_S, var.set_uptime_s_sensor)
 
-    if CONF_STATUS in config:
-        sens = await sensor.new_sensor(config[CONF_STATUS])
-        cg.add(var.set_status_sensor(sens))
-
-    if CONF_FAULT in config:
-        sens = await sensor.new_sensor(config[CONF_FAULT])
-        cg.add(var.set_fault_sensor(sens))
-
-    if CONF_MOTOR_STATE in config:
-        sens = await sensor.new_sensor(config[CONF_MOTOR_STATE])
-        cg.add(var.set_motor_state_sensor(sens))
-
-    if CONF_CURRENT_FAULT in config:
-        sens = await sensor.new_sensor(config[CONF_CURRENT_FAULT])
-        cg.add(var.set_current_fault_sensor(sens))
-
-    if CONF_OCCURRED_FAULT in config:
-        sens = await sensor.new_sensor(config[CONF_OCCURRED_FAULT])
-        cg.add(var.set_occurred_fault_sensor(sens))
-
-    if CONF_MEASURED_SPEED_RPM in config:
-        sens = await sensor.new_sensor(config[CONF_MEASURED_SPEED_RPM])
-        cg.add(var.set_measured_speed_rpm_sensor(sens))
-
-    if CONF_SPEED_REFERENCE_RPM in config:
-        sens = await sensor.new_sensor(config[CONF_SPEED_REFERENCE_RPM])
-        cg.add(var.set_speed_reference_rpm_sensor(sens))
-
-    if CONF_CONTROL_MODE in config:
-        sens = await sensor.new_sensor(config[CONF_CONTROL_MODE])
-        cg.add(var.set_control_mode_sensor(sens))
-
-    if CONF_COMMAND_STATE in config:
-        sens = await sensor.new_sensor(config[CONF_COMMAND_STATE])
-        cg.add(var.set_command_state_sensor(sens))
-
-    if CONF_IA in config:
-        sens = await sensor.new_sensor(config[CONF_IA])
-        cg.add(var.set_ia_sensor(sens))
-
-    if CONF_IB in config:
-        sens = await sensor.new_sensor(config[CONF_IB])
-        cg.add(var.set_ib_sensor(sens))
-
-    if CONF_PHASE_CURRENT_AMPLITUDE in config:
-        sens = await sensor.new_sensor(config[CONF_PHASE_CURRENT_AMPLITUDE])
-        cg.add(var.set_phase_current_amplitude_sensor(sens))
-
-    if CONF_IQ in config:
-        sens = await sensor.new_sensor(config[CONF_IQ])
-        cg.add(var.set_iq_sensor(sens))
-
-    if CONF_ID_CURRENT in config:
-        sens = await sensor.new_sensor(config[CONF_ID_CURRENT])
-        cg.add(var.set_id_sensor(sens))
-
-    if CONF_IQ_REF in config:
-        sens = await sensor.new_sensor(config[CONF_IQ_REF])
-        cg.add(var.set_iq_ref_sensor(sens))
-
-    if CONF_VQ in config:
-        sens = await sensor.new_sensor(config[CONF_VQ])
-        cg.add(var.set_vq_sensor(sens))
-
-    if CONF_VD in config:
-        sens = await sensor.new_sensor(config[CONF_VD])
-        cg.add(var.set_vd_sensor(sens))
-
-    if CONF_PHASE_VOLTAGE_AMPLITUDE in config:
-        sens = await sensor.new_sensor(config[CONF_PHASE_VOLTAGE_AMPLITUDE])
-        cg.add(var.set_phase_voltage_amplitude_sensor(sens))
-
-    if CONF_BUS_VOLTAGE in config:
-        sens = await sensor.new_sensor(config[CONF_BUS_VOLTAGE])
-        cg.add(var.set_bus_voltage_sensor(sens))
-
-    if CONF_ELECTRICAL_ANGLE in config:
-        sens = await sensor.new_sensor(config[CONF_ELECTRICAL_ANGLE])
-        cg.add(var.set_electrical_angle_sensor(sens))
-
-    if CONF_VALPHA in config:
-        sens = await sensor.new_sensor(config[CONF_VALPHA])
-        cg.add(var.set_valpha_sensor(sens))
-
-    if CONF_LAST_COMMAND_ID in config:
-        sens = await sensor.new_sensor(config[CONF_LAST_COMMAND_ID])
-        cg.add(var.set_last_command_id_sensor(sens))
-
-    if CONF_LAST_COMMAND_RESULT in config:
-        sens = await sensor.new_sensor(config[CONF_LAST_COMMAND_RESULT])
-        cg.add(var.set_last_command_result_sensor(sens))
+    if CONF_START_MOTOR in config:
+        b = await button.new_button(config[CONF_START_MOTOR])
+        await cg.register_parented(b, var)
+    if CONF_STOP_MOTOR in config:
+        b = await button.new_button(config[CONF_STOP_MOTOR])
+        await cg.register_parented(b, var)
+    if CONF_CLEAR_FAULTS in config:
+        b = await button.new_button(config[CONF_CLEAR_FAULTS])
+        await cg.register_parented(b, var)
+    if CONF_ESTOP in config:
+        b = await button.new_button(config[CONF_ESTOP])
+        await cg.register_parented(b, var)
+    if CONF_SET_SPEED_RAMP in config:
+        b = await button.new_button(config[CONF_SET_SPEED_RAMP])
+        await cg.register_parented(b, var)

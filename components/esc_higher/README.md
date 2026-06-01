@@ -1,8 +1,12 @@
 # esc_higher
 
 ## What it does
-Provides a monolithic `esc_higher:` ESPHome component for an I2C device at address `0x43`.
-It periodically reads STM32 temperature state using command `0x01` with retries and validates command echo and status.
+Provides a monolithic `esc_higher:` ESPHome component for the register-based STM32 I2C interface documented in [`i2c_interface.md`](./i2c_interface.md).
+
+Implemented protocol model:
+- 7-bit I2C address default: `0x34`
+- Read registers: `0x00` (`ID`), `0x10` (`STATUS`), `0x30` (`TELEMETRY`)
+- Write command register: `0x20` with 16-byte command payload
 
 ## How to use it
 
@@ -22,75 +26,77 @@ esc_higher:
   id: esc
   i2c_id: i2c_bus
   update_interval: 10s  # Optional / default
-  address: 0x43  # Optional / default
-  temperature_c:
-    name: "Temperature"
-  status:
-    name: "Status"
-  fault:
-    name: "Fault"
-  ## Optional telemetry/state sensors:
-  # motor_state:
-  #   name: "Motor State"
-  # current_fault:
-  #   name: "Current Fault"
-  # occurred_fault:
-  #   name: "Occurred Fault"
-  # measured_speed_rpm:
-  #   name: "Measured Speed RPM"
-  # speed_reference_rpm:
-  #   name: "Speed Reference RPM"
-  # control_mode:
-  #   name: "Control Mode"
-  # command_state:
-  #   name: "Command State"
-  # ia:
-  #   name: "Ia"
-  # ib:
-  #   name: "Ib"
-  # phase_current_amplitude:
-  #   name: "Phase Current Amplitude"
-  # iq:
-  #   name: "Iq"
-  # id_current:
-  #   name: "Id"
-  # iq_ref:
-  #   name: "Iq Ref"
-  # vq:
-  #   name: "Vq"
-  # vd:
-  #   name: "Vd"
-  # phase_voltage_amplitude:
-  #   name: "Phase Voltage Amplitude"
-  # bus_voltage:
-  #   name: "Bus Voltage"
-  # electrical_angle:
-  #   name: "Electrical Angle"
-  # valpha:
-  #   name: "Valpha"
-  # last_command_id:
-  #   name: "Last Command ID"
-  # last_command_result:
-  #   name: "Last Command Result"
+  address: 0x34  # Optional / default
+
+  ## STATUS + TELEMETRY examples:
+  esc_state:
+    name: "ESC State"
+  mc_state:
+    name: "MC State"
+  last_cmd_error:
+    name: "Last Command Error"
+  current_faults:
+    name: "Current Faults"
+  vbus_mv:
+    name: "Bus Voltage mV"
+  speed_dhz:
+    name: "Speed dHz"
+  temp_mc:
+    name: "Temperature mC"
+
+  ## Optional ID register sensors:
+  # proto_major:
+  #   name: "Proto Major"
+  # proto_minor:
+  #   name: "Proto Minor"
+  # fw_major:
+  #   name: "FW Major"
+  # fw_minor:
+  #   name: "FW Minor"
+  # hw_id:
+  #   name: "HW ID"
+  # max_block_len:
+  #   name: "Max Block Len"
+  # capabilities:
+  #   name: "Capabilities"
+
+  ## Optional STATUS sensors:
+  # seq:
+  #   name: "Status Seq"
+  # last_cmd_seq:
+  #   name: "Last Command Seq"
+  # occurred_faults:
+  #   name: "Occurred Faults"
+  # status_flags:
+  #   name: "Status Flags"
+  # watchdog_ms_left:
+  #   name: "Watchdog ms Left"
+
+  ## Optional TELEMETRY sensors:
+  # ibus_ma:
+  #   name: "Bus Current mA"
+  # duty_centi_pct:
+  #   name: "Duty cPct"
+  # uptime_s:
+  #   name: "Uptime s"
+
+  ## Optional write command buttons:
+  # start_motor:
+  #   name: "Start Motor"
+  # stop_motor:
+  #   name: "Stop Motor"
+  # clear_faults:
+  #   name: "Clear Faults"
+  # estop:
+  #   name: "E-Stop"
+
+  ## Optional speed-ramp command (opcode 0x04):
+  # speed_ramp_target_dhz: 1200
+  # speed_ramp_time_ms: 750
+  # set_speed_ramp:
+  #   name: "Set Speed Ramp"
 ```
 
-Control note:
-- Updated control protocol uses write-only commands (`0x30` ack fault, `0x31` start, `0x32` stop).
-- Command outcome is exposed via telemetry command `0x26` (`last_command_id`, `last_command_result`).
-
-Example host-side usage:
-
-```cpp
-auto result = id(esc).read_stm32_temp_raw();
-if (result.ok) {
-  ESP_LOGI("main", "Temperature: %d C", static_cast<int>(result.temp_c));
-} else {
-  ESP_LOGW(
-    "main",
-    "Read failed: status=%u fault=0x%02X error=%s",
-    static_cast<unsigned>(result.status),
-    result.fault,
-    result.error_message
-  );
-}
-```
+Notes:
+- `set_speed_ramp` writes command opcode `0x04` with `param0=speed_ramp_target_dhz` and `param1=speed_ramp_time_ms`.
+- Command result is observed through STATUS fields (`last_cmd_seq`, `last_cmd_error`) on subsequent polls.

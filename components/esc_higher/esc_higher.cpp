@@ -6,341 +6,201 @@ namespace esphome {
 namespace esc_higher {
 
 static const char* const TAG = "esc_higher";
-static constexpr uint8_t STM32_TEMP_CMD = 0x01;
-static constexpr uint8_t STM32_STATE_CMD = 0x20;
-static constexpr uint8_t STM32_PHASE_CURRENT_CMD = 0x21;
-static constexpr uint8_t STM32_DQ_CURRENT_CMD = 0x22;
-static constexpr uint8_t STM32_DQ_VOLTAGE_CMD = 0x23;
-static constexpr uint8_t STM32_BUS_VOLT_ANGLE_CMD = 0x24;
-static constexpr uint8_t STM32_CTRL_PHASE_CMD = 0x25;
-static constexpr uint8_t STM32_LAST_CMD_RESULT_CMD = 0x26;
-static constexpr uint8_t STM32_SPEED_RAMP_CMD = 0x14;
-static constexpr size_t STM32_TEMP_RESP_LEN = 8;
-static constexpr uint8_t STM32_STATUS_OK = 0;
-static constexpr uint8_t STM32_STATUS_TEMP_FAULT = 1;
-static constexpr uint8_t STM32_MAX_ATTEMPTS = 3;
+
+void ESCHigherStartButton::press_action() {
+  this->parent_->start_motor();
+}
+void ESCHigherStopButton::press_action() {
+  this->parent_->stop_motor();
+}
+void ESCHigherClearFaultsButton::press_action() {
+  this->parent_->clear_faults();
+}
+void ESCHigherEstopButton::press_action() {
+  this->parent_->estop();
+}
+void ESCHigherSetSpeedRampButton::press_action() {
+  this->parent_->set_speed_ramp();
+}
 
 void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
 }
 
-bool ESCHigherComponent::send_write_only_command_(uint8_t cmd) {
-  const i2c::ErrorCode err = this->write(&cmd, 1);
-  if (err == i2c::ERROR_OK)
-    return true;
-  ESP_LOGW(TAG, "Write-only command 0x%02X failed (err=%d)", cmd, static_cast<int>(err));
-  return false;
-}
-
-bool ESCHigherComponent::send_speed_ramp_(int16_t target_rpm, uint16_t duration_ms) {
-  // 0x14 rr rr dd dd (little-endian int16 + uint16) per i2c_interface.md.
-  const uint8_t payload[5] = {
-    STM32_SPEED_RAMP_CMD,
-    static_cast<uint8_t>(target_rpm & 0xFF),
-    static_cast<uint8_t>((static_cast<uint16_t>(target_rpm) >> 8) & 0xFF),
-    static_cast<uint8_t>(duration_ms & 0xFF),
-    static_cast<uint8_t>((duration_ms >> 8) & 0xFF),
-  };
-  const i2c::ErrorCode err = this->write(payload, sizeof(payload));
-  if (err == i2c::ERROR_OK)
-    return true;
-  ESP_LOGW(TAG, "Speed ramp command failed (err=%d)", static_cast<int>(err));
-  return false;
-}
-
-STM32FrameResult ESCHigherComponent::read_frame_(uint8_t cmd, uint8_t* resp, size_t resp_len) {
-  STM32FrameResult result;
-  // ESPHome expects a 7-bit I2C address in i2c_device_schema; do not pre-shift.
-  for (uint8_t attempt = 1; attempt <= STM32_MAX_ATTEMPTS; attempt++) {
-    const i2c::ErrorCode w_err = this->write(&cmd, 1);
-    if (w_err != i2c::ERROR_OK) {
-      if (w_err == i2c::ERROR_NOT_ACKNOWLEDGED) {
-        ESP_LOGW(
-          TAG, "Attempt %u/%u: no ACK from 0x%02X", attempt, STM32_MAX_ATTEMPTS, this->address_
-        );
-      } else {
-        ESP_LOGW(
-          TAG,
-          "Attempt %u/%u: I2C command write failed at 0x%02X (err=%d)",
-          attempt,
-          STM32_MAX_ATTEMPTS,
-          this->address_,
-          static_cast<int>(w_err)
-        );
-      }
-      result.error_message = "i2c_write_failed";
-      continue;
-    }
-
-    const i2c::ErrorCode r_err = this->read(resp, resp_len);
-    if (r_err != i2c::ERROR_OK) {
-      if (r_err == i2c::ERROR_NOT_ACKNOWLEDGED) {
-        ESP_LOGW(
-          TAG,
-          "Attempt %u/%u: no ACK while reading %u bytes from 0x%02X",
-          attempt,
-          STM32_MAX_ATTEMPTS,
-          static_cast<unsigned>(resp_len),
-          this->address_
-        );
-      } else {
-        ESP_LOGW(
-          TAG,
-          "Attempt %u/%u: short read/transfer failure from 0x%02X (err=%d)",
-          attempt,
-          STM32_MAX_ATTEMPTS,
-          this->address_,
-          static_cast<int>(r_err)
-        );
-      }
-      result.error_message = "i2c_read_failed";
-      continue;
-    }
-
-    if (resp[0] != cmd) {
-      ESP_LOGW(
-        TAG,
-        "Attempt %u/%u: bad echo from 0x%02X (got 0x%02X expected 0x%02X)",
-        attempt,
-        STM32_MAX_ATTEMPTS,
-        this->address_,
-        resp[0],
-        cmd
-      );
-      result.error_message = "bad_command_echo";
-      continue;
-    }
-
-    result.ok = true;
-    result.error_message = "";
-    return result;
-  }
-
-  return result;
-}
-
-STM32TempReadResult ESCHigherComponent::read_stm32_temp_raw() {
-  STM32TempReadResult result;
-  result.status = 0xFF;
-  uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-  const STM32FrameResult frame = this->read_frame_(STM32_TEMP_CMD, resp, sizeof(resp));
-  if (!frame.ok) {
-    result.error_message = frame.error_message;
-    return result;
-  }
-
-  result.status = resp[1];
-  result.fault = resp[4];
-  if (result.status != STM32_STATUS_OK) {
-    result.error_message = result.status == STM32_STATUS_TEMP_FAULT ? "remote_temp_fault" : "remote_error";
+bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
+  for (uint8_t attempt = 1; attempt <= CMD_RETRIES; attempt++) {
+    const i2c::ErrorCode err = this->write_read(&reg, 1, out, len);
+    if (err == i2c::ERROR_OK)
+      return true;
     ESP_LOGW(
       TAG,
-      "Temp status non-zero at 0x%02X: status=%u fault=0x%02X",
-      this->address_,
-      static_cast<unsigned>(result.status),
-      result.fault
+      "Read reg 0x%02X failed attempt %u/%u (err=%d)",
+      reg,
+      attempt,
+      CMD_RETRIES,
+      static_cast<int>(err)
     );
-    return result;
   }
+  return false;
+}
 
-  result.temp_c = decode_i16_(resp[2], resp[3]);
-  result.ok = true;
-  result.error_message = "";
-  return result;
+bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
+  // Wire format: [0x20][16-byte payload]
+  // payload: seq,u8 opcode,u8 flags,u8 reserved,u8 param0 i32 LE, param1 i32 LE, param2 i32 LE
+  uint8_t tx[17]{0};
+  tx[0] = REG_COMMAND;
+  tx[1] = this->command_seq_++;
+  tx[2] = opcode;
+  tx[3] = 0;  // flags
+  tx[4] = 0;  // reserved
+  tx[5] = static_cast<uint8_t>(param0 & 0xFF);
+  tx[6] = static_cast<uint8_t>((param0 >> 8) & 0xFF);
+  tx[7] = static_cast<uint8_t>((param0 >> 16) & 0xFF);
+  tx[8] = static_cast<uint8_t>((param0 >> 24) & 0xFF);
+  tx[9] = static_cast<uint8_t>(param1 & 0xFF);
+  tx[10] = static_cast<uint8_t>((param1 >> 8) & 0xFF);
+  tx[11] = static_cast<uint8_t>((param1 >> 16) & 0xFF);
+  tx[12] = static_cast<uint8_t>((param1 >> 24) & 0xFF);
+  tx[13] = static_cast<uint8_t>(param2 & 0xFF);
+  tx[14] = static_cast<uint8_t>((param2 >> 8) & 0xFF);
+  tx[15] = static_cast<uint8_t>((param2 >> 16) & 0xFF);
+  tx[16] = static_cast<uint8_t>((param2 >> 24) & 0xFF);
+
+  for (uint8_t attempt = 1; attempt <= CMD_RETRIES; attempt++) {
+    const i2c::ErrorCode err = this->write(tx, sizeof(tx));
+    if (err == i2c::ERROR_OK)
+      return true;
+    ESP_LOGW(
+      TAG,
+      "Write command opcode 0x%02X failed attempt %u/%u (err=%d)",
+      opcode,
+      attempt,
+      CMD_RETRIES,
+      static_cast<int>(err)
+    );
+  }
+  return false;
+}
+
+bool ESCHigherComponent::start_motor() {
+  return this->write_command_(OPCODE_START, 0, 0, 0);
+}
+bool ESCHigherComponent::stop_motor() {
+  return this->write_command_(OPCODE_STOP, 0, 0, 0);
+}
+bool ESCHigherComponent::clear_faults() {
+  return this->write_command_(OPCODE_CLEAR_FAULTS, 0, 0, 0);
+}
+bool ESCHigherComponent::estop() {
+  return this->write_command_(OPCODE_ESTOP, 0, 0, 0);
+}
+bool ESCHigherComponent::set_speed_ramp() {
+  return this->write_command_(OPCODE_SET_SPEED_RAMP, speed_ramp_target_dhz_, speed_ramp_time_ms_, 0);
 }
 
 void ESCHigherComponent::update() {
-  const STM32TempReadResult result = this->read_stm32_temp_raw();
-  if (this->status_sensor_ != nullptr) {
-    this->status_sensor_->publish_state(result.status);
-  }
-  if (this->fault_sensor_ != nullptr) {
-    this->fault_sensor_->publish_state(result.fault);
+  bool all_ok = true;
+
+  if (
+    proto_major_sensor_ != nullptr || proto_minor_sensor_ != nullptr || fw_major_sensor_ != nullptr ||
+    fw_minor_sensor_ != nullptr || hw_id_sensor_ != nullptr || max_block_len_sensor_ != nullptr ||
+    capabilities_sensor_ != nullptr
+  ) {
+    uint8_t id[8]{0};
+    if (this->read_register_(REG_ID, id, sizeof(id))) {
+      if (proto_major_sensor_ != nullptr)
+        proto_major_sensor_->publish_state(id[0]);
+      if (proto_minor_sensor_ != nullptr)
+        proto_minor_sensor_->publish_state(id[1]);
+      if (fw_major_sensor_ != nullptr)
+        fw_major_sensor_->publish_state(id[2]);
+      if (fw_minor_sensor_ != nullptr)
+        fw_minor_sensor_->publish_state(id[3]);
+      if (hw_id_sensor_ != nullptr)
+        hw_id_sensor_->publish_state(id[4]);
+      if (max_block_len_sensor_ != nullptr)
+        max_block_len_sensor_->publish_state(id[5]);
+      if (capabilities_sensor_ != nullptr)
+        capabilities_sensor_->publish_state(u16_(id, 6));
+    } else {
+      all_ok = false;
+    }
   }
 
-  if (result.ok) {
+  {
+    uint8_t status[16]{0};
+    if (this->read_register_(REG_STATUS, status, sizeof(status))) {
+      // Field offsets follow the documented STATUS layout in i2c_interface.md.
+      if (seq_sensor_ != nullptr)
+        seq_sensor_->publish_state(status[0]);
+      if (esc_state_sensor_ != nullptr)
+        esc_state_sensor_->publish_state(status[1]);
+      if (mc_state_sensor_ != nullptr)
+        mc_state_sensor_->publish_state(status[2]);
+      if (last_cmd_seq_sensor_ != nullptr)
+        last_cmd_seq_sensor_->publish_state(status[3]);
+      if (last_cmd_error_sensor_ != nullptr)
+        last_cmd_error_sensor_->publish_state(status[4]);
+      if (current_faults_sensor_ != nullptr)
+        current_faults_sensor_->publish_state(u16_(status, 6));
+      if (occurred_faults_sensor_ != nullptr)
+        occurred_faults_sensor_->publish_state(u16_(status, 8));
+      if (status_flags_sensor_ != nullptr)
+        status_flags_sensor_->publish_state(u16_(status, 10));
+      if (watchdog_ms_left_sensor_ != nullptr)
+        watchdog_ms_left_sensor_->publish_state(u16_(status, 12));
+    } else {
+      all_ok = false;
+    }
+  }
+
+  {
+    uint8_t tel[32]{0};
+    if (this->read_register_(REG_TELEMETRY, tel, sizeof(tel))) {
+      // Field offsets follow TELEMETRY ordering in i2c_interface.md.
+      if (seq_sensor_ != nullptr)
+        seq_sensor_->publish_state(tel[0]);
+      if (esc_state_sensor_ != nullptr)
+        esc_state_sensor_->publish_state(tel[1]);
+      if (mc_state_sensor_ != nullptr)
+        mc_state_sensor_->publish_state(tel[2]);
+      if (last_cmd_error_sensor_ != nullptr)
+        last_cmd_error_sensor_->publish_state(tel[3]);
+      if (status_flags_sensor_ != nullptr)
+        status_flags_sensor_->publish_state(u16_(tel, 4));
+      if (current_faults_sensor_ != nullptr)
+        current_faults_sensor_->publish_state(u16_(tel, 6));
+      if (vbus_mv_sensor_ != nullptr)
+        vbus_mv_sensor_->publish_state(u32_(tel, 8));
+      if (ibus_ma_sensor_ != nullptr)
+        ibus_ma_sensor_->publish_state(i32_(tel, 12));
+      if (speed_dhz_sensor_ != nullptr)
+        speed_dhz_sensor_->publish_state(i32_(tel, 16));
+      if (duty_centi_pct_sensor_ != nullptr)
+        duty_centi_pct_sensor_->publish_state(i16_(tel, 20));
+      if (temp_mc_sensor_ != nullptr)
+        temp_mc_sensor_->publish_state(i32_(tel, 22));
+      if (last_cmd_seq_sensor_ != nullptr)
+        last_cmd_seq_sensor_->publish_state(tel[26]);
+      if (uptime_s_sensor_ != nullptr)
+        uptime_s_sensor_->publish_state(u32_(tel, 28));
+    } else {
+      all_ok = false;
+    }
+  }
+
+  if (all_ok)
     this->status_clear_warning();
-    if (this->temperature_c_sensor_ != nullptr) {
-      this->temperature_c_sensor_->publish_state(result.temp_c);
-    }
-    ESP_LOGI(
-      TAG, "STM32 temperature: %d C (fault=0x%02X)", static_cast<int>(result.temp_c), result.fault
-    );
-  } else {
+  else
     this->status_set_warning();
-    ESP_LOGW(
-      TAG,
-      "STM32 temp read failed at 0x%02X: status=%u fault=0x%02X error=%s",
-      this->address_,
-      static_cast<unsigned>(result.status),
-      result.fault,
-      result.error_message
-    );
-  }
-
-  if (
-    this->motor_state_sensor_ != nullptr || this->current_fault_sensor_ != nullptr ||
-    this->measured_speed_rpm_sensor_ != nullptr || this->speed_reference_rpm_sensor_ != nullptr
-  ) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_STATE_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (this->motor_state_sensor_ != nullptr)
-        this->motor_state_sensor_->publish_state(resp[1]);
-      if (this->current_fault_sensor_ != nullptr)
-        this->current_fault_sensor_->publish_state(decode_u16_(resp[2], resp[3]));
-      if (this->measured_speed_rpm_sensor_ != nullptr)
-        this->measured_speed_rpm_sensor_->publish_state(decode_i16_(resp[4], resp[5]));
-      if (this->speed_reference_rpm_sensor_ != nullptr)
-        this->speed_reference_rpm_sensor_->publish_state(decode_i16_(resp[6], resp[7]));
-    }
-  }
-
-  if (
-    this->control_mode_sensor_ != nullptr || this->command_state_sensor_ != nullptr ||
-    this->occurred_fault_sensor_ != nullptr
-  ) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_CTRL_PHASE_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (this->motor_state_sensor_ != nullptr)
-        this->motor_state_sensor_->publish_state(resp[1]);
-      if (this->control_mode_sensor_ != nullptr)
-        this->control_mode_sensor_->publish_state(resp[2]);
-      if (this->command_state_sensor_ != nullptr)
-        this->command_state_sensor_->publish_state(resp[3]);
-      if (this->current_fault_sensor_ != nullptr)
-        this->current_fault_sensor_->publish_state(decode_u16_(resp[4], resp[5]));
-      if (this->occurred_fault_sensor_ != nullptr)
-        this->occurred_fault_sensor_->publish_state(decode_u16_(resp[6], resp[7]));
-    }
-  }
-
-  if (
-    this->ia_sensor_ != nullptr || this->ib_sensor_ != nullptr ||
-    this->phase_current_amplitude_sensor_ != nullptr
-  ) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_PHASE_CURRENT_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (resp[1] == STM32_STATUS_OK) {
-        if (this->ia_sensor_ != nullptr)
-          this->ia_sensor_->publish_state(decode_i16_(resp[2], resp[3]));
-        if (this->ib_sensor_ != nullptr)
-          this->ib_sensor_->publish_state(decode_i16_(resp[4], resp[5]));
-        if (this->phase_current_amplitude_sensor_ != nullptr)
-          this->phase_current_amplitude_sensor_->publish_state(decode_i16_(resp[6], resp[7]));
-      } else {
-        ESP_LOGW(TAG, "Phase current status non-zero: %u", static_cast<unsigned>(resp[1]));
-      }
-    }
-  }
-
-  if (this->iq_sensor_ != nullptr || this->id_sensor_ != nullptr || this->iq_ref_sensor_ != nullptr) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_DQ_CURRENT_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (resp[1] == STM32_STATUS_OK) {
-        if (this->iq_sensor_ != nullptr)
-          this->iq_sensor_->publish_state(decode_i16_(resp[2], resp[3]));
-        if (this->id_sensor_ != nullptr)
-          this->id_sensor_->publish_state(decode_i16_(resp[4], resp[5]));
-        if (this->iq_ref_sensor_ != nullptr)
-          this->iq_ref_sensor_->publish_state(decode_i16_(resp[6], resp[7]));
-      } else {
-        ESP_LOGW(TAG, "DQ current status non-zero: %u", static_cast<unsigned>(resp[1]));
-      }
-    }
-  }
-
-  if (
-    this->vq_sensor_ != nullptr || this->vd_sensor_ != nullptr ||
-    this->phase_voltage_amplitude_sensor_ != nullptr
-  ) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_DQ_VOLTAGE_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (resp[1] == STM32_STATUS_OK) {
-        if (this->vq_sensor_ != nullptr)
-          this->vq_sensor_->publish_state(decode_i16_(resp[2], resp[3]));
-        if (this->vd_sensor_ != nullptr)
-          this->vd_sensor_->publish_state(decode_i16_(resp[4], resp[5]));
-        if (this->phase_voltage_amplitude_sensor_ != nullptr)
-          this->phase_voltage_amplitude_sensor_->publish_state(decode_i16_(resp[6], resp[7]));
-      } else {
-        ESP_LOGW(TAG, "DQ voltage status non-zero: %u", static_cast<unsigned>(resp[1]));
-      }
-    }
-  }
-
-  if (
-    this->bus_voltage_sensor_ != nullptr || this->electrical_angle_sensor_ != nullptr ||
-    this->valpha_sensor_ != nullptr
-  ) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_BUS_VOLT_ANGLE_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (resp[1] == STM32_STATUS_OK) {
-        if (this->bus_voltage_sensor_ != nullptr)
-          this->bus_voltage_sensor_->publish_state(decode_u16_(resp[2], resp[3]));
-        if (this->electrical_angle_sensor_ != nullptr)
-          this->electrical_angle_sensor_->publish_state(decode_i16_(resp[4], resp[5]));
-        if (this->valpha_sensor_ != nullptr)
-          this->valpha_sensor_->publish_state(decode_i16_(resp[6], resp[7]));
-      } else {
-        ESP_LOGW(TAG, "Bus/angle status non-zero: %u", static_cast<unsigned>(resp[1]));
-      }
-    }
-  }
-
-  if (this->last_command_id_sensor_ != nullptr || this->last_command_result_sensor_ != nullptr) {
-    uint8_t resp[STM32_TEMP_RESP_LEN]{0};
-    const STM32FrameResult frame = this->read_frame_(STM32_LAST_CMD_RESULT_CMD, resp, sizeof(resp));
-    if (frame.ok) {
-      if (resp[1] == STM32_STATUS_OK) {
-        if (this->last_command_id_sensor_ != nullptr)
-          this->last_command_id_sensor_->publish_state(resp[2]);
-        if (this->last_command_result_sensor_ != nullptr)
-          this->last_command_result_sensor_->publish_state(resp[3]);
-        if (this->current_fault_sensor_ != nullptr)
-          this->current_fault_sensor_->publish_state(decode_u16_(resp[4], resp[5]));
-        if (this->occurred_fault_sensor_ != nullptr)
-          this->occurred_fault_sensor_->publish_state(decode_u16_(resp[6], resp[7]));
-      } else {
-        ESP_LOGW(TAG, "Last-command status non-zero: %u", static_cast<unsigned>(resp[1]));
-      }
-    }
-  }
 }
 
 void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "esc_higher:");
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
-  LOG_SENSOR("  ", "Temperature C", this->temperature_c_sensor_);
-  LOG_SENSOR("  ", "Status", this->status_sensor_);
-  LOG_SENSOR("  ", "Fault", this->fault_sensor_);
-  LOG_SENSOR("  ", "Motor State", this->motor_state_sensor_);
-  LOG_SENSOR("  ", "Current Fault", this->current_fault_sensor_);
-  LOG_SENSOR("  ", "Occurred Fault", this->occurred_fault_sensor_);
-  LOG_SENSOR("  ", "Measured Speed RPM", this->measured_speed_rpm_sensor_);
-  LOG_SENSOR("  ", "Speed Reference RPM", this->speed_reference_rpm_sensor_);
-  LOG_SENSOR("  ", "Control Mode", this->control_mode_sensor_);
-  LOG_SENSOR("  ", "Command State", this->command_state_sensor_);
-  LOG_SENSOR("  ", "Ia", this->ia_sensor_);
-  LOG_SENSOR("  ", "Ib", this->ib_sensor_);
-  LOG_SENSOR("  ", "Phase Current Amplitude", this->phase_current_amplitude_sensor_);
-  LOG_SENSOR("  ", "Iq", this->iq_sensor_);
-  LOG_SENSOR("  ", "Id", this->id_sensor_);
-  LOG_SENSOR("  ", "Iq Ref", this->iq_ref_sensor_);
-  LOG_SENSOR("  ", "Vq", this->vq_sensor_);
-  LOG_SENSOR("  ", "Vd", this->vd_sensor_);
-  LOG_SENSOR("  ", "Phase Voltage Amplitude", this->phase_voltage_amplitude_sensor_);
-  LOG_SENSOR("  ", "Bus Voltage", this->bus_voltage_sensor_);
-  LOG_SENSOR("  ", "Electrical Angle", this->electrical_angle_sensor_);
-  LOG_SENSOR("  ", "Valpha", this->valpha_sensor_);
-  LOG_SENSOR("  ", "Last Command ID", this->last_command_id_sensor_);
-  LOG_SENSOR("  ", "Last Command Result", this->last_command_result_sensor_);
+  ESP_LOGCONFIG(TAG, "  Speed ramp target dHz: %d", static_cast<int>(speed_ramp_target_dhz_));
+  ESP_LOGCONFIG(TAG, "  Speed ramp time ms: %d", static_cast<int>(speed_ramp_time_ms_));
 }
 
 }  // namespace esc_higher

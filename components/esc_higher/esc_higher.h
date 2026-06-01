@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/core/component.h"
@@ -10,17 +11,31 @@
 namespace esphome {
 namespace esc_higher {
 
-struct STM32TempReadResult {
-  bool ok{false};
-  uint8_t status{0xFF};
-  int16_t temp_c{0};
-  uint8_t fault{0};
-  const char* error_message{"uninitialized"};
+class ESCHigherComponent;
+
+class ESCHigherStartButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
 };
 
-struct STM32FrameResult {
-  bool ok{false};
-  const char* error_message{"uninitialized"};
+class ESCHigherStopButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
+};
+
+class ESCHigherClearFaultsButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
+};
+
+class ESCHigherEstopButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
+};
+
+class ESCHigherSetSpeedRampButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
 };
 
 class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
@@ -29,124 +44,150 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void update() override;
   void dump_config() override;
 
-  STM32TempReadResult read_stm32_temp_raw();
-  STM32FrameResult read_frame_(uint8_t cmd, uint8_t* resp, size_t resp_len);
-  bool send_write_only_command_(uint8_t cmd);
-  bool send_speed_ramp_(int16_t target_rpm, uint16_t duration_ms);
-  bool acknowledge_fault() {
-    return this->send_write_only_command_(0x30);
+  bool start_motor();
+  bool stop_motor();
+  bool clear_faults();
+  bool estop();
+  bool set_speed_ramp();
+
+  void set_speed_ramp_target_dhz(int32_t v) {
+    speed_ramp_target_dhz_ = v;
   }
-  bool start_motor() {
-    return this->send_write_only_command_(0x31);
+  void set_speed_ramp_time_ms(int32_t v) {
+    speed_ramp_time_ms_ = v;
   }
-  bool stop_motor() {
-    return this->send_write_only_command_(0x32);
+
+  void set_proto_major_sensor(sensor::Sensor* s) {
+    proto_major_sensor_ = s;
   }
-  void set_temperature_c_sensor(sensor::Sensor* s) {
-    temperature_c_sensor_ = s;
+  void set_proto_minor_sensor(sensor::Sensor* s) {
+    proto_minor_sensor_ = s;
   }
-  void set_status_sensor(sensor::Sensor* s) {
-    status_sensor_ = s;
+  void set_fw_major_sensor(sensor::Sensor* s) {
+    fw_major_sensor_ = s;
   }
-  void set_fault_sensor(sensor::Sensor* s) {
-    fault_sensor_ = s;
+  void set_fw_minor_sensor(sensor::Sensor* s) {
+    fw_minor_sensor_ = s;
   }
-  void set_motor_state_sensor(sensor::Sensor* s) {
-    motor_state_sensor_ = s;
+  void set_hw_id_sensor(sensor::Sensor* s) {
+    hw_id_sensor_ = s;
   }
-  void set_current_fault_sensor(sensor::Sensor* s) {
-    current_fault_sensor_ = s;
+  void set_max_block_len_sensor(sensor::Sensor* s) {
+    max_block_len_sensor_ = s;
   }
-  void set_occurred_fault_sensor(sensor::Sensor* s) {
-    occurred_fault_sensor_ = s;
+  void set_capabilities_sensor(sensor::Sensor* s) {
+    capabilities_sensor_ = s;
   }
-  void set_measured_speed_rpm_sensor(sensor::Sensor* s) {
-    measured_speed_rpm_sensor_ = s;
+
+  void set_seq_sensor(sensor::Sensor* s) {
+    seq_sensor_ = s;
   }
-  void set_speed_reference_rpm_sensor(sensor::Sensor* s) {
-    speed_reference_rpm_sensor_ = s;
+  void set_esc_state_sensor(sensor::Sensor* s) {
+    esc_state_sensor_ = s;
   }
-  void set_control_mode_sensor(sensor::Sensor* s) {
-    control_mode_sensor_ = s;
+  void set_mc_state_sensor(sensor::Sensor* s) {
+    mc_state_sensor_ = s;
   }
-  void set_command_state_sensor(sensor::Sensor* s) {
-    command_state_sensor_ = s;
+  void set_last_cmd_seq_sensor(sensor::Sensor* s) {
+    last_cmd_seq_sensor_ = s;
   }
-  void set_ia_sensor(sensor::Sensor* s) {
-    ia_sensor_ = s;
+  void set_last_cmd_error_sensor(sensor::Sensor* s) {
+    last_cmd_error_sensor_ = s;
   }
-  void set_ib_sensor(sensor::Sensor* s) {
-    ib_sensor_ = s;
+  void set_current_faults_sensor(sensor::Sensor* s) {
+    current_faults_sensor_ = s;
   }
-  void set_phase_current_amplitude_sensor(sensor::Sensor* s) {
-    phase_current_amplitude_sensor_ = s;
+  void set_occurred_faults_sensor(sensor::Sensor* s) {
+    occurred_faults_sensor_ = s;
   }
-  void set_iq_sensor(sensor::Sensor* s) {
-    iq_sensor_ = s;
+  void set_status_flags_sensor(sensor::Sensor* s) {
+    status_flags_sensor_ = s;
   }
-  void set_id_sensor(sensor::Sensor* s) {
-    id_sensor_ = s;
+  void set_watchdog_ms_left_sensor(sensor::Sensor* s) {
+    watchdog_ms_left_sensor_ = s;
   }
-  void set_iq_ref_sensor(sensor::Sensor* s) {
-    iq_ref_sensor_ = s;
+
+  void set_vbus_mv_sensor(sensor::Sensor* s) {
+    vbus_mv_sensor_ = s;
   }
-  void set_vq_sensor(sensor::Sensor* s) {
-    vq_sensor_ = s;
+  void set_ibus_ma_sensor(sensor::Sensor* s) {
+    ibus_ma_sensor_ = s;
   }
-  void set_vd_sensor(sensor::Sensor* s) {
-    vd_sensor_ = s;
+  void set_speed_dhz_sensor(sensor::Sensor* s) {
+    speed_dhz_sensor_ = s;
   }
-  void set_phase_voltage_amplitude_sensor(sensor::Sensor* s) {
-    phase_voltage_amplitude_sensor_ = s;
+  void set_duty_centi_pct_sensor(sensor::Sensor* s) {
+    duty_centi_pct_sensor_ = s;
   }
-  void set_bus_voltage_sensor(sensor::Sensor* s) {
-    bus_voltage_sensor_ = s;
+  void set_temp_mc_sensor(sensor::Sensor* s) {
+    temp_mc_sensor_ = s;
   }
-  void set_electrical_angle_sensor(sensor::Sensor* s) {
-    electrical_angle_sensor_ = s;
-  }
-  void set_valpha_sensor(sensor::Sensor* s) {
-    valpha_sensor_ = s;
-  }
-  void set_last_command_id_sensor(sensor::Sensor* s) {
-    last_command_id_sensor_ = s;
-  }
-  void set_last_command_result_sensor(sensor::Sensor* s) {
-    last_command_result_sensor_ = s;
+  void set_uptime_s_sensor(sensor::Sensor* s) {
+    uptime_s_sensor_ = s;
   }
 
  protected:
-  static int16_t decode_i16_(uint8_t lsb, uint8_t msb) {
-    return static_cast<int16_t>(static_cast<uint16_t>(lsb) | (static_cast<uint16_t>(msb) << 8));
+  bool read_register_(uint8_t reg, uint8_t* out, size_t len);
+  bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2);
+
+  static uint16_t u16_(const uint8_t* b, size_t off) {
+    return static_cast<uint16_t>(b[off]) | (static_cast<uint16_t>(b[off + 1]) << 8);
   }
-  static uint16_t decode_u16_(uint8_t lsb, uint8_t msb) {
-    return static_cast<uint16_t>(lsb) | (static_cast<uint16_t>(msb) << 8);
+  static int32_t i32_(const uint8_t* b, size_t off) {
+    return static_cast<int32_t>(
+      static_cast<uint32_t>(b[off]) | (static_cast<uint32_t>(b[off + 1]) << 8) |
+      (static_cast<uint32_t>(b[off + 2]) << 16) | (static_cast<uint32_t>(b[off + 3]) << 24)
+    );
+  }
+  static uint32_t u32_(const uint8_t* b, size_t off) {
+    return static_cast<uint32_t>(b[off]) | (static_cast<uint32_t>(b[off + 1]) << 8) |
+           (static_cast<uint32_t>(b[off + 2]) << 16) |
+           (static_cast<uint32_t>(b[off + 3]) << 24);
+  }
+  static int16_t i16_(const uint8_t* b, size_t off) {
+    return static_cast<int16_t>(u16_(b, off));
   }
 
-  sensor::Sensor* temperature_c_sensor_{nullptr};
-  sensor::Sensor* status_sensor_{nullptr};
-  sensor::Sensor* fault_sensor_{nullptr};
-  sensor::Sensor* motor_state_sensor_{nullptr};
-  sensor::Sensor* current_fault_sensor_{nullptr};
-  sensor::Sensor* occurred_fault_sensor_{nullptr};
-  sensor::Sensor* measured_speed_rpm_sensor_{nullptr};
-  sensor::Sensor* speed_reference_rpm_sensor_{nullptr};
-  sensor::Sensor* control_mode_sensor_{nullptr};
-  sensor::Sensor* command_state_sensor_{nullptr};
-  sensor::Sensor* ia_sensor_{nullptr};
-  sensor::Sensor* ib_sensor_{nullptr};
-  sensor::Sensor* phase_current_amplitude_sensor_{nullptr};
-  sensor::Sensor* iq_sensor_{nullptr};
-  sensor::Sensor* id_sensor_{nullptr};
-  sensor::Sensor* iq_ref_sensor_{nullptr};
-  sensor::Sensor* vq_sensor_{nullptr};
-  sensor::Sensor* vd_sensor_{nullptr};
-  sensor::Sensor* phase_voltage_amplitude_sensor_{nullptr};
-  sensor::Sensor* bus_voltage_sensor_{nullptr};
-  sensor::Sensor* electrical_angle_sensor_{nullptr};
-  sensor::Sensor* valpha_sensor_{nullptr};
-  sensor::Sensor* last_command_id_sensor_{nullptr};
-  sensor::Sensor* last_command_result_sensor_{nullptr};
+  static constexpr uint8_t REG_ID = 0x00;
+  static constexpr uint8_t REG_STATUS = 0x10;
+  static constexpr uint8_t REG_COMMAND = 0x20;
+  static constexpr uint8_t REG_TELEMETRY = 0x30;
+
+  static constexpr uint8_t OPCODE_START = 0x01;
+  static constexpr uint8_t OPCODE_STOP = 0x02;
+  static constexpr uint8_t OPCODE_CLEAR_FAULTS = 0x03;
+  static constexpr uint8_t OPCODE_SET_SPEED_RAMP = 0x04;
+  static constexpr uint8_t OPCODE_ESTOP = 0x05;
+
+  static constexpr uint8_t CMD_RETRIES = 3;
+  uint8_t command_seq_{0};
+  int32_t speed_ramp_target_dhz_{1000};
+  int32_t speed_ramp_time_ms_{1000};
+
+  sensor::Sensor* proto_major_sensor_{nullptr};
+  sensor::Sensor* proto_minor_sensor_{nullptr};
+  sensor::Sensor* fw_major_sensor_{nullptr};
+  sensor::Sensor* fw_minor_sensor_{nullptr};
+  sensor::Sensor* hw_id_sensor_{nullptr};
+  sensor::Sensor* max_block_len_sensor_{nullptr};
+  sensor::Sensor* capabilities_sensor_{nullptr};
+
+  sensor::Sensor* seq_sensor_{nullptr};
+  sensor::Sensor* esc_state_sensor_{nullptr};
+  sensor::Sensor* mc_state_sensor_{nullptr};
+  sensor::Sensor* last_cmd_seq_sensor_{nullptr};
+  sensor::Sensor* last_cmd_error_sensor_{nullptr};
+  sensor::Sensor* current_faults_sensor_{nullptr};
+  sensor::Sensor* occurred_faults_sensor_{nullptr};
+  sensor::Sensor* status_flags_sensor_{nullptr};
+  sensor::Sensor* watchdog_ms_left_sensor_{nullptr};
+
+  sensor::Sensor* vbus_mv_sensor_{nullptr};
+  sensor::Sensor* ibus_ma_sensor_{nullptr};
+  sensor::Sensor* speed_dhz_sensor_{nullptr};
+  sensor::Sensor* duty_centi_pct_sensor_{nullptr};
+  sensor::Sensor* temp_mc_sensor_{nullptr};
+  sensor::Sensor* uptime_s_sensor_{nullptr};
 };
 
 }  // namespace esc_higher
