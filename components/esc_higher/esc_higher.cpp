@@ -158,13 +158,13 @@ void ESCHigherComponent::update() {
         current_faults_sensor_->publish_state(u16_(status, 6));
       if (current_faults_text_sensor_ != nullptr)
         current_faults_text_sensor_->publish_state(
-          bitmask_to_names(u16_(status, 6), FAULT_NAMES, 16)
+          fault_bitmask_to_names(u16_(status, 6))
         );
       if (occurred_faults_sensor_ != nullptr)
         occurred_faults_sensor_->publish_state(u16_(status, 8));
       if (occurred_faults_text_sensor_ != nullptr)
         occurred_faults_text_sensor_->publish_state(
-          bitmask_to_names(u16_(status, 8), FAULT_NAMES, 16)
+          fault_bitmask_to_names(u16_(status, 8))
         );
       if (status_flags_sensor_ != nullptr)
         status_flags_sensor_->publish_state(u16_(status, 10));
@@ -209,7 +209,7 @@ void ESCHigherComponent::update() {
         current_faults_sensor_->publish_state(u16_(tel, 6));
       if (current_faults_text_sensor_ != nullptr)
         current_faults_text_sensor_->publish_state(
-          bitmask_to_names(u16_(tel, 6), FAULT_NAMES, 16)
+          fault_bitmask_to_names(u16_(tel, 6))
         );
       if (vbus_mv_sensor_ != nullptr)
         vbus_mv_sensor_->publish_state(u32_(tel, 8) / 1000.0f);

@@ -149,24 +149,21 @@ static const char* const STATUS_FLAG_NAMES[] = {
   "speed_feedback_unreliable",
 };
 
-// MCSDK fault bit names (16-bit bitmap in current_faults/occurred_faults)
-static const char* const FAULT_NAMES[] = {
-  "reserved0",           // bit0  (0x0001)
-  "overvoltage",         // bit1  (0x0002)
-  "undervoltage",        // bit2  (0x0004)
-  "overtemperature",     // bit3  (0x0008)
-  "startup_failed",      // bit4  (0x0010)
-  "speed_feedback_fault",// bit5  (0x0020)
-  "overcurrent",         // bit6  (0x0040)
-  "software_error",      // bit7  (0x0080)
-  "reserved8",           // bit8  (0x0100)
-  "reserved9",           // bit9  (0x0200)
-  "driver_protection",   // bit10 (0x0400)
-  "reserved11",          // bit11 (0x0800)
-  "reserved12",          // bit12 (0x1000)
-  "reserved13",          // bit13 (0x2000)
-  "reserved14",          // bit14 (0x4000)
-  "reserved15",          // bit15 (0x8000)
+struct FaultMapEntry {
+  uint16_t bit;
+  const char* name;
+};
+
+// Only include documented MCSDK fault bits.
+static const FaultMapEntry FAULT_MAP[] = {
+  {0x0002, "overvoltage"},
+  {0x0004, "undervoltage"},
+  {0x0008, "overtemperature"},
+  {0x0010, "startup_failed"},
+  {0x0020, "speed_feedback_fault"},
+  {0x0040, "overcurrent"},
+  {0x0080, "software_error"},
+  {0x0400, "driver_protection"},
 };
 
 // Convert a bitmask to a pipe-separated string of named bits
@@ -184,6 +181,27 @@ static std::string bitmask_to_names(uint16_t v, const char* const* names, size_t
   if (out.empty())
     out = "unknown_bits";
   return out;
+}
+
+static std::string fault_bitmask_to_names(uint16_t v) {
+  if (v == 0)
+    return "none";
+  std::string out;
+  uint16_t known = 0;
+  for (size_t i = 0; i < (sizeof(FAULT_MAP) / sizeof(FAULT_MAP[0])); i++) {
+    if ((v & FAULT_MAP[i].bit) == 0)
+      continue;
+    known |= FAULT_MAP[i].bit;
+    if (!out.empty())
+      out += "|";
+    out += FAULT_MAP[i].name;
+  }
+  if ((v & static_cast<uint16_t>(~known)) != 0) {
+    if (!out.empty())
+      out += "|";
+    out += "unknown_bits";
+  }
+  return out.empty() ? "unknown_bits" : out;
 }
 
 }  // namespace esc_higher
