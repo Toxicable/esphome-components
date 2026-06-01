@@ -79,6 +79,19 @@ static const char* mc_state_to_cstr(uint8_t v) {
   }
 }
 
+// Command opcode names
+static const char* opcode_to_cstr(uint8_t v) {
+  switch (v) {
+    case 0x00: return "NOP";
+    case 0x01: return "START";
+    case 0x02: return "STOP";
+    case 0x03: return "CLEAR_FAULTS";
+    case 0x04: return "SET_SPEED_RAMP";
+    case 0x05: return "ESTOP";
+    default: return "unknown";
+  }
+}
+
 static const char* const CAP_NAMES[] = {
   "speed_command", "duty_command", "current_meas", "temp_meas", "reverse", "brake",
 };
@@ -93,6 +106,26 @@ static const char* const STATUS_FLAG_NAMES[] = {
   "overtemperature",
   "overcurrent",
   "speed_feedback_unreliable",
+};
+
+// MCSDK fault bit names (16-bit bitmap in current_faults/occurred_faults)
+static const char* const FAULT_NAMES[] = {
+  "overvoltage",         // bit0  (0x0001)
+  "undervoltage",        // bit1  (0x0002)
+  "overspeed",           // bit2  (0x0004)
+  "overtemperature",     // bit3  (0x0008)
+  "startup_failed",      // bit4  (0x0010)
+  "speed_feedback_fault",// bit5  (0x0020)
+  "overcurrent",         // bit6  (0x0040)
+  "software_error",      // bit7  (0x0080)
+  "reserved8",           // bit8  (0x0100)
+  "reserved9",           // bit9  (0x0200)
+  "driver_protection",   // bit10 (0x0400)
+  "reserved11",          // bit11 (0x0800)
+  "reserved12",          // bit12 (0x1000)
+  "reserved13",          // bit13 (0x2000)
+  "reserved14",          // bit14 (0x4000)
+  "reserved15",          // bit15 (0x8000)
 };
 
 // Convert a bitmask to a pipe-separated string of named bits

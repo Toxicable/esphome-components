@@ -67,10 +67,14 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
   tx[15] = static_cast<uint8_t>((param2 >> 16) & 0xFF);
   tx[16] = static_cast<uint8_t>((param2 >> 24) & 0xFF);
 
+  ESP_LOGI(TAG, "Cmd %s (seq %d, p0=%d, p1=%d, p2=%d)",
+           opcode_to_cstr(opcode), tx[1], param0, param1, param2);
+
   const i2c::ErrorCode err = this->write(tx, sizeof(tx));
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(TAG, "Write command opcode 0x%02X failed (%s)", opcode, i2c_error_to_cstr(err));
+  ESP_LOGW(TAG, "Cmd %s (seq %d, p0=%d, p1=%d, p2=%d) failed: %s",
+             opcode_to_cstr(opcode), tx[1], param0, param1, param2, i2c_error_to_cstr(err));
   return false;
 }
 
@@ -150,13 +154,13 @@ void ESCHigherComponent::update() {
         current_faults_sensor_->publish_state(u16_(status, 6));
       if (current_faults_text_sensor_ != nullptr)
         current_faults_text_sensor_->publish_state(
-          std::string("0x") + str_sprintf("%04X", u16_(status, 6))
+          bitmask_to_names(u16_(status, 6), FAULT_NAMES, 16)
         );
       if (occurred_faults_sensor_ != nullptr)
         occurred_faults_sensor_->publish_state(u16_(status, 8));
       if (occurred_faults_text_sensor_ != nullptr)
         occurred_faults_text_sensor_->publish_state(
-          std::string("0x") + str_sprintf("%04X", u16_(status, 8))
+          bitmask_to_names(u16_(status, 8), FAULT_NAMES, 16)
         );
       if (status_flags_sensor_ != nullptr)
         status_flags_sensor_->publish_state(u16_(status, 10));
@@ -197,7 +201,7 @@ void ESCHigherComponent::update() {
         current_faults_sensor_->publish_state(u16_(tel, 6));
       if (current_faults_text_sensor_ != nullptr)
         current_faults_text_sensor_->publish_state(
-          std::string("0x") + str_sprintf("%04X", u16_(tel, 6))
+          bitmask_to_names(u16_(tel, 6), FAULT_NAMES, 16)
         );
       if (vbus_mv_sensor_ != nullptr)
         vbus_mv_sensor_->publish_state(u32_(tel, 8) / 1000.0f);

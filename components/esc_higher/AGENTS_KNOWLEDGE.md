@@ -23,4 +23,5 @@ Component-scoped notes for `components/esc_higher`.
   - `estop` -> `0x05`
 - STATUS/TELEMETRY decoding uses byte offsets from `i2c_interface.md` text ordering; if firmware layout changes, update offsets in `esc_higher.cpp`.
 - String text sensors are available for enum/bitmask fields: `esc_state_text`, `last_cmd_error_text`, `status_flags_text`, `current_faults_text`, `occurred_faults_text`, `capabilities_text`.
+- `current_faults_text` and `occurred_faults_text` publish named MCSDK fault bits (pipe-delimited) from the 16-bit fault bitmap, with `none` when zero.
 - I2C register reads and command writes are single-shot (no internal retry loop).

@@ -51,12 +51,20 @@ Command write:
 |      3 | `fw_minor`      | `u8`  |             0 |
 |      4 | `hw_id`         | `u8`  |             1 |
 |      5 | `max_block_len` | `u8`  |            32 |
-|      6 | `capabilities`  | `u16` |       `0x0009` |
+|      6 | `capabilities`  | `u16` |       `0x0001` |
 
 Capability bits currently set:
 
 - bit `0`: speed command supported
+
+Capability bit mapping (`ID.capabilities`):
+
+- bit `0`: speed command supported
+- bit `1`: duty command supported
+- bit `2`: current measurement available
 - bit `3`: temperature measurement available
+- bit `4`: reverse supported
+- bit `5`: brake supported
 
 ## `STATUS` register `0x10`
 
@@ -80,6 +88,20 @@ Current `esc_state` mapping:
 - `3`: stopping
 - `4`: fault
 
+Current `mc_state` mapping (raw `MCI_State_t` values used by this MCSDK build):
+
+- `0`: `IDLE`
+- `4`: `START`
+- `6`: `RUN`
+- `8`: `STOP`
+- `10`: `FAULT_NOW`
+- `11`: `FAULT_OVER`
+- `12`: `ICLWAIT`
+- `19`: `SWITCH_OVER`
+- `20`: `WAIT_STOP_MOTOR`
+- `21`: `OTF_DETECTION`
+- `22`: `OTF_BRAKE`
+
 Current `last_cmd_error` mapping:
 
 - `0`: OK
@@ -90,10 +112,29 @@ Current `last_cmd_error` mapping:
 - `5`: busy
 - `6`: bad length
 
+MCSDK fault bit mapping (`current_faults` / `occurred_faults`):
+
+- `0x0000`: `MC_NO_FAULTS` (no fault)
+- `0x0001`: `MC_OVER_VOLT` (overvoltage)
+- `0x0002`: `MC_UNDER_VOLT` (undervoltage)
+- `0x0004`: `MC_OVER_SPEED` (overspeed)
+- `0x0008`: `MC_OVER_TEMP` (overtemperature)
+- `0x0010`: `MC_START_UP` (startup failed)
+- `0x0020`: `MC_SPEED_FDBK` (speed feedback fault)
+- `0x0040`: `MC_OVER_CURR` (overcurrent / emergency input)
+- `0x0080`: `MC_SW_ERROR` (software error)
+- `0x0400`: `MC_DP_FAULT` (driver protection fault)
+
+Notes:
+
+- `occurred_faults` is latched history since entering fault state.
+- `current_faults` is the active fault bitmap at read time.
+
 Current `status_flags` bits:
 
 - bit `0`: fault present
 - bit `1`: running
+- bit `2`: watchdog expired (currently always `0`; watchdog not implemented)
 - bit `3`: undervoltage
 - bit `4`: overvoltage
 - bit `5`: overtemperature
@@ -123,6 +164,12 @@ Supported opcodes:
 - `0x04`: `SET_SPEED_RAMP`
 - `0x05`: `ESTOP`
 
+`flags` field mapping:
+
+- no bits defined yet
+- host should write `0`
+- firmware currently ignores this field
+
 `SET_SPEED_RAMP` uses:
 
 - `param0`: target speed in `dHz`
@@ -134,11 +181,11 @@ Layout matches the guideline.
 
 Current field behavior:
 
-- `vbus_mV`: real bus voltage in millivolts
+- `vbus_mV`: sampled bus voltage in millivolts; in `idle` the firmware polls ADC on demand
 - `ibus_mA`: `0` for now
 - `speed_dHz`: real mechanical speed from MCSDK speed units
 - `duty_centi_pct`: `0` for now
-- `temp_mC`: averaged temperature in milli-Celsius
+- `temp_mC`: `0` for now
 - `uptime_s`: HAL tick uptime in seconds
 
 ## Notes
