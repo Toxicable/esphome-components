@@ -19,6 +19,25 @@ ESCHigherComponent = esc_higher_ns.class_(
 CONF_TEMPERATURE_C = "temperature_c"
 CONF_STATUS = "status"
 CONF_FAULT = "fault"
+CONF_MOTOR_STATE = "motor_state"
+CONF_CURRENT_FAULT = "current_fault"
+CONF_OCCURRED_FAULT = "occurred_fault"
+CONF_MEASURED_SPEED_RPM = "measured_speed_rpm"
+CONF_SPEED_REFERENCE_RPM = "speed_reference_rpm"
+CONF_CONTROL_MODE = "control_mode"
+CONF_COMMAND_STATE = "command_state"
+CONF_IA = "ia"
+CONF_IB = "ib"
+CONF_PHASE_CURRENT_AMPLITUDE = "phase_current_amplitude"
+CONF_IQ = "iq"
+CONF_ID_CURRENT = "id_current"
+CONF_IQ_REF = "iq_ref"
+CONF_VQ = "vq"
+CONF_VD = "vd"
+CONF_PHASE_VOLTAGE_AMPLITUDE = "phase_voltage_amplitude"
+CONF_BUS_VOLTAGE = "bus_voltage"
+CONF_ELECTRICAL_ANGLE = "electrical_angle"
+CONF_VALPHA = "valpha"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -35,6 +54,82 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
             cv.Optional(CONF_FAULT): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_MOTOR_STATE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_CURRENT_FAULT): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_OCCURRED_FAULT): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_MEASURED_SPEED_RPM): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_SPEED_REFERENCE_RPM): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_CONTROL_MODE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_COMMAND_STATE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_IA): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_IB): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_PHASE_CURRENT_AMPLITUDE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_IQ): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_ID_CURRENT): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_IQ_REF): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_VQ): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_VD): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_PHASE_VOLTAGE_AMPLITUDE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_BUS_VOLTAGE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_ELECTRICAL_ANGLE): sensor.sensor_schema(
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_VALPHA): sensor.sensor_schema(
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
@@ -61,3 +156,79 @@ async def to_code(config):
     if CONF_FAULT in config:
         sens = await sensor.new_sensor(config[CONF_FAULT])
         cg.add(var.set_fault_sensor(sens))
+
+    if CONF_MOTOR_STATE in config:
+        sens = await sensor.new_sensor(config[CONF_MOTOR_STATE])
+        cg.add(var.set_motor_state_sensor(sens))
+
+    if CONF_CURRENT_FAULT in config:
+        sens = await sensor.new_sensor(config[CONF_CURRENT_FAULT])
+        cg.add(var.set_current_fault_sensor(sens))
+
+    if CONF_OCCURRED_FAULT in config:
+        sens = await sensor.new_sensor(config[CONF_OCCURRED_FAULT])
+        cg.add(var.set_occurred_fault_sensor(sens))
+
+    if CONF_MEASURED_SPEED_RPM in config:
+        sens = await sensor.new_sensor(config[CONF_MEASURED_SPEED_RPM])
+        cg.add(var.set_measured_speed_rpm_sensor(sens))
+
+    if CONF_SPEED_REFERENCE_RPM in config:
+        sens = await sensor.new_sensor(config[CONF_SPEED_REFERENCE_RPM])
+        cg.add(var.set_speed_reference_rpm_sensor(sens))
+
+    if CONF_CONTROL_MODE in config:
+        sens = await sensor.new_sensor(config[CONF_CONTROL_MODE])
+        cg.add(var.set_control_mode_sensor(sens))
+
+    if CONF_COMMAND_STATE in config:
+        sens = await sensor.new_sensor(config[CONF_COMMAND_STATE])
+        cg.add(var.set_command_state_sensor(sens))
+
+    if CONF_IA in config:
+        sens = await sensor.new_sensor(config[CONF_IA])
+        cg.add(var.set_ia_sensor(sens))
+
+    if CONF_IB in config:
+        sens = await sensor.new_sensor(config[CONF_IB])
+        cg.add(var.set_ib_sensor(sens))
+
+    if CONF_PHASE_CURRENT_AMPLITUDE in config:
+        sens = await sensor.new_sensor(config[CONF_PHASE_CURRENT_AMPLITUDE])
+        cg.add(var.set_phase_current_amplitude_sensor(sens))
+
+    if CONF_IQ in config:
+        sens = await sensor.new_sensor(config[CONF_IQ])
+        cg.add(var.set_iq_sensor(sens))
+
+    if CONF_ID_CURRENT in config:
+        sens = await sensor.new_sensor(config[CONF_ID_CURRENT])
+        cg.add(var.set_id_sensor(sens))
+
+    if CONF_IQ_REF in config:
+        sens = await sensor.new_sensor(config[CONF_IQ_REF])
+        cg.add(var.set_iq_ref_sensor(sens))
+
+    if CONF_VQ in config:
+        sens = await sensor.new_sensor(config[CONF_VQ])
+        cg.add(var.set_vq_sensor(sens))
+
+    if CONF_VD in config:
+        sens = await sensor.new_sensor(config[CONF_VD])
+        cg.add(var.set_vd_sensor(sens))
+
+    if CONF_PHASE_VOLTAGE_AMPLITUDE in config:
+        sens = await sensor.new_sensor(config[CONF_PHASE_VOLTAGE_AMPLITUDE])
+        cg.add(var.set_phase_voltage_amplitude_sensor(sens))
+
+    if CONF_BUS_VOLTAGE in config:
+        sens = await sensor.new_sensor(config[CONF_BUS_VOLTAGE])
+        cg.add(var.set_bus_voltage_sensor(sens))
+
+    if CONF_ELECTRICAL_ANGLE in config:
+        sens = await sensor.new_sensor(config[CONF_ELECTRICAL_ANGLE])
+        cg.add(var.set_electrical_angle_sensor(sens))
+
+    if CONF_VALPHA in config:
+        sens = await sensor.new_sensor(config[CONF_VALPHA])
+        cg.add(var.set_valpha_sensor(sens))

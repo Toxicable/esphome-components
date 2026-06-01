@@ -21,7 +21,7 @@ i2c:
 esc_higher:
   id: esc
   i2c_id: i2c_bus
-  update_interval: 1s  # Optional / default
+  update_interval: 10s  # Optional / default
   address: 0x43  # Optional / default
   temperature_c:
     name: "Temperature"
@@ -29,6 +29,45 @@ esc_higher:
     name: "Status"
   fault:
     name: "Fault"
+  ## Optional telemetry/state sensors:
+  # motor_state:
+  #   name: "Motor State"
+  # current_fault:
+  #   name: "Current Fault"
+  # occurred_fault:
+  #   name: "Occurred Fault"
+  # measured_speed_rpm:
+  #   name: "Measured Speed RPM"
+  # speed_reference_rpm:
+  #   name: "Speed Reference RPM"
+  # control_mode:
+  #   name: "Control Mode"
+  # command_state:
+  #   name: "Command State"
+  # ia:
+  #   name: "Ia"
+  # ib:
+  #   name: "Ib"
+  # phase_current_amplitude:
+  #   name: "Phase Current Amplitude"
+  # iq:
+  #   name: "Iq"
+  # id_current:
+  #   name: "Id"
+  # iq_ref:
+  #   name: "Iq Ref"
+  # vq:
+  #   name: "Vq"
+  # vd:
+  #   name: "Vd"
+  # phase_voltage_amplitude:
+  #   name: "Phase Voltage Amplitude"
+  # bus_voltage:
+  #   name: "Bus Voltage"
+  # electrical_angle:
+  #   name: "Electrical Angle"
+  # valpha:
+  #   name: "Valpha"
 ```
 
 Example host-side usage:
