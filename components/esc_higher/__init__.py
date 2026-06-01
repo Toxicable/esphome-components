@@ -1,10 +1,10 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, i2c, sensor
+from esphome.components import button, i2c, sensor, text_sensor
 from esphome.const import CONF_ID, STATE_CLASS_MEASUREMENT
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "sensor"]
+AUTO_LOAD = ["button", "sensor", "text_sensor"]
 
 esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
 ESCHigherComponent = esc_higher_ns.class_(
@@ -42,6 +42,12 @@ CONF_SPEED_DHZ = "speed_dhz"
 CONF_DUTY_CENTI_PCT = "duty_centi_pct"
 CONF_TEMP_MC = "temp_mc"
 CONF_UPTIME_S = "uptime_s"
+CONF_ESC_STATE_TEXT = "esc_state_text"
+CONF_LAST_CMD_ERROR_TEXT = "last_cmd_error_text"
+CONF_STATUS_FLAGS_TEXT = "status_flags_text"
+CONF_CURRENT_FAULTS_TEXT = "current_faults_text"
+CONF_OCCURRED_FAULTS_TEXT = "occurred_faults_text"
+CONF_CAPABILITIES_TEXT = "capabilities_text"
 CONF_START_MOTOR = "start_motor"
 CONF_STOP_MOTOR = "stop_motor"
 CONF_CLEAR_FAULTS = "clear_faults"
@@ -81,6 +87,12 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_DUTY_CENTI_PCT): _raw_sensor_schema(),
             cv.Optional(CONF_TEMP_MC): _raw_sensor_schema(),
             cv.Optional(CONF_UPTIME_S): _raw_sensor_schema(),
+            cv.Optional(CONF_ESC_STATE_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_LAST_CMD_ERROR_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_STATUS_FLAGS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_CAPABILITIES_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_START_MOTOR): button.button_schema(
                 ESCHigherStartButton, icon="mdi:play"
             ),
@@ -142,6 +154,24 @@ async def to_code(config):
     await _bind_sensor(config, CONF_DUTY_CENTI_PCT, var.set_duty_centi_pct_sensor)
     await _bind_sensor(config, CONF_TEMP_MC, var.set_temp_mc_sensor)
     await _bind_sensor(config, CONF_UPTIME_S, var.set_uptime_s_sensor)
+    if CONF_ESC_STATE_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_ESC_STATE_TEXT])
+        cg.add(var.set_esc_state_text_sensor(s))
+    if CONF_LAST_CMD_ERROR_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_LAST_CMD_ERROR_TEXT])
+        cg.add(var.set_last_cmd_error_text_sensor(s))
+    if CONF_STATUS_FLAGS_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_STATUS_FLAGS_TEXT])
+        cg.add(var.set_status_flags_text_sensor(s))
+    if CONF_CURRENT_FAULTS_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULTS_TEXT])
+        cg.add(var.set_current_faults_text_sensor(s))
+    if CONF_OCCURRED_FAULTS_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_OCCURRED_FAULTS_TEXT])
+        cg.add(var.set_occurred_faults_text_sensor(s))
+    if CONF_CAPABILITIES_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_CAPABILITIES_TEXT])
+        cg.add(var.set_capabilities_text_sensor(s))
 
     if CONF_START_MOTOR in config:
         b = await button.new_button(config[CONF_START_MOTOR])

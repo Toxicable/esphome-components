@@ -6,6 +6,7 @@
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 
 namespace esphome {
@@ -125,6 +126,24 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_uptime_s_sensor(sensor::Sensor* s) {
     uptime_s_sensor_ = s;
   }
+  void set_esc_state_text_sensor(text_sensor::TextSensor* s) {
+    esc_state_text_sensor_ = s;
+  }
+  void set_last_cmd_error_text_sensor(text_sensor::TextSensor* s) {
+    last_cmd_error_text_sensor_ = s;
+  }
+  void set_status_flags_text_sensor(text_sensor::TextSensor* s) {
+    status_flags_text_sensor_ = s;
+  }
+  void set_current_faults_text_sensor(text_sensor::TextSensor* s) {
+    current_faults_text_sensor_ = s;
+  }
+  void set_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
+    occurred_faults_text_sensor_ = s;
+  }
+  void set_capabilities_text_sensor(text_sensor::TextSensor* s) {
+    capabilities_text_sensor_ = s;
+  }
 
  protected:
   bool read_register_(uint8_t reg, uint8_t* out, size_t len);
@@ -147,6 +166,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static int16_t i16_(const uint8_t* b, size_t off) {
     return static_cast<int16_t>(u16_(b, off));
   }
+  static const char* esc_state_to_cstr_(uint8_t v);
+  static const char* last_cmd_error_to_cstr_(uint8_t v);
+  static std::string bitmask_to_names_(uint16_t v, const char* const* names, size_t count);
 
   static constexpr uint8_t REG_ID = 0x00;
   static constexpr uint8_t REG_STATUS = 0x10;
@@ -188,6 +210,12 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* duty_centi_pct_sensor_{nullptr};
   sensor::Sensor* temp_mc_sensor_{nullptr};
   sensor::Sensor* uptime_s_sensor_{nullptr};
+  text_sensor::TextSensor* esc_state_text_sensor_{nullptr};
+  text_sensor::TextSensor* last_cmd_error_text_sensor_{nullptr};
+  text_sensor::TextSensor* status_flags_text_sensor_{nullptr};
+  text_sensor::TextSensor* current_faults_text_sensor_{nullptr};
+  text_sensor::TextSensor* occurred_faults_text_sensor_{nullptr};
+  text_sensor::TextSensor* capabilities_text_sensor_{nullptr};
 };
 
 }  // namespace esc_higher

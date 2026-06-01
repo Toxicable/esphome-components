@@ -44,57 +44,69 @@ esc_higher:
   temp_mc:
     name: "Temperature mC"
 
-  ## Optional ID register sensors:
-  # proto_major:
-  #   name: "Proto Major"
-  # proto_minor:
-  #   name: "Proto Minor"
-  # fw_major:
-  #   name: "FW Major"
-  # fw_minor:
-  #   name: "FW Minor"
-  # hw_id:
-  #   name: "HW ID"
-  # max_block_len:
-  #   name: "Max Block Len"
-  # capabilities:
-  #   name: "Capabilities"
+  ## ID register sensors:
+  proto_major:
+    name: "Proto Major"
+  proto_minor:
+    name: "Proto Minor"
+  fw_major:
+    name: "FW Major"
+  fw_minor:
+    name: "FW Minor"
+  hw_id:
+    name: "HW ID"
+  max_block_len:
+    name: "Max Block Len"
+  capabilities:
+    name: "Capabilities"
+  capabilities_text:
+    name: "Capabilities Text"
 
-  ## Optional STATUS sensors:
-  # seq:
-  #   name: "Status Seq"
-  # last_cmd_seq:
-  #   name: "Last Command Seq"
-  # occurred_faults:
-  #   name: "Occurred Faults"
-  # status_flags:
-  #   name: "Status Flags"
-  # watchdog_ms_left:
-  #   name: "Watchdog ms Left"
+  ## STATUS sensors:
+  seq:
+    name: "Status Seq"
+  last_cmd_seq:
+    name: "Last Command Seq"
+  occurred_faults:
+    name: "Occurred Faults"
+  status_flags:
+    name: "Status Flags"
+  watchdog_ms_left:
+    name: "Watchdog ms Left"
+  esc_state_text:
+    name: "ESC State Text"
+  last_cmd_error_text:
+    name: "Last Cmd Error Text"
+  status_flags_text:
+    name: "Status Flags Text"
+  current_faults_text:
+    name: "Current Faults Text"
+  occurred_faults_text:
+    name: "Occurred Faults Text"
 
-  ## Optional TELEMETRY sensors:
-  # ibus_ma:
-  #   name: "Bus Current mA"
-  # duty_centi_pct:
-  #   name: "Duty cPct"
-  # uptime_s:
-  #   name: "Uptime s"
+  ## TELEMETRY sensors:
+  ibus_ma:
+    name: "Bus Current mA"
+  duty_centi_pct:
+    name: "Duty cPct"
+  uptime_s:
+    name: "Uptime s"
 
-  ## Optional write command buttons:
-  # start_motor:
-  #   name: "Start Motor"
-  # stop_motor:
-  #   name: "Stop Motor"
-  # clear_faults:
-  #   name: "Clear Faults"
-  # estop:
-  #   name: "E-Stop"
+  ## Write command buttons:
+  start_motor:
+    name: "Start Motor"
+  stop_motor:
+    name: "Stop Motor"
+  clear_faults:
+    name: "Clear Faults"
+  estop:
+    name: "E-Stop"
 
-  ## Optional speed-ramp command (opcode 0x04):
-  # speed_ramp_target_dhz: 1200
-  # speed_ramp_time_ms: 750
-  # set_speed_ramp:
-  #   name: "Set Speed Ramp"
+  ## Speed-ramp command (opcode 0x04):
+  speed_ramp_target_dhz: 1200
+  speed_ramp_time_ms: 750
+  set_speed_ramp:
+    name: "Set Speed Ramp"
 ```
 
 Notes:
