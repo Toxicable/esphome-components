@@ -146,6 +146,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_capabilities_text_sensor(text_sensor::TextSensor* s) {
     capabilities_text_sensor_ = s;
   }
+  void set_mc_state_text_sensor(text_sensor::TextSensor* s) {
+    mc_state_text_sensor_ = s;
+  }
 
  protected:
   bool read_register_(uint8_t reg, uint8_t* out, size_t len);
@@ -211,6 +214,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* status_flags_text_sensor_{nullptr};
   text_sensor::TextSensor* current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* occurred_faults_text_sensor_{nullptr};
+  text_sensor::TextSensor* mc_state_text_sensor_{nullptr};
   text_sensor::TextSensor* capabilities_text_sensor_{nullptr};
 };
 

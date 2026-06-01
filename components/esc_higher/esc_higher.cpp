@@ -138,6 +138,8 @@ void ESCHigherComponent::update() {
         esc_state_text_sensor_->publish_state(esc_state_to_cstr(status[1]));
       if (mc_state_sensor_ != nullptr)
         mc_state_sensor_->publish_state(status[2]);
+      if (mc_state_text_sensor_ != nullptr)
+        mc_state_text_sensor_->publish_state(mc_state_to_cstr(status[2]));
       if (last_cmd_seq_sensor_ != nullptr)
         last_cmd_seq_sensor_->publish_state(status[3]);
       if (last_cmd_error_sensor_ != nullptr)
@@ -181,6 +183,8 @@ void ESCHigherComponent::update() {
         esc_state_text_sensor_->publish_state(esc_state_to_cstr(tel[1]));
       if (mc_state_sensor_ != nullptr)
         mc_state_sensor_->publish_state(tel[2]);
+      if (mc_state_text_sensor_ != nullptr)
+        mc_state_text_sensor_->publish_state(mc_state_to_cstr(tel[2]));
       if (last_cmd_error_sensor_ != nullptr)
         last_cmd_error_sensor_->publish_state(tel[3]);
       if (last_cmd_error_text_sensor_ != nullptr)

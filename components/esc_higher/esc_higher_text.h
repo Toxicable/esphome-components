@@ -68,6 +68,17 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
 }
 
 // Capability bitmask names (6 bits)
+// MCSDK STM state (motor controller state machine)
+static const char* mc_state_to_cstr(uint8_t v) {
+  switch (v) {
+    case 0: return "init";
+    case 1: return "run";
+    case 2: return "ramp";
+    case 3: return "fault";
+    default: return "unknown";
+  }
+}
+
 static const char* const CAP_NAMES[] = {
   "speed_command", "duty_command", "current_meas", "temp_meas", "reverse", "brake",
 };

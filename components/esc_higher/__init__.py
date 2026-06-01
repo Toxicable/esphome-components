@@ -59,6 +59,7 @@ CONF_STATUS_FLAGS_TEXT = "status_flags_text"
 CONF_CURRENT_FAULTS_TEXT = "current_faults_text"
 CONF_OCCURRED_FAULTS_TEXT = "occurred_faults_text"
 CONF_CAPABILITIES_TEXT = "capabilities_text"
+CONF_MC_STATE_TEXT = "mc_state_text"
 CONF_START_MOTOR = "start_motor"
 CONF_STOP_MOTOR = "stop_motor"
 CONF_CLEAR_FAULTS = "clear_faults"
@@ -135,6 +136,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CAPABILITIES_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_MC_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_START_MOTOR): button.button_schema(
                 ESCHigherStartButton, icon="mdi:play"
             ),
@@ -214,6 +216,9 @@ async def to_code(config):
     if CONF_CAPABILITIES_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_CAPABILITIES_TEXT])
         cg.add(var.set_capabilities_text_sensor(s))
+    if CONF_MC_STATE_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_MC_STATE_TEXT])
+        cg.add(var.set_mc_state_text_sensor(s))
 
     if CONF_START_MOTOR in config:
         b = await button.new_button(config[CONF_START_MOTOR])
