@@ -181,7 +181,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t OPCODE_SET_SPEED_RAMP = 0x04;
   static constexpr uint8_t OPCODE_ESTOP = 0x05;
 
-  static constexpr uint8_t CMD_RETRIES = 3;
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};
   int32_t speed_ramp_time_ms_{1000};

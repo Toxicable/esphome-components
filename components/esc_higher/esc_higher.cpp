@@ -99,19 +99,10 @@ void ESCHigherComponent::setup() {
 }
 
 bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
-  for (uint8_t attempt = 1; attempt <= CMD_RETRIES; attempt++) {
-    const i2c::ErrorCode err = this->write_read(&reg, 1, out, len);
-    if (err == i2c::ERROR_OK)
-      return true;
-    ESP_LOGW(
-      TAG,
-      "Read reg 0x%02X failed attempt %u/%u (err=%d)",
-      reg,
-      attempt,
-      CMD_RETRIES,
-      static_cast<int>(err)
-    );
-  }
+  const i2c::ErrorCode err = this->write_read(&reg, 1, out, len);
+  if (err == i2c::ERROR_OK)
+    return true;
+  ESP_LOGW(TAG, "Read reg 0x%02X failed (err=%d)", reg, static_cast<int>(err));
   return false;
 }
 
@@ -137,19 +128,10 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
   tx[15] = static_cast<uint8_t>((param2 >> 16) & 0xFF);
   tx[16] = static_cast<uint8_t>((param2 >> 24) & 0xFF);
 
-  for (uint8_t attempt = 1; attempt <= CMD_RETRIES; attempt++) {
-    const i2c::ErrorCode err = this->write(tx, sizeof(tx));
-    if (err == i2c::ERROR_OK)
-      return true;
-    ESP_LOGW(
-      TAG,
-      "Write command opcode 0x%02X failed attempt %u/%u (err=%d)",
-      opcode,
-      attempt,
-      CMD_RETRIES,
-      static_cast<int>(err)
-    );
-  }
+  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
+  if (err == i2c::ERROR_OK)
+    return true;
+  ESP_LOGW(TAG, "Write command opcode 0x%02X failed (err=%d)", opcode, static_cast<int>(err));
   return false;
 }
 

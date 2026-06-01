@@ -25,7 +25,7 @@ i2c:
 esc_higher:
   id: esc
   i2c_id: i2c_bus
-  update_interval: 10s  # Optional / default
+  update_interval: 100ms  # Optional / default
   address: 0x34  # Optional / default
 
   ## STATUS + TELEMETRY examples:
