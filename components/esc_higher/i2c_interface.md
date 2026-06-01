@@ -122,7 +122,6 @@ Current `fault_detail` mapping (`STATUS[5]`, `TELEMETRY[27]`):
 - `0`: none
 - `1`: overvoltage
 - `2`: undervoltage
-- `3`: overspeed
 - `4`: overtemperature
 - `5`: startup failed
 - `6`: speed feedback fault
@@ -133,9 +132,8 @@ Current `fault_detail` mapping (`STATUS[5]`, `TELEMETRY[27]`):
 MCSDK fault bit mapping (`current_faults` / `occurred_faults`):
 
 - `0x0000`: `MC_NO_FAULTS` (no fault)
-- `0x0001`: `MC_OVER_VOLT` (overvoltage)
-- `0x0002`: `MC_UNDER_VOLT` (undervoltage)
-- `0x0004`: `MC_OVER_SPEED` (overspeed)
+- `0x0002`: `MC_OVER_VOLT` (overvoltage)
+- `0x0004`: `MC_UNDER_VOLT` (undervoltage)
 - `0x0008`: `MC_OVER_TEMP` (overtemperature)
 - `0x0010`: `MC_START_UP` (startup failed)
 - `0x0020`: `MC_SPEED_FDBK` (speed feedback fault)

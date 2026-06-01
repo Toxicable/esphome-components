@@ -84,8 +84,6 @@ static const char* fault_detail_to_cstr(uint8_t v) {
       return "overvoltage";
     case 2:
       return "undervoltage";
-    case 3:
-      return "overspeed";
     case 4:
       return "overtemperature";
     case 5:
@@ -153,9 +151,9 @@ static const char* const STATUS_FLAG_NAMES[] = {
 
 // MCSDK fault bit names (16-bit bitmap in current_faults/occurred_faults)
 static const char* const FAULT_NAMES[] = {
-  "overvoltage",         // bit0  (0x0001)
-  "undervoltage",        // bit1  (0x0002)
-  "overspeed",           // bit2  (0x0004)
+  "reserved0",           // bit0  (0x0001)
+  "overvoltage",         // bit1  (0x0002)
+  "undervoltage",        // bit2  (0x0004)
   "overtemperature",     // bit3  (0x0008)
   "startup_failed",      // bit4  (0x0010)
   "speed_feedback_fault",// bit5  (0x0020)

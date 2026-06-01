@@ -25,5 +25,6 @@ Component-scoped notes for `components/esc_higher`.
 - Latest spec adds `fault_detail` at STATUS byte `5` and TELEMETRY byte `27`; keep both raw (`fault_detail`) and text (`fault_detail_text`) sensors aligned to that enum mapping.
 - String text sensors are available for enum/bitmask fields: `esc_state_text`, `last_cmd_error_text`, `status_flags_text`, `current_faults_text`, `occurred_faults_text`, `capabilities_text`.
 - `current_faults_text` and `occurred_faults_text` publish named MCSDK fault bits (pipe-delimited) from the 16-bit fault bitmap, with `none` when zero.
+- Latest MCSDK fault bitmap mapping uses `0x0002` for overvoltage and `0x0004` for undervoltage; bit `0` (`0x0001`) is reserved.
 - `i2c_interface.md` is treated as externally owned specification text; implement code to match it, but do not edit it unless explicitly requested.
 - I2C register reads and command writes are single-shot (no internal retry loop).
