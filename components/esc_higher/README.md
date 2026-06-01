@@ -102,13 +102,13 @@ esc_higher:
   estop:
     name: "E-Stop"
 
-  ## Speed-ramp command (opcode 0x04):
+  ## Speed-ramp defaults + slider control (opcode 0x04):
   speed_ramp_target_dhz: 1200
   speed_ramp_time_ms: 750
-  set_speed_ramp:
-    name: "Set Speed Ramp"
+  speed_target_dhz:
+    name: "Speed Target dHz"
 ```
 
 Notes:
-- `set_speed_ramp` writes command opcode `0x04` with `param0=speed_ramp_target_dhz` and `param1=speed_ramp_time_ms`.
+- Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
 - Command result is observed through STATUS fields (`last_cmd_seq`, `last_cmd_error`) on subsequent polls.

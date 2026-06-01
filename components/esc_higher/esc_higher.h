@@ -5,6 +5,7 @@
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
+#include "esphome/components/number/number.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
@@ -34,9 +35,9 @@ class ESCHigherEstopButton : public button::Button, public Parented<ESCHigherCom
   void press_action() override;
 };
 
-class ESCHigherSetSpeedRampButton : public button::Button, public Parented<ESCHigherComponent> {
+class ESCHigherSpeedTargetNumber : public number::Number, public Parented<ESCHigherComponent> {
  public:
-  void press_action() override;
+  void control(float value) override;
 };
 
 class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
@@ -50,6 +51,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool clear_faults();
   bool estop();
   bool set_speed_ramp();
+  bool set_speed_target_dhz_and_send(int32_t target_dhz);
 
   void set_speed_ramp_target_dhz(int32_t v) {
     speed_ramp_target_dhz_ = v;
@@ -166,15 +168,10 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static int16_t i16_(const uint8_t* b, size_t off) {
     return static_cast<int16_t>(u16_(b, off));
   }
-  static const char* esc_state_to_cstr_(uint8_t v);
-  static const char* last_cmd_error_to_cstr_(uint8_t v);
-  static std::string bitmask_to_names_(uint16_t v, const char* const* names, size_t count);
-
   static constexpr uint8_t REG_ID = 0x00;
   static constexpr uint8_t REG_STATUS = 0x10;
   static constexpr uint8_t REG_COMMAND = 0x20;
   static constexpr uint8_t REG_TELEMETRY = 0x30;
-
   static constexpr uint8_t OPCODE_START = 0x01;
   static constexpr uint8_t OPCODE_STOP = 0x02;
   static constexpr uint8_t OPCODE_CLEAR_FAULTS = 0x03;

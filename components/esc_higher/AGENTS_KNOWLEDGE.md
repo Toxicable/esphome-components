@@ -19,7 +19,7 @@ Component-scoped notes for `components/esc_higher`.
   - `start_motor` -> `0x01`
   - `stop_motor` -> `0x02`
   - `clear_faults` -> `0x03`
-  - `set_speed_ramp` -> `0x04` (`param0=speed_ramp_target_dhz`, `param1=speed_ramp_time_ms`)
+  - Speed setpoint slider `speed_target_dhz` -> `0x04` (`param0=<slider value>`, `param1=speed_ramp_time_ms`)
   - `estop` -> `0x05`
 - STATUS/TELEMETRY decoding uses byte offsets from `i2c_interface.md` text ordering; if firmware layout changes, update offsets in `esc_higher.cpp`.
 - String text sensors are available for enum/bitmask fields: `esc_state_text`, `last_cmd_error_text`, `status_flags_text`, `current_faults_text`, `occurred_faults_text`, `capabilities_text`.

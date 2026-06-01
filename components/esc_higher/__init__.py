@@ -1,7 +1,18 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import button, i2c, sensor, text_sensor
-from esphome.const import CONF_ID, STATE_CLASS_MEASUREMENT
+from esphome.const import (
+    CONF_ID,
+    DEVICE_CLASS_CURRENT,
+    DEVICE_CLASS_TEMPERATURE,
+    DEVICE_CLASS_VOLTAGE,
+    ENTITY_CATEGORY_DIAGNOSTIC,
+    STATE_CLASS_MEASUREMENT,
+    UNIT_AMPERE,
+    UNIT_CELSIUS,
+    UNIT_PERCENT,
+    UNIT_VOLT,
+)
 
 DEPENDENCIES = ["i2c"]
 AUTO_LOAD = ["button", "sensor", "text_sensor"]
@@ -61,6 +72,14 @@ def _raw_sensor_schema():
     return sensor.sensor_schema(accuracy_decimals=0, state_class=STATE_CLASS_MEASUREMENT)
 
 
+def _diagnostic_sensor_schema():
+    return sensor.sensor_schema(
+        accuracy_decimals=0,
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    )
+
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -80,13 +99,36 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_CURRENT_FAULTS): _raw_sensor_schema(),
             cv.Optional(CONF_OCCURRED_FAULTS): _raw_sensor_schema(),
             cv.Optional(CONF_STATUS_FLAGS): _raw_sensor_schema(),
-            cv.Optional(CONF_WATCHDOG_MS_LEFT): _raw_sensor_schema(),
-            cv.Optional(CONF_VBUS_MV): _raw_sensor_schema(),
-            cv.Optional(CONF_IBUS_MA): _raw_sensor_schema(),
-            cv.Optional(CONF_SPEED_DHZ): _raw_sensor_schema(),
-            cv.Optional(CONF_DUTY_CENTI_PCT): _raw_sensor_schema(),
-            cv.Optional(CONF_TEMP_MC): _raw_sensor_schema(),
-            cv.Optional(CONF_UPTIME_S): _raw_sensor_schema(),
+            cv.Optional(CONF_WATCHDOG_MS_LEFT): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_VBUS_MV): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_IBUS_MA): sensor.sensor_schema(
+                unit_of_measurement=UNIT_AMPERE,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_CURRENT,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_SPEED_DHZ): sensor.sensor_schema(
+                unit_of_measurement="RPM",
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_DUTY_CENTI_PCT): sensor.sensor_schema(
+                unit_of_measurement=UNIT_PERCENT,
+                accuracy_decimals=2,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_TEMP_MC): sensor.sensor_schema(
+                unit_of_measurement=UNIT_CELSIUS,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_UPTIME_S): _diagnostic_sensor_schema(),
             cv.Optional(CONF_ESC_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_LAST_CMD_ERROR_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_STATUS_FLAGS_TEXT): text_sensor.text_sensor_schema(),

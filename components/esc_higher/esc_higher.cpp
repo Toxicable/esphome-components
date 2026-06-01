@@ -1,5 +1,6 @@
 #include "esc_higher.h"
 
+#include "esc_higher_text.h"
 #include <string>
 
 #include "esphome/core/helpers.h"
@@ -9,37 +10,6 @@ namespace esphome {
 namespace esc_higher {
 
 static const char* const TAG = "esc_higher";
-static const char* const CAP_NAMES[] = {
-  "speed_command", "duty_command", "current_meas", "temp_meas", "reverse", "brake",
-};
-static const char* const STATUS_FLAG_NAMES[] = {
-  "fault_present",
-  "running",
-  "watchdog_expired",
-  "undervoltage",
-  "overvoltage",
-  "overtemperature",
-  "overcurrent",
-  "speed_feedback_unreliable",
-};
-
-static const char* i2c_error_to_cstr_(i2c::ErrorCode err) {
-  switch (err) {
-    case i2c::ERROR_OK:
-      return "ok";
-    case i2c::ERROR_INVALID_ARGUMENT:
-      return "invalid_argument";
-    case i2c::ERROR_NOT_ACKNOWLEDGED:
-      return "not_acknowledged";
-    case i2c::ERROR_TIMEOUT:
-      return "timeout";
-    case i2c::ERROR_NOT_INITIALIZED:
-      return "not_initialized";
-    default:
-      return "unknown";
-  }
-}
-
 void ESCHigherStartButton::press_action() {
   this->parent_->start_motor();
 }
@@ -52,63 +22,15 @@ void ESCHigherClearFaultsButton::press_action() {
 void ESCHigherEstopButton::press_action() {
   this->parent_->estop();
 }
-void ESCHigherSetSpeedRampButton::press_action() {
-  this->parent_->set_speed_ramp();
-}
-
-// TODO: put mapping functins like this in another file
-const char* ESCHigherComponent::esc_state_to_cstr_(uint8_t v) {
-  switch (v) {
-    case 0:
-      return "boot";
-    case 1:
-      return "idle";
-    case 2:
-      return "running";
-    case 3:
-      return "stopping";
-    case 4:
-      return "fault";
-    default:
-      return "unknown";
+void ESCHigherSpeedTargetNumber::control(float value) {
+  if (this->parent_ == nullptr)
+    return;
+  const int32_t target = static_cast<int32_t>(value);
+  if (!this->parent_->set_speed_target_dhz_and_send(target)) {
+    ESP_LOGW(TAG, "Failed to set speed target dHz=%d", static_cast<int>(target));
+    return;
   }
-}
-
-const char* ESCHigherComponent::last_cmd_error_to_cstr_(uint8_t v) {
-  switch (v) {
-    case 0:
-      return "ok";
-    case 1:
-      return "unknown_opcode";
-    case 2:
-      return "invalid_state";
-    case 3:
-      return "parameter_out_of_range";
-    case 4:
-      return "motor_fault_active";
-    case 5:
-      return "busy";
-    case 6:
-      return "bad_length";
-    default:
-      return "unknown";
-  }
-}
-
-std::string ESCHigherComponent::bitmask_to_names_(uint16_t v, const char* const* names, size_t count) {
-  if (v == 0)
-    return "none";
-  std::string out;
-  for (size_t i = 0; i < count; i++) {
-    if ((v & (1U << i)) == 0)
-      continue;
-    if (!out.empty())
-      out += "|";
-    out += names[i];
-  }
-  if (out.empty())
-    out = "unknown_bits";
-  return out;
+  this->publish_state(static_cast<float>(target));
 }
 
 void ESCHigherComponent::setup() {
@@ -119,7 +41,7 @@ bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
   const i2c::ErrorCode err = this->write_read(&reg, 1, out, len);
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(TAG, "Read reg 0x%02X failed (%s)", reg, i2c_error_to_cstr_(err));
+  ESP_LOGW(TAG, "Read reg 0x%02X failed (%s)", reg, i2c_error_to_cstr(err));
   return false;
 }
 
@@ -148,7 +70,7 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
   const i2c::ErrorCode err = this->write(tx, sizeof(tx));
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(TAG, "Write command opcode 0x%02X failed (%s)", opcode, i2c_error_to_cstr_(err));
+  ESP_LOGW(TAG, "Write command opcode 0x%02X failed (%s)", opcode, i2c_error_to_cstr(err));
   return false;
 }
 
@@ -166,6 +88,11 @@ bool ESCHigherComponent::estop() {
 }
 bool ESCHigherComponent::set_speed_ramp() {
   return this->write_command_(OPCODE_SET_SPEED_RAMP, speed_ramp_target_dhz_, speed_ramp_time_ms_, 0);
+}
+
+bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
+  this->speed_ramp_target_dhz_ = target_dhz;
+  return this->set_speed_ramp();
 }
 
 void ESCHigherComponent::update() {
@@ -193,7 +120,7 @@ void ESCHigherComponent::update() {
       if (capabilities_sensor_ != nullptr)
         capabilities_sensor_->publish_state(u16_(id, 6));
       if (capabilities_text_sensor_ != nullptr)
-        capabilities_text_sensor_->publish_state(bitmask_to_names_(u16_(id, 6), CAP_NAMES, 6));
+        capabilities_text_sensor_->publish_state(bitmask_to_names(u16_(id, 6), CAP_NAMES, 6));
     } else {
       all_ok = false;
     }
@@ -208,7 +135,7 @@ void ESCHigherComponent::update() {
       if (esc_state_sensor_ != nullptr)
         esc_state_sensor_->publish_state(status[1]);
       if (esc_state_text_sensor_ != nullptr)
-        esc_state_text_sensor_->publish_state(esc_state_to_cstr_(status[1]));
+        esc_state_text_sensor_->publish_state(esc_state_to_cstr(status[1]));
       if (mc_state_sensor_ != nullptr)
         mc_state_sensor_->publish_state(status[2]);
       if (last_cmd_seq_sensor_ != nullptr)
@@ -216,7 +143,7 @@ void ESCHigherComponent::update() {
       if (last_cmd_error_sensor_ != nullptr)
         last_cmd_error_sensor_->publish_state(status[4]);
       if (last_cmd_error_text_sensor_ != nullptr)
-        last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr_(status[4]));
+        last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr(status[4]));
       if (current_faults_sensor_ != nullptr)
         current_faults_sensor_->publish_state(u16_(status, 6));
       if (current_faults_text_sensor_ != nullptr)
@@ -233,10 +160,10 @@ void ESCHigherComponent::update() {
         status_flags_sensor_->publish_state(u16_(status, 10));
       if (status_flags_text_sensor_ != nullptr)
         status_flags_text_sensor_->publish_state(
-          bitmask_to_names_(u16_(status, 10), STATUS_FLAG_NAMES, 8)
+          bitmask_to_names(u16_(status, 10), STATUS_FLAG_NAMES, 8)
         );
       if (watchdog_ms_left_sensor_ != nullptr)
-        watchdog_ms_left_sensor_->publish_state(u16_(status, 12));
+        watchdog_ms_left_sensor_->publish_state(u16_(status, 12) / 1000.0f);
     } else {
       all_ok = false;
     }
@@ -251,17 +178,17 @@ void ESCHigherComponent::update() {
       if (esc_state_sensor_ != nullptr)
         esc_state_sensor_->publish_state(tel[1]);
       if (esc_state_text_sensor_ != nullptr)
-        esc_state_text_sensor_->publish_state(esc_state_to_cstr_(tel[1]));
+        esc_state_text_sensor_->publish_state(esc_state_to_cstr(tel[1]));
       if (mc_state_sensor_ != nullptr)
         mc_state_sensor_->publish_state(tel[2]);
       if (last_cmd_error_sensor_ != nullptr)
         last_cmd_error_sensor_->publish_state(tel[3]);
       if (last_cmd_error_text_sensor_ != nullptr)
-        last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr_(tel[3]));
+        last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr(tel[3]));
       if (status_flags_sensor_ != nullptr)
         status_flags_sensor_->publish_state(u16_(tel, 4));
       if (status_flags_text_sensor_ != nullptr)
-        status_flags_text_sensor_->publish_state(bitmask_to_names_(u16_(tel, 4), STATUS_FLAG_NAMES, 8));
+        status_flags_text_sensor_->publish_state(bitmask_to_names(u16_(tel, 4), STATUS_FLAG_NAMES, 8));
       if (current_faults_sensor_ != nullptr)
         current_faults_sensor_->publish_state(u16_(tel, 6));
       if (current_faults_text_sensor_ != nullptr)
@@ -269,15 +196,15 @@ void ESCHigherComponent::update() {
           std::string("0x") + str_sprintf("%04X", u16_(tel, 6))
         );
       if (vbus_mv_sensor_ != nullptr)
-        vbus_mv_sensor_->publish_state(u32_(tel, 8));
+        vbus_mv_sensor_->publish_state(u32_(tel, 8) / 1000.0f);
       if (ibus_ma_sensor_ != nullptr)
-        ibus_ma_sensor_->publish_state(i32_(tel, 12));
+        ibus_ma_sensor_->publish_state(i32_(tel, 12) / 1000.0f);
       if (speed_dhz_sensor_ != nullptr)
         speed_dhz_sensor_->publish_state(i32_(tel, 16));
       if (duty_centi_pct_sensor_ != nullptr)
         duty_centi_pct_sensor_->publish_state(i16_(tel, 20));
       if (temp_mc_sensor_ != nullptr)
-        temp_mc_sensor_->publish_state(i32_(tel, 22));
+        temp_mc_sensor_->publish_state(i32_(tel, 22) / 1000.0f);
       if (last_cmd_seq_sensor_ != nullptr)
         last_cmd_seq_sensor_->publish_state(tel[26]);
       if (uptime_s_sensor_ != nullptr)
