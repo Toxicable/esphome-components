@@ -1,16 +1,24 @@
 # I2C Interface Specification
 
-This firmware now follows the register-based contract in [`i2c_guideline.md`](./i2c_guideline.md).
+This firmware exposes a small fixed-layout register protocol over I2C.
+
+Compatibility rule:
+
+- No backward compatibility is required.
+- The host is the only consumer, so the layout may change when needed.
 
 ## Bus
 
 - Role: STM32 (`ESPHigher`) acts as I2C target / slave
 - 7-bit slave address: `0x34`
-- External slave bus in this project: `I2C2`
-- Max block length: `32` bytes
+- External bus in this project: `I2C2`
+- Bus speed: `100 kHz`
+- Max block length: `64` bytes
 - Endian: little-endian
+- Floats: no
+- CRC: skipped initially
 
-## Transaction Model
+## Transaction model
 
 Register pointer write:
 
@@ -32,14 +40,26 @@ Command write:
 [addr+w] [0x20] [16-byte command payload]
 ```
 
-## Register Map
+Notes:
 
-| Register | Name        | Access | Size |
-| -------: | ----------- | ------ | ---: |
-|   `0x00` | `ID`        | read   |    8 |
-|   `0x10` | `STATUS`    | read   |   16 |
-|   `0x20` | `COMMAND`   | write  |   16 |
-|   `0x30` | `TELEMETRY` | read   |   32 |
+- Reads may be shorter than the register size.
+- Unknown read registers return zero-filled data.
+- Unknown write registers are ignored and set `last_cmd_error = 17`.
+- `COMMAND` writes must be exactly 16 payload bytes after register `0x20`.
+- Short or long `COMMAND` writes are rejected with `last_cmd_error = bad length`.
+- Telemetry/status reads do not refresh the command watchdog.
+- Invalid commands do not refresh the command watchdog.
+
+## Register map
+
+| Register | Name              | Access | Size |
+| -------: | ----------------- | ------ | ---: |
+|   `0x00` | `ID`              | read   |    8 |
+|   `0x10` | `STATUS`          | read   |   16 |
+|   `0x20` | `COMMAND`         | write  |   16 |
+|   `0x30` | `TELEMETRY`       | read   |   48 |
+|   `0x40` | `BRINGUP`         | read   |   48 |
+|   `0x50` | `DEBUG_TELEMETRY` | read   |   32 |
 
 ## `ID` register `0x00`
 
@@ -50,14 +70,10 @@ Command write:
 |      2 | `fw_major`      | `u8`  |             1 |
 |      3 | `fw_minor`      | `u8`  |             0 |
 |      4 | `hw_id`         | `u8`  |             1 |
-|      5 | `max_block_len` | `u8`  |            32 |
-|      6 | `capabilities`  | `u16` |       `0x0001` |
+|      5 | `max_block_len` | `u8`  |            64 |
+|      6 | `capabilities`  | `u16` |       `0x000D` |
 
-Capability bits currently set:
-
-- bit `0`: speed command supported
-
-Capability bit mapping (`ID.capabilities`):
+Capability bits:
 
 - bit `0`: speed command supported
 - bit `1`: duty command supported
@@ -68,20 +84,22 @@ Capability bit mapping (`ID.capabilities`):
 
 ## `STATUS` register `0x10`
 
-Layout matches the guideline:
+| Offset | Field                 | Type  | Notes |
+| -----: | --------------------- | ----- | ----- |
+|      0 | `seq`                 | `u8`  | increments whenever status updates |
+|      1 | `esc_state`           | `u8`  | interface state |
+|      2 | `mc_state`            | `u8`  | MCSDK state |
+|      3 | `last_cmd_seq`        | `u8`  | last accepted command sequence |
+|      4 | `last_cmd_error`      | `u8`  | last command result |
+|      5 | `fault_detail`        | `u8`  | simplified fault reason |
+|      6 | `current_faults`      | `u16` | active MCSDK fault bitmap |
+|      8 | `occurred_faults`     | `u16` | latched/occurred MCSDK fault bitmap |
+|     10 | `status_flags`        | `u16` | summary flags |
+|     12 | `watchdog_ms_left`    | `u16` | zero if disabled/expired |
+|     14 | `bringup_test_state`  | `u8`  | short bring-up state summary |
+|     15 | `bringup_test_result` | `u8`  | short bring-up result summary |
 
-- `seq`
-- `esc_state`
-- `mc_state`
-- `last_cmd_seq`
-- `last_cmd_error`
-- `fault_detail` (decoded primary fault reason)
-- `current_faults`
-- `occurred_faults`
-- `status_flags`
-- `watchdog_ms_left` = `0`
-
-Current `esc_state` mapping:
+`esc_state` values:
 
 - `0`: boot
 - `1`: idle
@@ -89,35 +107,26 @@ Current `esc_state` mapping:
 - `3`: stopping
 - `4`: fault
 
-Current `mc_state` mapping (raw `MCI_State_t` values used by this MCSDK build):
+`mc_state` values are the generated MCSDK state enum values.
 
-- `0`: `IDLE`
-- `4`: `START`
-- `6`: `RUN`
-- `8`: `STOP`
-- `10`: `FAULT_NOW`
-- `11`: `FAULT_OVER`
-- `12`: `ICLWAIT`
-- `19`: `SWITCH_OVER`
-- `20`: `WAIT_STOP_MOTOR`
-- `21`: `OTF_DETECTION`
-- `22`: `OTF_BRAKE`
-
-Current `last_cmd_error` mapping:
+`last_cmd_error` values:
 
 - `0`: OK
 - `1`: unknown opcode
 - `2`: invalid state
 - `3`: parameter out of range
 - `4`: motor fault active
-- `5`: busy (currently unused by `SET_SPEED_RAMP`)
+- `5`: busy
 - `6`: bad length
-- `7`: not idle (operation requires non-idle/idle-specific state)
-- `8`: not fault_over (fault acknowledge only allowed in `FAULT_OVER`)
-- `9`: faults still active (cannot acknowledge yet)
-- `10`: latched faults present (clear/ack required before command)
+- `7`: not idle
+- `8`: not fault_over
+- `9`: faults still active
+- `10`: latched faults present
+- `17`: unknown register
 
-Current `fault_detail` mapping (`STATUS[5]`, `TELEMETRY[27]`):
+Bring-up failure details are reported in `BRINGUP.result` / `BRINGUP.failure_code`, not in `last_cmd_error`.
+
+`fault_detail` values:
 
 - `0`: none
 - `1`: overvoltage
@@ -131,26 +140,21 @@ Current `fault_detail` mapping (`STATUS[5]`, `TELEMETRY[27]`):
 
 MCSDK fault bit mapping (`current_faults` / `occurred_faults`):
 
-- `0x0000`: `MC_NO_FAULTS` (no fault)
-- `0x0002`: `MC_OVER_VOLT` (overvoltage)
-- `0x0004`: `MC_UNDER_VOLT` (undervoltage)
-- `0x0008`: `MC_OVER_TEMP` (overtemperature)
-- `0x0010`: `MC_START_UP` (startup failed)
-- `0x0020`: `MC_SPEED_FDBK` (speed feedback fault)
-- `0x0040`: `MC_OVER_CURR` (overcurrent / emergency input)
-- `0x0080`: `MC_SW_ERROR` (software error)
-- `0x0400`: `MC_DP_FAULT` (driver protection fault)
+- `0x0000`: `MC_NO_FAULTS`
+- `0x0002`: `MC_OVER_VOLT`
+- `0x0004`: `MC_UNDER_VOLT`
+- `0x0008`: `MC_OVER_TEMP`
+- `0x0010`: `MC_START_UP`
+- `0x0020`: `MC_SPEED_FDBK`
+- `0x0040`: `MC_OVER_CURR`
+- `0x0080`: `MC_SW_ERROR`
+- `0x0400`: `MC_DP_FAULT`
 
-Notes:
-
-- `occurred_faults` is latched history since entering fault state.
-- `current_faults` is the active fault bitmap at read time.
-
-Current `status_flags` bits:
+`status_flags` bits:
 
 - bit `0`: fault present
 - bit `1`: running
-- bit `2`: watchdog expired (currently always `0`; watchdog not implemented)
+- bit `2`: watchdog expired
 - bit `3`: undervoltage
 - bit `4`: overvoltage
 - bit `5`: overtemperature
@@ -179,33 +183,191 @@ Supported opcodes:
 - `0x03`: `CLEAR_FAULTS`
 - `0x04`: `SET_SPEED_RAMP`
 - `0x05`: `ESTOP`
+- `0x07`: `SET_WATCHDOG`
+- `0x09`: `RUN_BRINGUP_TEST`
 
-`flags` field mapping:
-
-- no bits defined yet
-- host should write `0`
-- firmware currently ignores this field
-
-`SET_SPEED_RAMP` uses:
+`SET_SPEED_RAMP`:
 
 - `param0`: target speed in `dHz`
 - `param1`: ramp time in `ms`
 
+`SET_WATCHDOG`:
+
+- `param0`: watchdog timeout in `ms`
+- `param0 = 0`: disable watchdog completely
+
+`RUN_BRINGUP_TEST`:
+
+- `param0`: `test_id`
+- `param1`: `duration_ms` / `timeout_ms`
+- `param2`: option bits
+
+Bring-up option bits:
+
+- bit `0`: allow PWM enable
+- bit `1`: allow motor spin
+- bit `2`: clear previous bring-up report before start
+- bit `3`: ignore latched occurred faults; check only active faults
+- bit `4`: disable watchdog for duration of test
+- bit `5`: restore previous watchdog setting after test
+
 ## `TELEMETRY` register `0x30`
 
-Layout matches the guideline.
+High-level live telemetry only. Do not expose FOC internals here.
 
-Current field behavior:
+| Offset | Field                    | Type  | Unit |
+| -----: | ------------------------ | ----- | ---: |
+|      0 | `seq`                    | `u8`  |    - |
+|      1 | `esc_state`              | `u8`  |    - |
+|      2 | `mc_state`               | `u8`  |    - |
+|      3 | `last_cmd_error`        | `u8`  |    - |
+|      4 | `status_flags`           | `u16` |    - |
+|      6 | `current_faults`         | `u16` |    - |
+|      8 | `vbus_mV`                | `u32` |   mV |
+|     12 | `ibus_mA`                | `i32` |   mA |
+|     16 | `motor_current_mA`       | `i32` |   mA |
+|     20 | `speed_dHz`              | `i32` |  dHz |
+|     24 | `duty_centi_pct`         | `i16` | % × 100 |
+|     26 | `last_cmd_seq`           | `u8`  |    - |
+|     27 | `fault_detail`           | `u8`  |    - |
+|     28 | `temp_mC`                | `i32` |   m°C |
+|     32 | `target_speed_dHz`       | `i32` |  dHz |
+|     36 | `watchdog_ms_left`       | `u16` |   ms |
+|     38 | `drive_limit_centi_pct`  | `u16` | % × 100 |
+|     40 | `uptime_s`               | `u32` |    s |
+|     44 | `debug0`                 | `i16` |    - |
+|     46 | `debug1`                 | `i16` |    - |
 
-- `vbus_mV`: sampled bus voltage in millivolts; in `idle` the firmware polls ADC on demand
-- `ibus_mA`: `0` for now
-- `speed_dHz`: real mechanical speed converted from MCSDK speed unit to `dHz`
-- `duty_centi_pct`: `0` for now
-- `temp_mC`: from MCSDK NTC temperature sensor (`NTC_GetAvTemp_C`) converted to `m°C`
-- `uptime_s`: HAL tick uptime in seconds
+Notes:
 
-## Notes
+- `motor_current_mA` is a high-level estimate of current magnitude.
+- `ibus_mA` is zero if unavailable.
+- `drive_limit_centi_pct` is optional and currently zero.
+- `debug0` and `debug1` are currently zero.
+- A zero field does not always mean the physical value is zero.
 
-- Motor-control API calls are executed from `I2C_SlaveApp_Task()` in the main loop, not from the I2C callback.
-- If the host writes a bad register length, firmware records `last_cmd_error = 6`.
-- The previous 8-byte command/response protocol is no longer supported.
+## `BRINGUP` register `0x40`
+
+Detailed bring-up runner status/report.
+
+| Offset | Field                   | Type  | Unit | Notes |
+| -----: | ----------------------- | ----- | ---: | ----- |
+|      0 | `seq`                   | `u8`  |    - | increments when report updates |
+|      1 | `active`                | `u8`  | bool | 1 while test is running |
+|      2 | `test_id`               | `u8`  |    - | requested test |
+|      3 | `step_id`               | `u8`  |    - | current or failed step |
+|      4 | `state`                 | `u8`  |    - | idle/running/passed/failed/aborted |
+|      5 | `result`                | `u8`  |    - | result code |
+|      6 | `failure_code`          | `u8`  |    - | detailed failure reason |
+|      7 | `reserved`              | `u8`  |    - | zero |
+|      8 | `measured0`             | `i32` |    - | test-specific main measured value |
+|     12 | `measured1`             | `i32` |    - | test-specific secondary measured value |
+|     16 | `limit_min`             | `i32` |    - | lower threshold |
+|     20 | `limit_max`             | `i32` |    - | upper threshold |
+|     24 | `vbus_mV_at_test`       | `u32` |   mV | VBUS snapshot |
+|     28 | `current_faults_at_test` | `u16` |    - | MCSDK active faults |
+|     30 | `occurred_faults_at_test`| `u16` |    - | MCSDK occurred faults |
+|     32 | `mc_state_at_test`      | `u8`  |    - | MCSDK state snapshot |
+|     33 | `esc_state_at_test`     | `u8`  |    - | interface state snapshot |
+|     34 | `gd_ready`              | `u8`  | bool | sampled gate-driver ready |
+|     35 | `reserved`              | `u8`  |    - | zero |
+|     36 | `elapsed_ms`            | `u32` |   ms | test runtime |
+|     40 | `last_passed_step`      | `u8`  |    - | useful for sequences |
+|     41 | `steps_total`           | `u8`  |    - | number of steps in sequence |
+|     42 | `attempt_count`         | `u16` |    - | increments every run |
+|     44 | `debug0`                | `i16` |    - | temporary |
+|     46 | `debug1`                | `i16` |    - | temporary |
+
+Bring-up state values:
+
+- `0`: idle
+- `1`: running
+- `2`: passed
+- `3`: failed
+- `4`: aborted
+
+Bring-up result / failure codes:
+
+- `0`: none
+- `1`: busy
+- `2`: requires idle
+- `3`: active fault present
+- `4`: latched fault present
+- `5`: GD_READY low
+- `6`: VBUS too low
+- `7`: VBUS too high
+- `8`: PWM handle missing
+- `9`: ADC value implausible
+- `10`: current offset too large
+- `11`: temperature implausible
+- `12`: MCSDK state unexpected
+- `13`: MCSDK API call failed
+- `14`: timeout
+- `15`: aborted by host
+- `16`: unsupported test
+- `17`: passed
+
+Bring-up test IDs:
+
+| Test ID | Name                   | Purpose |
+| ------: | ---------------------- | ------- |
+| `0`     | `NONE`                 | no test |
+| `1`     | `PRECHECK`             | state, faults, VBUS, GD_READY |
+| `2`     | `VBUS_CHECK`           | read bus voltage and compare against limits |
+| `3`     | `GATE_DRIVER_CHECK`    | check gate-driver ready pin |
+| `4`     | `ADC_ZERO_CHECK`       | check idle current readings / offsets |
+| `5`     | `TEMP_CHECK`           | check temperature plausible |
+| `6`     | `PWM_HANDLE_CHECK`     | verify PWM/current-feedback handles exist |
+| `7`     | `PWM_ENABLE_PULSE`     | briefly enable PWM, then stop |
+| `8`     | `LOW_SPEED_SPIN`       | short low-speed start/ramp/stop test |
+| `100`   | `FULL_SAFE_SEQUENCE`   | run non-spin checks and PWM pulse |
+| `101`   | `FULL_SPIN_SEQUENCE`   | run safe sequence, then low-speed spin |
+
+Recommended bring-up sequences:
+
+- `FULL_SAFE_SEQUENCE`: `REQUIRE_IDLE`, `FAULT_CHECK`, `VBUS_CHECK`, `GD_READY_CHECK`, `TEMP_CHECK`, `ADC_ZERO_CHECK`, `PWM_HANDLE_CHECK`, `PWM_ENABLE_PULSE`
+- `FULL_SPIN_SEQUENCE`: `FULL_SAFE_SEQUENCE`, `START`, `LOW_SPEED_RAMP`, `RUN_OBSERVE`, `STOP`
+
+## `DEBUG_TELEMETRY` register `0x50`
+
+Optional raw/internal values for firmware debugging only.
+
+| Offset | Field              | Type  | Notes |
+| -----: | ------------------ | ----- | ----- |
+|      0 | `seq`              | `u8`  | increments when debug snapshot updates |
+|      1 | `reserved`         | `u8`  | zero |
+|      2 | `v_alpha_raw_s16`  | `i16` | raw internal controller value |
+|      4 | `v_beta_raw_s16`   | `i16` | raw internal controller value |
+|      6 | `v_q_raw_s16`      | `i16` | raw internal controller value |
+|      8 | `v_d_raw_s16`      | `i16` | raw internal controller value |
+|     10 | `v_u_raw_s16`      | `i16` | raw/internal value |
+|     12 | `v_v_raw_s16`      | `i16` | raw/internal value |
+|     14 | `v_w_raw_s16`      | `i16` | raw/internal value |
+|     16 | `v_amp_raw_s16`    | `i16` | raw/internal value |
+|     18 | `phase_iA_mA`      | `i16` | phase current A |
+|     20 | `phase_iB_mA`      | `i16` | phase current B |
+|     22 | `phase_iC_mA`      | `i16` | phase current C |
+|     24 | `reserved0`        | `u16` | zero |
+|     26 | `reserved1`        | `u16` | zero |
+|     28 | `reserved2`        | `u16` | zero |
+|     30 | `reserved3`        | `u16` | zero |
+
+Do not treat these values as calibrated phase voltages.
+
+## Behaviour
+
+- Telemetry/status reads do not affect bring-up state.
+- Valid control commands refresh the watchdog.
+- Invalid commands do not refresh the watchdog.
+- `STOP` and `ESTOP` are always accepted and abort an active bring-up test.
+- A failed bring-up test leaves the motor stopped.
+- A completed bring-up test leaves the motor stopped unless the step explicitly documents otherwise.
+- No speed target is retained across reset.
+- The motor must not auto-start after reset.
+
+## Reset behaviour
+
+- ESC boots idle/stopped.
+- Watchdog returns to its default setting.
+- Bring-up report returns to idle/none.
+- Latched MCSDK faults are still reported if present after reset.

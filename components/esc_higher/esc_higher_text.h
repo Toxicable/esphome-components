@@ -9,7 +9,6 @@
 namespace esphome {
 namespace esc_higher {
 
-// I2C error codes
 static const char* i2c_error_to_cstr(i2c::ErrorCode err) {
   switch (err) {
     case i2c::ERROR_OK:
@@ -27,7 +26,6 @@ static const char* i2c_error_to_cstr(i2c::ErrorCode err) {
   }
 }
 
-// ESC state machine
 static const char* esc_state_to_cstr(uint8_t v) {
   switch (v) {
     case 0:
@@ -45,7 +43,6 @@ static const char* esc_state_to_cstr(uint8_t v) {
   }
 }
 
-// Last command error codes
 static const char* last_cmd_error_to_cstr(uint8_t v) {
   switch (v) {
     case 0:
@@ -70,12 +67,13 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
       return "faults_still_active";
     case 10:
       return "latched_faults_present";
+    case 17:
+      return "unknown_register";
     default:
       return "unknown";
   }
 }
 
-// Decoded primary fault detail
 static const char* fault_detail_to_cstr(uint8_t v) {
   switch (v) {
     case 0:
@@ -101,35 +99,144 @@ static const char* fault_detail_to_cstr(uint8_t v) {
   }
 }
 
-// Capability bitmask names (6 bits)
-// MCSDK STM state (motor controller state machine)
 static const char* mc_state_to_cstr(uint8_t v) {
   switch (v) {
-    case 0: return "idle";
-    case 4: return "start";
-    case 6: return "run";
-    case 8: return "stop";
-    case 10: return "fault_now";
-    case 11: return "fault_over";
-    case 12: return "iclwait";
-    case 19: return "switch_over";
-    case 20: return "wait_stop_motor";
-    case 21: return "otf_detection";
-    case 22: return "otf_brake";
-    default: return "unknown";
+    case 0:
+      return "idle";
+    case 4:
+      return "start";
+    case 6:
+      return "run";
+    case 8:
+      return "stop";
+    case 10:
+      return "fault_now";
+    case 11:
+      return "fault_over";
+    case 12:
+      return "iclwait";
+    case 19:
+      return "switch_over";
+    case 20:
+      return "wait_stop_motor";
+    case 21:
+      return "otf_detection";
+    case 22:
+      return "otf_brake";
+    default:
+      return "unknown";
   }
 }
 
-// Command opcode names
+static const char* bringup_state_to_cstr(uint8_t v) {
+  switch (v) {
+    case 0:
+      return "idle";
+    case 1:
+      return "running";
+    case 2:
+      return "passed";
+    case 3:
+      return "failed";
+    case 4:
+      return "aborted";
+    default:
+      return "unknown";
+  }
+}
+
+static const char* bringup_result_to_cstr(uint8_t v) {
+  switch (v) {
+    case 0:
+      return "none";
+    case 1:
+      return "busy";
+    case 2:
+      return "requires_idle";
+    case 3:
+      return "active_fault_present";
+    case 4:
+      return "latched_fault_present";
+    case 5:
+      return "gd_ready_low";
+    case 6:
+      return "vbus_too_low";
+    case 7:
+      return "vbus_too_high";
+    case 8:
+      return "pwm_handle_missing";
+    case 9:
+      return "adc_value_implausible";
+    case 10:
+      return "current_offset_too_large";
+    case 11:
+      return "temperature_implausible";
+    case 12:
+      return "mc_state_unexpected";
+    case 13:
+      return "mcsdk_api_call_failed";
+    case 14:
+      return "timeout";
+    case 15:
+      return "aborted_by_host";
+    case 16:
+      return "unsupported_test";
+    case 17:
+      return "passed";
+    default:
+      return "unknown";
+  }
+}
+
+static const char* bringup_test_id_to_cstr(uint8_t v) {
+  switch (v) {
+    case 0:
+      return "none";
+    case 1:
+      return "precheck";
+    case 2:
+      return "vbus_check";
+    case 3:
+      return "gate_driver_check";
+    case 4:
+      return "adc_zero_check";
+    case 5:
+      return "temp_check";
+    case 6:
+      return "pwm_handle_check";
+    case 7:
+      return "pwm_enable_pulse";
+    case 8:
+      return "low_speed_spin";
+    case 100:
+      return "full_safe_sequence";
+    case 101:
+      return "full_spin_sequence";
+    default:
+      return "unknown";
+  }
+}
+
 static const char* opcode_to_cstr(uint8_t v) {
   switch (v) {
-    case 0x00: return "NOP";
-    case 0x01: return "START";
-    case 0x02: return "STOP";
-    case 0x03: return "CLEAR_FAULTS";
-    case 0x04: return "SET_SPEED_RAMP";
-    case 0x05: return "ESTOP";
-    default: return "unknown";
+    case 0x00:
+      return "NOP";
+    case 0x01:
+      return "START";
+    case 0x02:
+      return "STOP";
+    case 0x03:
+      return "CLEAR_FAULTS";
+    case 0x04:
+      return "SET_SPEED_RAMP";
+    case 0x05:
+      return "ESTOP";
+    case 0x07:
+      return "SET_WATCHDOG";
+    case 0x09:
+      return "RUN_BRINGUP_TEST";
+    default:
+      return "unknown";
   }
 }
 
@@ -137,7 +244,6 @@ static const char* const CAP_NAMES[] = {
   "speed_command", "duty_command", "current_meas", "temp_meas", "reverse", "brake",
 };
 
-// Status flag bitmask names (8 bits)
 static const char* const STATUS_FLAG_NAMES[] = {
   "fault_present",
   "running",
@@ -154,7 +260,6 @@ struct FaultMapEntry {
   const char* name;
 };
 
-// Only include documented MCSDK fault bits.
 static const FaultMapEntry FAULT_MAP[] = {
   {0x0002, "overvoltage"},
   {0x0004, "undervoltage"},
@@ -166,7 +271,6 @@ static const FaultMapEntry FAULT_MAP[] = {
   {0x0400, "driver_protection"},
 };
 
-// Convert a bitmask to a pipe-separated string of named bits
 static std::string bitmask_to_names(uint16_t v, const char* const* names, size_t count) {
   if (v == 0)
     return "none";

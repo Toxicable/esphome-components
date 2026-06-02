@@ -9,7 +9,9 @@ Component-scoped notes for `components/esc_higher`.
   - `0x00` ID (8 bytes)
   - `0x10` STATUS (16 bytes)
   - `0x20` COMMAND (write register + 16-byte payload)
-  - `0x30` TELEMETRY (32 bytes)
+  - `0x30` TELEMETRY (48 bytes)
+  - `0x40` BRINGUP (48 bytes)
+  - `0x50` DEBUG_TELEMETRY (32 bytes)
 - COMMAND payload encoding:
   - byte0 `seq`, byte1 `opcode`, byte2 `flags`, byte3 `reserved`
   - bytes4..7 `param0` LE i32
@@ -21,10 +23,15 @@ Component-scoped notes for `components/esc_higher`.
   - `clear_faults` -> `0x03`
   - Speed setpoint slider `speed_target_dhz` -> `0x04` (`param0=<slider value>`, `param1=speed_ramp_time_ms`)
   - `estop` -> `0x05`
+  - Bring-up button `run_bringup_test` -> `0x09` (`param0=bringup_test_id`, `param1=bringup_test_duration_ms`, `param2=bringup_test_options`)
 - STATUS/TELEMETRY decoding uses byte offsets from `i2c_interface.md` text ordering; if firmware layout changes, update offsets in `esc_higher.cpp`.
-- Latest spec adds `fault_detail` at STATUS byte `5` and TELEMETRY byte `27`; keep both raw (`fault_detail`) and text (`fault_detail_text`) sensors aligned to that enum mapping.
-- String text sensors are available for enum/bitmask fields: `esc_state_text`, `last_cmd_error_text`, `status_flags_text`, `current_faults_text`, `occurred_faults_text`, `capabilities_text`.
+- `seq` is the STATUS sequence sensor; telemetry, bring-up, and debug snapshots have their own sequence sensors.
+- `fault_detail` lives at STATUS byte `5` and TELEMETRY byte `27`; keep both raw (`fault_detail`) and text (`fault_detail_text`) sensors aligned to that enum mapping.
+- String text sensors are available for enum/bitmask fields: `esc_state_text`, `last_cmd_error_text`, `status_flags_text`, `current_faults_text`, `occurred_faults_text`, `capabilities_text`, `bringup_state_text`, `bringup_result_text`, `bringup_test_id_text`.
 - `current_faults_text` and `occurred_faults_text` publish named MCSDK fault bits (pipe-delimited) from the 16-bit fault bitmap, with `none` when zero.
 - Fault text output includes only documented MCSDK bits; any non-documented set bits are emitted as `unknown_bits` (no synthetic `reserved*` labels).
 - `i2c_interface.md` is treated as externally owned specification text; implement code to match it, but do not edit it unless explicitly requested.
 - I2C register reads and command writes are single-shot (no internal retry loop).
+- Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`.
+- `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
+- `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.

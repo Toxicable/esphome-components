@@ -1,8 +1,8 @@
 #include "esc_higher.h"
 
 #include "esc_higher_text.h"
-#include <string>
 
+#include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
@@ -10,18 +10,40 @@ namespace esphome {
 namespace esc_higher {
 
 static const char* const TAG = "esc_higher";
+namespace {
+constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
+
+template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
+  if (sensor != nullptr)
+    sensor->publish_state(value);
+}
+
+void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
+  if (sensor != nullptr)
+    sensor->publish_state(value);
+}
+}  // namespace
+
 void ESCHigherStartButton::press_action() {
   this->parent_->start_motor();
 }
+
 void ESCHigherStopButton::press_action() {
   this->parent_->stop_motor();
 }
+
 void ESCHigherClearFaultsButton::press_action() {
   this->parent_->clear_faults();
 }
+
 void ESCHigherEstopButton::press_action() {
   this->parent_->estop();
 }
+
+void ESCHigherRunBringupTestButton::press_action() {
+  this->parent_->run_bringup_test();
+}
+
 void ESCHigherSpeedTargetNumber::control(float value) {
   if (this->parent_ == nullptr)
     return;
@@ -35,6 +57,8 @@ void ESCHigherSpeedTargetNumber::control(float value) {
 
 void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
+  this->initialized_ = false;
+  this->next_init_retry_ms_ = 0;
 }
 
 bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
@@ -46,14 +70,12 @@ bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
 }
 
 bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
-  // Wire format: [0x20][16-byte payload]
-  // payload: seq,u8 opcode,u8 flags,u8 reserved,u8 param0 i32 LE, param1 i32 LE, param2 i32 LE
   uint8_t tx[17]{0};
   tx[0] = REG_COMMAND;
   tx[1] = this->command_seq_++;
   tx[2] = opcode;
-  tx[3] = 0;  // flags
-  tx[4] = 0;  // reserved
+  tx[3] = 0;
+  tx[4] = 0;
   tx[5] = static_cast<uint8_t>(param0 & 0xFF);
   tx[6] = static_cast<uint8_t>((param0 >> 8) & 0xFF);
   tx[7] = static_cast<uint8_t>((param0 >> 16) & 0xFF);
@@ -67,31 +89,76 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
   tx[15] = static_cast<uint8_t>((param2 >> 16) & 0xFF);
   tx[16] = static_cast<uint8_t>((param2 >> 24) & 0xFF);
 
-  ESP_LOGI(TAG, "Cmd %s (seq %d, p0=%d, p1=%d, p2=%d)",
+  ESP_LOGI(TAG, "Cmd %s (seq %u, p0=%d, p1=%d, p2=%d)",
            opcode_to_cstr(opcode), tx[1], param0, param1, param2);
 
   const i2c::ErrorCode err = this->write(tx, sizeof(tx));
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(TAG, "Cmd %s (seq %d, p0=%d, p1=%d, p2=%d) failed: %s",
-             opcode_to_cstr(opcode), tx[1], param0, param1, param2, i2c_error_to_cstr(err));
+  ESP_LOGW(TAG, "Cmd %s (seq %u, p0=%d, p1=%d, p2=%d) failed: %s",
+           opcode_to_cstr(opcode), tx[1], param0, param1, param2, i2c_error_to_cstr(err));
   return false;
+}
+
+bool ESCHigherComponent::configure_watchdog_() {
+  const uint32_t timeout_ms = this->disable_watchdog_ ? 0 : this->watchdog_timeout_ms_;
+  if (this->disable_watchdog_) {
+    ESP_LOGI(TAG, "Disabling command watchdog");
+  } else {
+    ESP_LOGI(TAG, "Setting command watchdog to %u ms", static_cast<unsigned>(timeout_ms));
+  }
+  if (this->write_command_(OPCODE_SET_WATCHDOG, static_cast<int32_t>(timeout_ms), 0, 0))
+    return true;
+  ESP_LOGW(TAG, "Failed to configure command watchdog");
+  return false;
+}
+
+bool ESCHigherComponent::initialize_() {
+  uint8_t id[8]{0};
+  if (!this->read_register_(REG_ID, id, sizeof(id))) {
+    ESP_LOGW(TAG, "Failed to read ID register");
+    return false;
+  }
+
+  ESP_LOGI(
+    TAG,
+    "Interface detected proto=%u.%u fw=%u.%u hw=%u max_block_len=%u caps=0x%04X",
+    id[0],
+    id[1],
+    id[2],
+    id[3],
+    id[4],
+    id[5],
+    u16_(id, 6)
+  );
+
+  return this->configure_watchdog_();
 }
 
 bool ESCHigherComponent::start_motor() {
   return this->write_command_(OPCODE_START, 0, 0, 0);
 }
+
 bool ESCHigherComponent::stop_motor() {
   return this->write_command_(OPCODE_STOP, 0, 0, 0);
 }
+
 bool ESCHigherComponent::clear_faults() {
   return this->write_command_(OPCODE_CLEAR_FAULTS, 0, 0, 0);
 }
+
 bool ESCHigherComponent::estop() {
   return this->write_command_(OPCODE_ESTOP, 0, 0, 0);
 }
+
 bool ESCHigherComponent::set_speed_ramp() {
   return this->write_command_(OPCODE_SET_SPEED_RAMP, speed_ramp_target_dhz_, speed_ramp_time_ms_, 0);
+}
+
+bool ESCHigherComponent::run_bringup_test() {
+  return this->write_command_(
+    OPCODE_RUN_BRINGUP_TEST, bringup_test_id_, bringup_test_duration_ms_, bringup_test_options_
+  );
 }
 
 bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
@@ -100,6 +167,19 @@ bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
 }
 
 void ESCHigherComponent::update() {
+  if (!this->initialized_) {
+    const uint32_t now = millis();
+    if (now < this->next_init_retry_ms_)
+      return;
+    if (!this->initialize_()) {
+      this->status_set_warning();
+      this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
+      return;
+    }
+    this->initialized_ = true;
+    this->status_clear_warning();
+  }
+
   bool all_ok = true;
 
   if (
@@ -109,22 +189,14 @@ void ESCHigherComponent::update() {
   ) {
     uint8_t id[8]{0};
     if (this->read_register_(REG_ID, id, sizeof(id))) {
-      if (proto_major_sensor_ != nullptr)
-        proto_major_sensor_->publish_state(id[0]);
-      if (proto_minor_sensor_ != nullptr)
-        proto_minor_sensor_->publish_state(id[1]);
-      if (fw_major_sensor_ != nullptr)
-        fw_major_sensor_->publish_state(id[2]);
-      if (fw_minor_sensor_ != nullptr)
-        fw_minor_sensor_->publish_state(id[3]);
-      if (hw_id_sensor_ != nullptr)
-        hw_id_sensor_->publish_state(id[4]);
-      if (max_block_len_sensor_ != nullptr)
-        max_block_len_sensor_->publish_state(id[5]);
-      if (capabilities_sensor_ != nullptr)
-        capabilities_sensor_->publish_state(u16_(id, 6));
-      if (capabilities_text_sensor_ != nullptr)
-        capabilities_text_sensor_->publish_state(bitmask_to_names(u16_(id, 6), CAP_NAMES, 6));
+      publish_sensor(proto_major_sensor_, id[0]);
+      publish_sensor(proto_minor_sensor_, id[1]);
+      publish_sensor(fw_major_sensor_, id[2]);
+      publish_sensor(fw_minor_sensor_, id[3]);
+      publish_sensor(hw_id_sensor_, id[4]);
+      publish_sensor(max_block_len_sensor_, id[5]);
+      publish_sensor(capabilities_sensor_, u16_(id, 6));
+      publish_text(capabilities_text_sensor_, bitmask_to_names(u16_(id, 6), CAP_NAMES, 6));
     } else {
       all_ok = false;
     }
@@ -133,98 +205,113 @@ void ESCHigherComponent::update() {
   {
     uint8_t status[16]{0};
     if (this->read_register_(REG_STATUS, status, sizeof(status))) {
-      // Field offsets follow the documented STATUS layout in i2c_interface.md.
-      if (seq_sensor_ != nullptr)
-        seq_sensor_->publish_state(status[0]);
-      if (esc_state_sensor_ != nullptr)
-        esc_state_sensor_->publish_state(status[1]);
-      if (esc_state_text_sensor_ != nullptr)
-        esc_state_text_sensor_->publish_state(esc_state_to_cstr(status[1]));
-      if (mc_state_sensor_ != nullptr)
-        mc_state_sensor_->publish_state(status[2]);
-      if (mc_state_text_sensor_ != nullptr)
-        mc_state_text_sensor_->publish_state(mc_state_to_cstr(status[2]));
-      if (last_cmd_seq_sensor_ != nullptr)
-        last_cmd_seq_sensor_->publish_state(status[3]);
-      if (last_cmd_error_sensor_ != nullptr)
-        last_cmd_error_sensor_->publish_state(status[4]);
-      if (last_cmd_error_text_sensor_ != nullptr)
-        last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr(status[4]));
-      if (fault_detail_sensor_ != nullptr)
-        fault_detail_sensor_->publish_state(status[5]);
-      if (fault_detail_text_sensor_ != nullptr)
-        fault_detail_text_sensor_->publish_state(fault_detail_to_cstr(status[5]));
-      if (current_faults_sensor_ != nullptr)
-        current_faults_sensor_->publish_state(u16_(status, 6));
-      if (current_faults_text_sensor_ != nullptr)
-        current_faults_text_sensor_->publish_state(
-          fault_bitmask_to_names(u16_(status, 6))
-        );
-      if (occurred_faults_sensor_ != nullptr)
-        occurred_faults_sensor_->publish_state(u16_(status, 8));
-      if (occurred_faults_text_sensor_ != nullptr)
-        occurred_faults_text_sensor_->publish_state(
-          fault_bitmask_to_names(u16_(status, 8))
-        );
-      if (status_flags_sensor_ != nullptr)
-        status_flags_sensor_->publish_state(u16_(status, 10));
-      if (status_flags_text_sensor_ != nullptr)
-        status_flags_text_sensor_->publish_state(
-          bitmask_to_names(u16_(status, 10), STATUS_FLAG_NAMES, 8)
-        );
-      if (watchdog_ms_left_sensor_ != nullptr)
-        watchdog_ms_left_sensor_->publish_state(u16_(status, 12) / 1000.0f);
+      publish_sensor(status_seq_sensor_, status[0]);
+      publish_sensor(esc_state_sensor_, status[1]);
+      publish_text(esc_state_text_sensor_, esc_state_to_cstr(status[1]));
+      publish_sensor(mc_state_sensor_, status[2]);
+      publish_text(mc_state_text_sensor_, mc_state_to_cstr(status[2]));
+      publish_sensor(last_cmd_seq_sensor_, status[3]);
+      publish_sensor(last_cmd_error_sensor_, status[4]);
+      publish_text(last_cmd_error_text_sensor_, last_cmd_error_to_cstr(status[4]));
+      publish_sensor(fault_detail_sensor_, status[5]);
+      publish_text(fault_detail_text_sensor_, fault_detail_to_cstr(status[5]));
+      publish_sensor(current_faults_sensor_, u16_(status, 6));
+      publish_text(current_faults_text_sensor_, fault_bitmask_to_names(u16_(status, 6)));
+      publish_sensor(occurred_faults_sensor_, u16_(status, 8));
+      publish_text(occurred_faults_text_sensor_, fault_bitmask_to_names(u16_(status, 8)));
+      publish_sensor(status_flags_sensor_, u16_(status, 10));
+      publish_text(status_flags_text_sensor_, bitmask_to_names(u16_(status, 10), STATUS_FLAG_NAMES, 8));
+      publish_sensor(watchdog_ms_left_sensor_, u16_(status, 12));
     } else {
       all_ok = false;
     }
   }
 
   {
-    uint8_t tel[32]{0};
+    uint8_t tel[48]{0};
     if (this->read_register_(REG_TELEMETRY, tel, sizeof(tel))) {
-      // Field offsets follow TELEMETRY ordering in i2c_interface.md.
-      if (seq_sensor_ != nullptr)
-        seq_sensor_->publish_state(tel[0]);
-      if (esc_state_sensor_ != nullptr)
-        esc_state_sensor_->publish_state(tel[1]);
-      if (esc_state_text_sensor_ != nullptr)
-        esc_state_text_sensor_->publish_state(esc_state_to_cstr(tel[1]));
-      if (mc_state_sensor_ != nullptr)
-        mc_state_sensor_->publish_state(tel[2]);
-      if (mc_state_text_sensor_ != nullptr)
-        mc_state_text_sensor_->publish_state(mc_state_to_cstr(tel[2]));
-      if (last_cmd_error_sensor_ != nullptr)
-        last_cmd_error_sensor_->publish_state(tel[3]);
-      if (last_cmd_error_text_sensor_ != nullptr)
-        last_cmd_error_text_sensor_->publish_state(last_cmd_error_to_cstr(tel[3]));
-      if (fault_detail_sensor_ != nullptr)
-        fault_detail_sensor_->publish_state(tel[27]);
-      if (fault_detail_text_sensor_ != nullptr)
-        fault_detail_text_sensor_->publish_state(fault_detail_to_cstr(tel[27]));
-      if (status_flags_sensor_ != nullptr)
-        status_flags_sensor_->publish_state(u16_(tel, 4));
-      if (status_flags_text_sensor_ != nullptr)
-        status_flags_text_sensor_->publish_state(bitmask_to_names(u16_(tel, 4), STATUS_FLAG_NAMES, 8));
-      if (current_faults_sensor_ != nullptr)
-        current_faults_sensor_->publish_state(u16_(tel, 6));
-      if (current_faults_text_sensor_ != nullptr)
-        current_faults_text_sensor_->publish_state(
-          fault_bitmask_to_names(u16_(tel, 6))
-        );
-      if (vbus_mv_sensor_ != nullptr)
-        vbus_mv_sensor_->publish_state(u32_(tel, 8) / 1000.0f);
-      if (ibus_ma_sensor_ != nullptr)
-        ibus_ma_sensor_->publish_state(i32_(tel, 12) / 1000.0f);
-      if (speed_dhz_sensor_ != nullptr)
-        speed_dhz_sensor_->publish_state(i32_(tel, 16));
-      if (duty_centi_pct_sensor_ != nullptr)
-        duty_centi_pct_sensor_->publish_state(i16_(tel, 20));
-      if (temp_mc_sensor_ != nullptr)
-        temp_mc_sensor_->publish_state(i32_(tel, 22) / 1000.0f);
-      if (last_cmd_seq_sensor_ != nullptr)
-        last_cmd_seq_sensor_->publish_state(tel[26]);
-      if (uptime_s_sensor_ != nullptr)
-        uptime_s_sensor_->publish_state(u32_(tel, 28));
+      publish_sensor(telemetry_seq_sensor_, tel[0]);
+      publish_sensor(esc_state_sensor_, tel[1]);
+      publish_text(esc_state_text_sensor_, esc_state_to_cstr(tel[1]));
+      publish_sensor(mc_state_sensor_, tel[2]);
+      publish_text(mc_state_text_sensor_, mc_state_to_cstr(tel[2]));
+      publish_sensor(last_cmd_error_sensor_, tel[3]);
+      publish_text(last_cmd_error_text_sensor_, last_cmd_error_to_cstr(tel[3]));
+      publish_sensor(status_flags_sensor_, u16_(tel, 4));
+      publish_text(status_flags_text_sensor_, bitmask_to_names(u16_(tel, 4), STATUS_FLAG_NAMES, 8));
+      publish_sensor(current_faults_sensor_, u16_(tel, 6));
+      publish_text(current_faults_text_sensor_, fault_bitmask_to_names(u16_(tel, 6)));
+      publish_sensor(vbus_mv_sensor_, u32_(tel, 8) / 1000.0f);
+      publish_sensor(ibus_ma_sensor_, i32_(tel, 12) / 1000.0f);
+      publish_sensor(motor_current_ma_sensor_, i32_(tel, 16) / 1000.0f);
+      publish_sensor(speed_dhz_sensor_, i32_(tel, 20));
+      publish_sensor(duty_centi_pct_sensor_, i16_(tel, 24));
+      publish_sensor(last_cmd_seq_sensor_, tel[26]);
+      publish_sensor(fault_detail_sensor_, tel[27]);
+      publish_text(fault_detail_text_sensor_, fault_detail_to_cstr(tel[27]));
+      publish_sensor(temp_mc_sensor_, i32_(tel, 28) / 1000.0f);
+      publish_sensor(target_speed_dhz_sensor_, i32_(tel, 32));
+      publish_sensor(watchdog_ms_left_sensor_, u16_(tel, 36));
+      publish_sensor(drive_limit_centi_pct_sensor_, u16_(tel, 38));
+      publish_sensor(uptime_s_sensor_, u32_(tel, 40));
+      publish_sensor(telemetry_debug0_sensor_, i16_(tel, 44));
+      publish_sensor(telemetry_debug1_sensor_, i16_(tel, 46));
+    } else {
+      all_ok = false;
+    }
+  }
+
+  {
+    uint8_t bringup[48]{0};
+    if (this->read_register_(REG_BRINGUP, bringup, sizeof(bringup))) {
+      publish_sensor(bringup_seq_sensor_, bringup[0]);
+      publish_sensor(bringup_active_sensor_, bringup[1]);
+      publish_sensor(bringup_test_id_sensor_, bringup[2]);
+      publish_text(bringup_test_id_text_sensor_, bringup_test_id_to_cstr(bringup[2]));
+      publish_sensor(bringup_step_id_sensor_, bringup[3]);
+      publish_sensor(bringup_state_sensor_, bringup[4]);
+      publish_text(bringup_state_text_sensor_, bringup_state_to_cstr(bringup[4]));
+      publish_sensor(bringup_result_sensor_, bringup[5]);
+      publish_text(bringup_result_text_sensor_, bringup_result_to_cstr(bringup[5]));
+      publish_sensor(bringup_failure_code_sensor_, bringup[6]);
+      publish_sensor(bringup_measured0_sensor_, i32_(bringup, 8));
+      publish_sensor(bringup_measured1_sensor_, i32_(bringup, 12));
+      publish_sensor(bringup_limit_min_sensor_, i32_(bringup, 16));
+      publish_sensor(bringup_limit_max_sensor_, i32_(bringup, 20));
+      publish_sensor(bringup_vbus_mv_at_test_sensor_, u32_(bringup, 24));
+      publish_sensor(bringup_current_faults_at_test_sensor_, u16_(bringup, 28));
+      publish_text(bringup_current_faults_text_sensor_, fault_bitmask_to_names(u16_(bringup, 28)));
+      publish_sensor(bringup_occurred_faults_at_test_sensor_, u16_(bringup, 30));
+      publish_text(bringup_occurred_faults_text_sensor_, fault_bitmask_to_names(u16_(bringup, 30)));
+      publish_sensor(bringup_mc_state_at_test_sensor_, bringup[32]);
+      publish_sensor(bringup_esc_state_at_test_sensor_, bringup[33]);
+      publish_sensor(bringup_gd_ready_sensor_, bringup[34]);
+      publish_sensor(bringup_elapsed_ms_sensor_, u32_(bringup, 36));
+      publish_sensor(bringup_last_passed_step_sensor_, bringup[40]);
+      publish_sensor(bringup_steps_total_sensor_, bringup[41]);
+      publish_sensor(bringup_attempt_count_sensor_, u16_(bringup, 42));
+      publish_sensor(bringup_debug0_sensor_, i16_(bringup, 44));
+      publish_sensor(bringup_debug1_sensor_, i16_(bringup, 46));
+    } else {
+      all_ok = false;
+    }
+  }
+
+  {
+    uint8_t debug[32]{0};
+    if (this->read_register_(REG_DEBUG_TELEMETRY, debug, sizeof(debug))) {
+      publish_sensor(debug_seq_sensor_, debug[0]);
+      publish_sensor(debug_v_alpha_raw_s16_sensor_, i16_(debug, 2));
+      publish_sensor(debug_v_beta_raw_s16_sensor_, i16_(debug, 4));
+      publish_sensor(debug_v_q_raw_s16_sensor_, i16_(debug, 6));
+      publish_sensor(debug_v_d_raw_s16_sensor_, i16_(debug, 8));
+      publish_sensor(debug_v_u_raw_s16_sensor_, i16_(debug, 10));
+      publish_sensor(debug_v_v_raw_s16_sensor_, i16_(debug, 12));
+      publish_sensor(debug_v_w_raw_s16_sensor_, i16_(debug, 14));
+      publish_sensor(debug_v_amp_raw_s16_sensor_, i16_(debug, 16));
+      publish_sensor(debug_phase_ia_ma_sensor_, i16_(debug, 18));
+      publish_sensor(debug_phase_ib_ma_sensor_, i16_(debug, 20));
+      publish_sensor(debug_phase_ic_ma_sensor_, i16_(debug, 22));
     } else {
       all_ok = false;
     }
@@ -240,8 +327,13 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "esc_higher:");
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
-  ESP_LOGCONFIG(TAG, "  Speed ramp target dHz: %d", static_cast<int>(speed_ramp_target_dhz_));
-  ESP_LOGCONFIG(TAG, "  Speed ramp time ms: %d", static_cast<int>(speed_ramp_time_ms_));
+  ESP_LOGCONFIG(TAG, "  disable_watchdog: %s", this->disable_watchdog_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  watchdog_timeout_ms: %u", static_cast<unsigned>(this->watchdog_timeout_ms_));
+  ESP_LOGCONFIG(TAG, "  speed_ramp_target_dhz: %d", static_cast<int>(speed_ramp_target_dhz_));
+  ESP_LOGCONFIG(TAG, "  speed_ramp_time_ms: %d", static_cast<int>(speed_ramp_time_ms_));
+  ESP_LOGCONFIG(TAG, "  bringup_test_id: %d", static_cast<int>(bringup_test_id_));
+  ESP_LOGCONFIG(TAG, "  bringup_test_duration_ms: %d", static_cast<int>(bringup_test_duration_ms_));
+  ESP_LOGCONFIG(TAG, "  bringup_test_options: 0x%08X", static_cast<unsigned>(bringup_test_options_));
 }
 
 }  // namespace esc_higher
