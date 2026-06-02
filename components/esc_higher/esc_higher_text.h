@@ -192,24 +192,6 @@ static const char* bringup_test_id_to_cstr(uint8_t v) {
   switch (v) {
     case 0:
       return "none";
-    case 1:
-      return "precheck";
-    case 2:
-      return "vbus_check";
-    case 3:
-      return "gate_driver_check";
-    case 4:
-      return "adc_zero_check";
-    case 5:
-      return "temp_check";
-    case 6:
-      return "pwm_handle_check";
-    case 7:
-      return "pwm_enable_pulse";
-    case 8:
-      return "low_speed_spin";
-    case 100:
-      return "full_safe_sequence";
     case 101:
       return "full_spin_sequence";
     default:

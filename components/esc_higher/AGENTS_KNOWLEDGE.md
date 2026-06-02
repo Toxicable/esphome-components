@@ -23,7 +23,7 @@ Component-scoped notes for `components/esc_higher`.
   - `clear_faults` -> `0x03`
   - Speed setpoint slider `speed_target_dhz` -> `0x04` (`param0=<slider value>`, `param1=speed_ramp_time_ms`)
   - `estop` -> `0x05`
-  - Bring-up button `run_bringup_test` -> `0x09` (`param0=bringup_test_id`, `param1=bringup_test_duration_ms`, `param2=bringup_test_options`)
+  - Bring-up button `run_bringup_test` -> `0x09` (`param0=bringup_test_duration_ms`, `param1=bringup_test_options`, `param2=0`)
 - STATUS/TELEMETRY decoding uses byte offsets from `i2c_interface.md` text ordering; if firmware layout changes, update offsets in `esc_higher.cpp`.
 - `seq` is the STATUS sequence sensor; telemetry, bring-up, and debug snapshots have their own sequence sensors.
 - `fault_detail` lives at STATUS byte `5` and TELEMETRY byte `27`; keep both raw (`fault_detail`) and text (`fault_detail_text`) sensors aligned to that enum mapping.
@@ -35,3 +35,4 @@ Component-scoped notes for `components/esc_higher`.
 - Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`.
 - `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
 - `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.
+- The firmware always runs the full autonomous bring-up sequence; `BRINGUP.test_id` is a report field, not a host command selector.

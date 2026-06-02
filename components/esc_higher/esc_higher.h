@@ -63,9 +63,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_speed_ramp_time_ms(int32_t value) {
     speed_ramp_time_ms_ = value;
   }
-  void set_bringup_test_id(int32_t value) {
-    bringup_test_id_ = value;
-  }
   void set_bringup_test_duration_ms(int32_t value) {
     bringup_test_duration_ms_ = value;
   }
@@ -358,7 +355,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};
   int32_t speed_ramp_time_ms_{1000};
-  int32_t bringup_test_id_{1};
   int32_t bringup_test_duration_ms_{5000};
   int32_t bringup_test_options_{0};
   bool disable_watchdog_{true};

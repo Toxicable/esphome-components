@@ -36,7 +36,6 @@ ESCHigherSpeedTargetNumber = esc_higher_ns.class_(
 
 CONF_DISABLE_WATCHDOG = "disable_watchdog"
 CONF_WATCHDOG_TIMEOUT_MS = "watchdog_timeout_ms"
-CONF_BRINGUP_TEST_ID_PARAM = "bringup_test_id"
 CONF_BRINGUP_TEST_DURATION_MS = "bringup_test_duration_ms"
 CONF_BRINGUP_TEST_OPTIONS = "bringup_test_options"
 
@@ -159,7 +158,6 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_WATCHDOG_TIMEOUT_MS, default=500): cv.int_range(
                 min=0, max=2147483647
             ),
-            cv.Optional(CONF_BRINGUP_TEST_ID_PARAM, default=1): cv.int_,
             cv.Optional(CONF_BRINGUP_TEST_DURATION_MS, default=5000): cv.int_range(
                 min=0, max=2147483647
             ),
@@ -315,7 +313,6 @@ async def to_code(config):
 
     cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
     cg.add(var.set_watchdog_timeout_ms(config[CONF_WATCHDOG_TIMEOUT_MS]))
-    cg.add(var.set_bringup_test_id(config[CONF_BRINGUP_TEST_ID_PARAM]))
     cg.add(var.set_bringup_test_duration_ms(config[CONF_BRINGUP_TEST_DURATION_MS]))
     cg.add(var.set_bringup_test_options(config[CONF_BRINGUP_TEST_OPTIONS]))
     cg.add(var.set_speed_ramp_target_dhz(config[CONF_SPEED_RAMP_TARGET_DHZ]))

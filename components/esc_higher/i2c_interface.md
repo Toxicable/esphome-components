@@ -198,18 +198,18 @@ Supported opcodes:
 
 `RUN_BRINGUP_TEST`:
 
-- `param0`: `test_id`
-- `param1`: `duration_ms` / `timeout_ms`
-- `param2`: option bits
+- `param0`: `duration_ms` / `timeout_ms`
+- `param1`: option bits
+- `param2`: reserved, currently ignored
 
 Bring-up option bits:
 
-- bit `0`: allow PWM enable
-- bit `1`: allow motor spin
 - bit `2`: clear previous bring-up report before start
 - bit `3`: ignore latched occurred faults; check only active faults
 - bit `4`: disable watchdog for duration of test
 - bit `5`: restore previous watchdog setting after test
+
+The firmware always runs the full autonomous bring-up sequence. The host does not select individual tests or modes.
 
 ## `TELEMETRY` register `0x30`
 
@@ -309,24 +309,11 @@ Bring-up result / failure codes:
 
 Bring-up test IDs:
 
-| Test ID | Name                   | Purpose |
-| ------: | ---------------------- | ------- |
-| `0`     | `NONE`                 | no test |
-| `1`     | `PRECHECK`             | state, faults, VBUS, GD_READY |
-| `2`     | `VBUS_CHECK`           | read bus voltage and compare against limits |
-| `3`     | `GATE_DRIVER_CHECK`    | check gate-driver ready pin |
-| `4`     | `ADC_ZERO_CHECK`       | check idle current readings / offsets |
-| `5`     | `TEMP_CHECK`           | check temperature plausible |
-| `6`     | `PWM_HANDLE_CHECK`     | verify PWM/current-feedback handles exist |
-| `7`     | `PWM_ENABLE_PULSE`     | briefly enable PWM, then stop |
-| `8`     | `LOW_SPEED_SPIN`       | short low-speed start/ramp/stop test |
-| `100`   | `FULL_SAFE_SEQUENCE`   | run non-spin checks and PWM pulse |
-| `101`   | `FULL_SPIN_SEQUENCE`   | run safe sequence, then low-speed spin |
+| Report ID | Name                 | Purpose |
+| --------: | -------------------- | ------- |
+| `101`     | `FULL_SPIN_SEQUENCE` | full autonomous bring-up sequence |
 
-Recommended bring-up sequences:
-
-- `FULL_SAFE_SEQUENCE`: `REQUIRE_IDLE`, `FAULT_CHECK`, `VBUS_CHECK`, `GD_READY_CHECK`, `TEMP_CHECK`, `ADC_ZERO_CHECK`, `PWM_HANDLE_CHECK`, `PWM_ENABLE_PULSE`
-- `FULL_SPIN_SEQUENCE`: `FULL_SAFE_SEQUENCE`, `START`, `LOW_SPEED_RAMP`, `RUN_OBSERVE`, `STOP`
+The `BRINGUP.step_id` field is an internal step tracker for the autonomous sequence, not a host command selector.
 
 ## `DEBUG_TELEMETRY` register `0x50`
 

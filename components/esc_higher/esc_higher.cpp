@@ -156,9 +156,7 @@ bool ESCHigherComponent::set_speed_ramp() {
 }
 
 bool ESCHigherComponent::run_bringup_test() {
-  return this->write_command_(
-    OPCODE_RUN_BRINGUP_TEST, bringup_test_id_, bringup_test_duration_ms_, bringup_test_options_
-  );
+  return this->write_command_(OPCODE_RUN_BRINGUP_TEST, bringup_test_duration_ms_, bringup_test_options_, 0);
 }
 
 bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
@@ -331,7 +329,6 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  watchdog_timeout_ms: %u", static_cast<unsigned>(this->watchdog_timeout_ms_));
   ESP_LOGCONFIG(TAG, "  speed_ramp_target_dhz: %d", static_cast<int>(speed_ramp_target_dhz_));
   ESP_LOGCONFIG(TAG, "  speed_ramp_time_ms: %d", static_cast<int>(speed_ramp_time_ms_));
-  ESP_LOGCONFIG(TAG, "  bringup_test_id: %d", static_cast<int>(bringup_test_id_));
   ESP_LOGCONFIG(TAG, "  bringup_test_duration_ms: %d", static_cast<int>(bringup_test_duration_ms_));
   ESP_LOGCONFIG(TAG, "  bringup_test_options: 0x%08X", static_cast<unsigned>(bringup_test_options_));
 }

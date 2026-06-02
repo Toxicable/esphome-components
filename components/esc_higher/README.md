@@ -30,7 +30,6 @@ esc_higher:
   address: 0x34  # Optional / default
   disable_watchdog: true
   # watchdog_timeout_ms: 500
-  # bringup_test_id: 1
   # bringup_test_duration_ms: 5000
   # bringup_test_options: 0
 
@@ -85,6 +84,8 @@ esc_higher:
     name: "Bringup Current Faults Text"
   bringup_occurred_faults_text:
     name: "Bringup Occurred Faults Text"
+
+  # BRINGUP.test_id is a report field; the firmware always runs the autonomous sequence.
 
   ## ID register sensors:
   # proto_major:
@@ -155,7 +156,7 @@ esc_higher:
 
 Notes:
 - Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
-- `run_bringup_test` sends opcode `0x09` with the configured bring-up parameters.
+- `run_bringup_test` sends opcode `0x09` with `param0=bringup_test_duration_ms`, `param1=bringup_test_options`, and `param2=0`.
 - Set `disable_watchdog: true` to disable the command watchdog at startup; otherwise the component programs `watchdog_timeout_ms` (default `500 ms`).
 - `watchdog_ms_left` publishes raw milliseconds from `STATUS[12]`.
 - Command result is observed through STATUS fields (`last_cmd_seq`, `last_cmd_error`) on subsequent polls.
