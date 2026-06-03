@@ -312,50 +312,5 @@ static std::string fault_bitmask_to_names(uint16_t v) {
   return out.empty() ? "unknown_bits" : out;
 }
 
-static const char* debug_event_id_to_cstr(uint16_t event_id) {
-  switch (event_id) {
-    case 0x0100:
-      return "BRINGUP_START";
-    case 0x0101:
-      return "TEST102_CONFIG";
-    case 0x0102:
-      return "TEST102_VECTOR_BEGIN";
-    case 0x0103:
-      return "TEST102_PWMC_BEFORE";
-    case 0x0104:
-      return "TEST102_PWMC_AFTER";
-    case 0x0105:
-      return "TEST102_TIM_BEFORE";
-    case 0x0106:
-      return "TEST102_TIM_AFTER";
-    case 0x0107:
-      return "TEST102_VOLTAGE_COMMAND";
-    case 0x0108:
-      return "TEST102_SETPHASE_RESULT";
-    case 0x0109:
-      return "TEST102_CURRENT_SNAPSHOT";
-    case 0x010A:
-      return "TEST102_VECTOR_RESULT";
-    case 0x010B:
-      return "BRINGUP_FAIL";
-    case 0x010C:
-      return "BRINGUP_ABORT";
-    case 0x010D:
-      return "BRINGUP_PASS";
-    case 0x010E:
-      return "MCSDK_SNAPSHOT";
-    case 0x010F:
-      return "CURRENT_SNAPSHOT";
-    case 0x0110:
-    return "TEST102_OFFSET_CALIB_STATE";
-    case 0x0111:
-    return "TEST102_OFFSET_CALIB_START";
-    case 0x0112:
-    return "TEST102_OFFSET_CALIB_START_RESULT";
-    default:
-      return nullptr;
-  }
-}
-
 }  // namespace esc_higher
 }  // namespace esphome

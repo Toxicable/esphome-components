@@ -63,6 +63,7 @@ Notes:
 |   `0x70` | `DEBUG_INFO`      | read   |   16 |
 |   `0x71` | `DEBUG_READ`      | w/r    |   64 |
 |   `0x72` | `DEBUG_CTRL`      | write  |    1 |
+|   `0x73` | `DEBUG_INFO2`     | read   |   20 |
 
 ## `ID` register `0x00`
 
@@ -210,10 +211,10 @@ Supported opcodes:
 - `param1`: `duration_ms`
 - `param2`: options / reserved
 
-`bridge_static_vector_test` is a dry-run diagnostic. It first waits for MCSDK
-offset calibration to complete, then logs vectors `1`, `2`, and `3`. It does
-not prove the current-map sign pattern as a pass/fail condition. The final
-bring-up result code is `dry_run_complete`.
+`bridge_static_vector_test` is a dry-run diagnostic. It skips offset
+calibration, then logs vectors `1`, `2`, and `3`. It does not prove the
+current-map sign pattern as a pass/fail condition. The final bring-up result
+code is `dry_run_complete`.
 
 Bring-up option bits:
 
@@ -371,32 +372,38 @@ Do not treat these values as calibrated phase voltages.
 
 ## `DEBUG_INFO` register `0x70`
 
-Read-only metadata for the generic binary debug log.
+Read-only metadata for the frozen text debug log export.
 
-| Offset | Field          | Type  | Notes |
-| -----: | -------------- | ----- | ----- |
-|      0 | `proto`        | `u8`  | `1` |
-|      1 | `flags`        | `u8`  | bit 0 frozen, bit 1 dropped |
-|      2 | `debug_seq`    | `u32` | log/session sequence, increments on clear |
-|      6 | `used_len`     | `u16` | valid bytes in `DEBUG_READ` |
-|      8 | `export_len`   | `u16` | exported bytes, currently equal to `used_len` |
-|     10 | `capacity`     | `u16` | compile-time buffer capacity, currently `4096` |
-|     12 | `dropped`      | `u16` | records dropped because the log was full or frozen |
-|     14 | `crc16`        | `u16` | CRC16-CCITT-FALSE over `used_len` bytes |
+| Offset | Field        | Type  | Notes |
+| -----: | ------------ | ----- | ----- |
+|      0 | `proto`      | `u8`  | `2` |
+|      1 | `flags`      | `u8`  | bit 0 export valid, bit 1 live overflow, bit 2 line truncation, bit 3 write attempt while frozen |
+|      2 | `seq`        | `u32` | frozen export sequence, increments on `DEBUG_CTRL freeze` |
+|      6 | `used_len`   | `u16` | live bytes currently buffered |
+|      8 | `export_len` | `u16` | immutable frozen export length |
+|     10 | `capacity`   | `u16` | compile-time buffer capacity, currently `4096` |
+|     12 | `dropped`    | `u16` | lines dropped while the live buffer was full or frozen |
+|     14 | `crc16`      | `u16` | CRC16-CCITT-FALSE over the frozen export bytes |
 
-Debug log rules:
+## `DEBUG_INFO2` register `0x73`
 
-- Linear buffer, reset at the start of each bring-up run.
-- `DEBUG_CTRL clear` clears the log, resets `used_len`, `dropped`, and frozen
-  state, and increments `debug_seq`.
-- `DEBUG_CTRL freeze` finalizes the current CRC and prevents further appends.
-- Terminal bring-up pass/fail/abort events freeze the buffer automatically.
-- Host should read `DEBUG_INFO`, then `DEBUG_READ` chunks, then verify `crc16`.
-- Unknown event IDs are valid; host decoders must log the payload as hex rather than failing.
+Extra sanity fields for the frozen export snapshot.
+
+| Offset | Field | Type | Notes |
+| -----: | ----- | ---- | ----- |
+| 0 | `live_used_len` | `u16` | live bytes currently buffered |
+| 2 | `export_len` | `u16` | frozen export length |
+| 4 | `export_crc16` | `u16` | frozen export CRC |
+| 6 | `export_seq` | `u32` | frozen export sequence |
+| 10 | `flags` | `u8` | same flag bits as `DEBUG_INFO` |
+| 12 | `dropped` | `u16` | frozen dropped count |
+| 14 | `first_word` | `u16` | first 16-bit word of the export buffer |
+| 16 | `last_event_id` | `u16` | last known event id, or `0` if the last line was plain text |
+| 18 | `reserved` | `u16` | zero |
 
 ## `DEBUG_READ` register `0x71`
 
-Binary debug-log chunk reader.
+Read-only chunk reader for the frozen UTF-8 text export.
 
 Request format:
 
@@ -406,11 +413,11 @@ Request format:
 
 Response format:
 
-- returns up to `length` bytes from the debug log starting at `offset`
+- returns up to `length` bytes from the frozen export buffer starting at `offset`
 - host should read in conservative chunks, ideally `32` to `64` bytes
 - `length = 0` is treated as `1`
 - `length > 64` is clamped to `64`
-- `offset >= used_len` returns zero-filled bytes of the requested length
+- `offset >= export_len` returns zero-filled bytes of the requested length
 
 ## `DEBUG_CTRL` register `0x72`
 
@@ -424,58 +431,25 @@ Write one payload byte after the register byte.
 
 Invalid control values set `last_cmd_error = parameter out of range`.
 
-## Debug Record Format
+## Text Log Format
 
-Each record is variable length. Multi-byte fields are little-endian.
+The debug log is newline-delimited UTF-8 text. `DebugLog_Printf()` appends one
+complete line and adds the newline automatically. `DebugLog_AppendString()` does
+the same for fixed strings.
 
-```c
-struct debug_record_header {
-  uint16_t magic;      // 0xD617
-  uint8_t version;     // 1
-  uint8_t header_len;  // 20
-  uint16_t record_len; // header + payload
-  uint16_t event_id;
-  uint32_t seq;
-  uint32_t tick_ms;
-  uint8_t source;
-  uint8_t reserved;
-  uint16_t flags;
-};
-```
+The firmware currently emits lines such as:
 
-Known event IDs:
+- `bringup start test=102 opts=0x01 attempt=1 seq_len=6 pulse_ms=1`
+- `test102 config mode=dry_run output=disabled ...`
+- `test102 dry_run skip_offset_calib`
+- `vec=1 begin alpha=1 beta=0 ...`
+- `vec=1 setphase rc=8 spread=0 ...`
+- `vec=1 result status=setphase_nonzero output=disabled ...`
+- `bringup done result=dry_run_complete ...`
 
-| Event ID | Name |
-| -------: | ---- |
-| `0x0100` | `bringup_start` |
-| `0x0101` | `test102_config` |
-| `0x0102` | `test102_vector_begin` |
-| `0x0103` | `test102_pwmc_before` |
-| `0x0104` | `test102_pwmc_after` |
-| `0x0105` | `test102_tim_before` |
-| `0x0106` | `test102_tim_after` |
-| `0x0107` | `test102_voltage_command` |
-| `0x0108` | `test102_setphase_result` |
-| `0x0109` | `test102_current_snapshot` |
-| `0x010A` | `test102_vector_result` |
-| `0x010B` | `bringup_fail` |
-| `0x010C` | `bringup_abort` |
-| `0x010D` | `bringup_pass` |
-| `0x010E` | `mcsdk_snapshot` |
-| `0x010F` | `current_snapshot` |
-| `0x0110` | `test102_offset_calib_state` |
-| `0x0111` | `test102_offset_calib_start` |
-| `0x0112` | `test102_offset_calib_start_result` |
-
-Event payloads are binary and event-specific. `test102_tim_*` payloads contain
-`CR1`, `BDTR`, `CCER`, `CNT`, `ARR`, `CCR1`, `CCR2`, `CCR3` as `u32`.
-`test102_pwmc_*` payloads contain `CntPhA/B/C`, `low/mid/highDuty`,
-sector/PWM/calibration state, `SWerror`, and last `Ia/Ib/Ic`. The test logs
-`offset_calib_state` before any vector work, then `vector_begin`,
-`pwmc_before`, `tim_before`, `current_snapshot`, `voltage_command`,
-`setphase_result`, `pwmc_after`, `tim_after`, `current_snapshot`, and
-`vector_result` once for each of vectors `1`, `2`, and `3`. Unknown payloads
-should be logged as hex.
+`DEBUG_INFO.crc16` and `DEBUG_READ` both refer to the same frozen export
+snapshot. The client should read `DEBUG_INFO`, then read `DEBUG_READ` chunks for
+`export_len`, then verify CRC16 over those bytes.
 
 ## Behaviour
 

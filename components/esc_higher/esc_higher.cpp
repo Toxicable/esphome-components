@@ -2,7 +2,6 @@
 
 #include "esc_higher_text.h"
 
-#include <cstdarg>
 #include <algorithm>
 #include <cstdio>
 
@@ -25,51 +24,6 @@ template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
 void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
   if (sensor != nullptr)
     sensor->publish_state(value);
-}
-
-void append_formatted_line(std::string& out, const char* fmt, ...) {
-  char line[256];
-  va_list args;
-  va_start(args, fmt);
-  const int written = std::vsnprintf(line, sizeof(line), fmt, args);
-  va_end(args);
-  if (written <= 0) {
-    return;
-  }
-  const size_t copy_len = static_cast<size_t>(std::min<int>(written, static_cast<int>(sizeof(line) - 1)));
-  out.append(line, copy_len);
-  out.push_back('\n');
-}
-
-static void log_debug_hex(const uint8_t* data, size_t len) {
-  constexpr size_t BYTES_PER_LINE = 16;
-  char line[3 * BYTES_PER_LINE + 32];
-
-  for (size_t offset = 0; offset < len; offset += BYTES_PER_LINE) {
-    int pos = std::snprintf(
-      line,
-      sizeof(line),
-      "Debug log hex[%04u]:",
-      static_cast<unsigned>(offset)
-    );
-    if (pos < 0) {
-      continue;
-    }
-    for (size_t i = 0; i < BYTES_PER_LINE && offset + i < len; i++) {
-      if (pos >= static_cast<int>(sizeof(line)))
-        break;
-      const int written = std::snprintf(
-        line + pos,
-        sizeof(line) - static_cast<size_t>(pos),
-        " %02X",
-        static_cast<unsigned>(data[offset + i])
-      );
-      if (written < 0)
-        break;
-      pos += written;
-    }
-    ESP_LOGD(TAG, "%s", line);
-  }
 }
 }  // namespace
 
@@ -222,15 +176,15 @@ bool ESCHigherComponent::publish_debug_log_(
   this->debug_log_read_failed_ = false;
 
   if (export_len == 0) {
-    ESP_LOGI(TAG, "Debug log seq=%u len=0", static_cast<unsigned>(debug_seq));
-    char summary[240];
+    char summary[128];
     std::snprintf(
       summary,
       sizeof(summary),
-      "seq=%u len=0 crc=ok records=0 dropped=%u last=none",
+      "debug seq=%u len=0 crc=ok dropped=%u",
       static_cast<unsigned>(debug_seq),
       static_cast<unsigned>(dropped)
     );
+    ESP_LOGI(TAG, "%s", summary);
     publish_text(this->debug_log_text_sensor_, summary);
     return true;
   }
@@ -263,197 +217,59 @@ bool ESCHigherComponent::publish_debug_log_(
   }
 
   const uint16_t computed_crc = crc16_ccitt_false_(buffer, export_len);
-  const bool crc_ok = (computed_crc == crc16);
-  if (!crc_ok) {
-    ESP_LOGE(
-      TAG,
-      "Debug log seq=%u len=%u crc mismatch reported=0x%04X computed=0x%04X",
+  if (computed_crc != crc16) {
+    char summary[128];
+    std::snprintf(
+      summary,
+      sizeof(summary),
+      "debug crc bad seq=%u len=%u reported=0x%04X computed=0x%04X",
       static_cast<unsigned>(debug_seq),
       static_cast<unsigned>(export_len),
       static_cast<unsigned>(crc16),
       static_cast<unsigned>(computed_crc)
     );
-    publish_text(this->debug_log_text_sensor_, "ERROR: debug log CRC mismatch");
+    ESP_LOGE(TAG, "%s", summary);
+    publish_text(this->debug_log_text_sensor_, summary);
     this->debug_log_read_failed_ = true;
     return false;
-  } else {
-    ESP_LOGI(
-      TAG,
-      "Debug log seq=%u len=%u crc=0x%04X verified",
-      static_cast<unsigned>(debug_seq),
-      static_cast<unsigned>(export_len),
-      static_cast<unsigned>(crc16)
-    );
   }
 
-  constexpr uint16_t RECORD_HEADER_SIZE = 16;
-  size_t pos = 0;
-  uint16_t record_count = 0;
+  ESP_LOGI(
+    TAG,
+    "Debug log seq=%u len=%u crc=0x%04X verified",
+    static_cast<unsigned>(debug_seq),
+    static_cast<unsigned>(export_len),
+    static_cast<unsigned>(crc16)
+  );
 
-  // Track BRINGUP_FAIL info for summary
-  bool has_fail_info = false;
-  uint8_t fail_step = 0;
-  uint8_t fail_result = 0;
-  uint8_t fail_failure_code = 0;
-  uint8_t fail_mc_state = 0;
-  uint8_t fail_last_passed = 0;
-
-  const char* last_event_name = "none";
-
-  while (pos + RECORD_HEADER_SIZE <= export_len) {
-    const uint16_t magic = u16_(buffer, pos);
-    if (magic != 0xD617) {
-      ESP_LOGW(TAG, "Debug log seq=%u: bad magic 0x%04X at offset %u", static_cast<unsigned>(debug_seq), magic, static_cast<unsigned>(pos));
-      publish_text(this->debug_log_text_sensor_, "ERROR: debug log bad record magic");
-      this->debug_log_read_failed_ = true;
-      return false;
+  // Treat buffer as UTF-8/ASCII text; split on '\n' and log each line.
+  const char* line_start = reinterpret_cast<const char*>(buffer);
+  const char* line_end = line_start;
+  const char* buf_end = line_start + export_len;
+  while (line_end < buf_end) {
+    const char* nl = std::find(line_end, buf_end, '\n');
+    const size_t line_len = static_cast<size_t>(nl - line_end);
+    if (line_len > 0) {
+      char line_buf[256];
+      const size_t copy_len = std::min(line_len, sizeof(line_buf) - 1);
+      std::memcpy(line_buf, line_end, copy_len);
+      line_buf[copy_len] = '\0';
+      ESP_LOGI(TAG, "DBG: %s", line_buf);
     }
-
-    const uint8_t version = buffer[pos + 2];
-    const uint8_t header_len = buffer[pos + 3];
-    const uint16_t record_len = u16_(buffer, pos + 4);
-    const uint16_t event_id = u16_(buffer, pos + 6);
-    const uint32_t record_seq = u32_(buffer, pos + 8);
-    const uint32_t tick_ms = u32_(buffer, pos + 12);
-
-    if (record_len < RECORD_HEADER_SIZE || pos + record_len > export_len) {
-      ESP_LOGW(TAG, "Debug log seq=%u: record_len=%u invalid at offset %u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(record_len), static_cast<unsigned>(pos));
-      publish_text(this->debug_log_text_sensor_, "ERROR: debug log malformed record");
-      this->debug_log_read_failed_ = true;
-      return false;
-    }
-
-    const size_t payload_off = std::max(static_cast<size_t>(header_len), static_cast<size_t>(RECORD_HEADER_SIZE));
-    const size_t payload_len = record_len - payload_off;
-
-    const char* event_name = debug_event_id_to_cstr(event_id);
-    if (event_name != nullptr) {
-      ESP_LOGD(
-        TAG,
-        "Debug record[%u] event=0x%04X(%s) seq=%u tick=%u version=%u payload=%u",
-        record_count,
-        static_cast<unsigned>(event_id),
-        event_name,
-        static_cast<unsigned>(record_seq),
-        static_cast<unsigned>(tick_ms),
-        static_cast<unsigned>(version),
-        static_cast<unsigned>(payload_len)
-      );
-      if (payload_len > 0) {
-        log_debug_hex(buffer + pos + payload_off, payload_len);
-        // Decode payload based on event type
-        const uint8_t* payload = buffer + pos + payload_off;
-        switch (event_id) {
-          case 0x010E:  // MCSDK_SNAPSHOT
-            log_mcsdk_snapshot_payload_(payload, payload_len);
-            break;
-          case 0x0103:  // TEST102_PWMC_BEFORE
-          case 0x0104:  // TEST102_PWMC_AFTER
-            log_pwmc_snapshot_payload_(payload, payload_len);
-            break;
-          case 0x0105:  // TEST102_TIM_BEFORE
-          case 0x0106:  // TEST102_TIM_AFTER
-            log_tim_snapshot_payload_(payload, payload_len);
-            break;
-          case 0x0110:  // TEST102_OFFSET_CALIB_STATE
-          case 0x0112:  // TEST102_OFFSET_CALIB_START_RESULT
-            log_offset_calib_payload_(payload, payload_len);
-            break;
-          default:
-            break;
-        }
-      }
-
-      // Track BRINGUP_FAIL for summary
-      if (event_id == 0x010B && payload_len >= 5) {
-        const uint8_t* payload = buffer + pos + payload_off;
-        fail_step = payload[0];
-        fail_result = payload[1];
-        fail_failure_code = payload[2];
-        fail_mc_state = payload[3];
-        fail_last_passed = payload[4];
-        has_fail_info = true;
-      }
-      last_event_name = event_name;
-    } else {
-      ESP_LOGD(
-        TAG,
-        "Debug record[%u] event=0x%04X(unknown) seq=%u tick=%u version=%u payload=%u",
-        record_count,
-        static_cast<unsigned>(event_id),
-        static_cast<unsigned>(record_seq),
-        static_cast<unsigned>(tick_ms),
-        static_cast<unsigned>(version),
-        static_cast<unsigned>(payload_len)
-      );
-      if (payload_len > 0) {
-        log_debug_hex(buffer + pos + payload_off, payload_len);
-      }
-      last_event_name = "unknown_event";
-    }
-
-    pos += record_len;
-    record_count++;
+    line_end = nl + 1;  // advance past '\n' (or to buf_end)
   }
 
-  if (pos != export_len) {
-    ESP_LOGW(TAG, "Debug log seq=%u: %u trailing bytes after last record", static_cast<unsigned>(debug_seq), static_cast<unsigned>(export_len - pos));
-  }
-
-  char summary[240];
+  char summary[128];
   std::snprintf(
     summary,
     sizeof(summary),
-    "seq=%u len=%u crc=ok records=%u dropped=%u last=%s",
+    "debug seq=%u len=%u crc=ok dropped=%u",
     static_cast<unsigned>(debug_seq),
     static_cast<unsigned>(export_len),
-    static_cast<unsigned>(record_count),
-    static_cast<unsigned>(dropped),
-    last_event_name
+    static_cast<unsigned>(dropped)
   );
-
-  if (has_fail_info) {
-    const char* result_name = bringup_result_to_cstr(fail_result);
-    const char* mc_name = mc_state_to_cstr(fail_mc_state);
-    char extra[120];
-    std::snprintf(extra, sizeof(extra), " step=%u result=%u(%s) mc=%s passed=%u",
-      static_cast<unsigned>(fail_step),
-      static_cast<unsigned>(fail_result),
-      result_name,
-      mc_name,
-      static_cast<unsigned>(fail_last_passed)
-    );
-    strlcat(summary, extra, sizeof(summary));
   publish_text(this->debug_log_text_sensor_, summary);
-  }
   return true;
-}
-
-void ESCHigherComponent::log_mcsdk_snapshot_payload_(const uint8_t* p, size_t len) {
-  if (len >= 20) {
-    ESP_LOGD(TAG, "MCSDK_SNAPSHOT: mc=%s faults=%04X occurred=%04X speed=%d v_amp=%d",
-      mc_state_to_cstr(p[0]), u16_(p, 1), u16_(p, 3), i32_(p, 5), i16_(p, 9));
-  }
-}
-
-void ESCHigherComponent::log_pwmc_snapshot_payload_(const uint8_t* p, size_t len) {
-  if (len >= 34) {
-    ESP_LOGD(TAG, "PWMC: PhA=%u PhB=%u PhC=%u sector=%u PWMState=%u calib=%u Ia=%d Ib=%d Ic=%d",
-      u16_(p, 0), u16_(p, 2), u16_(p, 4), p[6], p[7], p[8], i16_(p, 10), i16_(p, 12), i16_(p, 14));
-  }
-}
-
-void ESCHigherComponent::log_tim_snapshot_payload_(const uint8_t* p, size_t len) {
-  if (len >= 56) {
-    ESP_LOGD(TAG, "TIM: CR1=%08X BDTR=%08X CCER=%08X CNT=%u ARR=%u CCR1=%u CCR2=%u CCR3=%u",
-      u32_(p, 0), u32_(p, 4), u32_(p, 8), u32_(p, 12), u32_(p, 16), u32_(p, 20), u32_(p, 24), u32_(p, 28));
-  }
-}
-
-void ESCHigherComponent::log_offset_calib_payload_(const uint8_t* p, size_t len) {
-  if (len >= 2) {
-    ESP_LOGD(TAG, "OFFSET_CALIB: status=%u result=%u", p[0], p[1]);
-  }
 }
 
 bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
@@ -745,14 +561,14 @@ void ESCHigherComponent::update() {
                 ESP_LOGI(TAG, "Debug log available: seq=%u export_len=%u dropped=%u capacity=%u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(export_len), static_cast<unsigned>(dropped), static_cast<unsigned>(capacity));
                 (void) this->publish_debug_log_(debug_seq, export_len, dropped, crc16);
               } else {
-                ESP_LOGI(TAG, "Debug log empty (export_len=0)");
-                char summary[240];
-                std::snprintf(summary, sizeof(summary), "seq=%u len=0 crc=ok records=0 dropped=%u last=none", static_cast<unsigned>(debug_seq), static_cast<unsigned>(dropped));
+                char summary[128];
+                std::snprintf(summary, sizeof(summary), "debug seq=%u len=0 crc=ok dropped=%u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(dropped));
+                ESP_LOGI(TAG, "%s", summary);
                 publish_text(this->debug_log_text_sensor_, summary);
               }
             } else {
               publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
-          this->debug_log_read_failed_ = true;
+              this->debug_log_read_failed_ = true;
             }
           }
         }
