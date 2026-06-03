@@ -60,6 +60,8 @@ Notes:
 |   `0x30` | `TELEMETRY`       | read   |   48 |
 |   `0x40` | `BRINGUP`         | read   |   48 |
 |   `0x50` | `DEBUG_TELEMETRY` | read   |   32 |
+|   `0x60` | `TRACE_INFO`      | read   |    8 |
+|   `0x61` | `TRACE_READ`      | w/r    |   64 |
 
 ## `ID` register `0x00`
 
@@ -122,6 +124,7 @@ Capability bits:
 - `8`: not fault_over
 - `9`: faults still active
 - `10`: latched faults present
+- `11`: current_limit_exceeded
 - `17`: unknown register
 
 Bring-up failure details are reported in `BRINGUP.result` / `BRINGUP.failure_code`, not in `last_cmd_error`.
@@ -199,36 +202,19 @@ Supported opcodes:
 `RUN_BRINGUP_TEST`:
 
 - `param0`: `test_id`
-- `param1`: `duration_ms` / `timeout_ms`
-- `param2`: option bits / reserved
+  - `101`: `full_spin_sequence`
+  - `102`: `bridge_static_vector_test`
+  - `103`: `forced_timer_differential_pwm`
+- `param1`: `duration_ms`
+- `param2`: options / reserved
 
 Bring-up option bits:
 
-- bit `0`: allow forced timer differential PWM test
-- bit `2`: clear previous bring-up report before start
-- bit `3`: ignore latched occurred faults; check only active faults
+- bit `0`: allow forced differential PWM test `103`
 - bit `4`: disable watchdog for duration of test
 - bit `5`: restore previous watchdog setting after test
 
-Bring-up test IDs:
-
-| Test ID | Name                      | Notes |
-| ------: | ------------------------- | ----- |
-| `101`   | `full_spin_sequence`      | default full autonomous bring-up sequence |
-| `102`   | `bridge_static_vector_test` | static-vector bring-up validation |
-| `103`   | `forced_timer_diff_pwm`   | forced low-level timer differential PWM test |
-
-For `test_id = 102`, the report reuses fields as follows:
-
-- `measured0`: low 16 bits = `CntPhA`, high 16 bits = `CntPhB`
-- `measured1`: `CntPhC`
-- `limit_min`: max PWM duty spread during static-vector pulse, timer ticks
-- `limit_max`: max measured phase current during static-vector pulse, mA
-- `debug0` bit 0: PWM enabled
-- `debug0` bit 1: `PWMC_SetPhaseVoltage` called
-- `debug0` bit 2: PWM duty spread became nonzero
-- `debug0` bit 3: measured current became nonzero
-- `debug1`: `PWMC_SetPhaseVoltage` return value
+The host selects the bring-up test by `param0`.
 
 ## `TELEMETRY` register `0x30`
 
@@ -325,15 +311,21 @@ Bring-up result / failure codes:
 - `15`: aborted by host
 - `16`: unsupported test
 - `17`: passed
+- `18`: motor did not spin
 - `19`: no differential PWM
+- `20`: current limit exceeded
 
-Bring-up test IDs:
+Bring-up sweep report:
 
 | Report ID | Name                 | Purpose |
 | --------: | -------------------- | ------- |
 | `101`     | `FULL_SPIN_SEQUENCE` | full autonomous bring-up sequence |
+| `102`     | `bridge_static_vector_test` | gate activity and differential-vector probe |
+| `103`     | `forced_timer_differential_pwm` | explicit low-level differential PWM test |
 
-The `BRINGUP.step_id` field is an internal step tracker for the autonomous sequence, not a host command selector.
+`BRINGUP.step_id` is an internal step tracker for the autonomous sequence, not a host command selector.
+
+`BRINGUP` remains a compact summary for the most recent bring-up run. For detailed diagnostics on test `102`, read `TRACE_INFO` and `TRACE_READ`.
 
 ## `DEBUG_TELEMETRY` register `0x50`
 
@@ -360,6 +352,79 @@ Optional raw/internal values for firmware debugging only.
 |     30 | `reserved3`        | `u16` | zero |
 
 Do not treat these values as calibrated phase voltages.
+
+## `TRACE_INFO` register `0x60`
+
+Read-only trace metadata for the binary bring-up trace buffer.
+
+| Offset | Field        | Type  | Notes |
+| -----: | ------------ | ----- | ----- |
+|      0 | `trace_seq`  | `u16` | monotonically increasing trace sequence |
+|      2 | `trace_len`  | `u16` | number of valid bytes in the trace buffer |
+|      4 | `record_size` | `u16` | size of `diag_trace_record`, packed little-endian |
+|      6 | `crc16`      | `u16` | CRC16 over the valid trace bytes |
+
+Trace buffer rules:
+
+- buffer size: `1024` bytes
+- reset at the start of each bring-up test
+- linear buffer is fine
+- trace sequence increments as records are appended
+- `trace_len` is the number of valid bytes currently in the buffer
+
+## `TRACE_READ` register `0x61`
+
+Binary trace chunk reader.
+
+Request format:
+
+- write `3` payload bytes after register byte
+- offset `u16` little-endian
+- length `u8`
+
+Response format:
+
+- returns up to `length` bytes from the trace buffer starting at `offset`
+- host should read in conservative chunks, ideally `32` to `64` bytes
+- `length > 64` is rejected
+- `offset >= trace_len` returns zero bytes
+
+Trace record format:
+
+```c
+struct diag_trace_record {
+  uint8_t type;
+  uint8_t vector_id;
+  uint16_t sample_index;
+  int16_t ia_mA;
+  int16_t ib_mA;
+  int16_t ic_mA;
+  int16_t baseline_ia_mA;
+  int16_t baseline_ib_mA;
+  int16_t baseline_ic_mA;
+  uint16_t tim_ccr1;
+  uint16_t tim_ccr2;
+  uint16_t tim_ccr3;
+  uint16_t pwmc_a;
+  uint16_t pwmc_b;
+  uint16_t pwmc_c;
+  uint16_t mc_state;
+  uint16_t current_faults;
+  uint16_t occurred_faults;
+  uint16_t debug_flags;
+} __packed;
+```
+
+Record types:
+
+- `1`: baseline
+- `2`: active_sample
+- `3`: averaged_result
+- `4`: abort
+- `5`: pass
+- `6`: fault_snapshot
+
+All trace fields are little-endian and binary only. Do not rely on printf-style encoding on the STM side.
 
 ## Behaviour
 

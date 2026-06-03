@@ -12,6 +12,8 @@ Component-scoped notes for `components/esc_higher`.
   - `0x30` TELEMETRY (48 bytes)
   - `0x40` BRINGUP (48 bytes)
   - `0x50` DEBUG_TELEMETRY (32 bytes)
+  - `0x60` TRACE_INFO (8 bytes, bring-up trace metadata)
+  - `0x61` TRACE_READ (chunked binary trace reader; request offset/length in the write phase)
 - COMMAND payload encoding:
   - byte0 `seq`, byte1 `opcode`, byte2 `flags`, byte3 `reserved`
   - bytes4..7 `param0` LE i32
@@ -40,4 +42,5 @@ Component-scoped notes for `components/esc_higher`.
 - Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`.
 - `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
 - `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.
+- For bring-up test `102`, the component automatically reads `TRACE_INFO`/`TRACE_READ` after completion, verifies the trace CRC best-effort, and publishes decoded trace text via `bringup_trace_decoded` plus optional `bringup_trace_hex`.
 - Host bring-up commands now carry an explicit test ID. Supported IDs are `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), and `103` (`forced_timer_diff_pwm`); `BRINGUP.test_id` remains the report field.

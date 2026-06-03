@@ -2,6 +2,10 @@
 
 #include "esc_higher_text.h"
 
+#include <cstdarg>
+#include <algorithm>
+#include <cstdio>
+
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
@@ -12,6 +16,7 @@ namespace esc_higher {
 static const char* const TAG = "esc_higher";
 namespace {
 constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
+constexpr uint16_t TRACE_RECORD_CORE_SIZE = 36;
 
 template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
   if (sensor != nullptr)
@@ -21,6 +26,39 @@ template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
 void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
   if (sensor != nullptr)
     sensor->publish_state(value);
+}
+
+const char* bringup_trace_type_to_cstr(uint8_t type) {
+  switch (type) {
+    case 1:
+      return "baseline";
+    case 2:
+      return "sample";
+    case 3:
+      return "avg";
+    case 4:
+      return "abort";
+    case 5:
+      return "pass";
+    case 6:
+      return "fault";
+    default:
+      return "unknown";
+  }
+}
+
+void append_formatted_line(std::string& out, const char* fmt, ...) {
+  char line[256];
+  va_list args;
+  va_start(args, fmt);
+  const int written = std::vsnprintf(line, sizeof(line), fmt, args);
+  va_end(args);
+  if (written <= 0) {
+    return;
+  }
+  const size_t copy_len = static_cast<size_t>(std::min<int>(written, static_cast<int>(sizeof(line) - 1)));
+  out.append(line, copy_len);
+  out.push_back('\n');
 }
 }  // namespace
 
@@ -98,6 +136,235 @@ bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
     return true;
   ESP_LOGW(TAG, "Read reg 0x%02X failed (%s)", reg, i2c_error_to_cstr(err));
   return false;
+}
+
+bool ESCHigherComponent::read_trace_info_(
+  uint16_t* trace_seq,
+  uint16_t* trace_len,
+  uint16_t* record_size,
+  uint16_t* crc16
+) {
+  uint8_t info[8]{0};
+  if (!this->read_register_(REG_TRACE_INFO, info, sizeof(info))) {
+    ESP_LOGW(TAG, "Failed to read TRACE_INFO");
+    return false;
+  }
+
+  if (trace_seq != nullptr)
+    *trace_seq = u16_(info, 0);
+  if (trace_len != nullptr)
+    *trace_len = u16_(info, 2);
+  if (record_size != nullptr)
+    *record_size = u16_(info, 4);
+  if (crc16 != nullptr)
+    *crc16 = u16_(info, 6);
+  return true;
+}
+
+bool ESCHigherComponent::read_trace_chunk_(uint16_t offset, uint8_t length, uint8_t* out) {
+  if (length == 0)
+    return true;
+  uint8_t tx[4]{REG_TRACE_READ, static_cast<uint8_t>(offset & 0xFF), static_cast<uint8_t>((offset >> 8) & 0xFF), length};
+  const i2c::ErrorCode err = this->write_read(tx, sizeof(tx), out, length);
+  if (err == i2c::ERROR_OK)
+    return true;
+  ESP_LOGW(
+    TAG,
+    "TRACE_READ offset=%u len=%u failed (%s)",
+    static_cast<unsigned>(offset),
+    static_cast<unsigned>(length),
+    i2c_error_to_cstr(err)
+  );
+  return false;
+}
+
+uint16_t ESCHigherComponent::crc16_ccitt_false_(const uint8_t* data, size_t len) {
+  uint16_t crc = 0xFFFF;
+  for (size_t i = 0; i < len; i++) {
+    crc ^= static_cast<uint16_t>(data[i]) << 8;
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      if (crc & 0x8000) {
+        crc = static_cast<uint16_t>((crc << 1) ^ 0x1021);
+      } else {
+        crc <<= 1;
+      }
+    }
+  }
+  return crc;
+}
+
+bool ESCHigherComponent::publish_bringup_trace_(
+  uint16_t trace_seq,
+  uint16_t trace_len,
+  uint16_t record_size,
+  uint16_t crc16
+) {
+  if (trace_seq == this->last_bringup_trace_seq_) {
+    return true;
+  }
+
+  if (trace_len == 0) {
+    ESP_LOGI(TAG, "Bring-up trace seq=%u len=0", static_cast<unsigned>(trace_seq));
+    publish_text(this->bringup_trace_decoded_text_sensor_, "");
+    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    this->last_bringup_trace_seq_ = trace_seq;
+    return true;
+  }
+
+  if (record_size < TRACE_RECORD_CORE_SIZE) {
+    ESP_LOGW(
+      TAG,
+      "Bring-up trace seq=%u len=%u record_size=%u smaller than expected %u",
+      static_cast<unsigned>(trace_seq),
+      static_cast<unsigned>(trace_len),
+      static_cast<unsigned>(record_size),
+      static_cast<unsigned>(TRACE_RECORD_CORE_SIZE)
+    );
+    return false;
+  }
+
+  if (trace_len > TRACE_BUFFER_SIZE) {
+    ESP_LOGW(
+      TAG,
+      "Bring-up trace seq=%u reported len=%u exceeds buffer size %u; truncating",
+      static_cast<unsigned>(trace_seq),
+      static_cast<unsigned>(trace_len),
+      static_cast<unsigned>(TRACE_BUFFER_SIZE)
+    );
+    trace_len = TRACE_BUFFER_SIZE;
+  }
+
+  uint8_t trace[TRACE_BUFFER_SIZE]{0};
+  uint16_t offset = 0;
+  while (offset < trace_len) {
+    const uint8_t chunk_len = static_cast<uint8_t>(
+      std::min<uint16_t>(TRACE_READ_CHUNK_SIZE, static_cast<uint16_t>(trace_len - offset))
+    );
+    if (!this->read_trace_chunk_(offset, chunk_len, trace + offset)) {
+      return false;
+    }
+    offset = static_cast<uint16_t>(offset + chunk_len);
+  }
+
+  const uint16_t computed_crc = crc16_ccitt_false_(trace, trace_len);
+  const bool crc_ok = (computed_crc == crc16);
+  if (crc_ok) {
+    ESP_LOGI(
+      TAG,
+      "Bring-up trace seq=%u len=%u record_size=%u crc=0x%04X verified",
+      static_cast<unsigned>(trace_seq),
+      static_cast<unsigned>(trace_len),
+      static_cast<unsigned>(record_size),
+      static_cast<unsigned>(crc16)
+    );
+  } else {
+    ESP_LOGW(
+      TAG,
+      "Bring-up trace seq=%u len=%u record_size=%u crc mismatch reported=0x%04X computed=0x%04X",
+      static_cast<unsigned>(trace_seq),
+      static_cast<unsigned>(trace_len),
+      static_cast<unsigned>(record_size),
+      static_cast<unsigned>(crc16),
+      static_cast<unsigned>(computed_crc)
+    );
+  }
+
+  std::string decoded;
+  decoded.reserve(128 + (trace_len / record_size + 1) * 128);
+  append_formatted_line(
+    decoded,
+    "seq=%u len=%u size=%u crc=0x%04X calc=0x%04X crc_ok=%s",
+    static_cast<unsigned>(trace_seq),
+    static_cast<unsigned>(trace_len),
+    static_cast<unsigned>(record_size),
+    static_cast<unsigned>(crc16),
+    static_cast<unsigned>(computed_crc),
+    crc_ok ? "yes" : "no"
+  );
+  append_formatted_line(
+    decoded,
+    "type,vec,idx,ia,ib,ic,bia,bib,bic,ccr1,ccr2,ccr3,pwmc_a,pwmc_b,pwmc_c,mc,cf,of,flags"
+  );
+
+  const uint16_t record_count = static_cast<uint16_t>(trace_len / record_size);
+  const uint16_t decoded_bytes = static_cast<uint16_t>(record_count * record_size);
+  if (decoded_bytes != trace_len) {
+    ESP_LOGW(
+      TAG,
+      "Bring-up trace seq=%u len=%u is not a whole number of records; ignoring %u trailing byte(s)",
+      static_cast<unsigned>(trace_seq),
+      static_cast<unsigned>(trace_len),
+      static_cast<unsigned>(trace_len - decoded_bytes)
+    );
+  }
+
+  for (uint16_t index = 0; index < record_count; index++) {
+    const uint8_t* rec = trace + static_cast<size_t>(index) * record_size;
+    const uint8_t type = rec[0];
+    const char* type_name = bringup_trace_type_to_cstr(type);
+    char line[256];
+    const int written = std::snprintf(
+      line,
+      sizeof(line),
+      "%s,%u,%u,%d,%d,%d,%d,%d,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,0x%04X",
+      type_name,
+      static_cast<unsigned>(rec[1]),
+      static_cast<unsigned>(u16_(rec, 2)),
+      static_cast<int>(i16_(rec, 4)),
+      static_cast<int>(i16_(rec, 6)),
+      static_cast<int>(i16_(rec, 8)),
+      static_cast<int>(i16_(rec, 10)),
+      static_cast<int>(i16_(rec, 12)),
+      static_cast<int>(i16_(rec, 14)),
+      static_cast<unsigned>(u16_(rec, 16)),
+      static_cast<unsigned>(u16_(rec, 18)),
+      static_cast<unsigned>(u16_(rec, 20)),
+      static_cast<unsigned>(u16_(rec, 22)),
+      static_cast<unsigned>(u16_(rec, 24)),
+      static_cast<unsigned>(u16_(rec, 26)),
+      static_cast<unsigned>(u16_(rec, 28)),
+      static_cast<unsigned>(u16_(rec, 30)),
+      static_cast<unsigned>(u16_(rec, 32)),
+      static_cast<unsigned>(u16_(rec, 34))
+    );
+    if (written <= 0) {
+      ESP_LOGW(TAG, "Failed to format bring-up trace record %u", static_cast<unsigned>(index));
+      continue;
+    }
+    decoded.append(line, static_cast<size_t>(written));
+    decoded.push_back('\n');
+    ESP_LOGI(TAG, "%s", line);
+  }
+
+  std::string hex;
+  hex.reserve(4 + static_cast<size_t>(trace_len) * 3);
+  for (uint16_t offset_bytes = 0; offset_bytes < trace_len; offset_bytes += 16) {
+    char line[80];
+    int pos = std::snprintf(line, sizeof(line), "%04X:", static_cast<unsigned>(offset_bytes));
+    for (uint16_t i = 0; i < 16 && (offset_bytes + i) < trace_len; i++) {
+      if (pos <= 0 || static_cast<size_t>(pos) >= sizeof(line)) {
+        break;
+      }
+      const int written = std::snprintf(
+        line + pos,
+        sizeof(line) - static_cast<size_t>(pos),
+        " %02X",
+        trace[offset_bytes + i]
+      );
+      if (written <= 0) {
+        break;
+      }
+      pos += written;
+    }
+    const size_t copy_len = static_cast<size_t>(std::min<int>(pos, static_cast<int>(sizeof(line) - 1)));
+    hex.append(line, copy_len);
+    hex.push_back('\n');
+  }
+
+  publish_text(this->bringup_trace_decoded_text_sensor_, decoded);
+  publish_text(this->bringup_trace_hex_text_sensor_, hex);
+  this->last_bringup_trace_seq_ = trace_seq;
+  return true;
 }
 
 bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
@@ -355,6 +622,21 @@ void ESCHigherComponent::update() {
       publish_sensor(bringup_attempt_count_sensor_, u16_(bringup, 42));
       publish_sensor(bringup_debug0_sensor_, i16_(bringup, 44));
       publish_sensor(bringup_debug1_sensor_, i16_(bringup, 46));
+
+      const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
+      if (bringup[2] == BRINGUP_TEST_BRIDGE_STATIC_VECTOR && bringup_terminal) {
+        uint16_t trace_seq = 0;
+        uint16_t trace_len = 0;
+        uint16_t record_size = 0;
+        uint16_t crc16 = 0;
+        if (this->read_trace_info_(&trace_seq, &trace_len, &record_size, &crc16)) {
+          if (!this->publish_bringup_trace_(trace_seq, trace_len, record_size, crc16)) {
+            all_ok = false;
+          }
+        } else {
+          all_ok = false;
+        }
+      }
     } else {
       all_ok = false;
     }

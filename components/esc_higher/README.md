@@ -170,10 +170,16 @@ esc_higher:
     name: "Bringup Current Faults Text"
   bringup_occurred_faults_text:
     name: "Bringup Occurred Faults Text"
+  bringup_trace_decoded:
+    name: "Bringup Trace Decoded"
+  # bringup_trace_hex:
+  #   name: "Bringup Trace Hex"
   bringup_test_select:
     name: "Bringup Test"
   ## Defaults to full_spin_sequence / 101.
   ## Option bit0 enables forced_timer_diff_pwm. Only use with motor disconnected or with a current-limited bench supply.
+  ## After test 102 completes, the component automatically reads TRACE_INFO / TRACE_READ
+  ## and publishes a decoded trace blob plus optional hex dump.
 
   ## BRINGUP.test_id is a report field; bringup_test_select chooses which bringup test the run button starts.
 
@@ -239,6 +245,7 @@ Notes:
 - `run_bridge_static_vector_test` sends opcode `0x09` with `param0=102`, `param1=50`, and `param2=bringup_test_options`.
 - `run_forced_timer_diff_pwm_test` sends opcode `0x09` with `param0=103`, `param1=1000`, and `param2=bringup_test_options`.
 - `bringup_test_options: 1` enables the forced timer differential PWM test path. Use only with motor disconnected or with a current-limited bench supply.
+- After a bring-up run with test ID `102`, the component reads `TRACE_INFO` (`0x60`) and `TRACE_READ` (`0x61`) automatically, verifies the trace CRC if possible, and publishes the decoded trace as `bringup_trace_decoded` plus optional `bringup_trace_hex`.
 - Set `disable_watchdog: true` to disable the command watchdog at startup; otherwise the component programs `watchdog_timeout_ms` (default `500 ms`).
 - `watchdog_ms_left` publishes raw milliseconds from `STATUS[12]`.
 - Command result is observed through STATUS fields (`last_cmd_seq`, `last_cmd_error`) on subsequent polls.

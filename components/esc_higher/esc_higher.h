@@ -349,15 +349,25 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     bringup_occurred_faults_text_sensor_ = s;
   }
+  void set_bringup_trace_decoded_text_sensor(text_sensor::TextSensor* s) {
+    bringup_trace_decoded_text_sensor_ = s;
+  }
+  void set_bringup_trace_hex_text_sensor(text_sensor::TextSensor* s) {
+    bringup_trace_hex_text_sensor_ = s;
+  }
   void set_bringup_test_select(select::Select* s) {
     bringup_test_select_ = s;
   }
 
  protected:
   bool read_register_(uint8_t reg, uint8_t* out, size_t len);
+  bool read_trace_info_(uint16_t* trace_seq, uint16_t* trace_len, uint16_t* record_size, uint16_t* crc16);
+  bool read_trace_chunk_(uint16_t offset, uint8_t length, uint8_t* out);
+  bool publish_bringup_trace_(uint16_t trace_seq, uint16_t trace_len, uint16_t record_size, uint16_t crc16);
   bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2);
   bool initialize_();
   bool configure_watchdog_();
+  static uint16_t crc16_ccitt_false_(const uint8_t* data, size_t len);
 
   static uint16_t u16_(const uint8_t* b, size_t off) {
     return static_cast<uint16_t>(b[off]) | (static_cast<uint16_t>(b[off + 1]) << 8);
@@ -383,6 +393,11 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_TELEMETRY = 0x30;
   static constexpr uint8_t REG_BRINGUP = 0x40;
   static constexpr uint8_t REG_DEBUG_TELEMETRY = 0x50;
+  static constexpr uint8_t REG_TRACE_INFO = 0x60;
+  static constexpr uint8_t REG_TRACE_READ = 0x61;
+  static constexpr uint16_t TRACE_BUFFER_SIZE = 1024;
+  static constexpr uint16_t TRACE_RECORD_SIZE = 36;
+  static constexpr uint8_t TRACE_READ_CHUNK_SIZE = 64;
 
   static constexpr uint8_t OPCODE_START = 0x01;
   static constexpr uint8_t OPCODE_STOP = 0x02;
@@ -496,7 +511,11 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_occurred_faults_text_sensor_{nullptr};
+  text_sensor::TextSensor* bringup_trace_decoded_text_sensor_{nullptr};
+  text_sensor::TextSensor* bringup_trace_hex_text_sensor_{nullptr};
   select::Select* bringup_test_select_{nullptr};
+
+  uint16_t last_bringup_trace_seq_{0xFFFF};
 };
 
 }  // namespace esc_higher
