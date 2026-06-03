@@ -27,25 +27,6 @@ void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
     sensor->publish_state(value);
 }
 
-const char* bringup_trace_type_to_cstr(uint8_t type) {
-  switch (type) {
-    case 1:
-      return "baseline";
-    case 2:
-      return "sample";
-    case 3:
-      return "avg";
-    case 4:
-      return "abort";
-    case 5:
-      return "pass";
-    case 6:
-      return "fault";
-    default:
-      return "unknown";
-  }
-}
-
 void append_formatted_line(std::string& out, const char* fmt, ...) {
   char line[256];
   va_list args;
@@ -60,7 +41,7 @@ void append_formatted_line(std::string& out, const char* fmt, ...) {
   out.push_back('\n');
 }
 
-void log_hex_dump(const uint8_t* data, size_t len) {
+static void log_debug_hex(const uint8_t* data, size_t len) {
   constexpr size_t BYTES_PER_LINE = 16;
   char line[3 * BYTES_PER_LINE + 32];
 
@@ -68,7 +49,7 @@ void log_hex_dump(const uint8_t* data, size_t len) {
     int pos = std::snprintf(
       line,
       sizeof(line),
-      "Bring-up trace hex[%04u]:",
+      "Debug log hex[%04u]:",
       static_cast<unsigned>(offset)
     );
     if (pos < 0) {
@@ -87,7 +68,7 @@ void log_hex_dump(const uint8_t* data, size_t len) {
         break;
       pos += written;
     }
-    ESP_LOGI(TAG, "%s", line);
+    ESP_LOGD(TAG, "%s", line);
   }
 }
 }  // namespace
@@ -151,9 +132,7 @@ void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
-  this->trace_required_missing_ = false;
-  this->trace_read_failed_ = false;
-  this->trace_dump_not_supported_logged_ = false;
+  this->debug_log_read_failed_ = false;
   this->last_bringup_report_seq_ = 0xFF;
   if (this->bringup_test_select_ != nullptr) {
     this->bringup_test_select_->publish_state(
@@ -172,40 +151,46 @@ bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
   return false;
 }
 
-bool ESCHigherComponent::read_trace_info_(
-  uint16_t* trace_seq,
-  uint16_t* trace_len,
-  uint16_t* record_size,
+bool ESCHigherComponent::read_debug_info_(
+  uint32_t* debug_seq,
+  uint16_t* used_len,
+  uint16_t* export_len,
+  uint16_t* capacity,
+  uint16_t* dropped,
   uint16_t* crc16
 ) {
-  uint8_t info[8]{0};
-  uint8_t reg = REG_TRACE_INFO;
+  uint8_t info[16]{0};
+  uint8_t reg = REG_DEBUG_INFO;
   if (this->write_read(&reg, 1, info, sizeof(info)) != i2c::ERROR_OK) {
-    ESP_LOGE(TAG, "Failed to read TRACE_INFO");
+    ESP_LOGE(TAG, "Failed to read DEBUG_INFO");
     return false;
   }
 
-  if (trace_seq != nullptr)
-    *trace_seq = u16_(info, 0);
-  if (trace_len != nullptr)
-    *trace_len = u16_(info, 2);
-  if (record_size != nullptr)
-    *record_size = u16_(info, 4);
+  if (debug_seq != nullptr)
+    *debug_seq = u32_(info, 2);
+  if (used_len != nullptr)
+    *used_len = u16_(info, 6);
+  if (export_len != nullptr)
+    *export_len = u16_(info, 8);
+  if (capacity != nullptr)
+    *capacity = u16_(info, 10);
+  if (dropped != nullptr)
+    *dropped = u16_(info, 12);
   if (crc16 != nullptr)
-    *crc16 = u16_(info, 6);
+    *crc16 = u16_(info, 14);
   return true;
 }
 
-bool ESCHigherComponent::read_trace_chunk_(uint16_t offset, uint8_t length, uint8_t* out) {
+bool ESCHigherComponent::read_debug_chunk_(uint16_t offset, uint8_t length, uint8_t* out) {
   if (length == 0)
     return true;
-  uint8_t tx[4]{REG_TRACE_READ, static_cast<uint8_t>(offset & 0xFF), static_cast<uint8_t>((offset >> 8) & 0xFF), length};
+  uint8_t tx[4]{REG_DEBUG_READ, static_cast<uint8_t>(offset & 0xFF), static_cast<uint8_t>((offset >> 8) & 0xFF), length};
   const i2c::ErrorCode err = this->write_read(tx, sizeof(tx), out, length);
   if (err == i2c::ERROR_OK)
     return true;
   ESP_LOGE(
     TAG,
-    "TRACE_READ offset=%u len=%u failed (%s)",
+    "DEBUG_READ offset=%u len=%u failed (%s)",
     static_cast<unsigned>(offset),
     static_cast<unsigned>(length),
     i2c_error_to_cstr(err)
@@ -228,168 +213,164 @@ uint16_t ESCHigherComponent::crc16_ccitt_false_(const uint8_t* data, size_t len)
   return crc;
 }
 
-bool ESCHigherComponent::publish_bringup_trace_(
-  uint16_t trace_seq,
-  uint16_t trace_len,
-  uint16_t record_size,
+bool ESCHigherComponent::publish_debug_log_(
+  uint32_t debug_seq,
+  uint16_t export_len,
+  uint16_t dropped,
   uint16_t crc16
 ) {
-  this->trace_read_failed_ = false;
+  this->debug_log_read_failed_ = false;
 
-  if (trace_len == 0) {
-    ESP_LOGI(TAG, "Bring-up trace seq=%u len=0", static_cast<unsigned>(trace_seq));
+  if (export_len == 0) {
+    ESP_LOGI(TAG, "Debug log seq=%u len=0", static_cast<unsigned>(debug_seq));
     char summary[240];
     std::snprintf(
       summary,
       sizeof(summary),
-      "seq=%u len=0 crc=ok records=0 last=none vec=0 ia=0 ib=0 ic=0 flags=0x0000",
-      static_cast<unsigned>(trace_seq)
+      "seq=%u len=0 crc=ok records=0 dropped=%u last=none",
+      static_cast<unsigned>(debug_seq),
+      static_cast<unsigned>(dropped)
     );
-    publish_text(this->bringup_trace_decoded_text_sensor_, summary);
-    publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
+    publish_text(this->debug_log_text_sensor_, summary);
     return true;
   }
 
-  if (record_size < TRACE_RECORD_SIZE) {
-    ESP_LOGE(
-      TAG,
-      "Bring-up trace seq=%u len=%u record_size=%u smaller than expected %u",
-      static_cast<unsigned>(trace_seq),
-      static_cast<unsigned>(trace_len),
-      static_cast<unsigned>(record_size),
-      static_cast<unsigned>(TRACE_RECORD_SIZE)
-    );
-    publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
-    publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
-    this->trace_read_failed_ = true;
-    return false;
-  }
-
-  if (trace_len > TRACE_BUFFER_SIZE) {
+  if (export_len > DEBUG_BUFFER_SIZE) {
     ESP_LOGW(
       TAG,
-      "Bring-up trace seq=%u reported len=%u exceeds buffer size %u; truncating",
-      static_cast<unsigned>(trace_seq),
-      static_cast<unsigned>(trace_len),
-      static_cast<unsigned>(TRACE_BUFFER_SIZE)
+      "Debug log seq=%u reported len=%u exceeds buffer size %u; truncating",
+      static_cast<unsigned>(debug_seq),
+      static_cast<unsigned>(export_len),
+      static_cast<unsigned>(DEBUG_BUFFER_SIZE)
     );
-    trace_len = TRACE_BUFFER_SIZE;
+    export_len = DEBUG_BUFFER_SIZE;
   }
 
-  uint8_t trace[TRACE_BUFFER_SIZE]{0};
+  uint8_t buffer[DEBUG_BUFFER_SIZE]{0};
   uint16_t offset = 0;
-  while (offset < trace_len) {
+  while (offset < export_len) {
     const uint16_t block_limit = this->max_block_len_ != 0 ? this->max_block_len_ : 16;
-    const uint16_t conservative_limit = std::min<uint16_t>(TRACE_READ_CHUNK_SIZE, block_limit);
+    const uint16_t chunk_size = std::min<uint16_t>(DEBUG_READ_CHUNK_SIZE, block_limit);
     const uint8_t chunk_len = static_cast<uint8_t>(
-      std::min<uint16_t>(conservative_limit, static_cast<uint16_t>(trace_len - offset))
+      std::min<uint16_t>(chunk_size, static_cast<uint16_t>(export_len - offset))
     );
-    if (!this->read_trace_chunk_(offset, chunk_len, trace + offset)) {
-      publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
-      publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
-      this->trace_read_failed_ = true;
+    if (!this->read_debug_chunk_(offset, chunk_len, buffer + offset)) {
+      publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
+      this->debug_log_read_failed_ = true;
       return false;
     }
     offset = static_cast<uint16_t>(offset + chunk_len);
   }
 
-  const uint16_t computed_crc = crc16_ccitt_false_(trace, trace_len);
-  ESP_LOGI(TAG, "Bring-up trace raw hex dump (%u bytes):", static_cast<unsigned>(trace_len));
-  log_hex_dump(trace, trace_len);
+  const uint16_t computed_crc = crc16_ccitt_false_(buffer, export_len);
   const bool crc_ok = (computed_crc == crc16);
-  if (crc_ok) {
-    ESP_LOGI(
-      TAG,
-      "Bring-up trace seq=%u len=%u record_size=%u crc=0x%04X verified",
-      static_cast<unsigned>(trace_seq),
-      static_cast<unsigned>(trace_len),
-      static_cast<unsigned>(record_size),
-      static_cast<unsigned>(crc16)
-    );
-  } else {
+  if (!crc_ok) {
     ESP_LOGE(
       TAG,
-      "Bring-up trace seq=%u len=%u record_size=%u crc mismatch reported=0x%04X computed=0x%04X",
-      static_cast<unsigned>(trace_seq),
-      static_cast<unsigned>(trace_len),
-      static_cast<unsigned>(record_size),
+      "Debug log seq=%u len=%u crc mismatch reported=0x%04X computed=0x%04X",
+      static_cast<unsigned>(debug_seq),
+      static_cast<unsigned>(export_len),
       static_cast<unsigned>(crc16),
       static_cast<unsigned>(computed_crc)
     );
-    publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace CRC mismatch");
-    publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
-    this->trace_read_failed_ = true;
+    publish_text(this->debug_log_text_sensor_, "ERROR: debug log CRC mismatch");
+    this->debug_log_read_failed_ = true;
     return false;
-  }
-
-  const uint16_t record_count = static_cast<uint16_t>(trace_len / record_size);
-  const uint16_t decoded_bytes = static_cast<uint16_t>(record_count * record_size);
-  if (decoded_bytes != trace_len) {
-    ESP_LOGW(
+  } else {
+    ESP_LOGI(
       TAG,
-      "Bring-up trace seq=%u len=%u is not a whole number of records; ignoring %u trailing byte(s)",
-      static_cast<unsigned>(trace_seq),
-      static_cast<unsigned>(trace_len),
-      static_cast<unsigned>(trace_len - decoded_bytes)
+      "Debug log seq=%u len=%u crc=0x%04X verified",
+      static_cast<unsigned>(debug_seq),
+      static_cast<unsigned>(export_len),
+      static_cast<unsigned>(crc16)
     );
   }
 
-  for (uint16_t index = 0; index < record_count; index++) {
-    const uint8_t* rec = trace + static_cast<size_t>(index) * record_size;
-    const uint8_t type = rec[0];
-    const char* type_name = bringup_trace_type_to_cstr(type);
-    char line[256];
-    const int written = std::snprintf(
-      line,
-      sizeof(line),
-      "%s,%u,%u,%d,%d,%d,%d,%d,%d,%u,%u,%u,%u,%u,%u,%u,%u,%u,0x%04X",
-      type_name,
-      static_cast<unsigned>(rec[1]),
-      static_cast<unsigned>(u16_(rec, 2)),
-      static_cast<int>(i16_(rec, 4)),
-      static_cast<int>(i16_(rec, 6)),
-      static_cast<int>(i16_(rec, 8)),
-      static_cast<int>(i16_(rec, 10)),
-      static_cast<int>(i16_(rec, 12)),
-      static_cast<int>(i16_(rec, 14)),
-      static_cast<unsigned>(u16_(rec, 16)),
-      static_cast<unsigned>(u16_(rec, 18)),
-      static_cast<unsigned>(u16_(rec, 20)),
-      static_cast<unsigned>(u16_(rec, 22)),
-      static_cast<unsigned>(u16_(rec, 24)),
-      static_cast<unsigned>(u16_(rec, 26)),
-      static_cast<unsigned>(u16_(rec, 28)),
-      static_cast<unsigned>(u16_(rec, 30)),
-      static_cast<unsigned>(u16_(rec, 32)),
-      static_cast<unsigned>(u16_(rec, 34))
-    );
-    if (written <= 0) {
-      ESP_LOGW(TAG, "Failed to format bring-up trace record %u", static_cast<unsigned>(index));
-      continue;
+  constexpr uint16_t RECORD_HEADER_SIZE = 16;
+  size_t pos = 0;
+  uint16_t record_count = 0;
+  const char* last_event_name = "none";
+
+  while (pos + RECORD_HEADER_SIZE <= export_len) {
+    const uint16_t magic = u16_(buffer, pos);
+    if (magic != 0xD617) {
+      ESP_LOGW(TAG, "Debug log seq=%u: bad magic 0x%04X at offset %u", static_cast<unsigned>(debug_seq), magic, static_cast<unsigned>(pos));
+      publish_text(this->debug_log_text_sensor_, "ERROR: debug log bad record magic");
+      this->debug_log_read_failed_ = true;
+      return false;
     }
-    ESP_LOGI(TAG, "%s", line);
-    if (index + 1 == record_count) {
-      const char* summary_type = bringup_trace_type_to_cstr(type);
-      char summary[240];
-      std::snprintf(
-        summary,
-        sizeof(summary),
-        "seq=%u len=%u crc=%s records=%u last=%s vec=%u ia=%d ib=%d ic=%d flags=0x%04X",
-        static_cast<unsigned>(trace_seq),
-        static_cast<unsigned>(trace_len),
-        crc_ok ? "ok" : "bad",
-        static_cast<unsigned>(record_count),
-        summary_type,
-        static_cast<unsigned>(rec[1]),
-        static_cast<int>(i16_(rec, 4)),
-        static_cast<int>(i16_(rec, 6)),
-        static_cast<int>(i16_(rec, 8)),
-        static_cast<unsigned>(u16_(rec, 34))
+
+    const uint8_t version = buffer[pos + 2];
+    const uint8_t header_len = buffer[pos + 3];
+    const uint16_t record_len = u16_(buffer, pos + 4);
+    const uint16_t event_id = u16_(buffer, pos + 6);
+    const uint32_t record_seq = u32_(buffer, pos + 8);
+    const uint32_t tick_ms = u32_(buffer, pos + 12);
+
+    if (record_len < RECORD_HEADER_SIZE || pos + record_len > export_len) {
+      ESP_LOGW(TAG, "Debug log seq=%u: record_len=%u invalid at offset %u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(record_len), static_cast<unsigned>(pos));
+      publish_text(this->debug_log_text_sensor_, "ERROR: debug log malformed record");
+      this->debug_log_read_failed_ = true;
+      return false;
+    }
+
+    const size_t payload_off = std::max(static_cast<size_t>(header_len), RECORD_HEADER_SIZE);
+    const size_t payload_len = record_len - payload_off;
+
+    const char* event_name = debug_event_id_to_cstr(event_id);
+    if (event_name != nullptr) {
+      ESP_LOGI(
+        TAG,
+        "Debug record[%u] event=0x%04X(%s) seq=%u tick=%u version=%u payload=%u",
+        record_count,
+        static_cast<unsigned>(event_id),
+        event_name,
+        static_cast<unsigned>(record_seq),
+        static_cast<unsigned>(tick_ms),
+        static_cast<unsigned>(version),
+        static_cast<unsigned>(payload_len)
       );
-      publish_text(this->bringup_trace_decoded_text_sensor_, summary);
-      publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
+      if (payload_len > 0) {
+        log_debug_hex(buffer + pos + payload_off, payload_len);
+      }
+      last_event_name = event_name;
+    } else {
+      ESP_LOGI(
+        TAG,
+        "Debug record[%u] event=0x%04X(unknown) seq=%u tick=%u version=%u payload=%u",
+        record_count,
+        static_cast<unsigned>(event_id),
+        static_cast<unsigned>(record_seq),
+        static_cast<unsigned>(tick_ms),
+        static_cast<unsigned>(version),
+        static_cast<unsigned>(payload_len)
+      );
+      if (payload_len > 0) {
+        log_debug_hex(buffer + pos + payload_off, payload_len);
+      }
+      last_event_name = "unknown";
     }
+
+    pos += record_len;
+    record_count++;
   }
+
+  if (pos != export_len) {
+    ESP_LOGW(TAG, "Debug log seq=%u: %u trailing bytes after last record", static_cast<unsigned>(debug_seq), static_cast<unsigned>(export_len - pos));
+  }
+
+  char summary[240];
+  std::snprintf(
+    summary,
+    sizeof(summary),
+    "seq=%u len=%u crc=ok records=%u dropped=%u last=%s",
+    static_cast<unsigned>(debug_seq),
+    static_cast<unsigned>(export_len),
+    static_cast<unsigned>(record_count),
+    static_cast<unsigned>(dropped),
+    last_event_name
+  );
+  publish_text(this->debug_log_text_sensor_, summary);
   return true;
 }
 
@@ -446,7 +427,7 @@ bool ESCHigherComponent::initialize_() {
 
   this->max_block_len_ = id[5];
   this->capabilities_ = u16_(id, 6);
-  this->trace_supported_ = (this->capabilities_ & CAP_TRACE_DUMP) != 0;
+  this->debug_log_supported_ = (this->capabilities_ & CAP_DEBUG_LOG) != 0;
 
   ESP_LOGI(
     TAG,
@@ -460,18 +441,8 @@ bool ESCHigherComponent::initialize_() {
     this->capabilities_
   );
 
-  if (!this->trace_supported_ && !this->trace_dump_not_supported_logged_) {
-    ESP_LOGE(
-      TAG,
-      "Trace dump required but STM does not advertise CAP_TRACE_DUMP; not reading 0x60/0x61 to avoid wedging I2C"
-    );
-    publish_text(
-      this->bringup_trace_decoded_text_sensor_,
-      "ERROR: trace required but STM does not advertise CAP_TRACE_DUMP"
-    );
-    publish_text(this->bringup_trace_hex_text_sensor_, "");
-    this->trace_required_missing_ = true;
-    this->trace_dump_not_supported_logged_ = true;
+  if (this->debug_log_supported_) {
+    ESP_LOGD(TAG, "CAP_DEBUG_LOG detected");
   }
 
   return this->configure_watchdog_();
@@ -669,30 +640,37 @@ void ESCHigherComponent::update() {
 
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
+        ESP_LOGI(
+          TAG,
+          "Bring-up terminal report seq=%u state=%u result=%u",
+          static_cast<unsigned>(bringup[0]),
+          static_cast<unsigned>(bringup[4]),
+          static_cast<unsigned>(bringup[5])
+        );
         if (this->last_bringup_report_seq_ != bringup[0]) {
           this->last_bringup_report_seq_ = bringup[0];
-          if (!this->trace_supported_) {
-            ESP_LOGE(
-              TAG,
-              "Trace dump required but STM does not advertise CAP_TRACE_DUMP; not reading 0x60/0x61 to avoid wedging I2C"
-            );
-            publish_text(
-              this->bringup_trace_decoded_text_sensor_,
-              "ERROR: trace required but STM does not advertise CAP_TRACE_DUMP"
-            );
-            publish_text(this->bringup_trace_hex_text_sensor_, "");
-            this->trace_required_missing_ = true;
+          if (!this->debug_log_supported_) {
+            ESP_LOGW(TAG, "CAP_DEBUG_LOG not set on this firmware; skipping debug log read");
           } else {
-            uint16_t trace_seq = 0;
-            uint16_t trace_len = 0;
-            uint16_t record_size = 0;
+            uint32_t debug_seq = 0;
+            uint16_t used_len = 0;
+            uint16_t export_len = 0;
+            uint16_t capacity = 0;
+            uint16_t dropped = 0;
             uint16_t crc16 = 0;
-            if (this->read_trace_info_(&trace_seq, &trace_len, &record_size, &crc16)) {
-              (void) this->publish_bringup_trace_(trace_seq, trace_len, record_size, crc16);
+            if (this->read_debug_info_(&debug_seq, &used_len, &export_len, &capacity, &dropped, &crc16)) {
+              if (export_len > 0) {
+                ESP_LOGI(TAG, "Debug log available: seq=%u export_len=%u dropped=%u capacity=%u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(export_len), static_cast<unsigned>(dropped), static_cast<unsigned>(capacity));
+                (void) this->publish_debug_log_(debug_seq, export_len, dropped, crc16);
+              } else {
+                ESP_LOGI(TAG, "Debug log empty (export_len=0)");
+                char summary[240];
+                std::snprintf(summary, sizeof(summary), "seq=%u len=0 crc=ok records=0 dropped=%u last=none", static_cast<unsigned>(debug_seq), static_cast<unsigned>(dropped));
+                publish_text(this->debug_log_text_sensor_, summary);
+              }
             } else {
-              publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
-              publish_text(this->bringup_trace_hex_text_sensor_, "");
-              this->trace_read_failed_ = true;
+              publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
+          this->debug_log_read_failed_ = true;
             }
           }
         }
@@ -722,7 +700,7 @@ void ESCHigherComponent::update() {
     }
   }
 
-  if (this->trace_required_missing_ || this->trace_read_failed_)
+  if (this->debug_log_read_failed_)
     all_ok = false;
 
   if (all_ok)

@@ -349,11 +349,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     bringup_occurred_faults_text_sensor_ = s;
   }
-  void set_bringup_trace_decoded_text_sensor(text_sensor::TextSensor* s) {
-    bringup_trace_decoded_text_sensor_ = s;
-  }
-  void set_bringup_trace_hex_text_sensor(text_sensor::TextSensor* s) {
-    bringup_trace_hex_text_sensor_ = s;
+  void set_debug_log_text_sensor(text_sensor::TextSensor* s) {
+    debug_log_text_sensor_ = s;
   }
   void set_bringup_test_select(select::Select* s) {
     bringup_test_select_ = s;
@@ -361,9 +358,10 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
 
  protected:
   bool read_register_(uint8_t reg, uint8_t* out, size_t len);
-  bool read_trace_info_(uint16_t* trace_seq, uint16_t* trace_len, uint16_t* record_size, uint16_t* crc16);
-  bool read_trace_chunk_(uint16_t offset, uint8_t length, uint8_t* out);
-  bool publish_bringup_trace_(uint16_t trace_seq, uint16_t trace_len, uint16_t record_size, uint16_t crc16);
+  bool read_debug_info_(uint32_t* debug_seq, uint16_t* used_len, uint16_t* export_len, uint16_t* capacity,
+                        uint16_t* dropped, uint16_t* crc16);
+  bool read_debug_chunk_(uint16_t offset, uint8_t length, uint8_t* out);
+  bool publish_debug_log_(uint32_t debug_seq, uint16_t export_len, uint16_t dropped, uint16_t crc16);
   bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2);
   bool initialize_();
   bool configure_watchdog_();
@@ -393,12 +391,12 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_TELEMETRY = 0x30;
   static constexpr uint8_t REG_BRINGUP = 0x40;
   static constexpr uint8_t REG_DEBUG_TELEMETRY = 0x50;
-  static constexpr uint8_t REG_TRACE_INFO = 0x60;
-  static constexpr uint8_t REG_TRACE_READ = 0x61;
-  static constexpr uint16_t CAP_TRACE_DUMP = 1u << 6;
-  static constexpr uint16_t TRACE_BUFFER_SIZE = 1024;
-  static constexpr uint16_t TRACE_RECORD_SIZE = 36;
-  static constexpr uint8_t TRACE_READ_CHUNK_SIZE = 64;
+  static constexpr uint8_t REG_DEBUG_INFO = 0x70;
+  static constexpr uint8_t REG_DEBUG_READ = 0x71;
+  static constexpr uint8_t REG_DEBUG_CTRL = 0x72;
+  static constexpr uint16_t CAP_DEBUG_LOG = 1u << 7;
+  static constexpr uint16_t DEBUG_BUFFER_SIZE = 2048;
+  static constexpr uint8_t DEBUG_READ_CHUNK_SIZE = 64;
 
   static constexpr uint8_t OPCODE_START = 0x01;
   static constexpr uint8_t OPCODE_STOP = 0x02;
@@ -426,10 +424,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t next_init_retry_ms_{0};
   uint16_t capabilities_{0};
   uint8_t max_block_len_{0};
-  bool trace_supported_{false};
-  bool trace_required_missing_{false};
-  bool trace_read_failed_{false};
-  bool trace_dump_not_supported_logged_{false};
+  bool debug_log_supported_{false};
+  bool debug_log_read_failed_{false};
   uint8_t last_bringup_report_seq_{0xFF};
 
   sensor::Sensor* proto_major_sensor_{nullptr};
@@ -519,8 +515,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_occurred_faults_text_sensor_{nullptr};
-  text_sensor::TextSensor* bringup_trace_decoded_text_sensor_{nullptr};
-  text_sensor::TextSensor* bringup_trace_hex_text_sensor_{nullptr};
+  text_sensor::TextSensor* debug_log_text_sensor_{nullptr};
   select::Select* bringup_test_select_{nullptr};
 };
 
