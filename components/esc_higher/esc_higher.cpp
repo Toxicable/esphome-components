@@ -123,7 +123,7 @@ void ESCHigherComponent::setup() {
   this->trace_required_missing_ = false;
   this->trace_read_failed_ = false;
   this->trace_dump_not_supported_logged_ = false;
-  this->bringup_seq_for_trace_attempt_ = 0xFF;
+  this->last_bringup_report_seq_ = 0xFF;
   if (this->bringup_test_select_ != nullptr) {
     this->bringup_test_select_->publish_state(
       this->bringup_test_id_ == BRINGUP_TEST_BRIDGE_STATIC_VECTOR   ? "bridge_static_vector_test" :
@@ -203,16 +203,19 @@ bool ESCHigherComponent::publish_bringup_trace_(
   uint16_t record_size,
   uint16_t crc16
 ) {
-  if (trace_seq == this->last_bringup_trace_seq_) {
-    return true;
-  }
-  this->last_bringup_trace_seq_ = trace_seq;
   this->trace_read_failed_ = false;
 
   if (trace_len == 0) {
     ESP_LOGI(TAG, "Bring-up trace seq=%u len=0", static_cast<unsigned>(trace_seq));
-    publish_text(this->bringup_trace_decoded_text_sensor_, "");
-    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    char summary[240];
+    std::snprintf(
+      summary,
+      sizeof(summary),
+      "seq=%u len=0 crc=ok records=0 last=none vec=0 ia=0 ib=0 ic=0 flags=0x0000",
+      static_cast<unsigned>(trace_seq)
+    );
+    publish_text(this->bringup_trace_decoded_text_sensor_, summary);
+    publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
     return true;
   }
 
@@ -226,7 +229,7 @@ bool ESCHigherComponent::publish_bringup_trace_(
       static_cast<unsigned>(TRACE_RECORD_SIZE)
     );
     publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
-    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
     this->trace_read_failed_ = true;
     return false;
   }
@@ -252,7 +255,7 @@ bool ESCHigherComponent::publish_bringup_trace_(
     );
     if (!this->read_trace_chunk_(offset, chunk_len, trace + offset)) {
       publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
-      publish_text(this->bringup_trace_hex_text_sensor_, "");
+      publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
       this->trace_read_failed_ = true;
       return false;
     }
@@ -281,27 +284,10 @@ bool ESCHigherComponent::publish_bringup_trace_(
       static_cast<unsigned>(computed_crc)
     );
     publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace CRC mismatch");
-    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
     this->trace_read_failed_ = true;
     return false;
   }
-
-  std::string decoded;
-  decoded.reserve(128 + (trace_len / record_size + 1) * 128);
-  append_formatted_line(
-    decoded,
-    "seq=%u len=%u size=%u crc=0x%04X calc=0x%04X crc_ok=%s",
-    static_cast<unsigned>(trace_seq),
-    static_cast<unsigned>(trace_len),
-    static_cast<unsigned>(record_size),
-    static_cast<unsigned>(crc16),
-    static_cast<unsigned>(computed_crc),
-    crc_ok ? "yes" : "no"
-  );
-  append_formatted_line(
-    decoded,
-    "type,vec,idx,ia,ib,ic,bia,bib,bic,ccr1,ccr2,ccr3,pwmc_a,pwmc_b,pwmc_c,mc,cf,of,flags"
-  );
 
   const uint16_t record_count = static_cast<uint16_t>(trace_len / record_size);
   const uint16_t decoded_bytes = static_cast<uint16_t>(record_count * record_size);
@@ -348,38 +334,29 @@ bool ESCHigherComponent::publish_bringup_trace_(
       ESP_LOGW(TAG, "Failed to format bring-up trace record %u", static_cast<unsigned>(index));
       continue;
     }
-    decoded.append(line, static_cast<size_t>(written));
-    decoded.push_back('\n');
     ESP_LOGI(TAG, "%s", line);
-  }
-
-  std::string hex;
-  hex.reserve(4 + static_cast<size_t>(trace_len) * 3);
-  for (uint16_t offset_bytes = 0; offset_bytes < trace_len; offset_bytes += 16) {
-    char line[80];
-    int pos = std::snprintf(line, sizeof(line), "%04X:", static_cast<unsigned>(offset_bytes));
-    for (uint16_t i = 0; i < 16 && (offset_bytes + i) < trace_len; i++) {
-      if (pos <= 0 || static_cast<size_t>(pos) >= sizeof(line)) {
-        break;
-      }
-      const int written = std::snprintf(
-        line + pos,
-        sizeof(line) - static_cast<size_t>(pos),
-        " %02X",
-        trace[offset_bytes + i]
+    if (index + 1 == record_count) {
+      const char* summary_type = bringup_trace_type_to_cstr(type);
+      char summary[240];
+      std::snprintf(
+        summary,
+        sizeof(summary),
+        "seq=%u len=%u crc=%s records=%u last=%s vec=%u ia=%d ib=%d ic=%d flags=0x%04X",
+        static_cast<unsigned>(trace_seq),
+        static_cast<unsigned>(trace_len),
+        crc_ok ? "ok" : "bad",
+        static_cast<unsigned>(record_count),
+        summary_type,
+        static_cast<unsigned>(rec[1]),
+        static_cast<int>(i16_(rec, 4)),
+        static_cast<int>(i16_(rec, 6)),
+        static_cast<int>(i16_(rec, 8)),
+        static_cast<unsigned>(u16_(rec, 34))
       );
-      if (written <= 0) {
-        break;
-      }
-      pos += written;
+      publish_text(this->bringup_trace_decoded_text_sensor_, summary);
+      publish_text(this->bringup_trace_hex_text_sensor_, "trace hex available in ESPHome logs");
     }
-    const size_t copy_len = static_cast<size_t>(std::min<int>(pos, static_cast<int>(sizeof(line) - 1)));
-    hex.append(line, copy_len);
-    hex.push_back('\n');
   }
-
-  publish_text(this->bringup_trace_decoded_text_sensor_, decoded);
-  publish_text(this->bringup_trace_hex_text_sensor_, hex);
   return true;
 }
 
@@ -659,8 +636,8 @@ void ESCHigherComponent::update() {
 
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
-        if (this->bringup_seq_for_trace_attempt_ != bringup[0]) {
-          this->bringup_seq_for_trace_attempt_ = bringup[0];
+        if (this->last_bringup_report_seq_ != bringup[0]) {
+          this->last_bringup_report_seq_ = bringup[0];
           if (!this->trace_supported_) {
             ESP_LOGE(
               TAG,

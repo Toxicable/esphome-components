@@ -430,7 +430,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool trace_required_missing_{false};
   bool trace_read_failed_{false};
   bool trace_dump_not_supported_logged_{false};
-  uint8_t bringup_seq_for_trace_attempt_{0xFF};
+  uint8_t last_bringup_report_seq_{0xFF};
 
   sensor::Sensor* proto_major_sensor_{nullptr};
   sensor::Sensor* proto_minor_sensor_{nullptr};
@@ -522,8 +522,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_trace_decoded_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_trace_hex_text_sensor_{nullptr};
   select::Select* bringup_test_select_{nullptr};
-
-  uint16_t last_bringup_trace_seq_{0xFFFF};
 };
 
 }  // namespace esc_higher
