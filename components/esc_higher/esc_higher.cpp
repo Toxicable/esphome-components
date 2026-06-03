@@ -315,6 +315,7 @@ bool ESCHigherComponent::publish_debug_log_(
     }
 
     const size_t payload_off = std::max(static_cast<size_t>(header_len), RECORD_HEADER_SIZE);
+    const size_t payload_off = std::max(static_cast<size_t>(header_len), static_cast<size_t>(RECORD_HEADER_SIZE));
     const size_t payload_len = record_len - payload_off;
 
     const char* event_name = debug_event_id_to_cstr(event_id);
