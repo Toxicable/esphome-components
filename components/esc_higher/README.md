@@ -44,14 +44,26 @@ esc_higher:
     name: "Status Seq"
   telemetry_seq:
     name: "Telemetry Seq"
+  debug_seq:
+    name: "Debug Seq"
   esc_state:
     name: "ESC State"
   mc_state:
     name: "MC State"
+  last_cmd_seq:
+    name: "Last Command Seq"
   last_cmd_error:
     name: "Last Command Error"
+  fault_detail:
+    name: "Fault Detail"
   current_faults:
     name: "Current Faults"
+  occurred_faults:
+    name: "Occurred Faults"
+  status_flags:
+    name: "Status Flags"
+  watchdog_ms_left:
+    name: "Watchdog ms Left"
   vbus_mv:
     name: "Bus Voltage mV"
   ibus_ma:
@@ -68,6 +80,32 @@ esc_higher:
     name: "Temperature mC"
   uptime_s:
     name: "Uptime s"
+  telemetry_debug0:
+    name: "Telemetry Debug 0"
+  telemetry_debug1:
+    name: "Telemetry Debug 1"
+  v_alpha_raw_s16:
+    name: "V Alpha Raw"
+  v_beta_raw_s16:
+    name: "V Beta Raw"
+  v_q_raw_s16:
+    name: "V Q Raw"
+  v_d_raw_s16:
+    name: "V D Raw"
+  v_u_raw_s16:
+    name: "V U Raw"
+  v_v_raw_s16:
+    name: "V V Raw"
+  v_w_raw_s16:
+    name: "V W Raw"
+  v_amp_raw_s16:
+    name: "V Amp Raw"
+  phase_iA_mA:
+    name: "Phase IA mA"
+  phase_iB_mA:
+    name: "Phase IB mA"
+  phase_iC_mA:
+    name: "Phase IC mA"
 
   ## Bring-up report examples:
   bringup_seq:
@@ -80,6 +118,42 @@ esc_higher:
     name: "Bringup Result"
   bringup_test_id_state:
     name: "Bringup Test ID"
+  bringup_step_id:
+    name: "Bringup Step ID"
+  bringup_measured0:
+    name: "Bringup Measured 0"
+  bringup_measured1:
+    name: "Bringup Measured 1"
+  bringup_limit_min:
+    name: "Bringup Limit Min"
+  bringup_limit_max:
+    name: "Bringup Limit Max"
+  bringup_elapsed_ms:
+    name: "Bringup Elapsed ms"
+  bringup_failure_code:
+    name: "Bringup Failure Code"
+  bringup_vbus_mv_at_test:
+    name: "Bringup Vbus mV"
+  bringup_current_faults_at_test:
+    name: "Bringup Current Faults"
+  bringup_occurred_faults_at_test:
+    name: "Bringup Occurred Faults"
+  bringup_mc_state_at_test:
+    name: "Bringup MC State"
+  bringup_esc_state_at_test:
+    name: "Bringup ESC State"
+  bringup_gd_ready:
+    name: "Bringup GD Ready"
+  bringup_last_passed_step:
+    name: "Bringup Last Passed Step"
+  bringup_steps_total:
+    name: "Bringup Steps Total"
+  bringup_attempt_count:
+    name: "Bringup Attempt Count"
+  bringup_debug0:
+    name: "Bringup Debug 0"
+  bringup_debug1:
+    name: "Bringup Debug 1"
   bringup_current_faults_text:
     name: "Bringup Current Faults Text"
   bringup_occurred_faults_text:
@@ -105,41 +179,26 @@ esc_higher:
   capabilities_text:
     name: "Capabilities Text"
 
-  ## STATUS sensors:
-  last_cmd_seq:
-    name: "Last Command Seq"
-  occurred_faults:
-    name: "Occurred Faults"
-  status_flags:
-    name: "Status Flags"
-  watchdog_ms_left:
-    name: "Watchdog ms Left"
   esc_state_text:
     name: "ESC State Text"
   last_cmd_error_text:
     name: "Last Cmd Error Text"
+  fault_detail_text:
+    name: "Fault Detail Text"
   status_flags_text:
     name: "Status Flags Text"
   current_faults_text:
     name: "Current Faults Text"
   occurred_faults_text:
     name: "Occurred Faults Text"
+  mc_state_text:
+    name: "MC State Text"
   bringup_state_text:
     name: "Bringup State Text"
   bringup_result_text:
     name: "Bringup Result Text"
   bringup_test_id_text:
     name: "Bringup Test ID Text"
-
-  ## DEBUG_TELEMETRY sensors:
-  # debug_seq:
-  #   name: "Debug Seq"
-  telemetry_debug0:
-    name: "Telemetry Debug 0"
-  telemetry_debug1:
-    name: "Telemetry Debug 1"
-  v_alpha_raw_s16:
-    name: "V Alpha Raw"
 
   ## Write command buttons:
   start_motor:
