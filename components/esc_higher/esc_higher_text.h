@@ -181,10 +181,26 @@ static const char* bringup_result_to_cstr(uint8_t v) {
       return "aborted_by_host";
     case 16:
       return "unsupported_test";
-    case 17:
-      return "passed";
+    case 18:
+    return "motor_did_not_spin";
     case 19:
       return "no_differential_pwm";
+    case 20:
+    return "current_limit_exceeded";
+    case 21:
+    return "dry_run_complete";
+    case 22:
+    return "output_disabled";
+    case 23:
+    return "current_not_valid";
+    case 24:
+    return "offset_calib_start_failed";
+    case 25:
+    return "offset_calib_timeout";
+    case 26:
+    return "offset_calib_not_ready";
+    case 17:
+      return "passed";
     default:
       return "unknown";
   }
@@ -330,6 +346,12 @@ static const char* debug_event_id_to_cstr(uint16_t event_id) {
       return "MCSDK_SNAPSHOT";
     case 0x010F:
       return "CURRENT_SNAPSHOT";
+    case 0x0110:
+    return "TEST102_OFFSET_CALIB_STATE";
+    case 0x0111:
+    return "TEST102_OFFSET_CALIB_START";
+    case 0x0112:
+    return "TEST102_OFFSET_CALIB_START_RESULT";
     default:
       return nullptr;
   }

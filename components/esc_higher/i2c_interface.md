@@ -60,8 +60,9 @@ Notes:
 |   `0x30` | `TELEMETRY`       | read   |   48 |
 |   `0x40` | `BRINGUP`         | read   |   48 |
 |   `0x50` | `DEBUG_TELEMETRY` | read   |   32 |
-|   `0x60` | `TRACE_INFO`      | read   |    8 |
-|   `0x61` | `TRACE_READ`      | w/r    |   64 |
+|   `0x70` | `DEBUG_INFO`      | read   |   16 |
+|   `0x71` | `DEBUG_READ`      | w/r    |   64 |
+|   `0x72` | `DEBUG_CTRL`      | write  |    1 |
 
 ## `ID` register `0x00`
 
@@ -73,7 +74,7 @@ Notes:
 |      3 | `fw_minor`      | `u8`  |             0 |
 |      4 | `hw_id`         | `u8`  |             1 |
 |      5 | `max_block_len` | `u8`  |            64 |
-|      6 | `capabilities`  | `u16` |       `0x000D` |
+|      6 | `capabilities`  | `u16` |       `0x008D` |
 
 Capability bits:
 
@@ -83,6 +84,7 @@ Capability bits:
 - bit `3`: temperature measurement available
 - bit `4`: reverse supported
 - bit `5`: brake supported
+- bit `7`: generic debug log supported
 
 ## `STATUS` register `0x10`
 
@@ -208,6 +210,11 @@ Supported opcodes:
 - `param1`: `duration_ms`
 - `param2`: options / reserved
 
+`bridge_static_vector_test` is a dry-run diagnostic. It first waits for MCSDK
+offset calibration to complete, then logs vectors `1`, `2`, and `3`. It does
+not prove the current-map sign pattern as a pass/fail condition. The final
+bring-up result code is `dry_run_complete`.
+
 Bring-up option bits:
 
 - bit `0`: allow forced differential PWM test `103`
@@ -248,7 +255,9 @@ Notes:
 - `motor_current_mA` is a high-level estimate of current magnitude.
 - `ibus_mA` is zero if unavailable.
 - `drive_limit_centi_pct` is optional and currently zero.
-- `debug0` and `debug1` are currently zero.
+- `debug0` / `debug1` are reserved for bring-up diagnostics. For test `102`,
+  `debug0` reports the current CCR spread after a vector attempt, and `debug1`
+  carries offset-calibration / dry-run flags.
 - A zero field does not always mean the physical value is zero.
 
 ## `BRINGUP` register `0x40`
@@ -314,6 +323,12 @@ Bring-up result / failure codes:
 - `18`: motor did not spin
 - `19`: no differential PWM
 - `20`: current limit exceeded
+- `21`: dry_run_complete
+- `22`: output_disabled
+- `23`: current_not_valid
+- `24`: offset_calib_start_failed
+- `25`: offset_calib_timeout
+- `26`: offset_calib_not_ready
 
 Bring-up sweep report:
 
@@ -325,7 +340,8 @@ Bring-up sweep report:
 
 `BRINGUP.step_id` is an internal step tracker for the autonomous sequence, not a host command selector.
 
-`BRINGUP` remains a compact summary for the most recent bring-up run. For detailed diagnostics on test `102`, read `TRACE_INFO` and `TRACE_READ`.
+`BRINGUP` remains a compact summary for the most recent bring-up run. For
+detailed diagnostics on test `102`, read `DEBUG_INFO` and `DEBUG_READ`.
 
 ## `DEBUG_TELEMETRY` register `0x50`
 
@@ -353,28 +369,34 @@ Optional raw/internal values for firmware debugging only.
 
 Do not treat these values as calibrated phase voltages.
 
-## `TRACE_INFO` register `0x60`
+## `DEBUG_INFO` register `0x70`
 
-Read-only trace metadata for the binary bring-up trace buffer.
+Read-only metadata for the generic binary debug log.
 
-| Offset | Field        | Type  | Notes |
-| -----: | ------------ | ----- | ----- |
-|      0 | `trace_seq`  | `u16` | monotonically increasing trace sequence |
-|      2 | `trace_len`  | `u16` | number of valid bytes in the trace buffer |
-|      4 | `record_size` | `u16` | size of `diag_trace_record`, packed little-endian |
-|      6 | `crc16`      | `u16` | CRC16 over the valid trace bytes |
+| Offset | Field          | Type  | Notes |
+| -----: | -------------- | ----- | ----- |
+|      0 | `proto`        | `u8`  | `1` |
+|      1 | `flags`        | `u8`  | bit 0 frozen, bit 1 dropped |
+|      2 | `debug_seq`    | `u32` | log/session sequence, increments on clear |
+|      6 | `used_len`     | `u16` | valid bytes in `DEBUG_READ` |
+|      8 | `export_len`   | `u16` | exported bytes, currently equal to `used_len` |
+|     10 | `capacity`     | `u16` | compile-time buffer capacity, currently `4096` |
+|     12 | `dropped`      | `u16` | records dropped because the log was full or frozen |
+|     14 | `crc16`        | `u16` | CRC16-CCITT-FALSE over `used_len` bytes |
 
-Trace buffer rules:
+Debug log rules:
 
-- buffer size: `1024` bytes
-- reset at the start of each bring-up test
-- linear buffer is fine
-- trace sequence increments as records are appended
-- `trace_len` is the number of valid bytes currently in the buffer
+- Linear buffer, reset at the start of each bring-up run.
+- `DEBUG_CTRL clear` clears the log, resets `used_len`, `dropped`, and frozen
+  state, and increments `debug_seq`.
+- `DEBUG_CTRL freeze` finalizes the current CRC and prevents further appends.
+- Terminal bring-up pass/fail/abort events freeze the buffer automatically.
+- Host should read `DEBUG_INFO`, then `DEBUG_READ` chunks, then verify `crc16`.
+- Unknown event IDs are valid; host decoders must log the payload as hex rather than failing.
 
-## `TRACE_READ` register `0x61`
+## `DEBUG_READ` register `0x71`
 
-Binary trace chunk reader.
+Binary debug-log chunk reader.
 
 Request format:
 
@@ -384,47 +406,76 @@ Request format:
 
 Response format:
 
-- returns up to `length` bytes from the trace buffer starting at `offset`
+- returns up to `length` bytes from the debug log starting at `offset`
 - host should read in conservative chunks, ideally `32` to `64` bytes
-- `length > 64` is rejected
-- `offset >= trace_len` returns zero bytes
+- `length = 0` is treated as `1`
+- `length > 64` is clamped to `64`
+- `offset >= used_len` returns zero-filled bytes of the requested length
 
-Trace record format:
+## `DEBUG_CTRL` register `0x72`
+
+Write one payload byte after the register byte.
+
+| Value | Command |
+| ----: | ------- |
+|   `1` | clear |
+|   `2` | freeze/finalize |
+|   `3` | unfreeze |
+
+Invalid control values set `last_cmd_error = parameter out of range`.
+
+## Debug Record Format
+
+Each record is variable length. Multi-byte fields are little-endian.
 
 ```c
-struct diag_trace_record {
-  uint8_t type;
-  uint8_t vector_id;
-  uint16_t sample_index;
-  int16_t ia_mA;
-  int16_t ib_mA;
-  int16_t ic_mA;
-  int16_t baseline_ia_mA;
-  int16_t baseline_ib_mA;
-  int16_t baseline_ic_mA;
-  uint16_t tim_ccr1;
-  uint16_t tim_ccr2;
-  uint16_t tim_ccr3;
-  uint16_t pwmc_a;
-  uint16_t pwmc_b;
-  uint16_t pwmc_c;
-  uint16_t mc_state;
-  uint16_t current_faults;
-  uint16_t occurred_faults;
-  uint16_t debug_flags;
-} __packed;
+struct debug_record_header {
+  uint16_t magic;      // 0xD617
+  uint8_t version;     // 1
+  uint8_t header_len;  // 20
+  uint16_t record_len; // header + payload
+  uint16_t event_id;
+  uint32_t seq;
+  uint32_t tick_ms;
+  uint8_t source;
+  uint8_t reserved;
+  uint16_t flags;
+};
 ```
 
-Record types:
+Known event IDs:
 
-- `1`: baseline
-- `2`: active_sample
-- `3`: averaged_result
-- `4`: abort
-- `5`: pass
-- `6`: fault_snapshot
+| Event ID | Name |
+| -------: | ---- |
+| `0x0100` | `bringup_start` |
+| `0x0101` | `test102_config` |
+| `0x0102` | `test102_vector_begin` |
+| `0x0103` | `test102_pwmc_before` |
+| `0x0104` | `test102_pwmc_after` |
+| `0x0105` | `test102_tim_before` |
+| `0x0106` | `test102_tim_after` |
+| `0x0107` | `test102_voltage_command` |
+| `0x0108` | `test102_setphase_result` |
+| `0x0109` | `test102_current_snapshot` |
+| `0x010A` | `test102_vector_result` |
+| `0x010B` | `bringup_fail` |
+| `0x010C` | `bringup_abort` |
+| `0x010D` | `bringup_pass` |
+| `0x010E` | `mcsdk_snapshot` |
+| `0x010F` | `current_snapshot` |
+| `0x0110` | `test102_offset_calib_state` |
+| `0x0111` | `test102_offset_calib_start` |
+| `0x0112` | `test102_offset_calib_start_result` |
 
-All trace fields are little-endian and binary only. Do not rely on printf-style encoding on the STM side.
+Event payloads are binary and event-specific. `test102_tim_*` payloads contain
+`CR1`, `BDTR`, `CCER`, `CNT`, `ARR`, `CCR1`, `CCR2`, `CCR3` as `u32`.
+`test102_pwmc_*` payloads contain `CntPhA/B/C`, `low/mid/highDuty`,
+sector/PWM/calibration state, `SWerror`, and last `Ia/Ib/Ic`. The test logs
+`offset_calib_state` before any vector work, then `vector_begin`,
+`pwmc_before`, `tim_before`, `current_snapshot`, `voltage_command`,
+`setphase_result`, `pwmc_after`, `tim_after`, `current_snapshot`, and
+`vector_result` once for each of vectors `1`, `2`, and `3`. Unknown payloads
+should be logged as hex.
 
 ## Behaviour
 

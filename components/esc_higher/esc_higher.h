@@ -367,6 +367,12 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool configure_watchdog_();
   static uint16_t crc16_ccitt_false_(const uint8_t* data, size_t len);
 
+  // Payload decoders for debug records
+  void log_mcsdk_snapshot_payload_(const uint8_t* payload, size_t len);
+  void log_pwmc_snapshot_payload_(const uint8_t* payload, size_t len);
+  void log_tim_snapshot_payload_(const uint8_t* payload, size_t len);
+  void log_offset_calib_payload_(const uint8_t* payload, size_t len);
+
   static uint16_t u16_(const uint8_t* b, size_t off) {
     return static_cast<uint16_t>(b[off]) | (static_cast<uint16_t>(b[off + 1]) << 8);
   }

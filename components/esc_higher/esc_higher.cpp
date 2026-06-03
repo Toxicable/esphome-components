@@ -289,6 +289,15 @@ bool ESCHigherComponent::publish_debug_log_(
   constexpr uint16_t RECORD_HEADER_SIZE = 16;
   size_t pos = 0;
   uint16_t record_count = 0;
+
+  // Track BRINGUP_FAIL info for summary
+  bool has_fail_info = false;
+  uint8_t fail_step = 0;
+  uint8_t fail_result = 0;
+  uint8_t fail_failure_code = 0;
+  uint8_t fail_mc_state = 0;
+  uint8_t fail_last_passed = 0;
+
   const char* last_event_name = "none";
 
   while (pos + RECORD_HEADER_SIZE <= export_len) {
@@ -319,7 +328,7 @@ bool ESCHigherComponent::publish_debug_log_(
 
     const char* event_name = debug_event_id_to_cstr(event_id);
     if (event_name != nullptr) {
-      ESP_LOGI(
+      ESP_LOGD(
         TAG,
         "Debug record[%u] event=0x%04X(%s) seq=%u tick=%u version=%u payload=%u",
         record_count,
@@ -332,10 +341,42 @@ bool ESCHigherComponent::publish_debug_log_(
       );
       if (payload_len > 0) {
         log_debug_hex(buffer + pos + payload_off, payload_len);
+        // Decode payload based on event type
+        const uint8_t* payload = buffer + pos + payload_off;
+        switch (event_id) {
+          case 0x010E:  // MCSDK_SNAPSHOT
+            log_mcsdk_snapshot_payload_(payload, payload_len);
+            break;
+          case 0x0103:  // TEST102_PWMC_BEFORE
+          case 0x0104:  // TEST102_PWMC_AFTER
+            log_pwmc_snapshot_payload_(payload, payload_len);
+            break;
+          case 0x0105:  // TEST102_TIM_BEFORE
+          case 0x0106:  // TEST102_TIM_AFTER
+            log_tim_snapshot_payload_(payload, payload_len);
+            break;
+          case 0x0110:  // TEST102_OFFSET_CALIB_STATE
+          case 0x0112:  // TEST102_OFFSET_CALIB_START_RESULT
+            log_offset_calib_payload_(payload, payload_len);
+            break;
+          default:
+            break;
+        }
+      }
+
+      // Track BRINGUP_FAIL for summary
+      if (event_id == 0x010B && payload_len >= 5) {
+        const uint8_t* payload = buffer + pos + payload_off;
+        fail_step = payload[0];
+        fail_result = payload[1];
+        fail_failure_code = payload[2];
+        fail_mc_state = payload[3];
+        fail_last_passed = payload[4];
+        has_fail_info = true;
       }
       last_event_name = event_name;
     } else {
-      ESP_LOGI(
+      ESP_LOGD(
         TAG,
         "Debug record[%u] event=0x%04X(unknown) seq=%u tick=%u version=%u payload=%u",
         record_count,
@@ -348,7 +389,7 @@ bool ESCHigherComponent::publish_debug_log_(
       if (payload_len > 0) {
         log_debug_hex(buffer + pos + payload_off, payload_len);
       }
-      last_event_name = "unknown";
+      last_event_name = "unknown_event";
     }
 
     pos += record_len;
@@ -370,8 +411,49 @@ bool ESCHigherComponent::publish_debug_log_(
     static_cast<unsigned>(dropped),
     last_event_name
   );
+
+  if (has_fail_info) {
+    const char* result_name = bringup_result_to_cstr(fail_result);
+    const char* mc_name = mc_state_to_cstr(fail_mc_state);
+    char extra[120];
+    std::snprintf(extra, sizeof(extra), " step=%u result=%u(%s) mc=%s passed=%u",
+      static_cast<unsigned>(fail_step),
+      static_cast<unsigned>(fail_result),
+      result_name,
+      mc_name,
+      static_cast<unsigned>(fail_last_passed)
+    );
+    strlcat(summary, extra, sizeof(summary));
   publish_text(this->debug_log_text_sensor_, summary);
+  }
   return true;
+}
+
+void ESCHigherComponent::log_mcsdk_snapshot_payload_(const uint8_t* p, size_t len) {
+  if (len >= 20) {
+    ESP_LOGD(TAG, "MCSDK_SNAPSHOT: mc=%s faults=%04X occurred=%04X speed=%d v_amp=%d",
+      mc_state_to_cstr(p[0]), u16_(p, 1), u16_(p, 3), i32_(p, 5), i16_(p, 9));
+  }
+}
+
+void ESCHigherComponent::log_pwmc_snapshot_payload_(const uint8_t* p, size_t len) {
+  if (len >= 34) {
+    ESP_LOGD(TAG, "PWMC: PhA=%u PhB=%u PhC=%u sector=%u PWMState=%u calib=%u Ia=%d Ib=%d Ic=%d",
+      u16_(p, 0), u16_(p, 2), u16_(p, 4), p[6], p[7], p[8], i16_(p, 10), i16_(p, 12), i16_(p, 14));
+  }
+}
+
+void ESCHigherComponent::log_tim_snapshot_payload_(const uint8_t* p, size_t len) {
+  if (len >= 56) {
+    ESP_LOGD(TAG, "TIM: CR1=%08X BDTR=%08X CCER=%08X CNT=%u ARR=%u CCR1=%u CCR2=%u CCR3=%u",
+      u32_(p, 0), u32_(p, 4), u32_(p, 8), u32_(p, 12), u32_(p, 16), u32_(p, 20), u32_(p, 24), u32_(p, 28));
+  }
+}
+
+void ESCHigherComponent::log_offset_calib_payload_(const uint8_t* p, size_t len) {
+  if (len >= 2) {
+    ESP_LOGD(TAG, "OFFSET_CALIB: status=%u result=%u", p[0], p[1]);
+  }
 }
 
 bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
@@ -640,15 +722,15 @@ void ESCHigherComponent::update() {
 
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
-        ESP_LOGI(
-          TAG,
-          "Bring-up terminal report seq=%u state=%u result=%u",
-          static_cast<unsigned>(bringup[0]),
-          static_cast<unsigned>(bringup[4]),
-          static_cast<unsigned>(bringup[5])
-        );
         if (this->last_bringup_report_seq_ != bringup[0]) {
           this->last_bringup_report_seq_ = bringup[0];
+          ESP_LOGI(
+            TAG,
+            "Bring-up terminal report seq=%u state=%u result=%u",
+            static_cast<unsigned>(bringup[0]),
+            static_cast<unsigned>(bringup[4]),
+            static_cast<unsigned>(bringup[5])
+          );
           if (!this->debug_log_supported_) {
             ESP_LOGW(TAG, "CAP_DEBUG_LOG not set on this firmware; skipping debug log read");
           } else {
@@ -722,5 +804,13 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  bringup_test_id: %u", static_cast<unsigned>(bringup_test_id_));
 }
 
+void ESCHigherComponent::log_mcsdk_snapshot_payload_(const uint8_t* payload, size_t len) {
+  if (len >= 20) {
+    const uint8_t mc_state = payload[0];
+    const uint16_t current_faults = u16_(payload, 1);
+    const uint16_t occurred_faults = u16_(payload, 3);
+    const int32_t speed_dhz = i32_(payload, 5);
+    const int16_t voltage_amp = i16_(payload, 9);
+    ESP_LOGD(TAG, 
 }  // namespace esc_higher
 }  // namespace esphome
