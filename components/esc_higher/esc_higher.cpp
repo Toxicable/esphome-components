@@ -314,7 +314,6 @@ bool ESCHigherComponent::publish_debug_log_(
       return false;
     }
 
-    const size_t payload_off = std::max(static_cast<size_t>(header_len), RECORD_HEADER_SIZE);
     const size_t payload_off = std::max(static_cast<size_t>(header_len), static_cast<size_t>(RECORD_HEADER_SIZE));
     const size_t payload_len = record_len - payload_off;
 
