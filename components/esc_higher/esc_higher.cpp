@@ -44,6 +44,24 @@ void ESCHigherRunBringupTestButton::press_action() {
   this->parent_->run_bringup_test();
 }
 
+void ESCHigherRunBridgeStaticVectorTestButton::press_action() {
+  this->parent_->run_bridge_static_vector_test();
+}
+
+void ESCHigherBringupTestSelect::control(const std::string& value) {
+  if (this->parent_ == nullptr)
+    return;
+  if (value == "full_spin_sequence") {
+    this->parent_->set_bringup_test_id(101);
+  } else if (value == "bridge_static_vector_test") {
+    this->parent_->set_bringup_test_id(102);
+  } else {
+    ESP_LOGW(TAG, "Unknown bringup test selection: %s", value.c_str());
+    return;
+  }
+  this->publish_state(value);
+}
+
 void ESCHigherSpeedTargetNumber::control(float value) {
   if (this->parent_ == nullptr)
     return;
@@ -59,6 +77,12 @@ void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
+  if (this->bringup_test_select_ != nullptr) {
+    this->bringup_test_select_->publish_state(
+      this->bringup_test_id_ == BRINGUP_TEST_BRIDGE_STATIC_VECTOR ? "bridge_static_vector_test" :
+                                                                     "full_spin_sequence"
+    );
+  }
 }
 
 bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
@@ -156,7 +180,24 @@ bool ESCHigherComponent::set_speed_ramp() {
 }
 
 bool ESCHigherComponent::run_bringup_test() {
-  return this->write_command_(OPCODE_RUN_BRINGUP_TEST, bringup_test_duration_ms_, bringup_test_options_, 0);
+  const uint8_t test_id = bringup_test_id_;
+  int32_t duration_ms = bringup_test_duration_ms_;
+  if (test_id == BRINGUP_TEST_BRIDGE_STATIC_VECTOR)
+    duration_ms = BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS;
+  else if (test_id != BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
+    ESP_LOGW(TAG, "Unsupported bringup test id: %u", static_cast<unsigned>(test_id));
+    return false;
+  }
+  return this->write_command_(OPCODE_RUN_BRINGUP_TEST, test_id, duration_ms, bringup_test_options_);
+}
+
+bool ESCHigherComponent::run_bridge_static_vector_test() {
+  return this->write_command_(
+    OPCODE_RUN_BRINGUP_TEST,
+    BRINGUP_TEST_BRIDGE_STATIC_VECTOR,
+    BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS,
+    bringup_test_options_
+  );
 }
 
 bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
@@ -276,6 +317,11 @@ void ESCHigherComponent::update() {
       publish_sensor(bringup_measured1_sensor_, i32_(bringup, 12));
       publish_sensor(bringup_limit_min_sensor_, i32_(bringup, 16));
       publish_sensor(bringup_limit_max_sensor_, i32_(bringup, 20));
+      publish_sensor(bringup_phase_a_count_sensor_, static_cast<uint16_t>(u32_(bringup, 8) & 0xFFFF));
+      publish_sensor(bringup_phase_b_count_sensor_, static_cast<uint16_t>((u32_(bringup, 8) >> 16) & 0xFFFF));
+      publish_sensor(bringup_phase_c_count_sensor_, static_cast<uint16_t>(u32_(bringup, 12) & 0xFFFF));
+      publish_sensor(bringup_pwm_spread_ticks_sensor_, i32_(bringup, 16));
+      publish_sensor(bringup_max_phase_current_ma_sensor_, i32_(bringup, 20));
       publish_sensor(bringup_vbus_mv_at_test_sensor_, u32_(bringup, 24));
       publish_sensor(bringup_current_faults_at_test_sensor_, u16_(bringup, 28));
       publish_text(bringup_current_faults_text_sensor_, fault_bitmask_to_names(u16_(bringup, 28)));
@@ -331,6 +377,7 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  speed_ramp_time_ms: %d", static_cast<int>(speed_ramp_time_ms_));
   ESP_LOGCONFIG(TAG, "  bringup_test_duration_ms: %d", static_cast<int>(bringup_test_duration_ms_));
   ESP_LOGCONFIG(TAG, "  bringup_test_options: 0x%08X", static_cast<unsigned>(bringup_test_options_));
+  ESP_LOGCONFIG(TAG, "  bringup_test_id: %u", static_cast<unsigned>(bringup_test_id_));
 }
 
 }  // namespace esc_higher

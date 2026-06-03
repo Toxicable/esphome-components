@@ -198,9 +198,9 @@ Supported opcodes:
 
 `RUN_BRINGUP_TEST`:
 
-- `param0`: `duration_ms` / `timeout_ms`
-- `param1`: option bits
-- `param2`: reserved, currently ignored
+- `param0`: `test_id`
+- `param1`: `duration_ms` / `timeout_ms`
+- `param2`: option bits / reserved
 
 Bring-up option bits:
 
@@ -209,7 +209,24 @@ Bring-up option bits:
 - bit `4`: disable watchdog for duration of test
 - bit `5`: restore previous watchdog setting after test
 
-The firmware always runs the full autonomous bring-up sequence. The host does not select individual tests or modes.
+Bring-up test IDs:
+
+| Test ID | Name                      | Notes |
+| ------: | ------------------------- | ----- |
+| `101`   | `full_spin_sequence`      | default full autonomous bring-up sequence |
+| `102`   | `bridge_static_vector_test` | static-vector bring-up validation |
+
+For `test_id = 102`, the report reuses fields as follows:
+
+- `measured0`: low 16 bits = `CntPhA`, high 16 bits = `CntPhB`
+- `measured1`: `CntPhC`
+- `limit_min`: max PWM duty spread during static-vector pulse, timer ticks
+- `limit_max`: max measured phase current during static-vector pulse, mA
+- `debug0` bit 0: PWM enabled
+- `debug0` bit 1: `PWMC_SetPhaseVoltage` called
+- `debug0` bit 2: PWM duty spread became nonzero
+- `debug0` bit 3: measured current became nonzero
+- `debug1`: `PWMC_SetPhaseVoltage` return value
 
 ## `TELEMETRY` register `0x30`
 

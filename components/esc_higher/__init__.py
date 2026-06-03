@@ -1,21 +1,23 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, i2c, number, sensor, text_sensor
+from esphome.components import button, i2c, number, select, sensor, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
+    ENTITY_CATEGORY_CONFIG,
     ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     UNIT_AMPERE,
     UNIT_CELSIUS,
+    UNIT_MILLIAMP,
     UNIT_PERCENT,
     UNIT_VOLT,
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "number", "sensor", "text_sensor"]
+AUTO_LOAD = ["button", "number", "select", "sensor", "text_sensor"]
 
 esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
 ESCHigherComponent = esc_higher_ns.class_(
@@ -29,6 +31,12 @@ ESCHigherClearFaultsButton = esc_higher_ns.class_(
 ESCHigherEstopButton = esc_higher_ns.class_("ESCHigherEstopButton", button.Button)
 ESCHigherRunBringupTestButton = esc_higher_ns.class_(
     "ESCHigherRunBringupTestButton", button.Button
+)
+ESCHigherRunBridgeStaticVectorTestButton = esc_higher_ns.class_(
+    "ESCHigherRunBridgeStaticVectorTestButton", button.Button
+)
+ESCHigherBringupTestSelect = esc_higher_ns.class_(
+    "ESCHigherBringupTestSelect", select.Select
 )
 ESCHigherSpeedTargetNumber = esc_higher_ns.class_(
     "ESCHigherSpeedTargetNumber", number.Number
@@ -81,6 +89,11 @@ CONF_BRINGUP_RESULT = "bringup_result"
 CONF_BRINGUP_FAILURE_CODE = "bringup_failure_code"
 CONF_BRINGUP_MEASURED0 = "bringup_measured0"
 CONF_BRINGUP_MEASURED1 = "bringup_measured1"
+CONF_BRINGUP_PHASE_A_COUNT = "bringup_phase_a_count"
+CONF_BRINGUP_PHASE_B_COUNT = "bringup_phase_b_count"
+CONF_BRINGUP_PHASE_C_COUNT = "bringup_phase_c_count"
+CONF_BRINGUP_PWM_SPREAD_TICKS = "bringup_pwm_spread_ticks"
+CONF_BRINGUP_MAX_PHASE_CURRENT_MA = "bringup_max_phase_current_ma"
 CONF_BRINGUP_LIMIT_MIN = "bringup_limit_min"
 CONF_BRINGUP_LIMIT_MAX = "bringup_limit_max"
 CONF_BRINGUP_VBUS_MV_AT_TEST = "bringup_vbus_mv_at_test"
@@ -121,15 +134,19 @@ CONF_BRINGUP_RESULT_TEXT = "bringup_result_text"
 CONF_BRINGUP_TEST_ID_TEXT = "bringup_test_id_text"
 CONF_BRINGUP_CURRENT_FAULTS_TEXT = "bringup_current_faults_text"
 CONF_BRINGUP_OCCURRED_FAULTS_TEXT = "bringup_occurred_faults_text"
+CONF_BRINGUP_TEST_SELECT = "bringup_test_select"
 
 CONF_START_MOTOR = "start_motor"
 CONF_STOP_MOTOR = "stop_motor"
 CONF_CLEAR_FAULTS = "clear_faults"
 CONF_ESTOP = "estop"
 CONF_RUN_BRINGUP_TEST = "run_bringup_test"
+CONF_RUN_BRIDGE_STATIC_VECTOR_TEST = "run_bridge_static_vector_test"
 CONF_SPEED_TARGET_DHZ = "speed_target_dhz"
 CONF_SPEED_RAMP_TARGET_DHZ = "speed_ramp_target_dhz"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
+
+BRINGUP_TEST_OPTIONS = ["full_spin_sequence", "bridge_static_vector_test"]
 
 
 def _raw_sensor_schema():
@@ -239,6 +256,16 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_FAILURE_CODE): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MEASURED0): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MEASURED1): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PHASE_A_COUNT): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PHASE_B_COUNT): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PHASE_C_COUNT): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PWM_SPREAD_TICKS): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_MAX_PHASE_CURRENT_MA): sensor.sensor_schema(
+                unit_of_measurement=UNIT_MILLIAMP,
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
             cv.Optional(CONF_BRINGUP_LIMIT_MIN): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_LIMIT_MAX): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_VBUS_MV_AT_TEST): _raw_sensor_schema(),
@@ -277,6 +304,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_TEST_ID_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_TEST_SELECT): select.select_schema(
+                ESCHigherBringupTestSelect,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
             cv.Optional(CONF_START_MOTOR): button.button_schema(
                 ESCHigherStartButton, icon="mdi:play"
             ),
@@ -290,7 +321,14 @@ CONFIG_SCHEMA = (
                 ESCHigherEstopButton, icon="mdi:alert-octagon"
             ),
             cv.Optional(CONF_RUN_BRINGUP_TEST): button.button_schema(
-                ESCHigherRunBringupTestButton, icon="mdi:play-box"
+                ESCHigherRunBringupTestButton,
+                icon="mdi:play-box",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_RUN_BRIDGE_STATIC_VECTOR_TEST): button.button_schema(
+                ESCHigherRunBridgeStaticVectorTestButton,
+                icon="mdi:play-box-outline",
+                entity_category=ENTITY_CATEGORY_CONFIG,
             ),
             cv.Optional(CONF_SPEED_TARGET_DHZ): number.number_schema(
                 ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
@@ -357,6 +395,11 @@ async def to_code(config):
     await _bind_sensor(config, CONF_BRINGUP_FAILURE_CODE, var.set_bringup_failure_code_sensor)
     await _bind_sensor(config, CONF_BRINGUP_MEASURED0, var.set_bringup_measured0_sensor)
     await _bind_sensor(config, CONF_BRINGUP_MEASURED1, var.set_bringup_measured1_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PHASE_A_COUNT, var.set_bringup_phase_a_count_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PHASE_B_COUNT, var.set_bringup_phase_b_count_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PHASE_C_COUNT, var.set_bringup_phase_c_count_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PWM_SPREAD_TICKS, var.set_bringup_pwm_spread_ticks_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_MAX_PHASE_CURRENT_MA, var.set_bringup_max_phase_current_ma_sensor)
     await _bind_sensor(config, CONF_BRINGUP_LIMIT_MIN, var.set_bringup_limit_min_sensor)
     await _bind_sensor(config, CONF_BRINGUP_LIMIT_MAX, var.set_bringup_limit_max_sensor)
     await _bind_sensor(config, CONF_BRINGUP_VBUS_MV_AT_TEST, var.set_bringup_vbus_mv_at_test_sensor)
@@ -422,6 +465,10 @@ async def to_code(config):
     if CONF_BRINGUP_OCCURRED_FAULTS_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_OCCURRED_FAULTS_TEXT])
         cg.add(var.set_bringup_occurred_faults_text_sensor(s))
+    if CONF_BRINGUP_TEST_SELECT in config:
+        sel = await select.new_select(config[CONF_BRINGUP_TEST_SELECT], options=BRINGUP_TEST_OPTIONS)
+        await cg.register_parented(sel, var)
+        cg.add(var.set_bringup_test_select(sel))
 
     if CONF_START_MOTOR in config:
         b = await button.new_button(config[CONF_START_MOTOR])
@@ -437,6 +484,9 @@ async def to_code(config):
         await cg.register_parented(b, var)
     if CONF_RUN_BRINGUP_TEST in config:
         b = await button.new_button(config[CONF_RUN_BRINGUP_TEST])
+        await cg.register_parented(b, var)
+    if CONF_RUN_BRIDGE_STATIC_VECTOR_TEST in config:
+        b = await button.new_button(config[CONF_RUN_BRIDGE_STATIC_VECTOR_TEST])
         await cg.register_parented(b, var)
     if CONF_SPEED_TARGET_DHZ in config:
         n = await number.new_number(

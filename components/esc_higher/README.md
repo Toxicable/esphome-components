@@ -124,6 +124,17 @@ esc_higher:
     name: "Bringup Measured 0"
   bringup_measured1:
     name: "Bringup Measured 1"
+  ## Test 102 decoded values:
+  bringup_phase_a_count:
+    name: "Bringup Phase A Count"
+  bringup_phase_b_count:
+    name: "Bringup Phase B Count"
+  bringup_phase_c_count:
+    name: "Bringup Phase C Count"
+  bringup_pwm_spread_ticks:
+    name: "Bringup PWM Spread Ticks"
+  bringup_max_phase_current_ma:
+    name: "Bringup Max Phase Current mA"
   bringup_limit_min:
     name: "Bringup Limit Min"
   bringup_limit_max:
@@ -158,8 +169,11 @@ esc_higher:
     name: "Bringup Current Faults Text"
   bringup_occurred_faults_text:
     name: "Bringup Occurred Faults Text"
+  bringup_test_select:
+    name: "Bringup Test"
+  ## Defaults to full_spin_sequence / 101.
 
-  # BRINGUP.test_id is a report field; the firmware always runs the autonomous sequence.
+  ## BRINGUP.test_id is a report field; bringup_test_select chooses which bringup test the run button starts.
 
   ## ID register sensors:
   # proto_major:
@@ -211,11 +225,14 @@ esc_higher:
     name: "E-Stop"
   run_bringup_test:
     name: "Run Bringup Test"
+  run_bridge_static_vector_test:
+    name: "Run Bridge Static Vector Test"
 ```
 
 Notes:
 - Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
-- `run_bringup_test` sends opcode `0x09` with `param0=bringup_test_duration_ms`, `param1=bringup_test_options`, and `param2=0`.
+- `run_bringup_test` sends opcode `0x09` with `param0=<selected bringup test_id>`, `param1=bringup_test_duration_ms` for `full_spin_sequence` or `50` for `bridge_static_vector_test`, and `param2=bringup_test_options`.
+- `run_bridge_static_vector_test` sends opcode `0x09` with `param0=102`, `param1=50`, and `param2=bringup_test_options`.
 - Set `disable_watchdog: true` to disable the command watchdog at startup; otherwise the component programs `watchdog_timeout_ms` (default `500 ms`).
 - `watchdog_ms_left` publishes raw milliseconds from `STATUS[12]`.
 - Command result is observed through STATUS fields (`last_cmd_seq`, `last_cmd_error`) on subsequent polls.

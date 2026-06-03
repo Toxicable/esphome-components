@@ -194,6 +194,8 @@ static const char* bringup_test_id_to_cstr(uint8_t v) {
       return "none";
     case 101:
       return "full_spin_sequence";
+    case 102:
+      return "bridge_static_vector_test";
     default:
       return "unknown";
   }

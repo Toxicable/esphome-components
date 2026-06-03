@@ -2,10 +2,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/number/number.h"
+#include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
@@ -40,6 +42,16 @@ class ESCHigherRunBringupTestButton : public button::Button, public Parented<ESC
   void press_action() override;
 };
 
+class ESCHigherRunBridgeStaticVectorTestButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
+};
+
+class ESCHigherBringupTestSelect : public select::Select, public Parented<ESCHigherComponent> {
+ public:
+  void control(const std::string& value) override;
+};
+
 class ESCHigherSpeedTargetNumber : public number::Number, public Parented<ESCHigherComponent> {
  public:
   void control(float value) override;
@@ -69,6 +81,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_test_options(int32_t value) {
     bringup_test_options_ = value;
   }
+  void set_bringup_test_id(uint8_t value) {
+    bringup_test_id_ = value;
+  }
 
   bool start_motor();
   bool stop_motor();
@@ -76,6 +91,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool estop();
   bool set_speed_ramp();
   bool run_bringup_test();
+  bool run_bridge_static_vector_test();
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
 
   void set_proto_major_sensor(sensor::Sensor* s) {
@@ -190,6 +206,21 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
   void set_bringup_measured1_sensor(sensor::Sensor* s) {
     bringup_measured1_sensor_ = s;
+  }
+  void set_bringup_phase_a_count_sensor(sensor::Sensor* s) {
+    bringup_phase_a_count_sensor_ = s;
+  }
+  void set_bringup_phase_b_count_sensor(sensor::Sensor* s) {
+    bringup_phase_b_count_sensor_ = s;
+  }
+  void set_bringup_phase_c_count_sensor(sensor::Sensor* s) {
+    bringup_phase_c_count_sensor_ = s;
+  }
+  void set_bringup_pwm_spread_ticks_sensor(sensor::Sensor* s) {
+    bringup_pwm_spread_ticks_sensor_ = s;
+  }
+  void set_bringup_max_phase_current_ma_sensor(sensor::Sensor* s) {
+    bringup_max_phase_current_ma_sensor_ = s;
   }
   void set_bringup_limit_min_sensor(sensor::Sensor* s) {
     bringup_limit_min_sensor_ = s;
@@ -312,6 +343,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     bringup_occurred_faults_text_sensor_ = s;
   }
+  void set_bringup_test_select(select::Select* s) {
+    bringup_test_select_ = s;
+  }
 
  protected:
   bool read_register_(uint8_t reg, uint8_t* out, size_t len);
@@ -351,12 +385,16 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t OPCODE_ESTOP = 0x05;
   static constexpr uint8_t OPCODE_SET_WATCHDOG = 0x07;
   static constexpr uint8_t OPCODE_RUN_BRINGUP_TEST = 0x09;
+  static constexpr uint8_t BRINGUP_TEST_FULL_SPIN_SEQUENCE = 101;
+  static constexpr uint8_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR = 102;
+  static constexpr int32_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS = 50;
 
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};
   int32_t speed_ramp_time_ms_{1000};
   int32_t bringup_test_duration_ms_{5000};
   int32_t bringup_test_options_{0};
+  uint8_t bringup_test_id_{BRINGUP_TEST_FULL_SPIN_SEQUENCE};
   bool disable_watchdog_{true};
   uint32_t watchdog_timeout_ms_{500};
   bool initialized_{false};
@@ -402,6 +440,11 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* bringup_failure_code_sensor_{nullptr};
   sensor::Sensor* bringup_measured0_sensor_{nullptr};
   sensor::Sensor* bringup_measured1_sensor_{nullptr};
+  sensor::Sensor* bringup_phase_a_count_sensor_{nullptr};
+  sensor::Sensor* bringup_phase_b_count_sensor_{nullptr};
+  sensor::Sensor* bringup_phase_c_count_sensor_{nullptr};
+  sensor::Sensor* bringup_pwm_spread_ticks_sensor_{nullptr};
+  sensor::Sensor* bringup_max_phase_current_ma_sensor_{nullptr};
   sensor::Sensor* bringup_limit_min_sensor_{nullptr};
   sensor::Sensor* bringup_limit_max_sensor_{nullptr};
   sensor::Sensor* bringup_vbus_mv_at_test_sensor_{nullptr};
@@ -444,6 +487,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_occurred_faults_text_sensor_{nullptr};
+  select::Select* bringup_test_select_{nullptr};
 };
 
 }  // namespace esc_higher
