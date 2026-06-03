@@ -35,6 +35,9 @@ ESCHigherRunBringupTestButton = esc_higher_ns.class_(
 ESCHigherRunBridgeStaticVectorTestButton = esc_higher_ns.class_(
     "ESCHigherRunBridgeStaticVectorTestButton", button.Button
 )
+ESCHigherRunForcedTimerDiffPwmTestButton = esc_higher_ns.class_(
+    "ESCHigherRunForcedTimerDiffPwmTestButton", button.Button
+)
 ESCHigherBringupTestSelect = esc_higher_ns.class_(
     "ESCHigherBringupTestSelect", select.Select
 )
@@ -142,11 +145,16 @@ CONF_CLEAR_FAULTS = "clear_faults"
 CONF_ESTOP = "estop"
 CONF_RUN_BRINGUP_TEST = "run_bringup_test"
 CONF_RUN_BRIDGE_STATIC_VECTOR_TEST = "run_bridge_static_vector_test"
+CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST = "run_forced_timer_diff_pwm_test"
 CONF_SPEED_TARGET_DHZ = "speed_target_dhz"
 CONF_SPEED_RAMP_TARGET_DHZ = "speed_ramp_target_dhz"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
 
-BRINGUP_TEST_OPTIONS = ["full_spin_sequence", "bridge_static_vector_test"]
+BRINGUP_TEST_OPTIONS = [
+    "full_spin_sequence",
+    "bridge_static_vector_test",
+    "forced_timer_diff_pwm",
+]
 
 
 def _raw_sensor_schema():
@@ -325,9 +333,14 @@ CONFIG_SCHEMA = (
                 icon="mdi:play-box",
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
-            cv.Optional(CONF_RUN_BRIDGE_STATIC_VECTOR_TEST): button.button_schema(
+    cv.Optional(CONF_RUN_BRIDGE_STATIC_VECTOR_TEST): button.button_schema(
                 ESCHigherRunBridgeStaticVectorTestButton,
                 icon="mdi:play-box-outline",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST): button.button_schema(
+                ESCHigherRunForcedTimerDiffPwmTestButton,
+                icon="mdi:play-box-multiple",
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
             cv.Optional(CONF_SPEED_TARGET_DHZ): number.number_schema(
@@ -487,6 +500,9 @@ async def to_code(config):
         await cg.register_parented(b, var)
     if CONF_RUN_BRIDGE_STATIC_VECTOR_TEST in config:
         b = await button.new_button(config[CONF_RUN_BRIDGE_STATIC_VECTOR_TEST])
+        await cg.register_parented(b, var)
+    if CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST in config:
+        b = await button.new_button(config[CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST])
         await cg.register_parented(b, var)
     if CONF_SPEED_TARGET_DHZ in config:
         n = await number.new_number(

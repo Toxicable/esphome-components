@@ -183,6 +183,8 @@ static const char* bringup_result_to_cstr(uint8_t v) {
       return "unsupported_test";
     case 17:
       return "passed";
+    case 19:
+      return "no_differential_pwm";
     default:
       return "unknown";
   }
@@ -196,6 +198,8 @@ static const char* bringup_test_id_to_cstr(uint8_t v) {
       return "full_spin_sequence";
     case 102:
       return "bridge_static_vector_test";
+    case 103:
+      return "forced_timer_diff_pwm";
     default:
       return "unknown";
   }

@@ -32,6 +32,7 @@ esc_higher:
   # watchdog_timeout_ms: 500
   # bringup_test_duration_ms: 5000
   # bringup_test_options: 0
+  # bringup_test_options: 1
 
   ## Speed-ramp defaults + slider control (opcode 0x04):
   speed_ramp_target_dhz: 1200
@@ -172,6 +173,7 @@ esc_higher:
   bringup_test_select:
     name: "Bringup Test"
   ## Defaults to full_spin_sequence / 101.
+  ## Option bit0 enables forced_timer_diff_pwm. Only use with motor disconnected or with a current-limited bench supply.
 
   ## BRINGUP.test_id is a report field; bringup_test_select chooses which bringup test the run button starts.
 
@@ -227,12 +229,16 @@ esc_higher:
     name: "Run Bringup Test"
   run_bridge_static_vector_test:
     name: "Run Bridge Static Vector Test"
+  run_forced_timer_diff_pwm_test:
+    name: "Run Forced Timer Diff PWM Test"
 ```
 
 Notes:
 - Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
 - `run_bringup_test` sends opcode `0x09` with `param0=<selected bringup test_id>`, `param1=bringup_test_duration_ms` for `full_spin_sequence` or `50` for `bridge_static_vector_test`, and `param2=bringup_test_options`.
 - `run_bridge_static_vector_test` sends opcode `0x09` with `param0=102`, `param1=50`, and `param2=bringup_test_options`.
+- `run_forced_timer_diff_pwm_test` sends opcode `0x09` with `param0=103`, `param1=1000`, and `param2=bringup_test_options`.
+- `bringup_test_options: 1` enables the forced timer differential PWM test path. Use only with motor disconnected or with a current-limited bench supply.
 - Set `disable_watchdog: true` to disable the command watchdog at startup; otherwise the component programs `watchdog_timeout_ms` (default `500 ms`).
 - `watchdog_ms_left` publishes raw milliseconds from `STATUS[12]`.
 - Command result is observed through STATUS fields (`last_cmd_seq`, `last_cmd_error`) on subsequent polls.

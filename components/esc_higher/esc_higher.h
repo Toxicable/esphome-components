@@ -47,6 +47,11 @@ class ESCHigherRunBridgeStaticVectorTestButton : public button::Button, public P
   void press_action() override;
 };
 
+class ESCHigherRunForcedTimerDiffPwmTestButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
+};
+
 class ESCHigherBringupTestSelect : public select::Select, public Parented<ESCHigherComponent> {
  public:
   void control(const std::string& value) override;
@@ -92,6 +97,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool set_speed_ramp();
   bool run_bringup_test();
   bool run_bridge_static_vector_test();
+  bool run_forced_timer_diff_pwm_test();
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
 
   void set_proto_major_sensor(sensor::Sensor* s) {
@@ -387,7 +393,10 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t OPCODE_RUN_BRINGUP_TEST = 0x09;
   static constexpr uint8_t BRINGUP_TEST_FULL_SPIN_SEQUENCE = 101;
   static constexpr uint8_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR = 102;
+  static constexpr uint8_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM = 103;
   static constexpr int32_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS = 50;
+  static constexpr int32_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS = 1000;
+  static constexpr int32_t BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1;
 
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};

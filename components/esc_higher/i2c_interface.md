@@ -204,6 +204,7 @@ Supported opcodes:
 
 Bring-up option bits:
 
+- bit `0`: allow forced timer differential PWM test
 - bit `2`: clear previous bring-up report before start
 - bit `3`: ignore latched occurred faults; check only active faults
 - bit `4`: disable watchdog for duration of test
@@ -215,6 +216,7 @@ Bring-up test IDs:
 | ------: | ------------------------- | ----- |
 | `101`   | `full_spin_sequence`      | default full autonomous bring-up sequence |
 | `102`   | `bridge_static_vector_test` | static-vector bring-up validation |
+| `103`   | `forced_timer_diff_pwm`   | forced low-level timer differential PWM test |
 
 For `test_id = 102`, the report reuses fields as follows:
 
@@ -323,6 +325,7 @@ Bring-up result / failure codes:
 - `15`: aborted by host
 - `16`: unsupported test
 - `17`: passed
+- `19`: no differential PWM
 
 Bring-up test IDs:
 

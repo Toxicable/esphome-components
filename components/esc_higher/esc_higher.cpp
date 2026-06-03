@@ -48,6 +48,10 @@ void ESCHigherRunBridgeStaticVectorTestButton::press_action() {
   this->parent_->run_bridge_static_vector_test();
 }
 
+void ESCHigherRunForcedTimerDiffPwmTestButton::press_action() {
+  this->parent_->run_forced_timer_diff_pwm_test();
+}
+
 void ESCHigherBringupTestSelect::control(const std::string& value) {
   if (this->parent_ == nullptr)
     return;
@@ -55,6 +59,8 @@ void ESCHigherBringupTestSelect::control(const std::string& value) {
     this->parent_->set_bringup_test_id(101);
   } else if (value == "bridge_static_vector_test") {
     this->parent_->set_bringup_test_id(102);
+  } else if (value == "forced_timer_diff_pwm") {
+    this->parent_->set_bringup_test_id(103);
   } else {
     ESP_LOGW(TAG, "Unknown bringup test selection: %s", value.c_str());
     return;
@@ -79,7 +85,8 @@ void ESCHigherComponent::setup() {
   this->next_init_retry_ms_ = 0;
   if (this->bringup_test_select_ != nullptr) {
     this->bringup_test_select_->publish_state(
-      this->bringup_test_id_ == BRINGUP_TEST_BRIDGE_STATIC_VECTOR ? "bridge_static_vector_test" :
+      this->bringup_test_id_ == BRINGUP_TEST_BRIDGE_STATIC_VECTOR   ? "bridge_static_vector_test" :
+      this->bringup_test_id_ == BRINGUP_TEST_FORCED_TIMER_DIFF_PWM ? "forced_timer_diff_pwm" :
                                                                      "full_spin_sequence"
     );
   }
@@ -184,7 +191,10 @@ bool ESCHigherComponent::run_bringup_test() {
   int32_t duration_ms = bringup_test_duration_ms_;
   if (test_id == BRINGUP_TEST_BRIDGE_STATIC_VECTOR)
     duration_ms = BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS;
-  else if (test_id != BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
+  else if (test_id == BRINGUP_TEST_FORCED_TIMER_DIFF_PWM) {
+    if (duration_ms == 5000)
+      duration_ms = BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS;
+  } else if (test_id != BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
     ESP_LOGW(TAG, "Unsupported bringup test id: %u", static_cast<unsigned>(test_id));
     return false;
   }
@@ -196,6 +206,15 @@ bool ESCHigherComponent::run_bridge_static_vector_test() {
     OPCODE_RUN_BRINGUP_TEST,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS,
+    bringup_test_options_
+  );
+}
+
+bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
+  return this->write_command_(
+    OPCODE_RUN_BRINGUP_TEST,
+    BRINGUP_TEST_FORCED_TIMER_DIFF_PWM,
+    BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS,
     bringup_test_options_
   );
 }
