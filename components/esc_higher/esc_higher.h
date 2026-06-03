@@ -395,6 +395,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_DEBUG_TELEMETRY = 0x50;
   static constexpr uint8_t REG_TRACE_INFO = 0x60;
   static constexpr uint8_t REG_TRACE_READ = 0x61;
+  static constexpr uint16_t CAP_TRACE_DUMP = 1u << 6;
   static constexpr uint16_t TRACE_BUFFER_SIZE = 1024;
   static constexpr uint16_t TRACE_RECORD_SIZE = 36;
   static constexpr uint8_t TRACE_READ_CHUNK_SIZE = 64;
@@ -423,6 +424,13 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   uint32_t watchdog_timeout_ms_{500};
   bool initialized_{false};
   uint32_t next_init_retry_ms_{0};
+  uint16_t capabilities_{0};
+  uint8_t max_block_len_{0};
+  bool trace_supported_{false};
+  bool trace_required_missing_{false};
+  bool trace_read_failed_{false};
+  bool trace_dump_not_supported_logged_{false};
+  uint8_t bringup_seq_for_trace_attempt_{0xFF};
 
   sensor::Sensor* proto_major_sensor_{nullptr};
   sensor::Sensor* proto_minor_sensor_{nullptr};

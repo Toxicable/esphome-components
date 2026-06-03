@@ -120,6 +120,10 @@ void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
+  this->trace_required_missing_ = false;
+  this->trace_read_failed_ = false;
+  this->trace_dump_not_supported_logged_ = false;
+  this->bringup_seq_for_trace_attempt_ = 0xFF;
   if (this->bringup_test_select_ != nullptr) {
     this->bringup_test_select_->publish_state(
       this->bringup_test_id_ == BRINGUP_TEST_BRIDGE_STATIC_VECTOR   ? "bridge_static_vector_test" :
@@ -144,8 +148,9 @@ bool ESCHigherComponent::read_trace_info_(
   uint16_t* crc16
 ) {
   uint8_t info[8]{0};
-  if (!this->read_register_(REG_TRACE_INFO, info, sizeof(info))) {
-    ESP_LOGW(TAG, "Failed to read TRACE_INFO");
+  uint8_t reg = REG_TRACE_INFO;
+  if (this->write_read(&reg, 1, info, sizeof(info)) != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "Failed to read TRACE_INFO");
     return false;
   }
 
@@ -167,7 +172,7 @@ bool ESCHigherComponent::read_trace_chunk_(uint16_t offset, uint8_t length, uint
   const i2c::ErrorCode err = this->write_read(tx, sizeof(tx), out, length);
   if (err == i2c::ERROR_OK)
     return true;
-  ESP_LOGW(
+  ESP_LOGE(
     TAG,
     "TRACE_READ offset=%u len=%u failed (%s)",
     static_cast<unsigned>(offset),
@@ -201,17 +206,18 @@ bool ESCHigherComponent::publish_bringup_trace_(
   if (trace_seq == this->last_bringup_trace_seq_) {
     return true;
   }
+  this->last_bringup_trace_seq_ = trace_seq;
+  this->trace_read_failed_ = false;
 
   if (trace_len == 0) {
     ESP_LOGI(TAG, "Bring-up trace seq=%u len=0", static_cast<unsigned>(trace_seq));
     publish_text(this->bringup_trace_decoded_text_sensor_, "");
     publish_text(this->bringup_trace_hex_text_sensor_, "");
-    this->last_bringup_trace_seq_ = trace_seq;
     return true;
   }
 
   if (record_size < TRACE_RECORD_SIZE) {
-    ESP_LOGW(
+    ESP_LOGE(
       TAG,
       "Bring-up trace seq=%u len=%u record_size=%u smaller than expected %u",
       static_cast<unsigned>(trace_seq),
@@ -219,6 +225,9 @@ bool ESCHigherComponent::publish_bringup_trace_(
       static_cast<unsigned>(record_size),
       static_cast<unsigned>(TRACE_RECORD_SIZE)
     );
+    publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
+    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    this->trace_read_failed_ = true;
     return false;
   }
 
@@ -236,10 +245,15 @@ bool ESCHigherComponent::publish_bringup_trace_(
   uint8_t trace[TRACE_BUFFER_SIZE]{0};
   uint16_t offset = 0;
   while (offset < trace_len) {
+    const uint16_t block_limit = this->max_block_len_ != 0 ? this->max_block_len_ : 16;
+    const uint16_t conservative_limit = std::min<uint16_t>(TRACE_READ_CHUNK_SIZE, block_limit);
     const uint8_t chunk_len = static_cast<uint8_t>(
-      std::min<uint16_t>(TRACE_READ_CHUNK_SIZE, static_cast<uint16_t>(trace_len - offset))
+      std::min<uint16_t>(conservative_limit, static_cast<uint16_t>(trace_len - offset))
     );
     if (!this->read_trace_chunk_(offset, chunk_len, trace + offset)) {
+      publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
+      publish_text(this->bringup_trace_hex_text_sensor_, "");
+      this->trace_read_failed_ = true;
       return false;
     }
     offset = static_cast<uint16_t>(offset + chunk_len);
@@ -257,7 +271,7 @@ bool ESCHigherComponent::publish_bringup_trace_(
       static_cast<unsigned>(crc16)
     );
   } else {
-    ESP_LOGW(
+    ESP_LOGE(
       TAG,
       "Bring-up trace seq=%u len=%u record_size=%u crc mismatch reported=0x%04X computed=0x%04X",
       static_cast<unsigned>(trace_seq),
@@ -266,6 +280,10 @@ bool ESCHigherComponent::publish_bringup_trace_(
       static_cast<unsigned>(crc16),
       static_cast<unsigned>(computed_crc)
     );
+    publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace CRC mismatch");
+    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    this->trace_read_failed_ = true;
+    return false;
   }
 
   std::string decoded;
@@ -362,7 +380,6 @@ bool ESCHigherComponent::publish_bringup_trace_(
 
   publish_text(this->bringup_trace_decoded_text_sensor_, decoded);
   publish_text(this->bringup_trace_hex_text_sensor_, hex);
-  this->last_bringup_trace_seq_ = trace_seq;
   return true;
 }
 
@@ -417,6 +434,10 @@ bool ESCHigherComponent::initialize_() {
     return false;
   }
 
+  this->max_block_len_ = id[5];
+  this->capabilities_ = u16_(id, 6);
+  this->trace_supported_ = (this->capabilities_ & CAP_TRACE_DUMP) != 0;
+
   ESP_LOGI(
     TAG,
     "Interface detected proto=%u.%u fw=%u.%u hw=%u max_block_len=%u caps=0x%04X",
@@ -426,8 +447,22 @@ bool ESCHigherComponent::initialize_() {
     id[3],
     id[4],
     id[5],
-    u16_(id, 6)
+    this->capabilities_
   );
+
+  if (!this->trace_supported_ && !this->trace_dump_not_supported_logged_) {
+    ESP_LOGE(
+      TAG,
+      "Trace dump required but STM does not advertise CAP_TRACE_DUMP; not reading 0x60/0x61 to avoid wedging I2C"
+    );
+    publish_text(
+      this->bringup_trace_decoded_text_sensor_,
+      "ERROR: trace required but STM does not advertise CAP_TRACE_DUMP"
+    );
+    publish_text(this->bringup_trace_hex_text_sensor_, "");
+    this->trace_required_missing_ = true;
+    this->trace_dump_not_supported_logged_ = true;
+  }
 
   return this->configure_watchdog_();
 }
@@ -624,16 +659,32 @@ void ESCHigherComponent::update() {
 
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
-        uint16_t trace_seq = 0;
-        uint16_t trace_len = 0;
-        uint16_t record_size = 0;
-        uint16_t crc16 = 0;
-        if (this->read_trace_info_(&trace_seq, &trace_len, &record_size, &crc16)) {
-          if (!this->publish_bringup_trace_(trace_seq, trace_len, record_size, crc16)) {
-            all_ok = false;
+        if (this->bringup_seq_for_trace_attempt_ != bringup[0]) {
+          this->bringup_seq_for_trace_attempt_ = bringup[0];
+          if (!this->trace_supported_) {
+            ESP_LOGE(
+              TAG,
+              "Trace dump required but STM does not advertise CAP_TRACE_DUMP; not reading 0x60/0x61 to avoid wedging I2C"
+            );
+            publish_text(
+              this->bringup_trace_decoded_text_sensor_,
+              "ERROR: trace required but STM does not advertise CAP_TRACE_DUMP"
+            );
+            publish_text(this->bringup_trace_hex_text_sensor_, "");
+            this->trace_required_missing_ = true;
+          } else {
+            uint16_t trace_seq = 0;
+            uint16_t trace_len = 0;
+            uint16_t record_size = 0;
+            uint16_t crc16 = 0;
+            if (this->read_trace_info_(&trace_seq, &trace_len, &record_size, &crc16)) {
+              (void) this->publish_bringup_trace_(trace_seq, trace_len, record_size, crc16);
+            } else {
+              publish_text(this->bringup_trace_decoded_text_sensor_, "ERROR: trace read failed");
+              publish_text(this->bringup_trace_hex_text_sensor_, "");
+              this->trace_read_failed_ = true;
+            }
           }
-        } else {
-          all_ok = false;
         }
       }
     } else {
@@ -660,6 +711,9 @@ void ESCHigherComponent::update() {
       all_ok = false;
     }
   }
+
+  if (this->trace_required_missing_ || this->trace_read_failed_)
+    all_ok = false;
 
   if (all_ok)
     this->status_clear_warning();

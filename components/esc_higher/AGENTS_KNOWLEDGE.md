@@ -42,5 +42,5 @@ Component-scoped notes for `components/esc_higher`.
 - Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`.
 - `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
 - `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.
-- For bring-up test `102`, the component automatically reads `TRACE_INFO`/`TRACE_READ` after completion, verifies the trace CRC best-effort, and publishes decoded trace text via `bringup_trace_decoded` plus optional `bringup_trace_hex`.
+- For bring-up test `102`, the component reads `TRACE_INFO`/`TRACE_READ` automatically only when the STM advertises `CAP_TRACE_DUMP`; otherwise it logs and reports the missing capability as a diagnostic error without touching `0x60`/`0x61`.
 - Host bring-up commands now carry an explicit test ID. Supported IDs are `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), and `103` (`forced_timer_diff_pwm`); `BRINGUP.test_id` remains the report field.
