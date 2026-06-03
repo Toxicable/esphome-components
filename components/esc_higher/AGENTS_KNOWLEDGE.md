@@ -43,5 +43,5 @@ Component-scoped notes for `components/esc_higher`.
 - `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
 - `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.
 - For bring-up test `102`, the component reads `TRACE_INFO`/`TRACE_READ` automatically only when the STM advertises `CAP_TRACE_DUMP`; otherwise it logs and reports the missing capability as a diagnostic error without touching `0x60`/`0x61`.
-- Trace records are always logged with `ESP_LOGI`; `bringup_trace_decoded` only carries a short summary and `bringup_trace_hex` should point users at the logs.
+- Trace records and raw hex dump lines are logged with `ESP_LOGI`; `bringup_trace_decoded` only carries a short summary and `bringup_trace_hex` should point users at the logs.
 - Host bring-up commands now carry an explicit test ID. Supported IDs are `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), and `103` (`forced_timer_diff_pwm`); `BRINGUP.test_id` remains the report field.

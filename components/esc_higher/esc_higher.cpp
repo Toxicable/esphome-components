@@ -59,6 +59,37 @@ void append_formatted_line(std::string& out, const char* fmt, ...) {
   out.append(line, copy_len);
   out.push_back('\n');
 }
+
+void log_hex_dump(const uint8_t* data, size_t len) {
+  constexpr size_t BYTES_PER_LINE = 16;
+  char line[3 * BYTES_PER_LINE + 32];
+
+  for (size_t offset = 0; offset < len; offset += BYTES_PER_LINE) {
+    int pos = std::snprintf(
+      line,
+      sizeof(line),
+      "Bring-up trace hex[%04u]:",
+      static_cast<unsigned>(offset)
+    );
+    if (pos < 0) {
+      continue;
+    }
+    for (size_t i = 0; i < BYTES_PER_LINE && offset + i < len; i++) {
+      if (pos >= static_cast<int>(sizeof(line)))
+        break;
+      const int written = std::snprintf(
+        line + pos,
+        sizeof(line) - static_cast<size_t>(pos),
+        " %02X",
+        static_cast<unsigned>(data[offset + i])
+      );
+      if (written < 0)
+        break;
+      pos += written;
+    }
+    ESP_LOGI(TAG, "%s", line);
+  }
+}
 }  // namespace
 
 void ESCHigherStartButton::press_action() {
@@ -263,6 +294,8 @@ bool ESCHigherComponent::publish_bringup_trace_(
   }
 
   const uint16_t computed_crc = crc16_ccitt_false_(trace, trace_len);
+  ESP_LOGI(TAG, "Bring-up trace raw hex dump (%u bytes):", static_cast<unsigned>(trace_len));
+  log_hex_dump(trace, trace_len);
   const bool crc_ok = (computed_crc == crc16);
   if (crc_ok) {
     ESP_LOGI(
