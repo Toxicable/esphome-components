@@ -804,13 +804,5 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  bringup_test_id: %u", static_cast<unsigned>(bringup_test_id_));
 }
 
-void ESCHigherComponent::log_mcsdk_snapshot_payload_(const uint8_t* payload, size_t len) {
-  if (len >= 20) {
-    const uint8_t mc_state = payload[0];
-    const uint16_t current_faults = u16_(payload, 1);
-    const uint16_t occurred_faults = u16_(payload, 3);
-    const int32_t speed_dhz = i32_(payload, 5);
-    const int16_t voltage_amp = i16_(payload, 9);
-    ESP_LOGD(TAG, 
 }  // namespace esc_higher
 }  // namespace esphome
