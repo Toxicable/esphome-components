@@ -16,7 +16,6 @@ namespace esc_higher {
 static const char* const TAG = "esc_higher";
 namespace {
 constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
-constexpr uint16_t TRACE_RECORD_CORE_SIZE = 36;
 
 template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
   if (sensor != nullptr)
@@ -211,14 +210,14 @@ bool ESCHigherComponent::publish_bringup_trace_(
     return true;
   }
 
-  if (record_size < TRACE_RECORD_CORE_SIZE) {
+  if (record_size < TRACE_RECORD_SIZE) {
     ESP_LOGW(
       TAG,
       "Bring-up trace seq=%u len=%u record_size=%u smaller than expected %u",
       static_cast<unsigned>(trace_seq),
       static_cast<unsigned>(trace_len),
       static_cast<unsigned>(record_size),
-      static_cast<unsigned>(TRACE_RECORD_CORE_SIZE)
+      static_cast<unsigned>(TRACE_RECORD_SIZE)
     );
     return false;
   }
@@ -624,7 +623,7 @@ void ESCHigherComponent::update() {
       publish_sensor(bringup_debug1_sensor_, i16_(bringup, 46));
 
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
-      if (bringup[2] == BRINGUP_TEST_BRIDGE_STATIC_VECTOR && bringup_terminal) {
+      if (bringup_terminal) {
         uint16_t trace_seq = 0;
         uint16_t trace_len = 0;
         uint16_t record_size = 0;
