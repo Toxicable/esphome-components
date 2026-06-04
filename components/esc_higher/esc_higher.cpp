@@ -605,7 +605,7 @@ void ESCHigherComponent::update() {
             }
           }
         } else {
-          ESP_LOGI(
+          ESP_LOGV(
             TAG,
             "Bring-up terminal report seq=%u already handled; debug read suppressed",
             static_cast<unsigned>(bringup[0])
