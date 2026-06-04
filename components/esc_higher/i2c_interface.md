@@ -330,6 +330,7 @@ Bring-up result / failure codes:
 - `24`: offset_calib_start_failed
 - `25`: offset_calib_timeout
 - `26`: offset_calib_not_ready
+- `27`: test102_stage_timeout
 
 Bring-up sweep report:
 
