@@ -428,6 +428,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool debug_log_supported_{false};
   bool debug_log_read_failed_{false};
   uint8_t last_bringup_report_seq_{0xFF};
+  bool force_next_bringup_debug_read_{false};
 
   sensor::Sensor* proto_major_sensor_{nullptr};
   sensor::Sensor* proto_minor_sensor_{nullptr};

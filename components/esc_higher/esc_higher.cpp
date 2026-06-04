@@ -407,10 +407,12 @@ bool ESCHigherComponent::run_bringup_test() {
     ESP_LOGW(TAG, "Unsupported bringup test id: %u", static_cast<unsigned>(test_id));
     return false;
   }
+  this->force_next_bringup_debug_read_ = true;
   return this->write_command_(OPCODE_RUN_BRINGUP_TEST, test_id, duration_ms, bringup_test_options_);
 }
 
 bool ESCHigherComponent::run_bridge_static_vector_test() {
+  this->force_next_bringup_debug_read_ = true;
   return this->write_command_(
     OPCODE_RUN_BRINGUP_TEST,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR,
@@ -420,6 +422,7 @@ bool ESCHigherComponent::run_bridge_static_vector_test() {
 }
 
 bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
+  this->force_next_bringup_debug_read_ = true;
   return this->write_command_(
     OPCODE_RUN_BRINGUP_TEST,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM,
@@ -567,8 +570,12 @@ void ESCHigherComponent::update() {
 
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
-        if (this->last_bringup_report_seq_ != bringup[0]) {
+        const bool new_report = this->last_bringup_report_seq_ != bringup[0];
+        const bool force_read = this->force_next_bringup_debug_read_;
+
+        if (new_report || force_read) {
           this->last_bringup_report_seq_ = bringup[0];
+          this->force_next_bringup_debug_read_ = false;
           ESP_LOGI(
             TAG,
             "Bring-up terminal report seq=%u state=%u result=%u",
@@ -576,22 +583,33 @@ void ESCHigherComponent::update() {
             static_cast<unsigned>(bringup[4]),
             static_cast<unsigned>(bringup[5])
           );
+          ESP_LOGI(
+            TAG,
+            "Reading debug log for bringup seq=%u force=%u",
+            static_cast<unsigned>(bringup[0]),
+            static_cast<unsigned>(force_read)
+          );
           if (!this->debug_log_supported_) {
             ESP_LOGW(TAG, "CAP_DEBUG_LOG not set on this firmware; skipping debug log read");
           } else {
             uint32_t debug_seq = 0;
-            uint16_t used_len = 0;
             uint16_t export_len = 0;
             uint16_t capacity = 0;
             uint16_t dropped = 0;
             uint16_t crc16 = 0;
-            if (this->read_debug_info_(&debug_seq, &used_len, &export_len, &capacity, &dropped, &crc16)) {
+            if (this->read_debug_info_(&debug_seq, nullptr, &export_len, &capacity, &dropped, &crc16)) {
               (void) this->publish_debug_log_(debug_seq, export_len, capacity, dropped, crc16);
             } else {
               publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
               this->debug_log_read_failed_ = true;
             }
           }
+        } else {
+          ESP_LOGI(
+            TAG,
+            "Bring-up terminal report seq=%u already handled; debug read suppressed",
+            static_cast<unsigned>(bringup[0])
+          );
         }
       }
     } else {
