@@ -180,10 +180,11 @@ bool ESCHigherComponent::publish_debug_log_(
     std::snprintf(
       summary,
       sizeof(summary),
-      "debug seq=%u len=0 crc=ok dropped=%u",
+      "debug seq=%u len=0 crc=ok dropped=%u empty_export",
       static_cast<unsigned>(debug_seq),
       static_cast<unsigned>(dropped)
     );
+    ESP_LOGW(TAG, "DEBUG_INFO returned empty export after terminal bringup");
     ESP_LOGI(TAG, "%s", summary);
     publish_text(this->debug_log_text_sensor_, summary);
     return true;
@@ -557,15 +558,7 @@ void ESCHigherComponent::update() {
             uint16_t dropped = 0;
             uint16_t crc16 = 0;
             if (this->read_debug_info_(&debug_seq, &used_len, &export_len, &capacity, &dropped, &crc16)) {
-              if (export_len > 0) {
-                ESP_LOGI(TAG, "Debug log available: seq=%u export_len=%u dropped=%u capacity=%u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(export_len), static_cast<unsigned>(dropped), static_cast<unsigned>(capacity));
-                (void) this->publish_debug_log_(debug_seq, export_len, dropped, crc16);
-              } else {
-                char summary[128];
-                std::snprintf(summary, sizeof(summary), "debug seq=%u len=0 crc=ok dropped=%u", static_cast<unsigned>(debug_seq), static_cast<unsigned>(dropped));
-                ESP_LOGI(TAG, "%s", summary);
-                publish_text(this->debug_log_text_sensor_, summary);
-              }
+              (void) this->publish_debug_log_(debug_seq, export_len, dropped, crc16);
             } else {
               publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
               this->debug_log_read_failed_ = true;
