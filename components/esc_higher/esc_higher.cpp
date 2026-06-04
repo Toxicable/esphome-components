@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <vector>
 
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
@@ -169,13 +170,14 @@ uint16_t ESCHigherComponent::crc16_ccitt_false_(const uint8_t* data, size_t len)
 
 bool ESCHigherComponent::publish_debug_log_(
   uint32_t debug_seq,
-  uint16_t export_len,
+  uint16_t stm_export_len,
+  uint16_t capacity,
   uint16_t dropped,
   uint16_t crc16
 ) {
   this->debug_log_read_failed_ = false;
 
-  if (export_len == 0) {
+  if (stm_export_len == 0) {
     char summary[128];
     std::snprintf(
       summary,
@@ -190,42 +192,66 @@ bool ESCHigherComponent::publish_debug_log_(
     return true;
   }
 
-  if (export_len > DEBUG_BUFFER_SIZE) {
-    ESP_LOGW(
-      TAG,
-      "Debug log seq=%u reported len=%u exceeds buffer size %u; truncating",
-      static_cast<unsigned>(debug_seq),
-      static_cast<unsigned>(export_len),
-      static_cast<unsigned>(DEBUG_BUFFER_SIZE)
-    );
-    export_len = DEBUG_BUFFER_SIZE;
-  }
-
-  uint8_t buffer[DEBUG_BUFFER_SIZE]{0};
-  uint16_t offset = 0;
-  while (offset < export_len) {
-    const uint16_t block_limit = this->max_block_len_ != 0 ? this->max_block_len_ : 16;
-    const uint16_t chunk_size = std::min<uint16_t>(DEBUG_READ_CHUNK_SIZE, block_limit);
-    const uint8_t chunk_len = static_cast<uint8_t>(
-      std::min<uint16_t>(chunk_size, static_cast<uint16_t>(export_len - offset))
-    );
-    if (!this->read_debug_chunk_(offset, chunk_len, buffer + offset)) {
-      publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
-      this->debug_log_read_failed_ = true;
-      return false;
-    }
-    offset = static_cast<uint16_t>(offset + chunk_len);
-  }
-
-  const uint16_t computed_crc = crc16_ccitt_false_(buffer, export_len);
-  if (computed_crc != crc16) {
+  // Validate export_len against reported capacity.
+  if (stm_export_len > capacity) {
     char summary[128];
     std::snprintf(
       summary,
       sizeof(summary),
-      "debug crc bad seq=%u len=%u reported=0x%04X computed=0x%04X",
+      "debug seq=%u malformed_info export_len=%u exceeds capacity=%u",
       static_cast<unsigned>(debug_seq),
-      static_cast<unsigned>(export_len),
+      static_cast<unsigned>(stm_export_len),
+      static_cast<unsigned>(capacity)
+    );
+    ESP_LOGE(TAG, "%s", summary);
+    publish_text(this->debug_log_text_sensor_, summary);
+    this->debug_log_read_failed_ = true;
+    return false;
+  }
+
+  // Check if export fits in our local buffer.
+  if (stm_export_len > DEBUG_BUFFER_SIZE) {
+    char summary[128];
+    std::snprintf(
+      summary,
+      sizeof(summary),
+      "debug seq=%u export_too_large len=%u max=%u",
+      static_cast<unsigned>(debug_seq),
+      static_cast<unsigned>(stm_export_len),
+      static_cast<unsigned>(DEBUG_BUFFER_SIZE)
+    );
+    ESP_LOGW(TAG, "%s", summary);
+    publish_text(this->debug_log_text_sensor_, summary);
+    this->debug_log_read_failed_ = true;
+    return false;
+  }
+
+  std::vector<uint8_t> buffer(stm_export_len);
+  uint16_t read_len = 0;
+  while (read_len < stm_export_len) {
+    const uint16_t block_limit = this->max_block_len_ != 0 ? this->max_block_len_ : 16;
+    const uint16_t chunk_size = std::min<uint16_t>(DEBUG_READ_CHUNK_SIZE, block_limit);
+    const uint8_t chunk_len = static_cast<uint8_t>(
+      std::min<uint16_t>(chunk_size, static_cast<uint16_t>(stm_export_len - read_len))
+    );
+    if (!this->read_debug_chunk_(read_len, chunk_len, buffer.data() + read_len)) {
+      publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
+      this->debug_log_read_failed_ = true;
+      return false;
+    }
+    read_len = static_cast<uint16_t>(read_len + chunk_len);
+  }
+
+  const uint16_t computed_crc = crc16_ccitt_false_(buffer.data(), read_len);
+  if (computed_crc != crc16) {
+    char summary[256];
+    std::snprintf(
+      summary,
+      sizeof(summary),
+      "debug crc bad seq=%u stm_export_len=%u read_len=%u reported_crc=0x%04X computed_crc=0x%04X",
+      static_cast<unsigned>(debug_seq),
+      static_cast<unsigned>(stm_export_len),
+      static_cast<unsigned>(read_len),
       static_cast<unsigned>(crc16),
       static_cast<unsigned>(computed_crc)
     );
@@ -239,14 +265,14 @@ bool ESCHigherComponent::publish_debug_log_(
     TAG,
     "Debug log seq=%u len=%u crc=0x%04X verified",
     static_cast<unsigned>(debug_seq),
-    static_cast<unsigned>(export_len),
+    static_cast<unsigned>(stm_export_len),
     static_cast<unsigned>(crc16)
   );
 
   // Treat buffer as UTF-8/ASCII text; split on '\n' and log each line.
-  const char* line_start = reinterpret_cast<const char*>(buffer);
+  const char* line_start = reinterpret_cast<const char*>(buffer.data());
   const char* line_end = line_start;
-  const char* buf_end = line_start + export_len;
+  const char* buf_end = line_start + read_len;
   while (line_end < buf_end) {
     const char* nl = std::find(line_end, buf_end, '\n');
     const size_t line_len = static_cast<size_t>(nl - line_end);
@@ -257,7 +283,10 @@ bool ESCHigherComponent::publish_debug_log_(
       line_buf[copy_len] = '\0';
       ESP_LOGI(TAG, "DBG: %s", line_buf);
     }
-    line_end = nl + 1;  // advance past '\n' (or to buf_end)
+    if (nl == buf_end) {
+      break;  // final partial line with no trailing newline
+    }
+    line_end = nl + 1;
   }
 
   char summary[128];
@@ -266,13 +295,12 @@ bool ESCHigherComponent::publish_debug_log_(
     sizeof(summary),
     "debug seq=%u len=%u crc=ok dropped=%u",
     static_cast<unsigned>(debug_seq),
-    static_cast<unsigned>(export_len),
+    static_cast<unsigned>(stm_export_len),
     static_cast<unsigned>(dropped)
   );
   publish_text(this->debug_log_text_sensor_, summary);
   return true;
 }
-
 bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
   uint8_t tx[17]{0};
   tx[0] = REG_COMMAND;
@@ -558,7 +586,7 @@ void ESCHigherComponent::update() {
             uint16_t dropped = 0;
             uint16_t crc16 = 0;
             if (this->read_debug_info_(&debug_seq, &used_len, &export_len, &capacity, &dropped, &crc16)) {
-              (void) this->publish_debug_log_(debug_seq, export_len, dropped, crc16);
+              (void) this->publish_debug_log_(debug_seq, export_len, capacity, dropped, crc16);
             } else {
               publish_text(this->debug_log_text_sensor_, "ERROR: debug log read failed");
               this->debug_log_read_failed_ = true;

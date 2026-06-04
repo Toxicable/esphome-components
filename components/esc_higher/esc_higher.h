@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
@@ -361,7 +362,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool read_debug_info_(uint32_t* debug_seq, uint16_t* used_len, uint16_t* export_len, uint16_t* capacity,
                         uint16_t* dropped, uint16_t* crc16);
   bool read_debug_chunk_(uint16_t offset, uint8_t length, uint8_t* out);
-  bool publish_debug_log_(uint32_t debug_seq, uint16_t export_len, uint16_t dropped, uint16_t crc16);
+  bool publish_debug_log_(uint32_t debug_seq, uint16_t export_len, uint16_t capacity, uint16_t dropped, uint16_t crc16);
   bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2);
   bool initialize_();
   bool configure_watchdog_();
@@ -395,7 +396,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_DEBUG_READ = 0x71;
   static constexpr uint8_t REG_DEBUG_CTRL = 0x72;
   static constexpr uint16_t CAP_DEBUG_LOG = 1u << 7;
-  static constexpr uint16_t DEBUG_BUFFER_SIZE = 2048;
+  static constexpr uint16_t DEBUG_BUFFER_SIZE = 4096;
   static constexpr uint8_t DEBUG_READ_CHUNK_SIZE = 64;
 
   static constexpr uint8_t OPCODE_START = 0x01;

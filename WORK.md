@@ -1,0 +1,2 @@
+setup a directory called devices where I can specify a device name, then there should be a process which can fetch the config for that device then run the esphome firmware compile? if that can be done in this environment, and then OTA it to the device.
+Theres probably some missing chunks there so look up the documentations and come up with a pla before executing
