@@ -1,3 +1,5 @@
+Always commit and push changes after you've done a batch - a batch is what makes sense to grup up some changes
+
 ## Continuous learning
 - When you learn new **repo-wide** project knowledge, coding style, or preferences during a session, update `AGENTS.md` (and `README.md` if it affects users) before finishing so the next agent benefits.
 - When you learn new **component-specific** knowledge, update that component's `components/<name>/AGENTS_KNOWLEDGE.md` before finishing.
