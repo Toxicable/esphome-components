@@ -23,12 +23,15 @@ esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
 ESCHigherComponent = esc_higher_ns.class_(
     "ESCHigherComponent", cg.PollingComponent, i2c.I2CDevice
 )
-ESCHigherStartButton = esc_higher_ns.class_("ESCHigherStartButton", button.Button)
-ESCHigherStopButton = esc_higher_ns.class_("ESCHigherStopButton", button.Button)
+ESCHigherStartButton = esc_higher_ns.class_(
+    "ESCHigherStartButton", button.Button)
+ESCHigherStopButton = esc_higher_ns.class_(
+    "ESCHigherStopButton", button.Button)
 ESCHigherClearFaultsButton = esc_higher_ns.class_(
     "ESCHigherClearFaultsButton", button.Button
 )
-ESCHigherEstopButton = esc_higher_ns.class_("ESCHigherEstopButton", button.Button)
+ESCHigherEstopButton = esc_higher_ns.class_(
+    "ESCHigherEstopButton", button.Button)
 ESCHigherRunBringupTestButton = esc_higher_ns.class_(
     "ESCHigherRunBringupTestButton", button.Button
 )
@@ -180,6 +183,8 @@ BRINGUP_PROFILE_OPTIONS = [
     "4 faster pickup",
     "5 lower observer min",
     "6 higher observer min",
+    "7 ",
+    "8 ",
 ]
 
 
@@ -372,7 +377,7 @@ CONFIG_SCHEMA = (
                 icon="mdi:play-box",
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
-    cv.Optional(CONF_RUN_BRIDGE_STATIC_VECTOR_TEST): button.button_schema(
+            cv.Optional(CONF_RUN_BRIDGE_STATIC_VECTOR_TEST): button.button_schema(
                 ESCHigherRunBridgeStaticVectorTestButton,
                 icon="mdi:play-box-outline",
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -403,7 +408,8 @@ async def to_code(config):
 
     cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
     cg.add(var.set_watchdog_timeout_ms(config[CONF_WATCHDOG_TIMEOUT_MS]))
-    cg.add(var.set_bringup_test_duration_ms(config[CONF_BRINGUP_TEST_DURATION_MS]))
+    cg.add(var.set_bringup_test_duration_ms(
+        config[CONF_BRINGUP_TEST_DURATION_MS]))
     cg.add(var.set_bringup_test_options(config[CONF_BRINGUP_TEST_OPTIONS]))
     cg.add(var.set_speed_ramp_target_dhz(config[CONF_SPEED_RAMP_TARGET_DHZ]))
     cg.add(var.set_speed_ramp_time_ms(config[CONF_SPEED_RAMP_TIME_MS]))
