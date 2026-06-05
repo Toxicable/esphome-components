@@ -96,6 +96,9 @@ void ESCHigherComponent::setup() {
                                                                      "full_spin_sequence"
     );
   }
+  if (this->bringup_profile_select_ != nullptr) {
+    this->bringup_profile_select_->publish_state("0 baseline");
+  }
 }
 
 bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
@@ -714,12 +717,11 @@ void ESCHigherBringupProfileSelect::control(const std::string& value) {
 
   ESP_LOGI(TAG, "Setting bringup profile index=%d (%s)", idx, value.c_str());
 
+  this->publish_state(value);
+
   if (!this->parent_->set_bringup_profile(static_cast<uint8_t>(idx))) {
     ESP_LOGW(TAG, "Failed to set bringup profile index=%d", idx);
-    return;
   }
-
-  this->publish_state(value);
 }
 
 }  // namespace esc_higher
