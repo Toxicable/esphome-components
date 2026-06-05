@@ -111,6 +111,21 @@ CONF_BRINGUP_STEPS_TOTAL = "bringup_steps_total"
 CONF_BRINGUP_ATTEMPT_COUNT = "bringup_attempt_count"
 CONF_BRINGUP_DEBUG0 = "bringup_debug0"
 CONF_BRINGUP_DEBUG1 = "bringup_debug1"
+CONF_BRINGUP_LAST_APP_FAULT_DETAIL = "bringup_last_app_fault_detail"
+CONF_BRINGUP_PROFILE_INDEX = "bringup_profile_index"
+CONF_BRINGUP_PROFILE_COUNT = "bringup_profile_count"
+CONF_BRINGUP_PROFILE_FLAGS = "bringup_profile_flags"
+CONF_BRINGUP_SWITCH_OVER_MS = "bringup_switch_over_ms"
+CONF_BRINGUP_RUN_MS = "bringup_run_ms"
+CONF_BRINGUP_MAX_SPEED_DHZ = "bringup_max_speed_dhz"
+CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA = "bringup_max_current_reference_ma"
+CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA = "bringup_max_phase_current_reported_ma"
+
+CONF_BRINGUP_PROFILE_NUMBER = "bringup_profile"
+
+ESCHigherBringupProfileNumber = esc_higher_ns.class_(
+    "ESCHigherBringupProfileNumber", number.Number
+)
 
 CONF_DEBUG_V_ALPHA_RAW_S16 = "v_alpha_raw_s16"
 CONF_DEBUG_V_BETA_RAW_S16 = "v_beta_raw_s16"
@@ -289,6 +304,20 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_ATTEMPT_COUNT): _diagnostic_sensor_schema(),
             cv.Optional(CONF_BRINGUP_DEBUG0): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_DEBUG1): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_LAST_APP_FAULT_DETAIL): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PROFILE_INDEX): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PROFILE_COUNT): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PROFILE_FLAGS): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_SWITCH_OVER_MS): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_RUN_MS): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_MAX_SPEED_DHZ): _raw_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA): _diagnostic_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PROFILE_NUMBER): number.number_schema(
+                ESCHigherBringupProfileNumber,
+                icon="mdi:tune",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
             cv.Optional(CONF_DEBUG_V_ALPHA_RAW_S16): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_V_BETA_RAW_S16): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_V_Q_RAW_S16): _raw_sensor_schema(),
@@ -428,6 +457,15 @@ async def to_code(config):
     await _bind_sensor(config, CONF_BRINGUP_ATTEMPT_COUNT, var.set_bringup_attempt_count_sensor)
     await _bind_sensor(config, CONF_BRINGUP_DEBUG0, var.set_bringup_debug0_sensor)
     await _bind_sensor(config, CONF_BRINGUP_DEBUG1, var.set_bringup_debug1_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_LAST_APP_FAULT_DETAIL, var.set_bringup_last_app_fault_detail_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PROFILE_INDEX, var.set_bringup_profile_index_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PROFILE_COUNT, var.set_bringup_profile_count_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_PROFILE_FLAGS, var.set_bringup_profile_flags_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_SWITCH_OVER_MS, var.set_bringup_switch_over_ms_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_RUN_MS, var.set_bringup_run_ms_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_MAX_SPEED_DHZ, var.set_bringup_max_speed_dhz_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA, var.set_bringup_max_current_reference_ma_sensor)
+    await _bind_sensor(config, CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA, var.set_bringup_max_phase_current_reported_ma_sensor)
     await _bind_sensor(config, CONF_DEBUG_V_ALPHA_RAW_S16, var.set_debug_v_alpha_raw_s16_sensor)
     await _bind_sensor(config, CONF_DEBUG_V_BETA_RAW_S16, var.set_debug_v_beta_raw_s16_sensor)
     await _bind_sensor(config, CONF_DEBUG_V_Q_RAW_S16, var.set_debug_v_q_raw_s16_sensor)
@@ -516,3 +554,11 @@ async def to_code(config):
             step=1,
         )
         cg.add(n.set_parent(var))
+    if CONF_BRINGUP_PROFILE_NUMBER in config:
+        n = await number.new_number(
+            config[CONF_BRINGUP_PROFILE_NUMBER],
+            min_value=0,
+            max_value=255,
+            step=1,
+        )
+        await cg.register_parented(n, var)

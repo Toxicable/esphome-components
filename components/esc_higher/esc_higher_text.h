@@ -94,6 +94,16 @@ static const char* fault_detail_to_cstr(uint8_t v) {
       return "software_error";
     case 9:
       return "driver_protection_fault";
+    case 10:
+      return "watchdog_timeout";
+    case 11:
+      return "bringup_failed";
+    case 12:
+      return "bringup_aborted";
+    case 13:
+      return "bringup_current_limit";
+    case 14:
+      return "bringup_profile_invalid";
     default:
       return "unknown";
   }
@@ -201,6 +211,8 @@ static const char* bringup_result_to_cstr(uint8_t v) {
     return "offset_calib_not_ready";
     case 17:
       return "passed";
+    case 32:
+      return "profile_invalid";
     default:
       return "unknown";
   }
