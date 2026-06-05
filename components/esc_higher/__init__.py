@@ -183,8 +183,6 @@ BRINGUP_PROFILE_OPTIONS = [
     "4 faster pickup",
     "5 lower observer min",
     "6 higher observer min",
-    "7 ",
-    "8 ",
 ]
 
 
