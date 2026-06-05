@@ -121,10 +121,10 @@ CONF_BRINGUP_MAX_SPEED_DHZ = "bringup_max_speed_dhz"
 CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA = "bringup_max_current_reference_ma"
 CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA = "bringup_max_phase_current_reported_ma"
 
-CONF_BRINGUP_PROFILE_NUMBER = "bringup_profile"
+CONF_BRINGUP_PROFILE_SELECT = "bringup_profile"
 
-ESCHigherBringupProfileNumber = esc_higher_ns.class_(
-    "ESCHigherBringupProfileNumber", number.Number
+ESCHigherBringupProfileSelect = esc_higher_ns.class_(
+    "ESCHigherBringupProfileSelect", select.Select
 )
 
 CONF_DEBUG_V_ALPHA_RAW_S16 = "v_alpha_raw_s16"
@@ -170,6 +170,16 @@ BRINGUP_TEST_OPTIONS = [
     "full_spin_sequence",
     "bridge_static_vector_test",
     "forced_timer_diff_pwm",
+]
+
+BRINGUP_PROFILE_OPTIONS = [
+    "0 baseline",
+    "1 gentler low-speed",
+    "2 less current",
+    "3 gentler less current",
+    "4 faster pickup",
+    "5 lower observer min",
+    "6 higher observer min",
 ]
 
 
@@ -313,9 +323,8 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_MAX_SPEED_DHZ): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA): _diagnostic_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PROFILE_NUMBER): number.number_schema(
-                ESCHigherBringupProfileNumber,
-                icon="mdi:tune",
+            cv.Optional(CONF_BRINGUP_PROFILE_SELECT): select.select_schema(
+                ESCHigherBringupProfileSelect,
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
             cv.Optional(CONF_DEBUG_V_ALPHA_RAW_S16): _raw_sensor_schema(),
@@ -554,11 +563,10 @@ async def to_code(config):
             step=1,
         )
         cg.add(n.set_parent(var))
-    if CONF_BRINGUP_PROFILE_NUMBER in config:
-        n = await number.new_number(
-            config[CONF_BRINGUP_PROFILE_NUMBER],
-            min_value=0,
-            max_value=255,
-            step=1,
+    if CONF_BRINGUP_PROFILE_SELECT in config:
+        sel = await select.new_select(
+            config[CONF_BRINGUP_PROFILE_SELECT],
+            options=BRINGUP_PROFILE_OPTIONS,
         )
-        await cg.register_parented(n, var)
+        await cg.register_parented(sel, var)
+        cg.add(var.set_bringup_profile_select(sel))

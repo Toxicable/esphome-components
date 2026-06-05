@@ -172,8 +172,12 @@ esc_higher:
     name: "Bringup Occurred Faults Text"
   debug_log:
     name: "Debug Log"
+  bringup_profile:
+    name: "Bringup Profile"
   bringup_test_select:
     name: "Bringup Test"
+  ## `bringup_profile` is a requested-profile dropdown. The STM32 still reports the actual
+  ## executed profile via bringup_profile_index / bringup_profile_count / bringup_profile_flags.
   ## Defaults to full_spin_sequence / 101.
   ## Option bit0 enables forced_timer_diff_pwm. Only use with motor disconnected or with a current-limited bench supply.
   ## After test 102 completes, the component automatically reads DEBUG_INFO / DEBUG_READ when
@@ -240,6 +244,7 @@ esc_higher:
 
 Notes:
 - Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
+- Selecting `bringup_profile` sends opcode `0x0B` with `param0=<selected profile index 0..6>`.
 - `run_bringup_test` sends opcode `0x09` with `param0=<selected bringup test_id>`, `param1=bringup_test_duration_ms` for `full_spin_sequence` or `50` for `bridge_static_vector_test`, and `param2=bringup_test_options`.
 - `run_bridge_static_vector_test` sends opcode `0x09` with `param0=102`, `param1=50`, and `param2=bringup_test_options`.
 - `run_forced_timer_diff_pwm_test` sends opcode `0x09` with `param0=103`, `param1=1000`, and `param2=bringup_test_options`.

@@ -686,19 +686,40 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  bringup_test_id: %u", static_cast<unsigned>(bringup_test_id_));
 }
 
-void ESCHigherBringupProfileNumber::control(float value) {
+void ESCHigherBringupProfileSelect::control(const std::string& value) {
   if (this->parent_ == nullptr)
     return;
-  const int idx = static_cast<int>(value);
-  if (idx < 0 || idx > 255) {
-    ESP_LOGW(TAG, "Invalid bringup profile index: %d", idx);
+
+  int idx = -1;
+
+  if (value.rfind("0", 0) == 0)
+    idx = 0;
+  else if (value.rfind("1", 0) == 0)
+    idx = 1;
+  else if (value.rfind("2", 0) == 0)
+    idx = 2;
+  else if (value.rfind("3", 0) == 0)
+    idx = 3;
+  else if (value.rfind("4", 0) == 0)
+    idx = 4;
+  else if (value.rfind("5", 0) == 0)
+    idx = 5;
+  else if (value.rfind("6", 0) == 0)
+    idx = 6;
+
+  if (idx < 0) {
+    ESP_LOGW(TAG, "Unknown bringup profile selection: %s", value.c_str());
     return;
   }
+
+  ESP_LOGI(TAG, "Setting bringup profile index=%d (%s)", idx, value.c_str());
+
   if (!this->parent_->set_bringup_profile(static_cast<uint8_t>(idx))) {
     ESP_LOGW(TAG, "Failed to set bringup profile index=%d", idx);
     return;
   }
-  this->publish_state(static_cast<float>(idx));
+
+  this->publish_state(value);
 }
 
 }  // namespace esc_higher

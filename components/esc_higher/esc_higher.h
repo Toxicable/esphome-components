@@ -63,9 +63,9 @@ class ESCHigherSpeedTargetNumber : public number::Number, public Parented<ESCHig
   void control(float value) override;
 };
 
-class ESCHigherBringupProfileNumber : public number::Number, public Parented<ESCHigherComponent> {
+class ESCHigherBringupProfileSelect : public select::Select, public Parented<ESCHigherComponent> {
  public:
-  void control(float value) override;
+  void control(const std::string& value) override;
 };
 
 class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
@@ -94,6 +94,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
   void set_bringup_test_id(uint8_t value) {
     bringup_test_id_ = value;
+  }
+  void set_bringup_profile_select(select::Select* s) {
+    bringup_profile_select_ = s;
   }
 
   bool start_motor();
@@ -565,6 +568,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_occurred_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* debug_log_text_sensor_{nullptr};
   select::Select* bringup_test_select_{nullptr};
+  select::Select* bringup_profile_select_{nullptr};
 };
 
 }  // namespace esc_higher
