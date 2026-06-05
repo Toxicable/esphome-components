@@ -10,10 +10,13 @@ Component-scoped notes for `components/esc_higher`.
   - `0x10` STATUS (16 bytes)
   - `0x20` COMMAND (write register + 16-byte payload)
   - `0x30` TELEMETRY (48 bytes)
-  - `0x40` BRINGUP (48 bytes)
+  - `0x40` BRINGUP (64 bytes)
   - `0x50` DEBUG_TELEMETRY (32 bytes)
-  - `0x60` TRACE_INFO (8 bytes, bring-up trace metadata)
-  - `0x61` TRACE_READ (chunked binary trace reader; request offset/length in the write phase)
+  - `0x60` TUNING (8 bytes)
+  - `0x70` DEBUG_INFO (16 bytes)
+  - `0x71` DEBUG_READ (chunked text debug-log reader; request offset/length in the write phase)
+  - `0x72` DEBUG_CTRL (1-byte write command)
+  - `0x73` DEBUG_INFO2 (20 bytes)
 - COMMAND payload encoding:
   - byte0 `seq`, byte1 `opcode`, byte2 `flags`, byte3 `reserved`
   - bytes4..7 `param0` LE i32
@@ -26,7 +29,8 @@ Component-scoped notes for `components/esc_higher`.
   - Speed setpoint slider `speed_target_dhz` -> `0x04` (`param0=<slider value>`, `param1=speed_ramp_time_ms`)
   - `estop` -> `0x05`
   - Bring-up controls:
-    - `bringup_profile` is a fixed-option select for requested profiles `0..6` and sends `0x0B` (`param0=<selected profile index>`)
+    - `bringup_profile` is a fixed-option select for requested profiles `0..8` and sends `0x0B` (`param0=<selected profile index>`)
+    - the component sends the selected `bringup_profile` again after ID/watchdog setup, so HA reconnects reapply the normal-start profile
     - `bringup_test_select` chooses `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), or `103` (`forced_timer_diff_pwm`)
     - `run_bringup_test` -> `0x09` (`param0=<selected test_id>`, `param1=bringup_test_duration_ms` for `101`/`103` or `50` for `102`, `param2=bringup_test_options`)
     - `run_bridge_static_vector_test` -> `0x09` (`param0=102`, `param1=50`, `param2=bringup_test_options`)
@@ -40,10 +44,10 @@ Component-scoped notes for `components/esc_higher`.
 - Fault text output includes only documented MCSDK bits; any non-documented set bits are emitted as `unknown_bits` (no synthetic `reserved*` labels).
 - `i2c_interface.md` is treated as externally owned specification text; implement code to match it, but do not edit it unless explicitly requested.
 - I2C register reads and command writes are single-shot (no internal retry loop).
-- Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`.
+- Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`; `disable_watchdog` defaults false.
 - `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
 - `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.
-- `bringup_profile_index`, `bringup_profile_count`, and `bringup_profile_flags` remain report sensors from the STM32; they do not mirror the requested `bringup_profile` select directly.
-- For bring-up test `102`, the component reads `TRACE_INFO`/`TRACE_READ` automatically only when the STM advertises `CAP_TRACE_DUMP`; otherwise it logs and reports the missing capability as a diagnostic error without touching `0x60`/`0x61`.
-- Trace records and raw hex dump lines are logged with `ESP_LOGI`; `bringup_trace_decoded` only carries a short summary and `bringup_trace_hex` should point users at the logs.
+- `bringup_profile_index`, `bringup_profile_count`, `bringup_profile_flags`, and `bringup_profile_summary` are read-only report fields from the STM32; they do not mirror the requested `bringup_profile` select directly.
+- Terminal bring-up reports read `DEBUG_INFO`/`DEBUG_READ` automatically when the STM advertises `CAP_DEBUG_LOG`; full debug lines go to ESPHome logs and the `debug_log` text sensor carries a short summary.
+- `ibus_ma` is reserved for real DC input current and should be presented as unknown/diagnostic while STM32 returns zero. `motor_current_ma` is motor phase-current telemetry.
 - Host bring-up commands now carry an explicit test ID. Supported IDs are `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), and `103` (`forced_timer_diff_pwm`); `BRINGUP.test_id` remains the report field.

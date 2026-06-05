@@ -16,6 +16,18 @@ namespace esc_higher {
 static const char* const TAG = "esc_higher";
 namespace {
 constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
+static const char* const BRINGUP_PROFILE_OPTIONS[] = {
+  "0 known-good 4.0s 8/9/10A",
+  "1 gentle 5.7s 1.8/1.8/2.0A",
+  "2 moderate 5.6s 1.5/1.6/1.8A",
+  "3 gentle moderate 5.8s",
+  "4 faster pickup 4.4s",
+  "5 low current 2.2A",
+  "6 low current 2.4A",
+  "7 observer min 400 mechanical rpm",
+  "8 observer min 600 mechanical rpm",
+};
+constexpr uint8_t BRINGUP_PROFILE_OPTION_COUNT = sizeof(BRINGUP_PROFILE_OPTIONS) / sizeof(BRINGUP_PROFILE_OPTIONS[0]);
 
 template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
   if (sensor != nullptr)
@@ -25,6 +37,21 @@ template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
 void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
   if (sensor != nullptr)
     sensor->publish_state(value);
+}
+
+const char* bringup_profile_option(uint8_t idx) {
+  if (idx >= BRINGUP_PROFILE_OPTION_COUNT)
+    return BRINGUP_PROFILE_OPTIONS[0];
+  return BRINGUP_PROFILE_OPTIONS[idx];
+}
+
+int parse_profile_index(const std::string& value) {
+  if (value.empty() || value[0] < '0' || value[0] > '9')
+    return -1;
+  const int idx = value[0] - '0';
+  if (idx >= BRINGUP_PROFILE_OPTION_COUNT)
+    return -1;
+  return idx;
 }
 }  // namespace
 
@@ -97,7 +124,7 @@ void ESCHigherComponent::setup() {
     );
   }
   if (this->bringup_profile_select_ != nullptr) {
-    this->bringup_profile_select_->publish_state("0 baseline");
+    this->bringup_profile_select_->publish_state(bringup_profile_option(this->bringup_profile_index_));
   }
 }
 
@@ -375,7 +402,15 @@ bool ESCHigherComponent::initialize_() {
     ESP_LOGD(TAG, "CAP_DEBUG_LOG detected");
   }
 
-  return this->configure_watchdog_();
+  if (!this->configure_watchdog_())
+    return false;
+
+  if (!this->set_bringup_profile(this->bringup_profile_index_)) {
+    ESP_LOGW(TAG, "Failed to apply configured bringup profile index=%u", static_cast<unsigned>(this->bringup_profile_index_));
+    return false;
+  }
+
+  return true;
 }
 
 bool ESCHigherComponent::start_motor() {
@@ -412,15 +447,11 @@ bool ESCHigherComponent::run_bringup_test() {
   }
 
   constexpr int32_t OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1 << 0;
-  constexpr int32_t OPT_DISABLE_WATCHDOG = 1 << 4;
-  constexpr int32_t OPT_RESTORE_WATCHDOG = 1 << 5;
 
   int32_t options = bringup_test_options_;
 
   if (test_id == BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
     options &= ~OPT_ALLOW_FORCED_TIMER_DIFF_PWM;
-    options |= OPT_DISABLE_WATCHDOG | OPT_RESTORE_WATCHDOG;
-    ESP_LOGI(TAG, "full_spin_sequence: disabling STM32 watchdog for bring-up and restoring afterwards");
   }
 
   this->force_next_bringup_debug_read_ = true;
@@ -438,12 +469,13 @@ bool ESCHigherComponent::run_bridge_static_vector_test() {
 }
 
 bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
+  constexpr int32_t OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1 << 0;
   this->force_next_bringup_debug_read_ = true;
   return this->write_command_(
     OPCODE_RUN_BRINGUP_TEST,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS,
-    bringup_test_options_
+    bringup_test_options_ | OPT_ALLOW_FORCED_TIMER_DIFF_PWM
   );
 }
 
@@ -598,6 +630,20 @@ void ESCHigherComponent::update() {
       publish_sensor(bringup_max_speed_dhz_sensor_, i16_(bringup, 56));
       publish_sensor(bringup_max_current_reference_ma_sensor_, u16_(bringup, 58));
       publish_sensor(bringup_max_phase_current_reported_ma_sensor_, u16_(bringup, 60));
+      {
+        char profile_summary[128];
+        std::snprintf(
+          profile_summary,
+          sizeof(profile_summary),
+          "idx=%u count=%u flags=0x%02X switch_ms=%u run_ms=%u",
+          static_cast<unsigned>(bringup[49]),
+          static_cast<unsigned>(bringup[50]),
+          static_cast<unsigned>(bringup[51]),
+          static_cast<unsigned>(u16_(bringup, 52)),
+          static_cast<unsigned>(u16_(bringup, 54))
+        );
+        publish_text(bringup_profile_summary_text_sensor_, profile_summary);
+      }
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
         const bool new_report = this->last_bringup_report_seq_ != bringup[0];
@@ -693,22 +739,7 @@ void ESCHigherBringupProfileSelect::control(const std::string& value) {
   if (this->parent_ == nullptr)
     return;
 
-  int idx = -1;
-
-  if (value.rfind("0", 0) == 0)
-    idx = 0;
-  else if (value.rfind("1", 0) == 0)
-    idx = 1;
-  else if (value.rfind("2", 0) == 0)
-    idx = 2;
-  else if (value.rfind("3", 0) == 0)
-    idx = 3;
-  else if (value.rfind("4", 0) == 0)
-    idx = 4;
-  else if (value.rfind("5", 0) == 0)
-    idx = 5;
-  else if (value.rfind("6", 0) == 0)
-    idx = 6;
+  const int idx = parse_profile_index(value);
 
   if (idx < 0) {
     ESP_LOGW(TAG, "Unknown bringup profile selection: %s", value.c_str());
@@ -717,6 +748,7 @@ void ESCHigherBringupProfileSelect::control(const std::string& value) {
 
   ESP_LOGI(TAG, "Setting bringup profile index=%d (%s)", idx, value.c_str());
 
+  this->parent_->set_bringup_profile_index(static_cast<uint8_t>(idx));
   this->publish_state(value);
 
   if (!this->parent_->set_bringup_profile(static_cast<uint8_t>(idx))) {

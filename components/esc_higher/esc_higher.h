@@ -108,6 +108,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool run_bridge_static_vector_test();
   bool run_forced_timer_diff_pwm_test();
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
+  void set_bringup_profile_index(uint8_t idx) {
+    bringup_profile_index_ = idx;
+  }
 
   void set_proto_major_sensor(sensor::Sensor* s) {
     proto_major_sensor_ = s;
@@ -387,6 +390,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     bringup_occurred_faults_text_sensor_ = s;
   }
+  void set_bringup_profile_summary_text_sensor(text_sensor::TextSensor* s) {
+    bringup_profile_summary_text_sensor_ = s;
+  }
   void set_debug_log_text_sensor(text_sensor::TextSensor* s) {
     debug_log_text_sensor_ = s;
   }
@@ -457,7 +463,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   int32_t bringup_test_duration_ms_{5000};
   int32_t bringup_test_options_{0};
   uint8_t bringup_test_id_{BRINGUP_TEST_FULL_SPIN_SEQUENCE};
-  bool disable_watchdog_{true};
+  uint8_t bringup_profile_index_{0};
+  bool disable_watchdog_{false};
   uint32_t watchdog_timeout_ms_{500};
   bool initialized_{false};
   uint32_t next_init_retry_ms_{0};
@@ -566,6 +573,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_occurred_faults_text_sensor_{nullptr};
+  text_sensor::TextSensor* bringup_profile_summary_text_sensor_{nullptr};
   text_sensor::TextSensor* debug_log_text_sensor_{nullptr};
   select::Select* bringup_test_select_{nullptr};
   select::Select* bringup_profile_select_{nullptr};

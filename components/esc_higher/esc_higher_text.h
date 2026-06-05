@@ -67,8 +67,20 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
       return "faults_still_active";
     case 10:
       return "latched_faults_present";
+    case 11:
+      return "current_limit_exceeded";
+    case 12:
+      return "startup_guard_stopped";
     case 17:
       return "unknown_register";
+    case 24:
+      return "offset_calib_start_failed";
+    case 25:
+      return "offset_calib_timeout";
+    case 26:
+      return "offset_calib_not_ready";
+    case 27:
+      return "test102_stage_timeout";
     default:
       return "unknown";
   }
@@ -192,23 +204,31 @@ static const char* bringup_result_to_cstr(uint8_t v) {
     case 16:
       return "unsupported_test";
     case 18:
-    return "motor_did_not_spin";
+      return "motor_did_not_spin";
     case 19:
       return "no_differential_pwm";
     case 20:
-    return "current_limit_exceeded";
+      return "current_limit_exceeded";
     case 21:
-    return "dry_run_complete";
+      return "dry_run_complete";
     case 22:
-    return "output_disabled";
+      return "output_disabled";
     case 23:
-    return "current_not_valid";
+      return "current_not_valid";
     case 24:
-    return "offset_calib_start_failed";
+      return "offset_calib_start_failed";
     case 25:
-    return "offset_calib_timeout";
+      return "offset_calib_timeout";
     case 26:
-    return "offset_calib_not_ready";
+      return "offset_calib_not_ready";
+    case 28:
+      return "live_current_map_passed";
+    case 29:
+      return "live_current_map_inconclusive";
+    case 30:
+      return "live_current_map_permuted";
+    case 31:
+      return "live_current_map_global_sign_inverted";
     case 17:
       return "passed";
     case 32:
@@ -251,6 +271,8 @@ static const char* opcode_to_cstr(uint8_t v) {
       return "SET_WATCHDOG";
     case 0x09:
       return "RUN_BRINGUP_TEST";
+    case 0x0A:
+      return "RUN_MOTOR_TUNING";
     case 0x0B:
       return "SET_BRINGUP_PROFILE";
     default:

@@ -155,6 +155,7 @@ CONF_BRINGUP_RESULT_TEXT = "bringup_result_text"
 CONF_BRINGUP_TEST_ID_TEXT = "bringup_test_id_text"
 CONF_BRINGUP_CURRENT_FAULTS_TEXT = "bringup_current_faults_text"
 CONF_BRINGUP_OCCURRED_FAULTS_TEXT = "bringup_occurred_faults_text"
+CONF_BRINGUP_PROFILE_SUMMARY_TEXT = "bringup_profile_summary"
 CONF_DEBUG_LOG_TEXT = "debug_log"
 CONF_BRINGUP_TEST_SELECT = "bringup_test_select"
 
@@ -176,13 +177,15 @@ BRINGUP_TEST_OPTIONS = [
 ]
 
 BRINGUP_PROFILE_OPTIONS = [
-    "0 baseline",
-    "1 gentler low-speed",
-    "2 less current",
-    "3 gentler less current",
-    "4 faster pickup",
-    "5 lower observer min",
-    "6 higher observer min",
+    "0 known-good 4.0s 8/9/10A",
+    "1 gentle 5.7s 1.8/1.8/2.0A",
+    "2 moderate 5.6s 1.5/1.6/1.8A",
+    "3 gentle moderate 5.8s",
+    "4 faster pickup 4.4s",
+    "5 low current 2.2A",
+    "6 low current 2.4A",
+    "7 observer min 400 mechanical rpm",
+    "8 observer min 600 mechanical rpm",
 ]
 
 
@@ -208,7 +211,7 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(ESCHigherComponent),
-            cv.Optional(CONF_DISABLE_WATCHDOG, default=True): cv.boolean,
+            cv.Optional(CONF_DISABLE_WATCHDOG, default=False): cv.boolean,
             cv.Optional(CONF_WATCHDOG_TIMEOUT_MS, default=500): cv.int_range(
                 min=0, max=2147483647
             ),
@@ -249,6 +252,7 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_MOTOR_CURRENT_MA): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
@@ -352,7 +356,9 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_RESULT_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_ID_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_BRINGUP_PROFILE_SUMMARY_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_DEBUG_LOG_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_SELECT): select.select_schema(
                 ESCHigherBringupTestSelect,
@@ -530,6 +536,9 @@ async def to_code(config):
     if CONF_BRINGUP_OCCURRED_FAULTS_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_OCCURRED_FAULTS_TEXT])
         cg.add(var.set_bringup_occurred_faults_text_sensor(s))
+    if CONF_BRINGUP_PROFILE_SUMMARY_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_PROFILE_SUMMARY_TEXT])
+        cg.add(var.set_bringup_profile_summary_text_sensor(s))
     if CONF_DEBUG_LOG_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_DEBUG_LOG_TEXT])
         cg.add(var.set_debug_log_text_sensor(s))

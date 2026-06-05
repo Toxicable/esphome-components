@@ -28,11 +28,11 @@ esc_higher:
   i2c_id: i2c_bus
   update_interval: 100ms  # Optional / default
   address: 0x34  # Optional / default
-  disable_watchdog: true
+  disable_watchdog: false
   # watchdog_timeout_ms: 500
   # bringup_test_duration_ms: 5000
   # bringup_test_options: 0
-  # bringup_test_options: 1
+  # bringup_test_options: 48  ## Disable and restore STM32 watchdog for explicit autonomous diagnostics only.
 
   ## Speed-ramp defaults + slider control (opcode 0x04):
   speed_ramp_target_dhz: 1200
@@ -68,11 +68,11 @@ esc_higher:
   vbus_mv:
     name: "Bus Voltage mV"
   ibus_ma:
-    name: "Bus Current mA"
+    name: "DC Input Current Unknown"
   motor_current_ma:
-    name: "Motor Current mA"
+    name: "Motor Phase Current A"
   speed_dhz:
-    name: "Speed dHz"
+    name: "Mechanical Speed dHz"
   target_speed_dhz:
     name: "Target Speed dHz"
   drive_limit_centi_pct:
@@ -174,10 +174,13 @@ esc_higher:
     name: "Debug Log"
   bringup_profile:
     name: "Bringup Profile"
+  bringup_profile_summary:
+    name: "Bringup Profile Summary"
   bringup_test_select:
     name: "Bringup Test"
-  ## `bringup_profile` is a requested-profile dropdown. The STM32 still reports the actual
-  ## executed profile via bringup_profile_index / bringup_profile_count / bringup_profile_flags.
+  ## `bringup_profile` is a requested-profile dropdown. The component sends the selected
+  ## profile to STM32 on reconnect; STM32 reports the actual executed profile through
+  ## bringup_profile_index / bringup_profile_count / bringup_profile_flags / bringup_profile_summary.
   ## Defaults to full_spin_sequence / 101.
   ## Option bit0 enables forced_timer_diff_pwm. Only use with motor disconnected or with a current-limited bench supply.
   ## After test 102 completes, the component automatically reads DEBUG_INFO / DEBUG_READ when
@@ -244,9 +247,12 @@ esc_higher:
 
 Notes:
 - Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
-- Selecting `bringup_profile` sends opcode `0x0B` with `param0=<selected profile index 0..6>`.
+- Selecting `bringup_profile` sends opcode `0x0B` with `param0=<selected profile index 0..8>`.
+- On reconnect, the component sends the selected `bringup_profile` before normal Start Motor is used.
 - `run_bringup_test` sends opcode `0x09` with `param0=<selected bringup test_id>`, `param1=bringup_test_duration_ms` for `full_spin_sequence` or `50` for `bridge_static_vector_test`, and `param2=bringup_test_options`.
 - `run_bridge_static_vector_test` sends opcode `0x09` with `param0=102`, `param1=50`, and `param2=bringup_test_options`.
 - `run_forced_timer_diff_pwm_test` sends opcode `0x09` with `param0=103`, `param1=1000`, and `param2=bringup_test_options`.
+- `bringup_test_options` bit `4` disables the STM32 command watchdog for a diagnostic run and bit `5` restores the previous setting afterwards; set both bits together as `48`.
 - `bringup_test_options: 1` enables the forced timer differential PWM test path. Use only with motor disconnected or with a current-limited bench supply.
+- `ibus_ma` is reserved for a real DC input-current measurement and currently remains zero/unknown. Use `motor_current_ma` as motor phase-current telemetry, not PSU input current.
 - After a bring-up run with test ID `102`, the component reads `DEBUG_INFO` (`0x70`) and `DEBUG_READ` (`0x71`) automatically when the STM advertises `CAP_DEBUG_LOG`, decodes variable-length debug records, verifies CRC16-CCITT-FALSE, logs full record details in ESPHome, and publishes only a short summary to `debug_log`.
