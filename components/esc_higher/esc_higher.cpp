@@ -407,8 +407,21 @@ bool ESCHigherComponent::run_bringup_test() {
     ESP_LOGW(TAG, "Unsupported bringup test id: %u", static_cast<unsigned>(test_id));
     return false;
   }
+
+  constexpr int32_t OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1 << 0;
+  constexpr int32_t OPT_DISABLE_WATCHDOG = 1 << 4;
+  constexpr int32_t OPT_RESTORE_WATCHDOG = 1 << 5;
+
+  int32_t options = bringup_test_options_;
+
+  if (test_id == BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
+    options &= ~OPT_ALLOW_FORCED_TIMER_DIFF_PWM;
+    options |= OPT_DISABLE_WATCHDOG | OPT_RESTORE_WATCHDOG;
+    ESP_LOGI(TAG, "full_spin_sequence: disabling STM32 watchdog for bring-up and restoring afterwards");
+  }
+
   this->force_next_bringup_debug_read_ = true;
-  return this->write_command_(OPCODE_RUN_BRINGUP_TEST, test_id, duration_ms, bringup_test_options_);
+  return this->write_command_(OPCODE_RUN_BRINGUP_TEST, test_id, duration_ms, options);
 }
 
 bool ESCHigherComponent::run_bridge_static_vector_test() {

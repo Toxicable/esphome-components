@@ -1,2 +1,6 @@
 setup a directory called devices where I can specify a device name, then there should be a process which can fetch the config for that device then run the esphome firmware compile? if that can be done in this environment, and then OTA it to the device.
 Theres probably some missing chunks there so look up the documentations and come up with a pla before executing, or even just push the code and can we sent an instructio nto es[home and tell it to flash and deploy]
+
+
+
+the BQ charger needs to have it's config set not on /setup/startup, it should be when the charger gets connected to to be able to recover since it's doesn't hold 
