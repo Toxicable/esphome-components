@@ -689,12 +689,16 @@ void ESCHigherComponent::dump_config() {
 void ESCHigherBringupProfileNumber::control(float value) {
   if (this->parent_ == nullptr)
     return;
-  const uint8_t idx = static_cast<uint8_t>(value);
-  if (!this->parent_->set_bringup_profile(idx)) {
-    ESP_LOGW(TAG, "Failed to set bringup profile %u", static_cast<unsigned>(idx));
+  const int idx = static_cast<int>(value);
+  if (idx < 0 || idx > 255) {
+    ESP_LOGW(TAG, "Invalid bringup profile index: %d", idx);
     return;
   }
-  this->publish_state(value);
+  if (!this->parent_->set_bringup_profile(static_cast<uint8_t>(idx))) {
+    ESP_LOGW(TAG, "Failed to set bringup profile index=%d", idx);
+    return;
+  }
+  this->publish_state(static_cast<float>(idx));
 }
 
 }  // namespace esc_higher

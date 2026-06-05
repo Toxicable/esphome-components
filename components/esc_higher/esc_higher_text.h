@@ -251,6 +251,8 @@ static const char* opcode_to_cstr(uint8_t v) {
       return "SET_WATCHDOG";
     case 0x09:
       return "RUN_BRINGUP_TEST";
+    case 0x0B:
+      return "SET_BRINGUP_PROFILE";
     default:
       return "unknown";
   }
