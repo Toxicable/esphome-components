@@ -58,8 +58,9 @@ Notes:
 |   `0x10` | `STATUS`          | read   |   16 |
 |   `0x20` | `COMMAND`         | write  |   16 |
 |   `0x30` | `TELEMETRY`       | read   |   48 |
-|   `0x40` | `BRINGUP`         | read   |   48 |
+|   `0x40` | `BRINGUP`         | read   |   64 |
 |   `0x50` | `DEBUG_TELEMETRY` | read   |   32 |
+|   `0x60` | `TUNING`          | read   |    8 |
 |   `0x70` | `DEBUG_INFO`      | read   |   16 |
 |   `0x71` | `DEBUG_READ`      | w/r    |   64 |
 |   `0x72` | `DEBUG_CTRL`      | write  |    1 |
@@ -75,7 +76,7 @@ Notes:
 |      3 | `fw_minor`      | `u8`  |             0 |
 |      4 | `hw_id`         | `u8`  |             1 |
 |      5 | `max_block_len` | `u8`  |            64 |
-|      6 | `capabilities`  | `u16` |       `0x008D` |
+|      6 | `capabilities`  | `u16` |       `0x00CD` |
 
 Capability bits:
 
@@ -85,6 +86,7 @@ Capability bits:
 - bit `3`: temperature measurement available
 - bit `4`: reverse supported
 - bit `5`: brake supported
+- bit `6`: motor candidate validation/tuning workflow supported
 - bit `7`: generic debug log supported
 
 ## `STATUS` register `0x10`
@@ -143,6 +145,11 @@ Bring-up failure details are reported in `BRINGUP.result` / `BRINGUP.failure_cod
 - `7`: overcurrent
 - `8`: software error
 - `9`: driver protection fault
+- `10`: watchdog timeout
+- `11`: bringup failed
+- `12`: bringup aborted
+- `13`: bringup current limit
+- `14`: bringup profile invalid
 
 MCSDK fault bit mapping (`current_faults` / `occurred_faults`):
 
@@ -191,6 +198,8 @@ Supported opcodes:
 - `0x05`: `ESTOP`
 - `0x07`: `SET_WATCHDOG`
 - `0x09`: `RUN_BRINGUP_TEST`
+- `0x0A`: `RUN_MOTOR_TUNING`
+- `0x0B`: `SET_BRINGUP_PROFILE`
 
 `SET_SPEED_RAMP`:
 
@@ -211,10 +220,9 @@ Supported opcodes:
 - `param1`: `duration_ms`
 - `param2`: options / reserved
 
-`bridge_static_vector_test` is a dry-run diagnostic. It skips offset
-calibration, then logs vectors `1`, `2`, and `3`. It does not prove the
-current-map sign pattern as a pass/fail condition. The final bring-up result
-code is `dry_run_complete`.
+`bridge_static_vector_test` performs offset calibration, applies three bounded
+live vectors, and validates the phase-current response. It passes only when the
+positive dominant phase order is `A`, `B`, `C`.
 
 Bring-up option bits:
 
@@ -223,6 +231,25 @@ Bring-up option bits:
 - bit `5`: restore previous watchdog setting after test
 
 The host selects the bring-up test by `param0`.
+
+`SET_BRINGUP_PROFILE`:
+
+- `param0`: bring-up profile index
+- `param1`: reserved, must be `0`
+- `param2`: reserved, must be `0`
+
+`RUN_MOTOR_TUNING`:
+
+- `param0`: persist candidate after validation (`0` or `1`)
+- `param1`: full-spin observation duration in `ms`, must be greater than zero
+- `param2`: reserved, must be `0`
+
+The I2C command validates the currently active `MotorConfig_t`. It runs the live
+phase-map test `102`, then the full-spin sequence `101`. A failure or host abort
+restores the previous configuration. Persistence occurs only after both tests
+pass. The command saves, disables, and restores the command watchdog around the
+entire workflow. Read `TUNING` for the orchestration result and `BRINGUP` for
+the active or most recent subtest.
 
 ## `TELEMETRY` register `0x30`
 
@@ -258,7 +285,7 @@ Notes:
 - `drive_limit_centi_pct` is optional and currently zero.
 - `debug0` / `debug1` are reserved for bring-up diagnostics. For test `102`,
   `debug0` reports the current CCR spread after a vector attempt, and `debug1`
-  carries offset-calibration / dry-run flags.
+  carries offset-calibration and live-vector flags.
 - A zero field does not always mean the physical value is zero.
 
 ## `BRINGUP` register `0x40`
@@ -292,6 +319,16 @@ Detailed bring-up runner status/report.
 |     42 | `attempt_count`         | `u16` |    - | increments every run |
 |     44 | `debug0`                | `i16` |    - | temporary |
 |     46 | `debug1`                | `i16` |    - | temporary |
+|     48 | `last_app_fault_detail` | `u8`  |    - | best UI-facing app fault |
+|     49 | `profile_index`         | `u8`  |    - | selected bring-up profile |
+|     50 | `profile_count`         | `u8`  |    - | fixed profile table size |
+|     51 | `profile_flags`         | `u8`  |    - | bit0 seen_switch_over, bit1 seen_run |
+|     52 | `switch_over_ms`        | `u16` |   ms | first switch-over observation |
+|     54 | `run_ms`                | `u16` |   ms | first RUN observation |
+|     56 | `max_speed_dhz`         | `i16` |  dHz | max absolute speed during test |
+|     58 | `max_current_ref_mA`    | `u16` |   mA | max absolute current reference |
+|     60 | `max_phase_current_mA`  | `u16` |   mA | max absolute measured phase current |
+|     62 | `reserved2`             | `u16` |    - | zero |
 
 Bring-up state values:
 
@@ -331,6 +368,11 @@ Bring-up result / failure codes:
 - `25`: offset_calib_timeout
 - `26`: offset_calib_not_ready
 - `27`: test102_stage_timeout
+- `28`: live_current_map_passed
+- `29`: live_current_map_inconclusive
+- `30`: live_current_map_permuted
+- `31`: live_current_map_global_sign_inverted
+- `32`: bringup_profile_invalid
 
 Bring-up sweep report:
 
@@ -370,6 +412,43 @@ Optional raw/internal values for firmware debugging only.
 |     30 | `reserved3`        | `u16` | zero |
 
 Do not treat these values as calibrated phase voltages.
+
+## `TUNING` register `0x60`
+
+Read-only status for the candidate validation/tuning orchestrator.
+
+| Offset | Field                | Type | Notes |
+| -----: | -------------------- | ---- | ----- |
+|      0 | `seq`                | `u8` | increments on each snapshot |
+|      1 | `state`              | `u8` | tuning state |
+|      2 | `result`             | `u8` | terminal or current result |
+|      3 | `active`             | `u8` | `1` while the workflow owns the motor |
+|      4 | `saved_config_valid` | `u8` | `1` when flash contains a valid saved config |
+|    5-7 | `reserved`           | `u8` | zero |
+
+State values:
+
+- `0`: idle
+- `1`: phase map
+- `2`: spin request
+- `3`: spin
+- `4`: restoring previous configuration
+- `5`: complete
+- `6`: failed
+- `7`: aborted
+
+Result values:
+
+- `0`: none
+- `1`: busy
+- `2`: invalid config
+- `3`: apply failed
+- `4`: phase map failed
+- `5`: spin failed
+- `6`: persistence failed
+- `7`: restore failed
+- `8`: aborted
+- `9`: passed
 
 ## `DEBUG_INFO` register `0x70`
 
@@ -440,13 +519,12 @@ the same for fixed strings.
 
 The firmware currently emits lines such as:
 
-- `bringup start test=102 opts=0x01 attempt=1 seq_len=6 pulse_ms=1`
-- `test102 config mode=dry_run output=disabled ...`
-- `test102 dry_run skip_offset_calib`
-- `vec=1 begin alpha=1 beta=0 ...`
-- `vec=1 setphase rc=8 spread=0 ...`
-- `vec=1 result status=setphase_nonzero output=disabled ...`
-- `bringup done result=dry_run_complete ...`
+- `bringup start test=102 ...`
+- `test102 live_current_map start ...`
+- `test102 offset_calib done ...`
+- `vec=1 begin alpha=... beta=...`
+- `test102 vector_stats A_high ...`
+- `test102 done result=live_current_map_passed ...`
 
 `DEBUG_INFO.crc16` and `DEBUG_READ` both refer to the same frozen export
 snapshot. The client should read `DEBUG_INFO`, then read `DEBUG_READ` chunks for
@@ -457,7 +535,7 @@ snapshot. The client should read `DEBUG_INFO`, then read `DEBUG_READ` chunks for
 - Telemetry/status reads do not affect bring-up state.
 - Valid control commands refresh the watchdog.
 - Invalid commands do not refresh the watchdog.
-- `STOP` and `ESTOP` are always accepted and abort an active bring-up test.
+- `STOP` and `ESTOP` are always accepted and abort active bring-up or tuning workflows.
 - A failed bring-up test leaves the motor stopped.
 - A completed bring-up test leaves the motor stopped unless the step explicitly documents otherwise.
 - No speed target is retained across reset.
