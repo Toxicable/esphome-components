@@ -172,20 +172,8 @@ esc_higher:
     name: "Bringup Occurred Faults Text"
   debug_log:
     name: "Debug Log"
-  bringup_profile:
-    name: "Bringup Profile"
-  bringup_profile_summary:
-    name: "Bringup Profile Summary"
   bringup_test_select:
     name: "Bringup Test"
-  ## `bringup_profile` is a requested-profile dropdown. The component sends the selected
-  ## profile to STM32 on reconnect; STM32 reports the actual executed profile through
-  ## bringup_profile_index / bringup_profile_count / bringup_profile_flags / bringup_profile_summary.
-  ## Defaults to full_spin_sequence / 101.
-  ## Option bit0 enables forced_timer_diff_pwm. Only use with motor disconnected or with a current-limited bench supply.
-  ## After test 102 completes, the component automatically reads DEBUG_INFO / DEBUG_READ when
-  ## the STM advertises CAP_DEBUG_LOG, logs the full debug records to ESPHome logs, and publishes only a
-  ## short summary to the `debug_log` text sensor.
 
   ## BRINGUP.test_id is a report field; bringup_test_select chooses which bringup test the run button starts.
 
@@ -228,6 +216,18 @@ esc_higher:
   bringup_test_id_text:
     name: "Bringup Test ID Text"
 
+  ## Config/Board/Diagnostic text sensors:
+  config_status_text:
+    name: "Config Status"
+  board_config_text:
+    name: "Board Config"
+  diag_blocked_text:
+    name: "Diag Blocked Command"
+  diag_fault_text:
+    name: "Diag Fault Explanation"
+  diag_startup_text:
+    name: "Diag Startup Summary"
+
   ## Write command buttons:
   start_motor:
     name: "Start Motor"
@@ -247,8 +247,6 @@ esc_higher:
 
 Notes:
 - Moving `speed_target_dhz` sends command opcode `0x04` with `param0=<slider value>` and `param1=speed_ramp_time_ms`.
-- Selecting `bringup_profile` sends opcode `0x0B` with `param0=<selected profile index 0..8>`.
-- On reconnect, the component sends the selected `bringup_profile` before normal Start Motor is used.
 - `run_bringup_test` sends opcode `0x09` with `param0=<selected bringup test_id>`, `param1=bringup_test_duration_ms` for `full_spin_sequence` or `50` for `bridge_static_vector_test`, and `param2=bringup_test_options`.
 - `run_bridge_static_vector_test` sends opcode `0x09` with `param0=102`, `param1=50`, and `param2=bringup_test_options`.
 - `run_forced_timer_diff_pwm_test` sends opcode `0x09` with `param0=103`, `param1=1000`, and `param2=bringup_test_options`.
