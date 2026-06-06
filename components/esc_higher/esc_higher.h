@@ -63,11 +63,6 @@ class ESCHigherSpeedTargetNumber : public number::Number, public Parented<ESCHig
   void control(float value) override;
 };
 
-class ESCHigherBringupProfileSelect : public select::Select, public Parented<ESCHigherComponent> {
- public:
-  void control(const std::string& value) override;
-};
-
 class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -95,9 +90,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_test_id(uint8_t value) {
     bringup_test_id_ = value;
   }
-  void set_bringup_profile_select(select::Select* s) {
-    bringup_profile_select_ = s;
-  }
 
   bool start_motor();
   bool stop_motor();
@@ -108,9 +100,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool run_bridge_static_vector_test();
   bool run_forced_timer_diff_pwm_test();
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
-  void set_bringup_profile_index(uint8_t idx) {
-    bringup_profile_index_ = idx;
-  }
 
   void set_proto_major_sensor(sensor::Sensor* s) {
     proto_major_sensor_ = s;
@@ -285,14 +274,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_last_app_fault_detail_sensor(sensor::Sensor* s) {
     bringup_last_app_fault_detail_sensor_ = s;
   }
-  void set_bringup_profile_index_sensor(sensor::Sensor* s) {
-    bringup_profile_index_sensor_ = s;
   }
-  void set_bringup_profile_count_sensor(sensor::Sensor* s) {
-    bringup_profile_count_sensor_ = s;
   }
-  void set_bringup_profile_flags_sensor(sensor::Sensor* s) {
-    bringup_profile_flags_sensor_ = s;
   }
   void set_bringup_switch_over_ms_sensor(sensor::Sensor* s) {
     bringup_switch_over_ms_sensor_ = s;
@@ -309,7 +292,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_max_phase_current_reported_ma_sensor(sensor::Sensor* s) {
     bringup_max_phase_current_reported_ma_sensor_ = s;
   }
-  bool set_bringup_profile(uint8_t idx);
 
   void set_telemetry_debug0_sensor(sensor::Sensor* s) {
     telemetry_debug0_sensor_ = s;
@@ -390,8 +372,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     bringup_occurred_faults_text_sensor_ = s;
   }
-  void set_bringup_profile_summary_text_sensor(text_sensor::TextSensor* s) {
-    bringup_profile_summary_text_sensor_ = s;
   }
   void set_debug_log_text_sensor(text_sensor::TextSensor* s) {
     debug_log_text_sensor_ = s;
@@ -449,7 +429,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t OPCODE_ESTOP = 0x05;
   static constexpr uint8_t OPCODE_SET_WATCHDOG = 0x07;
   static constexpr uint8_t OPCODE_RUN_BRINGUP_TEST = 0x09;
-  static constexpr uint8_t OPCODE_SET_BRINGUP_PROFILE = 0x0B;
   static constexpr uint8_t BRINGUP_TEST_FULL_SPIN_SEQUENCE = 101;
   static constexpr uint8_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR = 102;
   static constexpr uint8_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM = 103;
@@ -463,7 +442,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   int32_t bringup_test_duration_ms_{5000};
   int32_t bringup_test_options_{0};
   uint8_t bringup_test_id_{BRINGUP_TEST_FULL_SPIN_SEQUENCE};
-  uint8_t bringup_profile_index_{0};
   bool disable_watchdog_{false};
   uint32_t watchdog_timeout_ms_{500};
   bool initialized_{false};
@@ -536,9 +514,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* bringup_debug1_sensor_{nullptr};
 
   sensor::Sensor* bringup_last_app_fault_detail_sensor_{nullptr};
-  sensor::Sensor* bringup_profile_index_sensor_{nullptr};
-  sensor::Sensor* bringup_profile_count_sensor_{nullptr};
-  sensor::Sensor* bringup_profile_flags_sensor_{nullptr};
   sensor::Sensor* bringup_switch_over_ms_sensor_{nullptr};
   sensor::Sensor* bringup_run_ms_sensor_{nullptr};
   sensor::Sensor* bringup_max_speed_dhz_sensor_{nullptr};
@@ -573,10 +548,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_occurred_faults_text_sensor_{nullptr};
-  text_sensor::TextSensor* bringup_profile_summary_text_sensor_{nullptr};
   text_sensor::TextSensor* debug_log_text_sensor_{nullptr};
   select::Select* bringup_test_select_{nullptr};
-  select::Select* bringup_profile_select_{nullptr};
 };
 
 }  // namespace esc_higher

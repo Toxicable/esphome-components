@@ -115,20 +115,13 @@ CONF_BRINGUP_ATTEMPT_COUNT = "bringup_attempt_count"
 CONF_BRINGUP_DEBUG0 = "bringup_debug0"
 CONF_BRINGUP_DEBUG1 = "bringup_debug1"
 CONF_BRINGUP_LAST_APP_FAULT_DETAIL = "bringup_last_app_fault_detail"
-CONF_BRINGUP_PROFILE_INDEX = "bringup_profile_index"
-CONF_BRINGUP_PROFILE_COUNT = "bringup_profile_count"
-CONF_BRINGUP_PROFILE_FLAGS = "bringup_profile_flags"
 CONF_BRINGUP_SWITCH_OVER_MS = "bringup_switch_over_ms"
 CONF_BRINGUP_RUN_MS = "bringup_run_ms"
 CONF_BRINGUP_MAX_SPEED_DHZ = "bringup_max_speed_dhz"
 CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA = "bringup_max_current_reference_ma"
 CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA = "bringup_max_phase_current_reported_ma"
 
-CONF_BRINGUP_PROFILE_SELECT = "bringup_profile"
 
-ESCHigherBringupProfileSelect = esc_higher_ns.class_(
-    "ESCHigherBringupProfileSelect", select.Select
-)
 
 CONF_DEBUG_V_ALPHA_RAW_S16 = "v_alpha_raw_s16"
 CONF_DEBUG_V_BETA_RAW_S16 = "v_beta_raw_s16"
@@ -155,7 +148,6 @@ CONF_BRINGUP_RESULT_TEXT = "bringup_result_text"
 CONF_BRINGUP_TEST_ID_TEXT = "bringup_test_id_text"
 CONF_BRINGUP_CURRENT_FAULTS_TEXT = "bringup_current_faults_text"
 CONF_BRINGUP_OCCURRED_FAULTS_TEXT = "bringup_occurred_faults_text"
-CONF_BRINGUP_PROFILE_SUMMARY_TEXT = "bringup_profile_summary"
 CONF_DEBUG_LOG_TEXT = "debug_log"
 CONF_BRINGUP_TEST_SELECT = "bringup_test_select"
 
@@ -174,18 +166,6 @@ BRINGUP_TEST_OPTIONS = [
     "full_spin_sequence",
     "bridge_static_vector_test",
     "forced_timer_diff_pwm",
-]
-
-BRINGUP_PROFILE_OPTIONS = [
-    "0 known-good 4.0s 8/9/10A",
-    "1 gentle 5.7s 1.8/1.8/2.0A",
-    "2 moderate 5.6s 1.5/1.6/1.8A",
-    "3 gentle moderate 5.8s",
-    "4 faster pickup 4.4s",
-    "5 low current 2.2A",
-    "6 low current 2.4A",
-    "7 observer min 400 mechanical rpm",
-    "8 observer min 600 mechanical rpm",
 ]
 
 
@@ -322,18 +302,11 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_DEBUG0): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_DEBUG1): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_LAST_APP_FAULT_DETAIL): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PROFILE_INDEX): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PROFILE_COUNT): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PROFILE_FLAGS): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_SWITCH_OVER_MS): _diagnostic_sensor_schema(),
             cv.Optional(CONF_BRINGUP_RUN_MS): _diagnostic_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MAX_SPEED_DHZ): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA): _diagnostic_sensor_schema(),
             cv.Optional(CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PROFILE_SELECT): select.select_schema(
-                ESCHigherBringupProfileSelect,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
             cv.Optional(CONF_DEBUG_V_ALPHA_RAW_S16): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_V_BETA_RAW_S16): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_V_Q_RAW_S16): _raw_sensor_schema(),
@@ -358,7 +331,6 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_TEST_ID_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PROFILE_SUMMARY_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_DEBUG_LOG_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_SELECT): select.select_schema(
                 ESCHigherBringupTestSelect,
@@ -477,9 +449,6 @@ async def to_code(config):
     await _bind_sensor(config, CONF_BRINGUP_DEBUG0, var.set_bringup_debug0_sensor)
     await _bind_sensor(config, CONF_BRINGUP_DEBUG1, var.set_bringup_debug1_sensor)
     await _bind_sensor(config, CONF_BRINGUP_LAST_APP_FAULT_DETAIL, var.set_bringup_last_app_fault_detail_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PROFILE_INDEX, var.set_bringup_profile_index_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PROFILE_COUNT, var.set_bringup_profile_count_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PROFILE_FLAGS, var.set_bringup_profile_flags_sensor)
     await _bind_sensor(config, CONF_BRINGUP_SWITCH_OVER_MS, var.set_bringup_switch_over_ms_sensor)
     await _bind_sensor(config, CONF_BRINGUP_RUN_MS, var.set_bringup_run_ms_sensor)
     await _bind_sensor(config, CONF_BRINGUP_MAX_SPEED_DHZ, var.set_bringup_max_speed_dhz_sensor)
@@ -536,9 +505,6 @@ async def to_code(config):
     if CONF_BRINGUP_OCCURRED_FAULTS_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_OCCURRED_FAULTS_TEXT])
         cg.add(var.set_bringup_occurred_faults_text_sensor(s))
-    if CONF_BRINGUP_PROFILE_SUMMARY_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_PROFILE_SUMMARY_TEXT])
-        cg.add(var.set_bringup_profile_summary_text_sensor(s))
     if CONF_DEBUG_LOG_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_DEBUG_LOG_TEXT])
         cg.add(var.set_debug_log_text_sensor(s))
@@ -576,10 +542,6 @@ async def to_code(config):
             step=1,
         )
         cg.add(n.set_parent(var))
-    if CONF_BRINGUP_PROFILE_SELECT in config:
         sel = await select.new_select(
-            config[CONF_BRINGUP_PROFILE_SELECT],
-            options=BRINGUP_PROFILE_OPTIONS,
         )
         await cg.register_parented(sel, var)
-        cg.add(var.set_bringup_profile_select(sel))

@@ -39,20 +39,6 @@ void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
     sensor->publish_state(value);
 }
 
-const char* bringup_profile_option(uint8_t idx) {
-  if (idx >= BRINGUP_PROFILE_OPTION_COUNT)
-    return BRINGUP_PROFILE_OPTIONS[0];
-  return BRINGUP_PROFILE_OPTIONS[idx];
-}
-
-int parse_profile_index(const std::string& value) {
-  if (value.empty() || value[0] < '0' || value[0] > '9')
-    return -1;
-  const int idx = value[0] - '0';
-  if (idx >= BRINGUP_PROFILE_OPTION_COUNT)
-    return -1;
-  return idx;
-}
 }  // namespace
 
 void ESCHigherStartButton::press_action() {
@@ -122,9 +108,6 @@ void ESCHigherComponent::setup() {
       this->bringup_test_id_ == BRINGUP_TEST_FORCED_TIMER_DIFF_PWM ? "forced_timer_diff_pwm" :
                                                                      "full_spin_sequence"
     );
-  }
-  if (this->bringup_profile_select_ != nullptr) {
-    this->bringup_profile_select_->publish_state(bringup_profile_option(this->bringup_profile_index_));
   }
 }
 
@@ -405,11 +388,6 @@ bool ESCHigherComponent::initialize_() {
   if (!this->configure_watchdog_())
     return false;
 
-  if (!this->set_bringup_profile(this->bringup_profile_index_)) {
-    ESP_LOGW(TAG, "Failed to apply configured bringup profile index=%u", static_cast<unsigned>(this->bringup_profile_index_));
-    return false;
-  }
-
   return true;
 }
 
@@ -482,10 +460,6 @@ bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
 bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
   this->speed_ramp_target_dhz_ = target_dhz;
   return this->set_speed_ramp();
-}
-
-bool ESCHigherComponent::set_bringup_profile(uint8_t idx) {
-  return this->write_command_(OPCODE_SET_BRINGUP_PROFILE, idx, 0, 0);
 }
 
 void ESCHigherComponent::update() {
@@ -622,28 +596,11 @@ void ESCHigherComponent::update() {
 
 
       publish_sensor(bringup_last_app_fault_detail_sensor_, bringup[48]);
-      publish_sensor(bringup_profile_index_sensor_, bringup[49]);
-      publish_sensor(bringup_profile_count_sensor_, bringup[50]);
-      publish_sensor(bringup_profile_flags_sensor_, bringup[51]);
       publish_sensor(bringup_switch_over_ms_sensor_, u16_(bringup, 52));
       publish_sensor(bringup_run_ms_sensor_, u16_(bringup, 54));
       publish_sensor(bringup_max_speed_dhz_sensor_, i16_(bringup, 56));
       publish_sensor(bringup_max_current_reference_ma_sensor_, u16_(bringup, 58));
       publish_sensor(bringup_max_phase_current_reported_ma_sensor_, u16_(bringup, 60));
-      {
-        char profile_summary[128];
-        std::snprintf(
-          profile_summary,
-          sizeof(profile_summary),
-          "idx=%u count=%u flags=0x%02X switch_ms=%u run_ms=%u",
-          static_cast<unsigned>(bringup[49]),
-          static_cast<unsigned>(bringup[50]),
-          static_cast<unsigned>(bringup[51]),
-          static_cast<unsigned>(u16_(bringup, 52)),
-          static_cast<unsigned>(u16_(bringup, 54))
-        );
-        publish_text(bringup_profile_summary_text_sensor_, profile_summary);
-      }
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
         const bool new_report = this->last_bringup_report_seq_ != bringup[0];
@@ -733,27 +690,6 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  bringup_test_duration_ms: %d", static_cast<int>(bringup_test_duration_ms_));
   ESP_LOGCONFIG(TAG, "  bringup_test_options: 0x%08X", static_cast<unsigned>(bringup_test_options_));
   ESP_LOGCONFIG(TAG, "  bringup_test_id: %u", static_cast<unsigned>(bringup_test_id_));
-}
-
-void ESCHigherBringupProfileSelect::control(const std::string& value) {
-  if (this->parent_ == nullptr)
-    return;
-
-  const int idx = parse_profile_index(value);
-
-  if (idx < 0) {
-    ESP_LOGW(TAG, "Unknown bringup profile selection: %s", value.c_str());
-    return;
-  }
-
-  ESP_LOGI(TAG, "Setting bringup profile index=%d (%s)", idx, value.c_str());
-
-  this->parent_->set_bringup_profile_index(static_cast<uint8_t>(idx));
-  this->publish_state(value);
-
-  if (!this->parent_->set_bringup_profile(static_cast<uint8_t>(idx))) {
-    ESP_LOGW(TAG, "Failed to set bringup profile index=%d", idx);
-  }
 }
 
 }  // namespace esc_higher
