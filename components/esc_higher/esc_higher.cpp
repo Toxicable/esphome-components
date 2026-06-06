@@ -799,6 +799,35 @@ void ESCHigherComponent::update() {
     }
   }
 
+  // Read board config register
+  if (board_config_text_sensor_ != nullptr) {
+    uint8_t board[56]{0};
+    if (this->read_register_(REG_BOARD_CONFIG, board, sizeof(board))) {
+      char buf[256];
+      uint32_t schema = u32_(board, 0);
+      uint32_t board_id = u32_(board, 4);
+      uint32_t hw_rev = u32_(board, 8);
+      float rshunt = *(float*)&board[12];
+      float amp_gain = *(float*)&board[16];
+      float adc_ref = *(float*)&board[20];
+      float vbus_part = *(float*)&board[24];
+      uint32_t pwm_hz = u32_(board, 28);
+      uint16_t deadtime = u16_(board, 32);
+      uint16_t reg_rate = u16_(board, 34);
+      uint16_t max_current = u16_(board, 36);
+      uint16_t max_vbus = u16_(board, 38);
+      uint16_t min_vbus = u16_(board, 40);
+      int16_t max_temp = i16_(board, 42);
+      float curr_conv = *(float*)&board[44];
+      uint32_t features = u32_(board, 48);
+      std::snprintf(buf, sizeof(buf), "board schema=%u id=%u hw=%u rshunt=%.4fOhm gain=%.1fx adc=%.1fV vbus_div=%.2f pwm=%uHz dt=%uns reg=%uHz max_I=%umA vbus=%u-%umV temp=%dC conv=%.1f flags=0x%08X",
+                    schema, board_id, hw_rev, rshunt, amp_gain, adc_ref, vbus_part, pwm_hz, deadtime, reg_rate, max_current, max_vbus, min_vbus, max_temp, curr_conv, features);
+      publish_text(board_config_text_sensor_, buf);
+    } else {
+      all_ok = false;
+    }
+  }
+
   if (this->debug_log_read_failed_)
     all_ok = false;
 
