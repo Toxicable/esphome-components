@@ -102,7 +102,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
 
   // Config provisioning
-  bool config_begin();
+  bool config_begin(uint16_t size, uint8_t schema, uint32_t crc);
   bool config_write_chunk(uint16_t offset, const uint8_t* data, size_t len);
   bool config_validate();
   bool config_commit();
@@ -475,8 +475,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t OPCODE_CONFIG_READ = 0x14;
   static constexpr uint8_t OPCODE_CONFIG_ERASE = 0x15;
   static constexpr uint8_t REG_CONFIG_DATA = 0x80;
-  static constexpr uint8_t CONFIG_DATA_CHUNK_SIZE = 64;
-  static constexpr uint8_t MOTOR_CONFIG_SCHEMA_VERSION = 1;
+  static constexpr uint8_t CONFIG_DATA_CHUNK_SIZE = 61;
+  static constexpr uint8_t MOTOR_CONFIG_SCHEMA_VERSION = 3;
 
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};

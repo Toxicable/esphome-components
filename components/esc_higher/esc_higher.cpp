@@ -2,8 +2,11 @@
 
 #include "esc_higher_text.h"
 
+#include <cstddef>
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <limits>
 #include <vector>
 
 #include "esphome/core/hal.h"
@@ -16,6 +19,7 @@ namespace esc_higher {
 static const char* const TAG = "esc_higher";
 namespace {
 constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
+// horrible delete
 static const char* const BRINGUP_PROFILE_OPTIONS[] = {
   "0 known-good 4.0s 8/9/10A",
   "1 gentle 5.7s 1.8/1.8/2.0A",
@@ -27,6 +31,7 @@ static const char* const BRINGUP_PROFILE_OPTIONS[] = {
   "7 observer min 400 mechanical rpm",
   "8 observer min 600 mechanical rpm",
 };
+// horrible delete
 constexpr uint8_t BRINGUP_PROFILE_OPTION_COUNT = sizeof(BRINGUP_PROFILE_OPTIONS) / sizeof(BRINGUP_PROFILE_OPTIONS[0]);
 
 template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
@@ -37,6 +42,57 @@ template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
 void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
   if (sensor != nullptr)
     sensor->publish_state(value);
+}
+
+struct MotorConfigWire_t {
+  struct MotorRevUpPhaseWire_t {
+    uint16_t duration_ms;
+    int16_t final_speed_unit;
+    int16_t final_current_mA;
+  };
+
+  char name[32];
+  uint16_t pole_pairs;
+  float rs_ohm;
+  float ls_h;
+  float ke_vll_rms_per_krpm;
+  uint16_t max_current_mA;
+  uint16_t startup_current_limit_mA;
+  uint16_t run_current_limit_mA;
+  uint16_t max_speed_unit;
+  uint16_t observer_min_speed_unit;
+  uint16_t observer_min_fly_speed_unit;
+  uint16_t startup_consistency_tests;
+  uint16_t variance_percentage;
+  uint16_t speed_band_upper_16ths;
+  uint16_t speed_band_lower_16ths;
+  uint16_t bemf_consistency_gain;
+  uint16_t bemf_consistency_tolerance;
+  uint16_t transition_duration_ms;
+  int16_t speed_kp;
+  int16_t speed_ki;
+  int16_t iq_kp;
+  int16_t iq_ki;
+  int16_t id_kp;
+  int16_t id_ki;
+  MotorRevUpPhaseWire_t revup[5];
+  uint16_t run_current_limit_dwell_ms;
+  uint16_t normal_start_guard_extra_ms;
+  uint32_t crc32;
+  uint8_t schema_version;
+};
+
+static_assert(offsetof(MotorConfigWire_t, crc32) > 0, "CRC field offset must be valid");
+
+uint32_t crc32_ieee_continue_(uint32_t crc, const uint8_t* data, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    crc ^= static_cast<uint32_t>(data[i]);
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      const uint32_t mask = static_cast<uint32_t>(-(static_cast<int32_t>(crc & 1u)));
+      crc = (crc >> 1) ^ (0xEDB88320u & mask);
+    }
+  }
+  return crc;
 }
 
 }  // namespace
@@ -462,8 +518,8 @@ bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
   return this->set_speed_ramp();
 }
 
-bool ESCHigherComponent::config_begin() {
-  return this->write_command_(OPCODE_CONFIG_BEGIN, 0, 0, 0);
+bool ESCHigherComponent::config_begin(uint16_t size, uint8_t schema, uint32_t crc) {
+  return this->write_command_(OPCODE_CONFIG_BEGIN, static_cast<int32_t>(size), static_cast<int32_t>(schema), static_cast<int32_t>(crc));
 }
 
 bool ESCHigherComponent::config_write_chunk(uint16_t offset, const uint8_t* data, size_t len) {
@@ -499,7 +555,40 @@ bool ESCHigherComponent::config_erase() {
 }
 
 bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
-  if (!this->config_begin()) {
+  if (data == nullptr) {
+    ESP_LOGW(TAG, "Config provision called with null data");
+    return false;
+  }
+  if (len == 0 || len > std::numeric_limits<uint16_t>::max()) {
+    ESP_LOGW(TAG, "Config size out of range: %u", static_cast<unsigned>(len));
+    return false;
+  }
+
+  if (len != sizeof(MotorConfigWire_t)) {
+    ESP_LOGW(TAG, "Unexpected config size: %u != %u", static_cast<unsigned>(len), static_cast<unsigned>(sizeof(MotorConfigWire_t)));
+    return false;
+  }
+
+  MotorConfigWire_t wire{};
+  std::memcpy(&wire, data, sizeof(wire));
+  const size_t crc_offset = offsetof(MotorConfigWire_t, crc32);
+  const size_t crc_tail_offset = crc_offset + sizeof(wire.crc32);
+  const size_t crc_tail_len = sizeof(MotorConfigWire_t) - crc_tail_offset;
+  uint32_t computed_crc = 0xFFFFFFFFu;
+
+  computed_crc = crc32_ieee_continue_(computed_crc, data, crc_offset);
+  computed_crc = crc32_ieee_continue_(computed_crc, data + crc_tail_offset, crc_tail_len);
+  computed_crc = ~computed_crc;
+  if (wire.schema_version != MOTOR_CONFIG_SCHEMA_VERSION) {
+    ESP_LOGW(TAG, "Config schema mismatch: got %u expected %u", wire.schema_version, MOTOR_CONFIG_SCHEMA_VERSION);
+    return false;
+  }
+  if (wire.crc32 != computed_crc) {
+    ESP_LOGW(TAG, "Config CRC mismatch: got 0x%08X expected 0x%08X", wire.crc32, computed_crc);
+    return false;
+  }
+
+  if (!this->config_begin(static_cast<uint16_t>(len), wire.schema_version, wire.crc32)) {
     ESP_LOGW(TAG, "Config begin failed");
     return false;
   }
@@ -830,7 +919,7 @@ void ESCHigherComponent::update() {
 
   // Read config status register
   if (config_status_text_sensor_ != nullptr) {
-    uint8_t status[48]{0};
+    uint8_t status[49]{0};
     if (this->read_register_(REG_CONFIG_STATUS, status, sizeof(status))) {
       char buf[256];
       bool present = status[0] != 0;
