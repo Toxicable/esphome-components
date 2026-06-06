@@ -462,6 +462,67 @@ bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
   return this->set_speed_ramp();
 }
 
+bool ESCHigherComponent::config_begin() {
+  return this->write_command_(OPCODE_CONFIG_BEGIN, 0, 0, 0);
+}
+
+bool ESCHigherComponent::config_write_chunk(uint16_t offset, const uint8_t* data, size_t len) {
+  if (len == 0)
+    return true;
+  if (len > CONFIG_DATA_CHUNK_SIZE) {
+    ESP_LOGW(TAG, "Config chunk too large: %u > %u", static_cast<unsigned>(len), CONFIG_DATA_CHUNK_SIZE);
+    return false;
+  }
+  uint8_t tx[CONFIG_DATA_CHUNK_SIZE + 3];
+  tx[0] = REG_CONFIG_DATA;
+  tx[1] = static_cast<uint8_t>(offset & 0xFF);
+  tx[2] = static_cast<uint8_t>((offset >> 8) & 0xFF);
+  std::memcpy(tx + 3, data, len);
+  const i2c::ErrorCode err = this->write(tx, 3 + len);
+  if (err == i2c::ERROR_OK)
+    return true;
+  ESP_LOGW(TAG, "Config write chunk offset=%u len=%u failed: %s",
+           static_cast<unsigned>(offset), static_cast<unsigned>(len), i2c_error_to_cstr(err));
+  return false;
+}
+
+bool ESCHigherComponent::config_validate() {
+  return this->write_command_(OPCODE_CONFIG_VALIDATE, 0, 0, 0);
+}
+
+bool ESCHigherComponent::config_commit() {
+  return this->write_command_(OPCODE_CONFIG_COMMIT, 0, 0, 0);
+}
+
+bool ESCHigherComponent::config_erase() {
+  return this->write_command_(OPCODE_CONFIG_ERASE, 0, 0, 0);
+}
+
+bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
+  if (!this->config_begin()) {
+    ESP_LOGW(TAG, "Config begin failed");
+    return false;
+  }
+  size_t offset = 0;
+  while (offset < len) {
+    const size_t chunk = std::min<size_t>(CONFIG_DATA_CHUNK_SIZE, len - offset);
+    if (!this->config_write_chunk(static_cast<uint16_t>(offset), data + offset, chunk)) {
+      ESP_LOGW(TAG, "Config write chunk failed at offset %u", static_cast<unsigned>(offset));
+      return false;
+    }
+    offset += chunk;
+  }
+  if (!this->config_validate()) {
+    ESP_LOGW(TAG, "Config validate failed");
+    return false;
+  }
+  if (!this->config_commit()) {
+    ESP_LOGW(TAG, "Config commit failed");
+    return false;
+  }
+  ESP_LOGI(TAG, "Config provisioned successfully (%u bytes)", static_cast<unsigned>(len));
+    return true;
+}
 void ESCHigherComponent::update() {
   if (!this->initialized_) {
     const uint32_t now = millis();

@@ -101,6 +101,14 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool run_forced_timer_diff_pwm_test();
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
 
+  // Config provisioning
+  bool config_begin();
+  bool config_write_chunk(uint16_t offset, const uint8_t* data, size_t len);
+  bool config_validate();
+  bool config_commit();
+  bool config_erase();
+  bool config_provision(const uint8_t* data, size_t len);
+
   void set_proto_major_sensor(sensor::Sensor* s) {
     proto_major_sensor_ = s;
   }
@@ -274,9 +282,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_last_app_fault_detail_sensor(sensor::Sensor* s) {
     bringup_last_app_fault_detail_sensor_ = s;
   }
-  }
-  }
-  }
   void set_bringup_switch_over_ms_sensor(sensor::Sensor* s) {
     bringup_switch_over_ms_sensor_ = s;
   }
@@ -351,6 +356,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     occurred_faults_text_sensor_ = s;
   }
+  void set_config_status_text_sensor(text_sensor::TextSensor* s) {
+    config_status_text_sensor_ = s;
+  }
   void set_capabilities_text_sensor(text_sensor::TextSensor* s) {
     capabilities_text_sensor_ = s;
   }
@@ -371,7 +379,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
   void set_bringup_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     bringup_occurred_faults_text_sensor_ = s;
-  }
   }
   void set_debug_log_text_sensor(text_sensor::TextSensor* s) {
     debug_log_text_sensor_ = s;
@@ -435,6 +442,17 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr int32_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS = 50;
   static constexpr int32_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS = 1000;
   static constexpr int32_t BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1;
+
+  // Config provisioning commands
+  static constexpr uint8_t OPCODE_CONFIG_BEGIN = 0x10;
+  static constexpr uint8_t OPCODE_CONFIG_WRITE_CHUNK = 0x11;
+  static constexpr uint8_t OPCODE_CONFIG_VALIDATE = 0x12;
+  static constexpr uint8_t OPCODE_CONFIG_COMMIT = 0x13;
+  static constexpr uint8_t OPCODE_CONFIG_READ = 0x14;
+  static constexpr uint8_t OPCODE_CONFIG_ERASE = 0x15;
+  static constexpr uint8_t REG_CONFIG_DATA = 0x80;
+  static constexpr uint8_t CONFIG_DATA_CHUNK_SIZE = 64;
+  static constexpr uint8_t MOTOR_CONFIG_SCHEMA_VERSION = 1;
 
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};
@@ -543,6 +561,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* occurred_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* mc_state_text_sensor_{nullptr};
   text_sensor::TextSensor* capabilities_text_sensor_{nullptr};
+  text_sensor::TextSensor* config_status_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_state_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_result_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};
