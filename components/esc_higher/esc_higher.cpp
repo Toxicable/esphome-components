@@ -828,6 +828,26 @@ void ESCHigherComponent::update() {
     }
   }
 
+  // Read config status register
+  if (config_status_text_sensor_ != nullptr) {
+    uint8_t status[48]{0};
+    if (this->read_register_(REG_CONFIG_STATUS, status, sizeof(status))) {
+      char buf[256];
+      bool present = status[0] != 0;
+      bool valid = status[1] != 0;
+      bool applied = status[2] != 0;
+      uint32_t crc = u32_(status, 3);
+      uint32_t generation = u32_(status, 7);
+      uint16_t schema = u16_(status, 11);
+      uint32_t last_error = u32_(status, 45);
+      std::snprintf(buf, sizeof(buf), "config present=%u valid=%u applied=%u crc=0x%08X gen=%u schema=%u name=%.*s error=%u",
+                    present, valid, applied, crc, generation, schema, 32, (const char*)&status[13], last_error);
+      publish_text(config_status_text_sensor_, buf);
+    } else {
+      all_ok = false;
+    }
+  }
+
   if (this->debug_log_read_failed_)
     all_ok = false;
 

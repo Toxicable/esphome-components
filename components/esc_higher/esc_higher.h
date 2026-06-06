@@ -443,6 +443,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_DIAG_FAULT = 0x91;
   static constexpr uint8_t REG_DIAG_STARTUP = 0x92;
 
+  // Config status register (read-only)
+  static constexpr uint8_t REG_CONFIG_STATUS = 0x93;
+
   // Board config register (read-only)
   static constexpr uint8_t REG_BOARD_CONFIG = 0xA0;
 
