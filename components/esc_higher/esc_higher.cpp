@@ -731,6 +731,74 @@ void ESCHigherComponent::update() {
     }
   }
 
+  // Read diagnostic registers
+  if (diag_blocked_text_sensor_ != nullptr) {
+    uint8_t diag[16]{0};
+    if (this->read_register_(REG_DIAG_BLOCKED, diag, sizeof(diag))) {
+      char buf[128];
+      uint8_t cmd = diag[0];
+      uint8_t state = diag[1];
+      uint16_t cur_faults = u16_(diag, 2);
+      uint16_t occ_faults = u16_(diag, 4);
+      bool config_ready = diag[6] != 0;
+      uint8_t reason = diag[7];
+      int32_t detail = i32_(diag, 8);
+      std::snprintf(buf, sizeof(buf), "blocked cmd=0x%02X state=%u faults=0x%04X/0x%04X config=%u reason=%u detail=%d",
+                    cmd, state, cur_faults, occ_faults, config_ready, reason, detail);
+      publish_text(diag_blocked_text_sensor_, buf);
+    } else {
+      all_ok = false;
+    }
+  }
+
+  if (diag_fault_text_sensor_ != nullptr) {
+    uint8_t diag[32]{0};
+    if (this->read_register_(REG_DIAG_FAULT, diag, sizeof(diag))) {
+      char buf[256];
+      uint16_t fault_code = u16_(diag, 0);
+      uint8_t state = diag[2];
+      int32_t forced_spd = i32_(diag, 3);
+      int32_t obs_spd = i32_(diag, 7);
+      bool reliable = diag[11] != 0;
+      bool bemf = diag[12] != 0;
+      bool variance = diag[13] != 0;
+      int32_t ref_ma = i32_(diag, 14);
+      int32_t phase_ma = i32_(diag, 18);
+      uint32_t vbus_mv = u32_(diag, 22);
+      std::snprintf(buf, sizeof(buf), "fault=0x%04X state=%u forced=%d obs=%d reliable=%u bemf=%u var=%u ref=%dma phase=%dmA vbus=%umV",
+                    fault_code, state, forced_spd, obs_spd, reliable, bemf, variance, ref_ma, phase_ma, vbus_mv);
+      publish_text(diag_fault_text_sensor_, buf);
+    } else {
+      all_ok = false;
+    }
+  }
+
+  if (diag_startup_text_sensor_ != nullptr) {
+    uint8_t diag[32]{0};
+    if (this->read_register_(REG_DIAG_STARTUP, diag, sizeof(diag))) {
+      char buf[256];
+      uint8_t result = diag[0];
+      uint8_t exit_reason = diag[1];
+      bool seen_start = diag[2] != 0;
+      bool seen_switch = diag[3] != 0;
+      bool seen_run = diag[4] != 0;
+      uint32_t hold_ms = u32_(diag, 5);
+      int32_t forced_spd = i32_(diag, 9);
+      int32_t obs_spd = i32_(diag, 13);
+      int32_t obs_err = i32_(diag, 17);
+      bool reliable = diag[21] != 0;
+      bool bemf = diag[22] != 0;
+      bool variance = diag[23] != 0;
+      int32_t phase_max = i32_(diag, 24);
+      int32_t ref_max = i32_(diag, 28);
+      std::snprintf(buf, sizeof(buf), "startup result=%u exit=%u start=%u switch=%u run=%u hold=%ums forced=%d obs=%d err=%d reliable=%u bemf=%u var=%u phase_max=%dma ref_max=%dma",
+                    result, exit_reason, seen_start, seen_switch, seen_run, hold_ms, forced_spd, obs_spd, obs_err, reliable, bemf, variance, phase_max, ref_max);
+      publish_text(diag_startup_text_sensor_, buf);
+    } else {
+      all_ok = false;
+    }
+  }
+
   if (this->debug_log_read_failed_)
     all_ok = false;
 

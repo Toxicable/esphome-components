@@ -359,6 +359,15 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_config_status_text_sensor(text_sensor::TextSensor* s) {
     config_status_text_sensor_ = s;
   }
+  void set_diag_blocked_text_sensor(text_sensor::TextSensor* s) {
+    diag_blocked_text_sensor_ = s;
+  }
+  void set_diag_fault_text_sensor(text_sensor::TextSensor* s) {
+    diag_fault_text_sensor_ = s;
+  }
+  void set_diag_startup_text_sensor(text_sensor::TextSensor* s) {
+    diag_startup_text_sensor_ = s;
+  }
   void set_capabilities_text_sensor(text_sensor::TextSensor* s) {
     capabilities_text_sensor_ = s;
   }
@@ -425,6 +434,11 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_DEBUG_INFO = 0x70;
   static constexpr uint8_t REG_DEBUG_READ = 0x71;
   static constexpr uint8_t REG_DEBUG_CTRL = 0x72;
+
+  // Diagnostic registers
+  static constexpr uint8_t REG_DIAG_BLOCKED = 0x90;
+  static constexpr uint8_t REG_DIAG_FAULT = 0x91;
+  static constexpr uint8_t REG_DIAG_STARTUP = 0x92;
   static constexpr uint16_t CAP_DEBUG_LOG = 1u << 7;
   static constexpr uint16_t DEBUG_BUFFER_SIZE = 4096;
   static constexpr uint8_t DEBUG_READ_CHUNK_SIZE = 64;
@@ -561,6 +575,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* occurred_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* mc_state_text_sensor_{nullptr};
   text_sensor::TextSensor* capabilities_text_sensor_{nullptr};
+  text_sensor::TextSensor* diag_blocked_text_sensor_{nullptr};
+  text_sensor::TextSensor* diag_fault_text_sensor_{nullptr};
+  text_sensor::TextSensor* diag_startup_text_sensor_{nullptr};
   text_sensor::TextSensor* config_status_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_state_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_result_text_sensor_{nullptr};

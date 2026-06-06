@@ -149,6 +149,9 @@ CONF_BRINGUP_TEST_ID_TEXT = "bringup_test_id_text"
 CONF_BRINGUP_CURRENT_FAULTS_TEXT = "bringup_current_faults_text"
 CONF_BRINGUP_OCCURRED_FAULTS_TEXT = "bringup_occurred_faults_text"
 CONF_CONFIG_STATUS_TEXT = "config_status_text"
+CONF_DIAG_BLOCKED_TEXT = "diag_blocked_text"
+CONF_DIAG_FAULT_TEXT = "diag_fault_text"
+CONF_DIAG_STARTUP_TEXT = "diag_startup_text"
 CONF_DEBUG_LOG_TEXT = "debug_log"
 CONF_BRINGUP_TEST_SELECT = "bringup_test_select"
 
@@ -334,6 +337,9 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_BRINGUP_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_DEBUG_LOG_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CONFIG_STATUS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_DIAG_BLOCKED_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_DIAG_FAULT_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_DIAG_STARTUP_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_SELECT): select.select_schema(
                 ESCHigherBringupTestSelect,
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -513,6 +519,15 @@ async def to_code(config):
     if CONF_CONFIG_STATUS_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_CONFIG_STATUS_TEXT])
         cg.add(var.set_config_status_text_sensor(s))
+    if CONF_DIAG_BLOCKED_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_DIAG_BLOCKED_TEXT])
+        cg.add(var.set_diag_blocked_text_sensor(s))
+    if CONF_DIAG_FAULT_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_DIAG_FAULT_TEXT])
+        cg.add(var.set_diag_fault_text_sensor(s))
+    if CONF_DIAG_STARTUP_TEXT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_DIAG_STARTUP_TEXT])
+        cg.add(var.set_diag_startup_text_sensor(s))
     if CONF_BRINGUP_TEST_SELECT in config:
         sel = await select.new_select(config[CONF_BRINGUP_TEST_SELECT], options=BRINGUP_TEST_OPTIONS)
         await cg.register_parented(sel, var)
