@@ -95,6 +95,26 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
       return "config_offset_exceeded";
     case 35:
       return "board_limit_exceeded";
+    case 40:
+      return "config_schema_mismatch";
+    case 41:
+      return "config_name_empty";
+    case 42:
+      return "config_crc_mismatch";
+    case 43:
+      return "config_dwell_zero";
+    case 44:
+      return "config_electrical_model";
+    case 45:
+      return "config_observer_tuning";
+    case 46:
+      return "config_current_limit";
+    case 47:
+      return "config_speed_invalid";
+    case 48:
+      return "config_pid_invalid";
+    case 49:
+      return "config_revup_phase";
     default:
       return "unknown";
   }
