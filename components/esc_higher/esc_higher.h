@@ -332,12 +332,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_bringup_max_phase_current_reported_ma_sensor(sensor::Sensor* s) {
     bringup_max_phase_current_reported_ma_sensor_ = s;
   }
-
-  void set_telemetry_debug0_sensor(sensor::Sensor* s) {
-    telemetry_debug0_sensor_ = s;
-  }
-  void set_telemetry_debug1_sensor(sensor::Sensor* s) {
-    telemetry_debug1_sensor_ = s;
   }
   void set_debug_v_alpha_raw_s16_sensor(sensor::Sensor* s) {
     debug_v_alpha_raw_s16_sensor_ = s;
@@ -634,8 +628,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* bringup_max_current_reference_ma_sensor_{nullptr};
   sensor::Sensor* bringup_max_phase_current_reported_ma_sensor_{nullptr};
 
-  sensor::Sensor* telemetry_debug0_sensor_{nullptr};
-  sensor::Sensor* telemetry_debug1_sensor_{nullptr};
 
   sensor::Sensor* debug_v_alpha_raw_s16_sensor_{nullptr};
   sensor::Sensor* debug_v_beta_raw_s16_sensor_{nullptr};

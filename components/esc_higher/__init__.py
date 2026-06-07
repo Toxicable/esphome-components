@@ -84,8 +84,6 @@ CONF_TEMP_MC = "temp_mc"
 CONF_TARGET_SPEED_DHZ = "target_speed_dhz"
 CONF_DRIVE_LIMIT_CENTI_PCT = "drive_limit_centi_pct"
 CONF_UPTIME_S = "uptime_s"
-CONF_TELEMETRY_DEBUG0 = "telemetry_debug0"
-CONF_TELEMETRY_DEBUG1 = "telemetry_debug1"
 
 CONF_BRINGUP_ACTIVE = "bringup_active"
 CONF_BRINGUP_TEST_ID = "bringup_test_id_state"
@@ -391,8 +389,6 @@ CONFIG_SCHEMA = (
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
             cv.Optional(CONF_UPTIME_S): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_TELEMETRY_DEBUG0): _raw_sensor_schema(),
-            cv.Optional(CONF_TELEMETRY_DEBUG1): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_ACTIVE): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_ID): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_STEP_ID): _raw_sensor_schema(),
@@ -554,8 +550,6 @@ async def to_code(config):
     await _bind_sensor(config, CONF_TARGET_SPEED_DHZ, var.set_target_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DRIVE_LIMIT_CENTI_PCT, var.set_drive_limit_centi_pct_sensor)
     await _bind_sensor(config, CONF_UPTIME_S, var.set_uptime_s_sensor)
-    await _bind_sensor(config, CONF_TELEMETRY_DEBUG0, var.set_telemetry_debug0_sensor)
-    await _bind_sensor(config, CONF_TELEMETRY_DEBUG1, var.set_telemetry_debug1_sensor)
     await _bind_sensor(config, CONF_BRINGUP_ACTIVE, var.set_bringup_active_sensor)
     await _bind_sensor(config, CONF_BRINGUP_TEST_ID, var.set_bringup_test_id_sensor)
     await _bind_sensor(config, CONF_BRINGUP_STEP_ID, var.set_bringup_step_id_sensor)

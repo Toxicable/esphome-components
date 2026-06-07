@@ -30,45 +30,48 @@ void publish_text(text_sensor::TextSensor* sensor, const std::string& value) {
     sensor->publish_state(value);
 }
 
-struct MotorConfigWire_t {
-  struct MotorRevUpPhaseWire_t {
-    uint16_t duration_ms;
-    int16_t final_speed_unit;
-    int16_t final_current_mA;
-  };
+// Wire format: flat packed, no padding, little-endian (123 bytes total)
+constexpr size_t MOTOR_CONFIG_WIRE_SIZE = 123;
+constexpr size_t MOTOR_CONFIG_WIRE_CRC_OFFSET = 118;
+constexpr size_t MOTOR_CONFIG_WIRE_SCHEMA_OFFSET = 122;
+constexpr size_t MOTOR_CONFIG_WIRE_REVUP_PHASE_SIZE = 6;
 
-  char name[32];
-  uint16_t pole_pairs;
-  float rs_ohm;
-  float ls_h;
-  float ke_vll_rms_per_krpm;
-  uint16_t max_current_mA;
-  uint16_t startup_current_limit_mA;
-  uint16_t run_current_limit_mA;
-  uint16_t max_speed_unit;
-  uint16_t observer_min_speed_unit;
-  uint16_t observer_min_fly_speed_unit;
-  uint16_t startup_consistency_tests;
-  uint16_t variance_percentage;
-  uint16_t speed_band_upper_16ths;
-  uint16_t speed_band_lower_16ths;
-  uint16_t bemf_consistency_gain;
-  uint16_t bemf_consistency_tolerance;
-  uint16_t transition_duration_ms;
-  int16_t speed_kp;
-  int16_t speed_ki;
-  int16_t iq_kp;
-  int16_t iq_ki;
-  int16_t id_kp;
-  int16_t id_ki;
-  MotorRevUpPhaseWire_t revup[5];
-  uint16_t run_current_limit_dwell_ms;
-  uint16_t normal_start_guard_extra_ms;
-  uint32_t crc32;
-  uint8_t schema_version;
-};
+void write_le16_(uint8_t* buf, size_t off, uint16_t val) {
+  buf[off + 0] = static_cast<uint8_t>(val & 0xFFu);
+  buf[off + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
+}
+void write_le32_(uint8_t* buf, size_t off, uint32_t val) {
+  buf[off + 0] = static_cast<uint8_t>(val & 0xFFu);
+  buf[off + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
+  buf[off + 2] = static_cast<uint8_t>((val >> 16) & 0xFFu);
+  buf[off + 3] = static_cast<uint8_t>((val >> 24) & 0xFFu);
+}
+void write_le_f32_(uint8_t* buf, size_t off, float val) {
+  uint32_t bits;
+  std::memcpy(&bits, &val, sizeof(bits));
+  write_le32_(buf, off, bits);
+}
+// Wire format: flat packed, no padding, little-endian (123 bytes total)
+constexpr size_t MOTOR_CONFIG_WIRE_SIZE = 123;
+constexpr size_t MOTOR_CONFIG_WIRE_CRC_OFFSET = 118;
+constexpr size_t MOTOR_CONFIG_WIRE_SCHEMA_OFFSET = 122;
+constexpr size_t MOTOR_CONFIG_WIRE_REVUP_PHASE_SIZE = 6;
 
-static_assert(offsetof(MotorConfigWire_t, crc32) > 0, "CRC field offset must be valid");
+void write_le16_(uint8_t* buf, size_t off, uint16_t val) {
+  buf[off + 0] = static_cast<uint8_t>(val & 0xFFu);
+  buf[off + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
+}
+void write_le32_(uint8_t* buf, size_t off, uint32_t val) {
+  buf[off + 0] = static_cast<uint8_t>(val & 0xFFu);
+  buf[off + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
+  buf[off + 2] = static_cast<uint8_t>((val >> 16) & 0xFFu);
+  buf[off + 3] = static_cast<uint8_t>((val >> 24) & 0xFFu);
+}
+void write_le_f32_(uint8_t* buf, size_t off, float val) {
+  uint32_t bits;
+  std::memcpy(&bits, &val, sizeof(bits));
+  write_le32_(buf, off, bits);
+}
 
 uint32_t crc32_ieee_continue_(uint32_t crc, const uint8_t* data, size_t len) {
   for (size_t i = 0; i < len; i++) {
@@ -563,31 +566,33 @@ bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
     return false;
   }
 
-  if (len != sizeof(MotorConfigWire_t)) {
-    ESP_LOGW(TAG, "Unexpected config size: %u != %u", static_cast<unsigned>(len), static_cast<unsigned>(sizeof(MotorConfigWire_t)));
+  if (len != MOTOR_CONFIG_WIRE_SIZE) {
+    ESP_LOGW(TAG, "Unexpected config size: %u != %u", static_cast<unsigned>(len), static_cast<unsigned>(MOTOR_CONFIG_WIRE_SIZE));
     return false;
   }
 
-  MotorConfigWire_t wire{};
-  std::memcpy(&wire, data, sizeof(wire));
-  const size_t crc_offset = offsetof(MotorConfigWire_t, crc32);
-  const size_t crc_tail_offset = crc_offset + sizeof(wire.crc32);
-  const size_t crc_tail_len = sizeof(MotorConfigWire_t) - crc_tail_offset;
   uint32_t computed_crc = 0xFFFFFFFFu;
-
-  computed_crc = crc32_ieee_continue_(computed_crc, data, crc_offset);
-  computed_crc = crc32_ieee_continue_(computed_crc, data + crc_tail_offset, crc_tail_len);
+  computed_crc = crc32_ieee_continue_(computed_crc, data, MOTOR_CONFIG_WIRE_CRC_OFFSET);
+  computed_crc = crc32_ieee_continue_(computed_crc, data + MOTOR_CONFIG_WIRE_SCHEMA_OFFSET,
+                                      MOTOR_CONFIG_WIRE_SIZE - MOTOR_CONFIG_WIRE_SCHEMA_OFFSET);
   computed_crc = ~computed_crc;
-  if (wire.schema_version != MOTOR_CONFIG_SCHEMA_VERSION) {
-    ESP_LOGW(TAG, "Config schema mismatch: got %u expected %u", wire.schema_version, MOTOR_CONFIG_SCHEMA_VERSION);
+
+  uint8_t schema = data[MOTOR_CONFIG_WIRE_SCHEMA_OFFSET];
+  uint32_t wire_crc = (uint32_t)data[MOTOR_CONFIG_WIRE_CRC_OFFSET] |
+                      ((uint32_t)data[MOTOR_CONFIG_WIRE_CRC_OFFSET + 1] << 8) |
+                      ((uint32_t)data[MOTOR_CONFIG_WIRE_CRC_OFFSET + 2] << 16) |
+                      ((uint32_t)data[MOTOR_CONFIG_WIRE_CRC_OFFSET + 3] << 24);
+
+  if (schema != MOTOR_CONFIG_SCHEMA_VERSION) {
+    ESP_LOGW(TAG, "Config schema mismatch: got %u expected %u", schema, MOTOR_CONFIG_SCHEMA_VERSION);
     return false;
   }
-  if (wire.crc32 != computed_crc) {
-    ESP_LOGW(TAG, "Config CRC mismatch: got 0x%08X expected 0x%08X", wire.crc32, computed_crc);
+  if (wire_crc != computed_crc) {
+    ESP_LOGW(TAG, "Config CRC mismatch: got 0x%08X expected 0x%08X", wire_crc, computed_crc);
     return false;
   }
 
-  if (!this->config_begin(static_cast<uint16_t>(len), wire.schema_version, wire.crc32)) {
+  if (!this->config_begin(static_cast<uint16_t>(len), schema, wire_crc)) {
     ESP_LOGW(TAG, "Config begin failed");
     return false;
   }
@@ -608,56 +613,74 @@ bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
     ESP_LOGW(TAG, "Config commit failed");
     return false;
   }
-  ESP_LOGI(TAG, "Config provisioned successfully (%u bytes)", static_cast<unsigned>(len));
-    return true;
+  ESP_LOGI(TAG, "Config provisioned successfully (%u bytes wire format)", static_cast<unsigned>(len));
+  return true;
 }
 
-bool ESCHigherComponent::config_provision_with_crc(const uint8_t* data, size_t len) {
 bool ESCHigherComponent::config_provision_with_crc() {
-  // Pack members into MotorConfigWire_t
-  MotorConfigWire_t wire{};
-  std::memcpy(wire.name, mc_name_, sizeof(wire.name));
-  wire.pole_pairs = mc_pole_pairs_;
-  wire.rs_ohm = mc_rs_ohm_;
-  wire.ls_h = mc_ls_h_;
-  wire.ke_vll_rms_per_krpm = mc_ke_vll_rms_per_krpm_;
-  wire.max_current_mA = mc_max_current_mA_;
-  wire.startup_current_limit_mA = mc_startup_current_limit_mA_;
-  wire.run_current_limit_mA = mc_run_current_limit_mA_;
-  wire.max_speed_unit = mc_max_speed_unit_;
-  wire.observer_min_speed_unit = mc_observer_min_speed_unit_;
-  wire.observer_min_fly_speed_unit = mc_observer_min_fly_speed_unit_;
-  wire.startup_consistency_tests = mc_startup_consistency_tests_;
-  wire.variance_percentage = mc_variance_percentage_;
-  wire.speed_band_upper_16ths = mc_speed_band_upper_16ths_;
-  wire.speed_band_lower_16ths = mc_speed_band_lower_16ths_;
-  wire.bemf_consistency_gain = mc_bemf_consistency_gain_;
-  wire.bemf_consistency_tolerance = mc_bemf_consistency_tolerance_;
-  wire.transition_duration_ms = mc_transition_duration_ms_;
-  wire.speed_kp = mc_speed_kp_;
-  wire.speed_ki = mc_speed_ki_;
-  wire.iq_kp = mc_iq_kp_;
-  wire.iq_ki = mc_iq_ki_;
-  wire.id_kp = mc_id_kp_;
-  wire.id_ki = mc_id_ki_;
+  // Serialize members into flat wire format buffer (123 bytes, no padding)
+  uint8_t wire[MOTOR_CONFIG_WIRE_SIZE] = {0};
+
+  // name[32] at offset 0
+  std::memcpy(wire + 0, mc_name_, sizeof(mc_name_));
+
+  // pole_pairs (LE uint16) at offset 32
+  write_le16_(wire, 32, mc_pole_pairs_);
+  // rs_ohm (LE float32) at offset 34
+  write_le_f32_(wire, 34, mc_rs_ohm_);
+  // ls_h (LE float32) at offset 38
+  write_le_f32_(wire, 38, mc_ls_h_);
+  // ke_vll_rms_per_krpm (LE float32) at offset 42
+  write_le_f32_(wire, 42, mc_ke_vll_rms_per_krpm_);
+
+  // uint16 fields at offsets 46-70
+  write_le16_(wire, 46, mc_max_current_mA_);
+  write_le16_(wire, 48, mc_startup_current_limit_mA_);
+  write_le16_(wire, 50, mc_run_current_limit_mA_);
+  write_le16_(wire, 52, mc_max_speed_unit_);
+  write_le16_(wire, 54, mc_observer_min_speed_unit_);
+  write_le16_(wire, 56, mc_observer_min_fly_speed_unit_);
+  write_le16_(wire, 58, mc_startup_consistency_tests_);
+  write_le16_(wire, 60, mc_variance_percentage_);
+  write_le16_(wire, 62, mc_speed_band_upper_16ths_);
+  write_le16_(wire, 64, mc_speed_band_lower_16ths_);
+  write_le16_(wire, 66, mc_bemf_consistency_gain_);
+  write_le16_(wire, 68, mc_bemf_consistency_tolerance_);
+  write_le16_(wire, 70, mc_transition_duration_ms_);
+
+  // PID gains (int16) at offsets 72-82
+  write_le16_(wire, 72, static_cast<uint16_t>(static_cast<uint16_t>(mc_speed_kp_)));
+  write_le16_(wire, 74, static_cast<uint16_t>(static_cast<uint16_t>(mc_speed_ki_)));
+  write_le16_(wire, 76, static_cast<uint16_t>(static_cast<uint16_t>(mc_iq_kp_)));
+  write_le16_(wire, 78, static_cast<uint16_t>(static_cast<uint16_t>(mc_iq_ki_)));
+  write_le16_(wire, 80, static_cast<uint16_t>(static_cast<uint16_t>(mc_id_kp_)));
+  write_le16_(wire, 82, static_cast<uint16_t>(static_cast<uint16_t>(mc_id_ki_)));
+
+  // Rev-up phases (5 x 6 bytes) at offset 84
   for (uint8_t i = 0; i < 5; i++) {
-    wire.revup[i].duration_ms = (i < mc_revup_count_) ? mc_revup_[i].duration_ms : 0;
-    wire.revup[i].final_speed_unit = (i < mc_revup_count_) ? mc_revup_[i].final_speed_unit : 0;
-    wire.revup[i].final_current_mA = (i < mc_revup_count_) ? mc_revup_[i].final_current_mA : 0;
+    size_t base = 84 + i * MOTOR_CONFIG_WIRE_REVUP_PHASE_SIZE;
+    uint16_t dur = (i < mc_revup_count_) ? mc_revup_[i].duration_ms : 0;
+    uint16_t spd = (i < mc_revup_count_) ? static_cast<uint16_t>(static_cast<uint16_t>(mc_revup_[i].final_speed_unit)) : 0;
+    uint16_t cur = (i < mc_revup_count_) ? static_cast<uint16_t>(static_cast<uint16_t>(mc_revup_[i].final_current_mA)) : 0;
+    write_le16_(wire, base + 0, dur);
+    write_le16_(wire, base + 2, spd);
+    write_le16_(wire, base + 4, cur);
   }
-  wire.run_current_limit_dwell_ms = mc_run_current_limit_dwell_ms_;
-  wire.normal_start_guard_extra_ms = mc_normal_start_guard_extra_ms_;
-  wire.schema_version = MOTOR_CONFIG_SCHEMA_VERSION;
 
-  // Compute CRC (skip crc32 field)
-  const size_t crc_offset = offsetof(MotorConfigWire_t, crc32);
-  const size_t crc_tail_offset = crc_offset + sizeof(wire.crc32);
+  // Normal start behaviour at offsets 114-116
+  write_le16_(wire, 114, mc_run_current_limit_dwell_ms_);
+  write_le16_(wire, 116, mc_normal_start_guard_extra_ms_);
+
+  // CRC and schema at offsets 118-122
   uint32_t crc = 0xFFFFFFFFu;
-  crc = crc32_ieee_continue_(crc, reinterpret_cast<const uint8_t*>(&wire), crc_offset);
-  crc = crc32_ieee_continue_(crc, reinterpret_cast<const uint8_t*>(&wire) + crc_tail_offset, sizeof(MotorConfigWire_t) - crc_tail_offset);
-  wire.crc32 = ~crc;
+  crc = crc32_ieee_continue_(crc, wire, MOTOR_CONFIG_WIRE_CRC_OFFSET);
+  crc = crc32_ieee_continue_(crc, wire + MOTOR_CONFIG_WIRE_SCHEMA_OFFSET,
+                              MOTOR_CONFIG_WIRE_SIZE - MOTOR_CONFIG_WIRE_SCHEMA_OFFSET);
+  crc = ~crc;
+  write_le32_(wire, MOTOR_CONFIG_WIRE_CRC_OFFSET, crc);
+  wire[MOTOR_CONFIG_WIRE_SCHEMA_OFFSET] = MOTOR_CONFIG_SCHEMA_VERSION;
 
-  return this->config_provision(reinterpret_cast<const uint8_t*>(&wire), sizeof(wire));
+  return this->config_provision(wire, MOTOR_CONFIG_WIRE_SIZE);
 }
 
 void ESCHigherComponent::update() {
@@ -748,8 +771,6 @@ void ESCHigherComponent::update() {
       publish_sensor(watchdog_ms_left_sensor_, u16_(tel, 36));
       publish_sensor(drive_limit_centi_pct_sensor_, u16_(tel, 38));
       publish_sensor(uptime_s_sensor_, u32_(tel, 40));
-      publish_sensor(telemetry_debug0_sensor_, i16_(tel, 44));
-      publish_sensor(telemetry_debug1_sensor_, i16_(tel, 46));
     } else {
       all_ok = false;
     }
@@ -848,23 +869,38 @@ void ESCHigherComponent::update() {
     }
   }
 
+  // FOC debug telemetry — skip I2C read if no debug sensors configured
   {
-    uint8_t debug[32]{0};
-    if (this->read_register_(REG_DEBUG_TELEMETRY, debug, sizeof(debug))) {
-      publish_sensor(debug_seq_sensor_, debug[0]);
-      publish_sensor(debug_v_alpha_raw_s16_sensor_, i16_(debug, 2));
-      publish_sensor(debug_v_beta_raw_s16_sensor_, i16_(debug, 4));
-      publish_sensor(debug_v_q_raw_s16_sensor_, i16_(debug, 6));
-      publish_sensor(debug_v_d_raw_s16_sensor_, i16_(debug, 8));
-      publish_sensor(debug_v_u_raw_s16_sensor_, i16_(debug, 10));
-      publish_sensor(debug_v_v_raw_s16_sensor_, i16_(debug, 12));
-      publish_sensor(debug_v_w_raw_s16_sensor_, i16_(debug, 14));
-      publish_sensor(debug_v_amp_raw_s16_sensor_, i16_(debug, 16));
-      publish_sensor(debug_phase_ia_ma_sensor_, i16_(debug, 18));
-      publish_sensor(debug_phase_ib_ma_sensor_, i16_(debug, 20));
-      publish_sensor(debug_phase_ic_ma_sensor_, i16_(debug, 22));
-    } else {
-      all_ok = false;
+    bool has_debug_sensor = (debug_v_alpha_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_beta_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_q_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_d_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_u_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_v_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_w_raw_s16_sensor_ != nullptr) ||
+                            (debug_v_amp_raw_s16_sensor_ != nullptr) ||
+                            (debug_phase_ia_ma_sensor_ != nullptr) ||
+                            (debug_phase_ib_ma_sensor_ != nullptr) ||
+                            (debug_phase_ic_ma_sensor_ != nullptr) ||
+                            (debug_seq_sensor_ != nullptr);
+    if (has_debug_sensor) {
+      uint8_t debug[32]{0};
+      if (this->read_register_(REG_DEBUG_TELEMETRY, debug, sizeof(debug))) {
+        publish_sensor(debug_seq_sensor_, debug[0]);
+        publish_sensor(debug_v_alpha_raw_s16_sensor_, i16_(debug, 2));
+        publish_sensor(debug_v_beta_raw_s16_sensor_, i16_(debug, 4));
+        publish_sensor(debug_v_q_raw_s16_sensor_, i16_(debug, 6));
+        publish_sensor(debug_v_d_raw_s16_sensor_, i16_(debug, 8));
+        publish_sensor(debug_v_u_raw_s16_sensor_, i16_(debug, 10));
+        publish_sensor(debug_v_v_raw_s16_sensor_, i16_(debug, 12));
+        publish_sensor(debug_v_w_raw_s16_sensor_, i16_(debug, 14));
+        publish_sensor(debug_v_amp_raw_s16_sensor_, i16_(debug, 16));
+        publish_sensor(debug_phase_ia_ma_sensor_, i16_(debug, 18));
+        publish_sensor(debug_phase_ib_ma_sensor_, i16_(debug, 20));
+        publish_sensor(debug_phase_ic_ma_sensor_, i16_(debug, 22));
+      } else {
+        all_ok = false;
+      }
     }
   }
 
