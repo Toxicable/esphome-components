@@ -444,6 +444,9 @@ bool ESCHigherComponent::initialize_() {
   if (!this->configure_watchdog_())
     return false;
 
+  if (this->provision_config_) {
+    this->config_provision_with_crc();
+  }
   return true;
 }
 
@@ -465,6 +468,16 @@ bool ESCHigherComponent::estop() {
 
 bool ESCHigherComponent::set_speed_ramp() {
   return this->write_command_(OPCODE_SET_SPEED_RAMP, speed_ramp_target_dhz_, speed_ramp_time_ms_, 0);
+}
+
+void ESCHigherComponent::set_mc_revup(uint8_t idx, uint16_t duration_ms, int16_t final_speed_unit, int16_t final_current_mA) {
+  if (idx < 5) {
+    mc_revup_[idx].duration_ms = duration_ms;
+    mc_revup_[idx].final_speed_unit = final_speed_unit;
+    mc_revup_[idx].final_current_mA = final_current_mA;
+    if (idx >= mc_revup_count_)
+      mc_revup_count_ = idx + 1;
+  }
 }
 
 bool ESCHigherComponent::run_bringup_test() {
@@ -612,6 +625,55 @@ bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
   ESP_LOGI(TAG, "Config provisioned successfully (%u bytes)", static_cast<unsigned>(len));
     return true;
 }
+
+bool ESCHigherComponent::config_provision_with_crc(const uint8_t* data, size_t len) {
+bool ESCHigherComponent::config_provision_with_crc() {
+  // Pack members into MotorConfigWire_t
+  MotorConfigWire_t wire{};
+  std::memcpy(wire.name, mc_name_, sizeof(wire.name));
+  wire.pole_pairs = mc_pole_pairs_;
+  wire.rs_ohm = mc_rs_ohm_;
+  wire.ls_h = mc_ls_h_;
+  wire.ke_vll_rms_per_krpm = mc_ke_vll_rms_per_krpm_;
+  wire.max_current_mA = mc_max_current_mA_;
+  wire.startup_current_limit_mA = mc_startup_current_limit_mA_;
+  wire.run_current_limit_mA = mc_run_current_limit_mA_;
+  wire.max_speed_unit = mc_max_speed_unit_;
+  wire.observer_min_speed_unit = mc_observer_min_speed_unit_;
+  wire.observer_min_fly_speed_unit = mc_observer_min_fly_speed_unit_;
+  wire.startup_consistency_tests = mc_startup_consistency_tests_;
+  wire.variance_percentage = mc_variance_percentage_;
+  wire.speed_band_upper_16ths = mc_speed_band_upper_16ths_;
+  wire.speed_band_lower_16ths = mc_speed_band_lower_16ths_;
+  wire.bemf_consistency_gain = mc_bemf_consistency_gain_;
+  wire.bemf_consistency_tolerance = mc_bemf_consistency_tolerance_;
+  wire.transition_duration_ms = mc_transition_duration_ms_;
+  wire.speed_kp = mc_speed_kp_;
+  wire.speed_ki = mc_speed_ki_;
+  wire.iq_kp = mc_iq_kp_;
+  wire.iq_ki = mc_iq_ki_;
+  wire.id_kp = mc_id_kp_;
+  wire.id_ki = mc_id_ki_;
+  for (uint8_t i = 0; i < 5; i++) {
+    wire.revup[i].duration_ms = (i < mc_revup_count_) ? mc_revup_[i].duration_ms : 0;
+    wire.revup[i].final_speed_unit = (i < mc_revup_count_) ? mc_revup_[i].final_speed_unit : 0;
+    wire.revup[i].final_current_mA = (i < mc_revup_count_) ? mc_revup_[i].final_current_mA : 0;
+  }
+  wire.run_current_limit_dwell_ms = mc_run_current_limit_dwell_ms_;
+  wire.normal_start_guard_extra_ms = mc_normal_start_guard_extra_ms_;
+  wire.schema_version = MOTOR_CONFIG_SCHEMA_VERSION;
+
+  // Compute CRC (skip crc32 field)
+  const size_t crc_offset = offsetof(MotorConfigWire_t, crc32);
+  const size_t crc_tail_offset = crc_offset + sizeof(wire.crc32);
+  uint32_t crc = 0xFFFFFFFFu;
+  crc = crc32_ieee_continue_(crc, reinterpret_cast<const uint8_t*>(&wire), crc_offset);
+  crc = crc32_ieee_continue_(crc, reinterpret_cast<const uint8_t*>(&wire) + crc_tail_offset, sizeof(MotorConfigWire_t) - crc_tail_offset);
+  wire.crc32 = ~crc;
+
+  return this->config_provision(reinterpret_cast<const uint8_t*>(&wire), sizeof(wire));
+}
+
 void ESCHigherComponent::update() {
   if (!this->initialized_) {
     const uint32_t now = millis();

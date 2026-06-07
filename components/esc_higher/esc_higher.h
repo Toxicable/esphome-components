@@ -91,6 +91,38 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
     bringup_test_id_ = value;
   }
 
+
+  // Motor config setters
+  void set_provision_config(bool v) { provision_config_ = v; }
+  void set_mc_name(const char* s) { if (s) { std::memcpy(mc_name_, s, std::min(std::strlen(s), sizeof(mc_name_)-1)); mc_name_[sizeof(mc_name_)-1] = '\0'; } }
+  void set_mc_pole_pairs(uint16_t v) { mc_pole_pairs_ = v; }
+  void set_mc_rs_ohm(float v) { mc_rs_ohm_ = v; }
+  void set_mc_ls_h(float v) { mc_ls_h_ = v; }
+  void set_mc_ke_vll_rms_per_krpm(float v) { mc_ke_vll_rms_per_krpm_ = v; }
+  void set_mc_max_current_mA(uint16_t v) { mc_max_current_mA_ = v; }
+  void set_mc_startup_current_limit_mA(uint16_t v) { mc_startup_current_limit_mA_ = v; }
+  void set_mc_run_current_limit_mA(uint16_t v) { mc_run_current_limit_mA_ = v; }
+  void set_mc_max_speed_unit(uint16_t v) { mc_max_speed_unit_ = v; }
+  void set_mc_observer_min_speed_unit(uint16_t v) { mc_observer_min_speed_unit_ = v; }
+  void set_mc_observer_min_fly_speed_unit(uint16_t v) { mc_observer_min_fly_speed_unit_ = v; }
+  void set_mc_startup_consistency_tests(uint16_t v) { mc_startup_consistency_tests_ = v; }
+  void set_mc_variance_percentage(uint16_t v) { mc_variance_percentage_ = v; }
+  void set_mc_speed_band_upper_16ths(uint16_t v) { mc_speed_band_upper_16ths_ = v; }
+  void set_mc_speed_band_lower_16ths(uint16_t v) { mc_speed_band_lower_16ths_ = v; }
+  void set_mc_bemf_consistency_gain(uint16_t v) { mc_bemf_consistency_gain_ = v; }
+  void set_mc_bemf_consistency_tolerance(uint16_t v) { mc_bemf_consistency_tolerance_ = v; }
+  void set_mc_transition_duration_ms(uint16_t v) { mc_transition_duration_ms_ = v; }
+  void set_mc_speed_kp(int16_t v) { mc_speed_kp_ = v; }
+  void set_mc_speed_ki(int16_t v) { mc_speed_ki_ = v; }
+  void set_mc_iq_kp(int16_t v) { mc_iq_kp_ = v; }
+  void set_mc_iq_ki(int16_t v) { mc_iq_ki_ = v; }
+  void set_mc_id_kp(int16_t v) { mc_id_kp_ = v; }
+  void set_mc_id_ki(int16_t v) { mc_id_ki_ = v; }
+  void set_mc_revup(uint8_t idx, uint16_t duration_ms, int16_t final_speed_unit, int16_t final_current_mA);
+  void set_mc_run_current_limit_dwell_ms(uint16_t v) { mc_run_current_limit_dwell_ms_ = v; }
+  void set_mc_normal_start_guard_extra_ms(uint16_t v) { mc_normal_start_guard_extra_ms_ = v; }
+
+
   bool start_motor();
   bool stop_motor();
   bool clear_faults();
@@ -108,6 +140,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool config_commit();
   bool config_erase();
   bool config_provision(const uint8_t* data, size_t len);
+
+  bool config_provision_with_crc();
+
 
   void set_proto_major_sensor(sensor::Sensor* s) {
     proto_major_sensor_ = s;
@@ -481,6 +516,43 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   uint8_t command_seq_{0};
   int32_t speed_ramp_target_dhz_{1000};
   int32_t speed_ramp_time_ms_{1000};
+
+  // Motor config provisioning fields
+  bool provision_config_{false};
+  char mc_name_[32]{};
+  uint16_t mc_pole_pairs_{0};
+  float mc_rs_ohm_{0};
+  float mc_ls_h_{0};
+  float mc_ke_vll_rms_per_krpm_{0};
+  uint16_t mc_max_current_mA_{0};
+  uint16_t mc_startup_current_limit_mA_{0};
+  uint16_t mc_run_current_limit_mA_{0};
+  uint16_t mc_max_speed_unit_{0};
+  uint16_t mc_observer_min_speed_unit_{0};
+  uint16_t mc_observer_min_fly_speed_unit_{0};
+  uint16_t mc_startup_consistency_tests_{8};
+  uint16_t mc_variance_percentage_{10};
+  uint16_t mc_speed_band_upper_16ths_{16};
+  uint16_t mc_speed_band_lower_16ths_{16};
+  uint16_t mc_bemf_consistency_gain_{128};
+  uint16_t mc_bemf_consistency_tolerance_{256};
+  uint16_t mc_transition_duration_ms_{500};
+  int16_t mc_speed_kp_{100};
+  int16_t mc_speed_ki_{10};
+  int16_t mc_iq_kp_{50};
+  int16_t mc_iq_ki_{5};
+  int16_t mc_id_kp_{30};
+  int16_t mc_id_ki_{3};
+  struct {
+    uint16_t duration_ms;
+    int16_t final_speed_unit;
+    int16_t final_current_mA;
+  } mc_revup_[5]{{0}};
+  uint8_t mc_revup_count_{0};
+  uint16_t mc_run_current_limit_dwell_ms_{1000};
+  uint16_t mc_normal_start_guard_extra_ms_{500};
+
+
   int32_t bringup_test_duration_ms_{5000};
   int32_t bringup_test_options_{0};
   uint8_t bringup_test_id_{BRINGUP_TEST_FULL_SPIN_SEQUENCE};

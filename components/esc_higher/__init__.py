@@ -167,6 +167,39 @@ CONF_SPEED_TARGET_DHZ = "speed_target_dhz"
 CONF_SPEED_RAMP_TARGET_DHZ = "speed_ramp_target_dhz"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
 
+# Motor config provisioning
+CONF_MOTOR_CONFIG = "motor_config"
+CONF_MC_NAME = "name"
+CONF_MC_POLE_PAIRS = "pole_pairs"
+CONF_MC_RS_OHM = "rs_ohm"
+CONF_MC_LS_H = "ls_h"
+CONF_MC_KE_VLL_RMS_PER_KRPM = "ke_vll_rms_per_krpm"
+CONF_MC_MAX_CURRENT_MA = "max_current_mA"
+CONF_MC_STARTUP_CURRENT_LIMIT_MA = "startup_current_limit_mA"
+CONF_MC_RUN_CURRENT_LIMIT_MA = "run_current_limit_mA"
+CONF_MC_MAX_SPEED_UNIT = "max_speed_unit"
+CONF_MC_OBSERVER_MIN_SPEED_UNIT = "observer_min_speed_unit"
+CONF_MC_OBSERVER_MIN_FLY_SPEED_UNIT = "observer_min_fly_speed_unit"
+CONF_MC_STARTUP_CONSISTENCY_TESTS = "startup_consistency_tests"
+CONF_MC_VARIANCE_PERCENTAGE = "variance_percentage"
+CONF_MC_SPEED_BAND_UPPER_16THS = "speed_band_upper_16ths"
+CONF_MC_SPEED_BAND_LOWER_16THS = "speed_band_lower_16ths"
+CONF_MC_BEMF_CONSISTENCY_GAIN = "bemf_consistency_gain"
+CONF_MC_BEMF_CONSISTENCY_TOLERANCE = "bemf_consistency_tolerance"
+CONF_MC_TRANSITION_DURATION_MS = "transition_duration_ms"
+CONF_MC_SPEED_KP = "speed_kp"
+CONF_MC_SPEED_KI = "speed_ki"
+CONF_MC_IQ_KP = "iq_kp"
+CONF_MC_IQ_KI = "iq_ki"
+CONF_MC_ID_KP = "id_kp"
+CONF_MC_ID_KI = "id_ki"
+CONF_MC_REVUP = "revup"
+CONF_MC_REVUP_DURATION_MS = "duration_ms"
+CONF_MC_REVUP_FINAL_SPEED_UNIT = "final_speed_unit"
+CONF_MC_REVUP_FINAL_CURRENT_MA = "final_current_mA"
+CONF_MC_RUN_CURRENT_LIMIT_DWELL_MS = "run_current_limit_dwell_ms"
+CONF_MC_NORMAL_START_GUARD_EXTRA_MS = "normal_start_guard_extra_ms"
+
 BRINGUP_TEST_OPTIONS = [
     "full_spin_sequence",
     "bridge_static_vector_test",
@@ -192,7 +225,93 @@ async def _bind_sensor(config, key, setter):
         cg.add(setter(s))
 
 
+MOTOR_CONFIG_SCHEMA_VERSION = 3
+
+
+def _revup_phase_schema():
+    return cv.Schema({
+        cv.Required(CONF_MC_REVUP_DURATION_MS): cv.int_range(min=0, max=65535),
+        cv.Required(CONF_MC_REVUP_FINAL_SPEED_UNIT): cv.int_range(min=-32768, max=32767),
+        cv.Required(CONF_MC_REVUP_FINAL_CURRENT_MA): cv.int_range(min=-32768, max=32767),
+    })
+
+
+def _validate_motor_config():
+    return cv.Schema({
+        cv.Optional(CONF_MC_NAME, default=""): cv.string,
+        cv.Required(CONF_MC_POLE_PAIRS): cv.int_range(min=1, max=65535),
+        cv.Required(CONF_MC_RS_OHM): cv.float_,
+        cv.Required(CONF_MC_LS_H): cv.float_,
+        cv.Required(CONF_MC_KE_VLL_RMS_PER_KRPM): cv.float_,
+        cv.Required(CONF_MC_MAX_CURRENT_MA): cv.int_range(min=1, max=65535),
+        cv.Required(CONF_MC_STARTUP_CURRENT_LIMIT_MA): cv.int_range(min=1, max=65535),
+        cv.Required(CONF_MC_RUN_CURRENT_LIMIT_MA): cv.int_range(min=1, max=65535),
+        cv.Required(CONF_MC_MAX_SPEED_UNIT): cv.int_range(min=1, max=65535),
+        cv.Required(CONF_MC_OBSERVER_MIN_SPEED_UNIT): cv.int_range(min=0, max=65535),
+        cv.Required(CONF_MC_OBSERVER_MIN_FLY_SPEED_UNIT): cv.int_range(min=0, max=65535),
+        cv.Optional(CONF_MC_STARTUP_CONSISTENCY_TESTS, default=8): cv.int_range(min=1, max=65535),
+        cv.Optional(CONF_MC_VARIANCE_PERCENTAGE, default=10): cv.int_range(min=1, max=65535),
+        cv.Optional(CONF_MC_SPEED_BAND_UPPER_16THS, default=16): cv.int_range(min=1, max=65535),
+        cv.Optional(CONF_MC_SPEED_BAND_LOWER_16THS, default=16): cv.int_range(min=1, max=65535),
+        cv.Optional(CONF_MC_BEMF_CONSISTENCY_GAIN, default=128): cv.int_range(min=0, max=65535),
+        cv.Optional(CONF_MC_BEMF_CONSISTENCY_TOLERANCE, default=256): cv.int_range(min=0, max=65535),
+        cv.Optional(CONF_MC_TRANSITION_DURATION_MS, default=500): cv.int_range(min=0, max=65535),
+        cv.Optional(CONF_MC_SPEED_KP, default=100): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_MC_SPEED_KI, default=10): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_MC_IQ_KP, default=50): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_MC_IQ_KI, default=5): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_MC_ID_KP, default=30): cv.int_range(min=-32768, max=32767),
+        cv.Optional(CONF_MC_ID_KI, default=3): cv.int_range(min=-32768, max=32767),
+        cv.Required(CONF_MC_REVUP): cv.All(
+            cv.ensure_list(_revup_phase_schema()),
+            cv.Length(min=1, max=5),
+        ),
+        cv.Optional(CONF_MC_RUN_CURRENT_LIMIT_DWELL_MS, default=1000): cv.int_range(min=0, max=65535),
+        cv.Optional(CONF_MC_NORMAL_START_GUARD_EXTRA_MS, default=500): cv.int_range(min=0, max=65535),
+    })
+
+
+
+
+async def _bind_motor_config(var, mc):
+    """Set motor config fields via C++ setters; C++ packs struct at provision time."""
+    cg.add(var.set_mc_name(mc[CONF_MC_NAME]))
+    cg.add(var.set_mc_pole_pairs(mc[CONF_MC_POLE_PAIRS]))
+    cg.add(var.set_mc_rs_ohm(mc[CONF_MC_RS_OHM]))
+    cg.add(var.set_mc_ls_h(mc[CONF_MC_LS_H]))
+    cg.add(var.set_mc_ke_vll_rms_per_krpm(mc[CONF_MC_KE_VLL_RMS_PER_KRPM]))
+    cg.add(var.set_mc_max_current_mA(mc[CONF_MC_MAX_CURRENT_MA]))
+    cg.add(var.set_mc_startup_current_limit_mA(mc[CONF_MC_STARTUP_CURRENT_LIMIT_MA]))
+    cg.add(var.set_mc_run_current_limit_mA(mc[CONF_MC_RUN_CURRENT_LIMIT_MA]))
+    cg.add(var.set_mc_max_speed_unit(mc[CONF_MC_MAX_SPEED_UNIT]))
+    cg.add(var.set_mc_observer_min_speed_unit(mc[CONF_MC_OBSERVER_MIN_SPEED_UNIT]))
+    cg.add(var.set_mc_observer_min_fly_speed_unit(mc[CONF_MC_OBSERVER_MIN_FLY_SPEED_UNIT]))
+    cg.add(var.set_mc_startup_consistency_tests(mc[CONF_MC_STARTUP_CONSISTENCY_TESTS]))
+    cg.add(var.set_mc_variance_percentage(mc[CONF_MC_VARIANCE_PERCENTAGE]))
+    cg.add(var.set_mc_speed_band_upper_16ths(mc[CONF_MC_SPEED_BAND_UPPER_16THS]))
+    cg.add(var.set_mc_speed_band_lower_16ths(mc[CONF_MC_SPEED_BAND_LOWER_16THS]))
+    cg.add(var.set_mc_bemf_consistency_gain(mc[CONF_MC_BEMF_CONSISTENCY_GAIN]))
+    cg.add(var.set_mc_bemf_consistency_tolerance(mc[CONF_MC_BEMF_CONSISTENCY_TOLERANCE]))
+    cg.add(var.set_mc_transition_duration_ms(mc[CONF_MC_TRANSITION_DURATION_MS]))
+    cg.add(var.set_mc_speed_kp(mc[CONF_MC_SPEED_KP]))
+    cg.add(var.set_mc_speed_ki(mc[CONF_MC_SPEED_KI]))
+    cg.add(var.set_mc_iq_kp(mc[CONF_MC_IQ_KP]))
+    cg.add(var.set_mc_iq_ki(mc[CONF_MC_IQ_KI]))
+    cg.add(var.set_mc_id_kp(mc[CONF_MC_ID_KP]))
+    cg.add(var.set_mc_id_ki(mc[CONF_MC_ID_KI]))
+    for i, phase in enumerate(mc[CONF_MC_REVUP]):
+        cg.add(var.set_mc_revup(
+            i,
+            phase[CONF_MC_REVUP_DURATION_MS],
+            phase[CONF_MC_REVUP_FINAL_SPEED_UNIT],
+            phase[CONF_MC_REVUP_FINAL_CURRENT_MA],
+        ))
+    cg.add(var.set_mc_run_current_limit_dwell_ms(mc[CONF_MC_RUN_CURRENT_LIMIT_DWELL_MS]))
+    cg.add(var.set_mc_normal_start_guard_extra_ms(mc[CONF_MC_NORMAL_START_GUARD_EXTRA_MS]))
+
+
 CONFIG_SCHEMA = (
+
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(ESCHigherComponent),
@@ -380,6 +499,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_SPEED_RAMP_TIME_MS, default=1000): cv.int_range(
                 min=0, max=2147483647
             ),
+            cv.Optional(CONF_MOTOR_CONFIG): _validate_motor_config(),
         }
     )
     .extend(cv.polling_component_schema("10s"))
@@ -399,6 +519,11 @@ async def to_code(config):
     cg.add(var.set_bringup_test_options(config[CONF_BRINGUP_TEST_OPTIONS]))
     cg.add(var.set_speed_ramp_target_dhz(config[CONF_SPEED_RAMP_TARGET_DHZ]))
     cg.add(var.set_speed_ramp_time_ms(config[CONF_SPEED_RAMP_TIME_MS]))
+
+    if CONF_MOTOR_CONFIG in config:
+        await _bind_motor_config(var, config[CONF_MOTOR_CONFIG])
+        cg.add(var.set_provision_config(True))
+
 
     await _bind_sensor(config, CONF_PROTO_MAJOR, var.set_proto_major_sensor)
     await _bind_sensor(config, CONF_PROTO_MINOR, var.set_proto_minor_sensor)

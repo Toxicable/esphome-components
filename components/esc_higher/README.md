@@ -40,6 +40,27 @@ esc_higher:
   speed_target_dhz:
     name: "Speed Target dHz"
 
+  ## Motor config provisioning (optional, provisioned to STM32 at startup):
+  # motor_config:
+  #   name: "MyMotor"
+  #   pole_pairs: 7
+  #   rs_ohm: 0.01
+  #   ls_h: 0.001
+  #   ke_vll_rms_per_krpm: 0.1
+  #   max_current_mA: 10000
+  #   startup_current_limit_mA: 15000
+  #   run_current_limit_mA: 12000
+  #   max_speed_unit: 10000
+  #   observer_min_speed_unit: 100
+  #   observer_min_fly_speed_unit: 200
+  #   revup:
+  #     - duration_ms: 1000
+  #       final_speed_unit: 500
+  #       final_current_mA: 5000
+  #     - duration_ms: 2000
+  #       final_speed_unit: 2000
+  #       final_current_mA: 8000
+
   ## STATUS + TELEMETRY examples:
   seq:
     name: "Status Seq"
@@ -254,3 +275,4 @@ Notes:
 - `bringup_test_options: 1` enables the forced timer differential PWM test path. Use only with motor disconnected or with a current-limited bench supply.
 - `ibus_ma` is reserved for a real DC input-current measurement and currently remains zero/unknown. Use `motor_current_ma` as motor phase-current telemetry, not PSU input current.
 - After a bring-up run with test ID `102`, the component reads `DEBUG_INFO` (`0x70`) and `DEBUG_READ` (`0x71`) automatically when the STM advertises `CAP_DEBUG_LOG`, decodes variable-length debug records, verifies CRC16-CCITT-FALSE, logs full record details in ESPHome, and publishes only a short summary to `debug_log`.
+| - `motor_config` is optional. When present, the component serializes the fields to the STM32's `MotorConfig_t` struct at startup (after I2C interface detection), computes CRC-32, and provisions via the config begin/write/validate/commit protocol. The `revup` list requires 1-5 phase entries; required fields are `pole_pairs`, `rs_ohm`, `ls_h`, `ke_vll_rms_per_krpm`, `max_current_mA`, `startup_current_limit_mA`, `run_current_limit_mA`, `max_speed_unit`, `observer_min_speed_unit`, `observer_min_fly_speed_unit`, and `revup`. All other fields have defaults matching firmware compile-time defaults.
