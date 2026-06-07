@@ -139,6 +139,25 @@ void ESCHigherComponent::maybe_log_command_result_(uint8_t last_cmd_seq, uint8_t
     return;
   }
 
+  if (last_cmd_error == 28) {
+    uint8_t config_status[49]{0};
+    if (this->read_register_(REG_CONFIG_STATUS, config_status, sizeof(config_status))) {
+      char config_name[33]{0};
+      std::memcpy(config_name, &config_status[13], 32);
+      ESP_LOGW(
+        TAG,
+        "Last command seq=%u rejected: %s (code=%u, esc_state=%s, mc_state=%s, fault_detail=%s, current_faults=0x%04X, occurred_faults=0x%04X, config_present=%u, config_valid=%u, config_applied=%u, config_gen=%u, config_schema=%u, config_error=%u, config_name=%s)",
+        static_cast<unsigned>(last_cmd_seq), last_cmd_error_to_cstr(last_cmd_error), static_cast<unsigned>(last_cmd_error),
+        esc_state_to_cstr(esc_state), mc_state_to_cstr(mc_state), fault_detail_to_cstr(fault_detail),
+        static_cast<unsigned>(current_faults), static_cast<unsigned>(occurred_faults),
+        static_cast<unsigned>(config_status[0] != 0), static_cast<unsigned>(config_status[1] != 0),
+        static_cast<unsigned>(config_status[2] != 0), static_cast<unsigned>(u32_(config_status, 7)),
+        static_cast<unsigned>(u16_(config_status, 11)), static_cast<unsigned>(u32_(config_status, 45)), config_name
+      );
+      return;
+    }
+  }
+
   ESP_LOGW(
     TAG,
     "Last command seq=%u rejected: %s (code=%u, esc_state=%s, mc_state=%s, fault_detail=%s, current_faults=0x%04X, occurred_faults=0x%04X)",
