@@ -417,6 +417,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
 
  protected:
+  void maybe_log_command_result_(uint8_t last_cmd_seq, uint8_t last_cmd_error, uint8_t esc_state, uint8_t mc_state,
+                                 uint8_t fault_detail, uint16_t current_faults, uint16_t occurred_faults);
   bool read_register_(uint8_t reg, uint8_t* out, size_t len);
   bool read_debug_info_(uint32_t* debug_seq, uint16_t* used_len, uint16_t* export_len, uint16_t* capacity,
                         uint16_t* dropped, uint16_t* crc16);
@@ -545,6 +547,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool debug_log_supported_{false};
   bool debug_log_read_failed_{false};
   uint8_t last_bringup_report_seq_{0xFF};
+  uint8_t last_logged_cmd_seq_{0xFF};
+  uint8_t last_logged_cmd_error_{0xFF};
   bool force_next_bringup_debug_read_{false};
 
   sensor::Sensor* proto_major_sensor_{nullptr};

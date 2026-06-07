@@ -81,6 +81,8 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
       return "offset_calib_not_ready";
     case 27:
       return "test102_stage_timeout";
+    case 28:
+      return "motor_config_missing";
     default:
       return "unknown";
   }

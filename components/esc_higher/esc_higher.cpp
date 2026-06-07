@@ -121,12 +121,37 @@ void ESCHigherSpeedTargetNumber::control(float value) {
   this->publish_state(static_cast<float>(target_dhz) * 6.0f);
 }
 
+void ESCHigherComponent::maybe_log_command_result_(uint8_t last_cmd_seq, uint8_t last_cmd_error, uint8_t esc_state,
+                                                   uint8_t mc_state, uint8_t fault_detail, uint16_t current_faults,
+                                                   uint16_t occurred_faults) {
+  if (last_cmd_seq == this->last_logged_cmd_seq_ && last_cmd_error == this->last_logged_cmd_error_)
+    return;
+
+  this->last_logged_cmd_seq_ = last_cmd_seq;
+  this->last_logged_cmd_error_ = last_cmd_error;
+
+  if (last_cmd_error == 0) {
+    ESP_LOGI(TAG, "Last command seq=%u accepted", static_cast<unsigned>(last_cmd_seq));
+    return;
+  }
+
+  ESP_LOGW(
+    TAG,
+    "Last command seq=%u rejected: %s (code=%u, esc_state=%s, mc_state=%s, fault_detail=%s, current_faults=0x%04X, occurred_faults=0x%04X)",
+    static_cast<unsigned>(last_cmd_seq), last_cmd_error_to_cstr(last_cmd_error), static_cast<unsigned>(last_cmd_error),
+    esc_state_to_cstr(esc_state), mc_state_to_cstr(mc_state), fault_detail_to_cstr(fault_detail),
+    static_cast<unsigned>(current_faults), static_cast<unsigned>(occurred_faults)
+  );
+}
+
 void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
   this->debug_log_read_failed_ = false;
   this->last_bringup_report_seq_ = 0xFF;
+  this->last_logged_cmd_seq_ = 0xFF;
+  this->last_logged_cmd_error_ = 0xFF;
   if (this->bringup_test_select_ != nullptr) {
     this->bringup_test_select_->publish_state(
       this->bringup_test_id_ == BRINGUP_TEST_BRIDGE_STATIC_VECTOR   ? "bridge_static_vector_test" :
@@ -691,6 +716,8 @@ void ESCHigherComponent::update() {
   {
     uint8_t status[16]{0};
     if (this->read_register_(REG_STATUS, status, sizeof(status))) {
+      this->maybe_log_command_result_(status[3], status[4], status[1], status[2], status[5], u16_(status, 6),
+                                      u16_(status, 8));
       publish_sensor(status_seq_sensor_, status[0]);
       publish_sensor(esc_state_sensor_, status[1]);
       publish_text(esc_state_text_sensor_, esc_state_to_cstr(status[1]));
@@ -716,6 +743,7 @@ void ESCHigherComponent::update() {
   {
     uint8_t tel[48]{0};
     if (this->read_register_(REG_TELEMETRY, tel, sizeof(tel))) {
+      this->maybe_log_command_result_(tel[26], tel[3], tel[1], tel[2], tel[27], u16_(tel, 6), 0);
       publish_sensor(telemetry_seq_sensor_, tel[0]);
       publish_sensor(esc_state_sensor_, tel[1]);
       publish_text(esc_state_text_sensor_, esc_state_to_cstr(tel[1]));

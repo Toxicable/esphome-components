@@ -570,12 +570,6 @@ def validate_no_motor_threshold_percent(value):
     )
 
 
-def validate_no_legacy_startup_keys(config):
-    for old_key, new_key in LEGACY_STARTUP_KEY_MAP.items():
-        if old_key in config:
-            raise cv.Invalid(f"`{old_key}` has been removed. Use `{new_key}` instead.")
-    return config
-
 
 def validate_safety_guardrails(config):
     if config.get(CONF_ALLOW_UNSAFE_CURRENT_LIMITS, False):
@@ -824,7 +818,6 @@ async def attach_optional_entities(var, config, entity_specs, factory):
 
 
 CONFIG_SCHEMA = cv.All(
-    validate_no_legacy_startup_keys,
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(MCF8329AComponent),

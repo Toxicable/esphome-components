@@ -34,25 +34,23 @@ esc_higher:
   speed_target:
     name: "Speed Target"
 
-
   start_motor:
     name: "ESC Start"
   stop_motor:
     name: "ESC Stop"
   clear_faults:
     name: "ESC Clear Faults"
-  # what's stop vs estop
   estop:
     name: "ESC E-Stop"
 
-  # bringup_test_select:
-  #   name: "Bringup Test"
-  # run_bringup_test:
-  #   name: "Run Bringup Test"
-  # run_bridge_static_vector_test:
-  #   name: "Run Bridge Static Vector Test"
-  # run_forced_timer_diff_pwm_test:
-  #   name: "Run Forced Timer Diff PWM Test"
+  bringup_test_select:
+    name: "Bringup Test"
+  run_bringup_test:
+    name: "Run Bringup Test"
+  run_bridge_static_vector_test:
+    name: "Run Bridge Static Vector Test"
+  run_forced_timer_diff_pwm_test:
+    name: "Run Forced Timer Diff PWM Test"
 
   esc_state:
     name: "ESC State"
@@ -68,7 +66,7 @@ esc_higher:
   bus_voltage:
     name: "Bus Voltage"
   input_current:
-    name: "Input Current"
+    name: "Bus Current"
   motor_current:
     name: "Motor Current"
   mechanical_speed:
@@ -80,26 +78,32 @@ esc_higher:
   controller_temperature:
     name: "Controller Temperature"
 
-  # debug_log:
-  #   name: "Debug Log Summary"
+  debug_log:
+    name: "Debug Log Summary"
 
   # Optional STM32 motor config provisioning at startup:
   # motor_config:
   #   name: "MyMotor"
-  #   pole_pairs: 7
-  #   rs_ohm: 0.01
-  #   ls_h: 0.001
-  #   ke_vll_rms_per_krpm: 0.1
-  #   max_current_mA: 10000
-  #   startup_current_limit_mA: 15000
-  #   run_current_limit_mA: 12000
-  #   max_speed_unit: 10000
-  #   observer_min_speed_unit: 100
-  #   observer_min_fly_speed_unit: 200
+  #   pole_pairs: 6
+  #   rs_ohm: 0.078
+  #   ls_h: 0.000030
+  #   ke_vll_rms_per_krpm: 0.50
+  #   max_current_mA: 15000
+  #   startup_current_limit_mA: 10000
+  #   run_current_limit_mA: 4000
+  #   max_speed_unit: 2100
+  #   observer_min_speed_unit: 83
+  #   observer_min_fly_speed_unit: 42
   #   revup:
-  #     - duration_ms: 1000
-  #       final_speed_unit: 500
-  #       final_current_mA: 5000
+  #     - duration_ms: 400
+  #       final_speed_unit: 20
+  #       final_current_mA: 8000
+  #     - duration_ms: 800
+  #       final_speed_unit: 58
+  #       final_current_mA: 9000
+  #     - duration_ms: 2000
+  #       final_speed_unit: 150
+  #       final_current_mA: 10000
 ```
 
 ## Behavior changes
@@ -108,6 +112,8 @@ esc_higher:
 - The old raw sequence counters and duplicate raw state/fault sensors are no longer part of the recommended public surface.
 - Speed control and speed telemetry are now RPM-facing in Home Assistant.
 - `bus_voltage`, `input_current`, `motor_current`, and `controller_temperature` use real HA-facing units.
+- Rejected commands are now logged in ESPHome using the decoded firmware error string, even if you did not configure diagnostic entities.
+- If you press `start_motor` before provisioning or loading a motor config, the STM32 will reject it with `motor_config_missing` and ESPHome will log that rejection.
 
 Legacy YAML keys are still accepted for compatibility:
 - `speed_target_dhz`

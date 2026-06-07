@@ -71,13 +71,6 @@ CONF_CONTROLLER_TEMPERATURE = "controller_temperature"
 CONF_TARGET_SPEED = "target_speed"
 CONF_DRIVE_LIMIT_CENTI_PCT = "drive_limit_centi_pct"
 
-CONF_VBUS_MV_LEGACY = "vbus_mv"
-CONF_IBUS_MA_LEGACY = "ibus_ma"
-CONF_MOTOR_CURRENT_MA_LEGACY = "motor_current_ma"
-CONF_SPEED_DHZ_LEGACY = "speed_dhz"
-CONF_TEMP_MC_LEGACY = "temp_mc"
-CONF_TARGET_SPEED_DHZ_LEGACY = "target_speed_dhz"
-
 CONF_BRINGUP_ACTIVE = "bringup_active"
 CONF_BRINGUP_TEST_ID = "bringup_test_id_state"
 CONF_BRINGUP_STEP_ID = "bringup_step_id"
@@ -126,11 +119,6 @@ CONF_DEBUG_PHASE_IA_MA = "phase_iA_mA"
 CONF_DEBUG_PHASE_IB_MA = "phase_iB_mA"
 CONF_DEBUG_PHASE_IC_MA = "phase_iC_mA"
 
-CONF_ESC_STATE_TEXT_LEGACY = "esc_state_text"
-CONF_LAST_CMD_ERROR_TEXT_LEGACY = "last_cmd_error_text"
-CONF_FAULT_DETAIL_TEXT_LEGACY = "fault_detail_text"
-CONF_CURRENT_FAULTS_TEXT_LEGACY = "current_faults_text"
-CONF_OCCURRED_FAULTS_TEXT_LEGACY = "occurred_faults_text"
 CONF_CAPABILITIES_TEXT = "capabilities_text"
 CONF_BRINGUP_STATE_TEXT = "bringup_state_text"
 CONF_BRINGUP_RESULT_TEXT = "bringup_result_text"
@@ -156,10 +144,8 @@ CONF_SPEED_TARGET = "speed_target"
 CONF_SPEED_RAMP_TARGET_RPM = "speed_ramp_target_rpm"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
 
-CONF_SPEED_TARGET_DHZ_LEGACY = "speed_target_dhz"
-CONF_SPEED_RAMP_TARGET_DHZ_LEGACY = "speed_ramp_target_dhz"
 
-# Motor config provisioning
+# Motor config
 CONF_MOTOR_CONFIG = "motor_config"
 CONF_MC_NAME = "name"
 CONF_MC_POLE_PAIRS = "pole_pairs"
@@ -215,28 +201,6 @@ async def _bind_sensor(config, key, setter):
     if key in config:
         s = await sensor.new_sensor(config[key])
         cg.add(setter(s))
-
-
-def _first_present(config, *keys):
-    for key in keys:
-        if key in config:
-            return key
-    return None
-
-
-async def _bind_sensor_alias(config, keys, setter):
-    key = _first_present(config, *keys)
-    if key is not None:
-        s = await sensor.new_sensor(config[key])
-        cg.add(setter(s))
-
-
-async def _bind_text_sensor_alias(config, keys, setter):
-    key = _first_present(config, *keys)
-    if key is not None:
-        s = await text_sensor.new_text_sensor(config[key])
-        cg.add(setter(s))
-
 
 MOTOR_CONFIG_SCHEMA_VERSION = 3
 
@@ -342,25 +306,11 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_VBUS_MV_LEGACY): sensor.sensor_schema(
-                unit_of_measurement=UNIT_VOLT,
-                accuracy_decimals=3,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
             cv.Optional(CONF_INPUT_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_IBUS_MA_LEGACY): sensor.sensor_schema(
-                unit_of_measurement=UNIT_AMPERE,
-                accuracy_decimals=3,
-                device_class=DEVICE_CLASS_CURRENT,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
             cv.Optional(CONF_MOTOR_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
@@ -368,18 +318,7 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_MOTOR_CURRENT_MA_LEGACY): sensor.sensor_schema(
-                unit_of_measurement=UNIT_AMPERE,
-                accuracy_decimals=3,
-                device_class=DEVICE_CLASS_CURRENT,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
             cv.Optional(CONF_MECHANICAL_SPEED): sensor.sensor_schema(
-                unit_of_measurement="rpm",
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_SPEED_DHZ_LEGACY): sensor.sensor_schema(
                 unit_of_measurement="rpm",
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
@@ -395,18 +334,7 @@ CONFIG_SCHEMA = (
                 device_class=DEVICE_CLASS_TEMPERATURE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_TEMP_MC_LEGACY): sensor.sensor_schema(
-                unit_of_measurement=UNIT_CELSIUS,
-                accuracy_decimals=1,
-                device_class=DEVICE_CLASS_TEMPERATURE,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
             cv.Optional(CONF_TARGET_SPEED): sensor.sensor_schema(
-                unit_of_measurement="rpm",
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_TARGET_SPEED_DHZ_LEGACY): sensor.sensor_schema(
                 unit_of_measurement="rpm",
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
@@ -466,15 +394,10 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_DEBUG_PHASE_IB_MA): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_PHASE_IC_MA): _raw_sensor_schema(),
             cv.Optional(CONF_ESC_STATE): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_ESC_STATE_TEXT_LEGACY): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_LAST_CMD_ERROR): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_LAST_CMD_ERROR_TEXT_LEGACY): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_FAULT_DETAIL): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_FAULT_DETAIL_TEXT_LEGACY): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CURRENT_FAULTS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_CURRENT_FAULTS_TEXT_LEGACY): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_OCCURRED_FAULTS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_OCCURRED_FAULTS_TEXT_LEGACY): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CAPABILITIES_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_RESULT_TEXT): text_sensor.text_sensor_schema(),
@@ -521,11 +444,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_SPEED_TARGET): number.number_schema(
                 ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
             ),
-            cv.Optional(CONF_SPEED_TARGET_DHZ_LEGACY): number.number_schema(
-                ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
-            ),
             cv.Optional(CONF_SPEED_RAMP_TARGET_RPM, default=6000): cv.int_,
-            cv.Optional(CONF_SPEED_RAMP_TARGET_DHZ_LEGACY): cv.int_,
             cv.Optional(CONF_SPEED_RAMP_TIME_MS, default=1000): cv.int_range(
                 min=0, max=2147483647
             ),
@@ -542,10 +461,6 @@ async def to_code(config):
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
-    speed_ramp_target_rpm = config.get(
-        CONF_SPEED_RAMP_TARGET_RPM,
-        int(config.get(CONF_SPEED_RAMP_TARGET_DHZ_LEGACY, 1000) * 6),
-    )
     cg.add(var.set_speed_ramp_target_dhz(int(round(speed_ramp_target_rpm / 6.0))))
     cg.add(var.set_speed_ramp_time_ms(config[CONF_SPEED_RAMP_TIME_MS]))
 
@@ -562,13 +477,7 @@ async def to_code(config):
     await _bind_sensor(config, CONF_MAX_BLOCK_LEN, var.set_max_block_len_sensor)
     await _bind_sensor(config, CONF_CAPABILITIES, var.set_capabilities_sensor)
     await _bind_sensor(config, CONF_BRINGUP_SEQ, var.set_bringup_seq_sensor)
-    await _bind_sensor_alias(config, (CONF_BUS_VOLTAGE, CONF_VBUS_MV_LEGACY), var.set_vbus_mv_sensor)
-    await _bind_sensor_alias(config, (CONF_INPUT_CURRENT, CONF_IBUS_MA_LEGACY), var.set_ibus_ma_sensor)
-    await _bind_sensor_alias(config, (CONF_MOTOR_CURRENT, CONF_MOTOR_CURRENT_MA_LEGACY), var.set_motor_current_ma_sensor)
-    await _bind_sensor_alias(config, (CONF_MECHANICAL_SPEED, CONF_SPEED_DHZ_LEGACY), var.set_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DUTY_CENTI_PCT, var.set_duty_centi_pct_sensor)
-    await _bind_sensor_alias(config, (CONF_CONTROLLER_TEMPERATURE, CONF_TEMP_MC_LEGACY), var.set_temp_mc_sensor)
-    await _bind_sensor_alias(config, (CONF_TARGET_SPEED, CONF_TARGET_SPEED_DHZ_LEGACY), var.set_target_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DRIVE_LIMIT_CENTI_PCT, var.set_drive_limit_centi_pct_sensor)
     await _bind_sensor(config, CONF_BRINGUP_ACTIVE, var.set_bringup_active_sensor)
     await _bind_sensor(config, CONF_BRINGUP_TEST_ID, var.set_bringup_test_id_sensor)
@@ -615,27 +524,6 @@ async def to_code(config):
     await _bind_sensor(config, CONF_DEBUG_PHASE_IB_MA, var.set_debug_phase_ib_ma_sensor)
     await _bind_sensor(config, CONF_DEBUG_PHASE_IC_MA, var.set_debug_phase_ic_ma_sensor)
 
-    await _bind_text_sensor_alias(config, (CONF_ESC_STATE, CONF_ESC_STATE_TEXT_LEGACY), var.set_esc_state_text_sensor)
-    await _bind_text_sensor_alias(
-        config,
-        (CONF_LAST_CMD_ERROR, CONF_LAST_CMD_ERROR_TEXT_LEGACY),
-        var.set_last_cmd_error_text_sensor,
-    )
-    await _bind_text_sensor_alias(
-        config,
-        (CONF_FAULT_DETAIL, CONF_FAULT_DETAIL_TEXT_LEGACY),
-        var.set_fault_detail_text_sensor,
-    )
-    await _bind_text_sensor_alias(
-        config,
-        (CONF_CURRENT_FAULTS, CONF_CURRENT_FAULTS_TEXT_LEGACY),
-        var.set_current_faults_text_sensor,
-    )
-    await _bind_text_sensor_alias(
-        config,
-        (CONF_OCCURRED_FAULTS, CONF_OCCURRED_FAULTS_TEXT_LEGACY),
-        var.set_occurred_faults_text_sensor,
-    )
     if CONF_CAPABILITIES_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_CAPABILITIES_TEXT])
         cg.add(var.set_capabilities_text_sensor(s))
@@ -698,10 +586,9 @@ async def to_code(config):
     if CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST in config:
         b = await button.new_button(config[CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST])
         await cg.register_parented(b, var)
-    speed_target_key = _first_present(config, CONF_SPEED_TARGET, CONF_SPEED_TARGET_DHZ_LEGACY)
-    if speed_target_key is not None:
+    if CONF_SPEED_TARGET in config:
         n = await number.new_number(
-            config[speed_target_key],
+            config[CONF_SPEED_TARGET],
             min_value=-10000,
             max_value=10000,
             step=6,
