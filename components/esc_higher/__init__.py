@@ -461,6 +461,7 @@ async def to_code(config):
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
+    speed_ramp_target_rpm = config[CONF_SPEED_RAMP_TARGET_RPM]
     cg.add(var.set_speed_ramp_target_dhz(int(round(speed_ramp_target_rpm / 6.0))))
     cg.add(var.set_speed_ramp_time_ms(config[CONF_SPEED_RAMP_TIME_MS]))
 
