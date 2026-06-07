@@ -28,8 +28,10 @@ esc_higher:
   i2c_id: i2c_bus
   update_interval: 100ms  # Optional / default
   address: 0x34  # Optional / default
+  # delete watch dog config and option - it should be on by default and handled by default
   disable_watchdog: false
   # watchdog_timeout_ms: 500
+  # are these fields still actie? delete them probs
   # bringup_test_duration_ms: 5000
   # bringup_test_options: 0
   # bringup_test_options: 48  ## Disable and restore STM32 watchdog for explicit autonomous diagnostics only.

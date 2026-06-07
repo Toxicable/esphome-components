@@ -1,0 +1,31 @@
+esphome:
+  name: esc-higher-test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: /workspaces/toxic-boards/esphome-components/components
+    refresh: 0s
+    components: [ esc_higher ]
+
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 400kHz
+
+esc_higher:
+  id: esc
+  i2c_id: i2c_bus
+  update_interval: 100ms
+  address: 0x34
+  disable_watchdog: false
+  speed_ramp_target_dhz: 1200
+  speed_ramp_time_ms: 750
+  speed_target_dhz:
+    name: "Speed Target dHz"

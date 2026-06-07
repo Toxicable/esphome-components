@@ -51,27 +51,6 @@ void write_le_f32_(uint8_t* buf, size_t off, float val) {
   std::memcpy(&bits, &val, sizeof(bits));
   write_le32_(buf, off, bits);
 }
-// Wire format: flat packed, no padding, little-endian (123 bytes total)
-constexpr size_t MOTOR_CONFIG_WIRE_SIZE = 123;
-constexpr size_t MOTOR_CONFIG_WIRE_CRC_OFFSET = 118;
-constexpr size_t MOTOR_CONFIG_WIRE_SCHEMA_OFFSET = 122;
-constexpr size_t MOTOR_CONFIG_WIRE_REVUP_PHASE_SIZE = 6;
-
-void write_le16_(uint8_t* buf, size_t off, uint16_t val) {
-  buf[off + 0] = static_cast<uint8_t>(val & 0xFFu);
-  buf[off + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
-}
-void write_le32_(uint8_t* buf, size_t off, uint32_t val) {
-  buf[off + 0] = static_cast<uint8_t>(val & 0xFFu);
-  buf[off + 1] = static_cast<uint8_t>((val >> 8) & 0xFFu);
-  buf[off + 2] = static_cast<uint8_t>((val >> 16) & 0xFFu);
-  buf[off + 3] = static_cast<uint8_t>((val >> 24) & 0xFFu);
-}
-void write_le_f32_(uint8_t* buf, size_t off, float val) {
-  uint32_t bits;
-  std::memcpy(&bits, &val, sizeof(bits));
-  write_le32_(buf, off, bits);
-}
 
 uint32_t crc32_ieee_continue_(uint32_t crc, const uint8_t* data, size_t len) {
   for (size_t i = 0; i < len; i++) {

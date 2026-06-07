@@ -686,6 +686,4 @@ async def to_code(config):
             step=1,
         )
         cg.add(n.set_parent(var))
-        sel = await select.new_select(
-        )
-        await cg.register_parented(sel, var)
+

@@ -1,7 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -331,7 +333,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
   void set_bringup_max_phase_current_reported_ma_sensor(sensor::Sensor* s) {
     bringup_max_phase_current_reported_ma_sensor_ = s;
-  }
   }
   void set_debug_v_alpha_raw_s16_sensor(sensor::Sensor* s) {
     debug_v_alpha_raw_s16_sensor_ = s;
