@@ -583,10 +583,11 @@ bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
     return false;
   }
 
+  const size_t crc_tail_offset = MOTOR_CONFIG_WIRE_CRC_OFFSET + 4;
   uint32_t computed_crc = 0xFFFFFFFFu;
   computed_crc = crc32_ieee_continue_(computed_crc, data, MOTOR_CONFIG_WIRE_CRC_OFFSET);
-  computed_crc = crc32_ieee_continue_(computed_crc, data + MOTOR_CONFIG_WIRE_SCHEMA_OFFSET,
-                                      MOTOR_CONFIG_WIRE_SIZE - MOTOR_CONFIG_WIRE_SCHEMA_OFFSET);
+  computed_crc = crc32_ieee_continue_(computed_crc, data + crc_tail_offset,
+                                      MOTOR_CONFIG_WIRE_SIZE - crc_tail_offset);
   computed_crc = ~computed_crc;
 
   uint8_t schema = data[MOTOR_CONFIG_WIRE_SCHEMA_OFFSET];
@@ -683,14 +684,15 @@ bool ESCHigherComponent::config_provision_with_crc() {
   write_le16_(wire, 114, mc_run_current_limit_dwell_ms_);
   write_le16_(wire, 116, mc_normal_start_guard_extra_ms_);
 
-  // CRC and schema at offsets 118-122
+  // CRC and schema at offsets 118-122. The CRC covers the schema byte and skips
+  // only the 4-byte CRC field, matching the STM32 validator.
+  wire[MOTOR_CONFIG_WIRE_SCHEMA_OFFSET] = MOTOR_CONFIG_SCHEMA_VERSION;
+  const size_t crc_tail_offset = MOTOR_CONFIG_WIRE_CRC_OFFSET + 4;
   uint32_t crc = 0xFFFFFFFFu;
   crc = crc32_ieee_continue_(crc, wire, MOTOR_CONFIG_WIRE_CRC_OFFSET);
-  crc = crc32_ieee_continue_(crc, wire + MOTOR_CONFIG_WIRE_SCHEMA_OFFSET,
-                              MOTOR_CONFIG_WIRE_SIZE - MOTOR_CONFIG_WIRE_SCHEMA_OFFSET);
+  crc = crc32_ieee_continue_(crc, wire + crc_tail_offset, MOTOR_CONFIG_WIRE_SIZE - crc_tail_offset);
   crc = ~crc;
   write_le32_(wire, MOTOR_CONFIG_WIRE_CRC_OFFSET, crc);
-  wire[MOTOR_CONFIG_WIRE_SCHEMA_OFFSET] = MOTOR_CONFIG_SCHEMA_VERSION;
 
   return this->config_provision(wire, MOTOR_CONFIG_WIRE_SIZE);
 }
