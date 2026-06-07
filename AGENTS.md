@@ -29,6 +29,7 @@ Always commit and push changes after you've done a batch - a batch is what makes
 - Generated datasheet artifacts (`*.compact.txt`, `*.index.md`, `*.compact.map.tsv`) should be treated as build artifacts: regenerate when the canonical PDF changes instead of manually editing.
 - Devcontainer installs `pypdf` alongside `esphome` for the PDF ingestion tool.
 - Devcontainer shells default to the ESP-IDF Python venv; Python deps needed at runtime should be installed into that env (Dockerfile sources `export.sh` before installing).
+- Devcontainer mounts named volumes for VS Code server, code-server, and PlatformIO state; post-create fixes ownership and best-effort installs the extension list through `code-server`/`code` for Coder.
 - ESPHome `i2c::I2CDevice::write_read()` returns `i2c::ErrorCode` (not bool); always compare to `i2c::ERROR_OK` or reads will be inverted.
 - ESPHome I2C `ErrorCode` value `2` maps to `ERROR_NOT_ACKNOWLEDGED` (target did not ACK address/data), useful when logs print numeric errors only.
 - Component READMEs should include an `external_components` snippet; add an explicit `i2c` block when the component depends on I2C.

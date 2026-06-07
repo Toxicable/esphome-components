@@ -6,6 +6,7 @@ Use `tools/pdf_to_text.py` to generate `<pdf>.txt` from PDFs, and provide the `.
 ## Checks
 - `./check.bash` runs `clangd --check` on C/C++ headers/sources (or pass a specific file path).
 - `./check_py.bash` runs Python syntax checks via `py_compile` without creating `__pycache__` files in the repo.
+- The devcontainer pins ESPHome and persists VS Code/code-server plus PlatformIO state in named volumes so Coder rebuilds do not lose extensions or re-download ESP-IDF tooling.
 
 ## README conventions
 - In component README YAML examples, entity `name` values should not include the component name prefix (for example, `Temperature` instead of `LPS25HB Temperature`).

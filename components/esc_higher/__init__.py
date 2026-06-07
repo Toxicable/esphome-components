@@ -7,11 +7,9 @@ from esphome.const import (
     DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_VOLTAGE,
     ENTITY_CATEGORY_CONFIG,
-    ENTITY_CATEGORY_DIAGNOSTIC,
     STATE_CLASS_MEASUREMENT,
     UNIT_AMPERE,
     UNIT_CELSIUS,
-    UNIT_MILLIAMP,
     UNIT_PERCENT,
     UNIT_VOLT,
 )
@@ -51,88 +49,15 @@ ESCHigherSpeedTargetNumber = esc_higher_ns.class_(
     "ESCHigherSpeedTargetNumber", number.Number
 )
 
-CONF_PROTO_MAJOR = "proto_major"
-CONF_PROTO_MINOR = "proto_minor"
-CONF_FW_MAJOR = "fw_major"
-CONF_FW_MINOR = "fw_minor"
-CONF_HW_ID = "hw_id"
-CONF_MAX_BLOCK_LEN = "max_block_len"
-CONF_CAPABILITIES = "capabilities"
-
-CONF_BRINGUP_SEQ = "bringup_seq"
-CONF_ESC_STATE = "esc_state"
-CONF_LAST_CMD_ERROR = "last_cmd_error"
-CONF_FAULT_DETAIL = "fault_detail"
-CONF_CURRENT_FAULTS = "current_faults"
-CONF_OCCURRED_FAULTS = "occurred_faults"
 CONF_BUS_VOLTAGE = "bus_voltage"
-CONF_INPUT_CURRENT = "input_current"
-CONF_MOTOR_CURRENT = "motor_current"
+CONF_CURRENT = "current"
 CONF_MECHANICAL_SPEED = "mechanical_speed"
 CONF_DUTY_CENTI_PCT = "duty_centi_pct"
 CONF_CONTROLLER_TEMPERATURE = "controller_temperature"
 CONF_TARGET_SPEED = "target_speed"
 CONF_DRIVE_LIMIT_CENTI_PCT = "drive_limit_centi_pct"
+CONF_CURRENT_FAULT = "current_fault"
 
-CONF_BRINGUP_ACTIVE = "bringup_active"
-CONF_BRINGUP_TEST_ID = "bringup_test_id_state"
-CONF_BRINGUP_STEP_ID = "bringup_step_id"
-CONF_BRINGUP_STATE = "bringup_state"
-CONF_BRINGUP_RESULT = "bringup_result"
-CONF_BRINGUP_FAILURE_CODE = "bringup_failure_code"
-CONF_BRINGUP_MEASURED0 = "bringup_measured0"
-CONF_BRINGUP_MEASURED1 = "bringup_measured1"
-CONF_BRINGUP_PHASE_A_COUNT = "bringup_phase_a_count"
-CONF_BRINGUP_PHASE_B_COUNT = "bringup_phase_b_count"
-CONF_BRINGUP_PHASE_C_COUNT = "bringup_phase_c_count"
-CONF_BRINGUP_PWM_SPREAD_TICKS = "bringup_pwm_spread_ticks"
-CONF_BRINGUP_MAX_PHASE_CURRENT_MA = "bringup_max_phase_current_ma"
-CONF_BRINGUP_LIMIT_MIN = "bringup_limit_min"
-CONF_BRINGUP_LIMIT_MAX = "bringup_limit_max"
-CONF_BRINGUP_VBUS_MV_AT_TEST = "bringup_vbus_mv_at_test"
-CONF_BRINGUP_CURRENT_FAULTS_AT_TEST = "bringup_current_faults_at_test"
-CONF_BRINGUP_OCCURRED_FAULTS_AT_TEST = "bringup_occurred_faults_at_test"
-CONF_BRINGUP_MC_STATE_AT_TEST = "bringup_mc_state_at_test"
-CONF_BRINGUP_ESC_STATE_AT_TEST = "bringup_esc_state_at_test"
-CONF_BRINGUP_GD_READY = "bringup_gd_ready"
-CONF_BRINGUP_ELAPSED_MS = "bringup_elapsed_ms"
-CONF_BRINGUP_LAST_PASSED_STEP = "bringup_last_passed_step"
-CONF_BRINGUP_STEPS_TOTAL = "bringup_steps_total"
-CONF_BRINGUP_ATTEMPT_COUNT = "bringup_attempt_count"
-CONF_BRINGUP_DEBUG0 = "bringup_debug0"
-CONF_BRINGUP_DEBUG1 = "bringup_debug1"
-CONF_BRINGUP_LAST_APP_FAULT_DETAIL = "bringup_last_app_fault_detail"
-CONF_BRINGUP_SWITCH_OVER_MS = "bringup_switch_over_ms"
-CONF_BRINGUP_RUN_MS = "bringup_run_ms"
-CONF_BRINGUP_MAX_SPEED_DHZ = "bringup_max_speed_dhz"
-CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA = "bringup_max_current_reference_ma"
-CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA = "bringup_max_phase_current_reported_ma"
-
-
-
-CONF_DEBUG_V_ALPHA_RAW_S16 = "v_alpha_raw_s16"
-CONF_DEBUG_V_BETA_RAW_S16 = "v_beta_raw_s16"
-CONF_DEBUG_V_Q_RAW_S16 = "v_q_raw_s16"
-CONF_DEBUG_V_D_RAW_S16 = "v_d_raw_s16"
-CONF_DEBUG_V_U_RAW_S16 = "v_u_raw_s16"
-CONF_DEBUG_V_V_RAW_S16 = "v_v_raw_s16"
-CONF_DEBUG_V_W_RAW_S16 = "v_w_raw_s16"
-CONF_DEBUG_V_AMP_RAW_S16 = "v_amp_raw_s16"
-CONF_DEBUG_PHASE_IA_MA = "phase_iA_mA"
-CONF_DEBUG_PHASE_IB_MA = "phase_iB_mA"
-CONF_DEBUG_PHASE_IC_MA = "phase_iC_mA"
-
-CONF_CAPABILITIES_TEXT = "capabilities_text"
-CONF_BRINGUP_STATE_TEXT = "bringup_state_text"
-CONF_BRINGUP_RESULT_TEXT = "bringup_result_text"
-CONF_BRINGUP_TEST_ID_TEXT = "bringup_test_id_text"
-CONF_BRINGUP_CURRENT_FAULTS_TEXT = "bringup_current_faults_text"
-CONF_BRINGUP_OCCURRED_FAULTS_TEXT = "bringup_occurred_faults_text"
-CONF_CONFIG_STATUS_TEXT = "config_status_text"
-CONF_DIAG_BLOCKED_TEXT = "diag_blocked_text"
-CONF_DIAG_FAULT_TEXT = "diag_fault_text"
-CONF_DIAG_STARTUP_TEXT = "diag_startup_text"
-CONF_BOARD_CONFIG_TEXT = "board_config_text"
 CONF_DEBUG_LOG_TEXT = "debug_log"
 CONF_BRINGUP_TEST_SELECT = "bringup_test_select"
 
@@ -187,18 +112,6 @@ BRINGUP_TEST_OPTIONS = [
     "bridge_static_vector_test",
     "forced_timer_diff_pwm",
 ]
-
-
-def _raw_sensor_schema():
-    return sensor.sensor_schema(accuracy_decimals=0, state_class=STATE_CLASS_MEASUREMENT)
-
-
-def _diagnostic_sensor_schema():
-    return sensor.sensor_schema(
-        accuracy_decimals=0,
-        state_class=STATE_CLASS_MEASUREMENT,
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-    )
 
 
 async def _bind_sensor(config, key, setter):
@@ -296,27 +209,13 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(ESCHigherComponent),
-            cv.Optional(CONF_PROTO_MAJOR): _raw_sensor_schema(),
-            cv.Optional(CONF_PROTO_MINOR): _raw_sensor_schema(),
-            cv.Optional(CONF_FW_MAJOR): _raw_sensor_schema(),
-            cv.Optional(CONF_FW_MINOR): _raw_sensor_schema(),
-            cv.Optional(CONF_HW_ID): _raw_sensor_schema(),
-            cv.Optional(CONF_MAX_BLOCK_LEN): _raw_sensor_schema(),
-            cv.Optional(CONF_CAPABILITIES): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_SEQ): _raw_sensor_schema(),
             cv.Optional(CONF_BUS_VOLTAGE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_VOLT,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_INPUT_CURRENT): sensor.sensor_schema(
-                unit_of_measurement=UNIT_AMPERE,
-                accuracy_decimals=3,
-                device_class=DEVICE_CLASS_CURRENT,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_MOTOR_CURRENT): sensor.sensor_schema(
+            cv.Optional(CONF_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
@@ -348,72 +247,8 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=2,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_BRINGUP_ACTIVE): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_TEST_ID): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_STEP_ID): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_STATE): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_RESULT): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_FAILURE_CODE): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MEASURED0): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MEASURED1): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PHASE_A_COUNT): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PHASE_B_COUNT): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PHASE_C_COUNT): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_PWM_SPREAD_TICKS): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MAX_PHASE_CURRENT_MA): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIAMP,
-                accuracy_decimals=0,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_BRINGUP_LIMIT_MIN): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_LIMIT_MAX): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_VBUS_MV_AT_TEST): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_CURRENT_FAULTS_AT_TEST): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_OCCURRED_FAULTS_AT_TEST): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MC_STATE_AT_TEST): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_ESC_STATE_AT_TEST): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_GD_READY): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_ELAPSED_MS): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_LAST_PASSED_STEP): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_STEPS_TOTAL): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_ATTEMPT_COUNT): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_DEBUG0): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_DEBUG1): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_LAST_APP_FAULT_DETAIL): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_SWITCH_OVER_MS): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_RUN_MS): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MAX_SPEED_DHZ): _raw_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_ALPHA_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_BETA_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_Q_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_D_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_U_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_V_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_W_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_V_AMP_RAW_S16): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_PHASE_IA_MA): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_PHASE_IB_MA): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_PHASE_IC_MA): _raw_sensor_schema(),
-            cv.Optional(CONF_ESC_STATE): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_LAST_CMD_ERROR): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_FAULT_DETAIL): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_CURRENT_FAULTS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_OCCURRED_FAULTS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_CAPABILITIES_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_STATE_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_RESULT_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_TEST_ID_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BRINGUP_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_CURRENT_FAULT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_DEBUG_LOG_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_CONFIG_STATUS_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_DIAG_BLOCKED_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_DIAG_FAULT_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_DIAG_STARTUP_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_BOARD_CONFIG_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_SELECT): select.select_schema(
                 ESCHigherBringupTestSelect,
                 entity_category=ENTITY_CATEGORY_CONFIG,
@@ -479,118 +314,20 @@ async def to_code(config):
         cg.add(var.set_provision_config(True))
 
 
-    await _bind_sensor(config, CONF_PROTO_MAJOR, var.set_proto_major_sensor)
-    await _bind_sensor(config, CONF_PROTO_MINOR, var.set_proto_minor_sensor)
-    await _bind_sensor(config, CONF_FW_MAJOR, var.set_fw_major_sensor)
-    await _bind_sensor(config, CONF_FW_MINOR, var.set_fw_minor_sensor)
-    await _bind_sensor(config, CONF_HW_ID, var.set_hw_id_sensor)
-    await _bind_sensor(config, CONF_MAX_BLOCK_LEN, var.set_max_block_len_sensor)
-    await _bind_sensor(config, CONF_CAPABILITIES, var.set_capabilities_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_SEQ, var.set_bringup_seq_sensor)
     await _bind_sensor(config, CONF_BUS_VOLTAGE, var.set_vbus_mv_sensor)
-    await _bind_sensor(config, CONF_INPUT_CURRENT, var.set_ibus_ma_sensor)
-    await _bind_sensor(config, CONF_MOTOR_CURRENT, var.set_motor_current_ma_sensor)
+    await _bind_sensor(config, CONF_CURRENT, var.set_current_sensor)
     await _bind_sensor(config, CONF_MECHANICAL_SPEED, var.set_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DUTY_CENTI_PCT, var.set_duty_centi_pct_sensor)
     await _bind_sensor(config, CONF_CONTROLLER_TEMPERATURE, var.set_temp_mc_sensor)
     await _bind_sensor(config, CONF_TARGET_SPEED, var.set_target_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DRIVE_LIMIT_CENTI_PCT, var.set_drive_limit_centi_pct_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_ACTIVE, var.set_bringup_active_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_TEST_ID, var.set_bringup_test_id_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_STEP_ID, var.set_bringup_step_id_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_STATE, var.set_bringup_state_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_RESULT, var.set_bringup_result_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_FAILURE_CODE, var.set_bringup_failure_code_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MEASURED0, var.set_bringup_measured0_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MEASURED1, var.set_bringup_measured1_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PHASE_A_COUNT, var.set_bringup_phase_a_count_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PHASE_B_COUNT, var.set_bringup_phase_b_count_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PHASE_C_COUNT, var.set_bringup_phase_c_count_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_PWM_SPREAD_TICKS, var.set_bringup_pwm_spread_ticks_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MAX_PHASE_CURRENT_MA, var.set_bringup_max_phase_current_ma_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_LIMIT_MIN, var.set_bringup_limit_min_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_LIMIT_MAX, var.set_bringup_limit_max_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_VBUS_MV_AT_TEST, var.set_bringup_vbus_mv_at_test_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_CURRENT_FAULTS_AT_TEST, var.set_bringup_current_faults_at_test_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_OCCURRED_FAULTS_AT_TEST, var.set_bringup_occurred_faults_at_test_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MC_STATE_AT_TEST, var.set_bringup_mc_state_at_test_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_ESC_STATE_AT_TEST, var.set_bringup_esc_state_at_test_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_GD_READY, var.set_bringup_gd_ready_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_ELAPSED_MS, var.set_bringup_elapsed_ms_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_LAST_PASSED_STEP, var.set_bringup_last_passed_step_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_STEPS_TOTAL, var.set_bringup_steps_total_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_ATTEMPT_COUNT, var.set_bringup_attempt_count_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_DEBUG0, var.set_bringup_debug0_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_DEBUG1, var.set_bringup_debug1_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_LAST_APP_FAULT_DETAIL, var.set_bringup_last_app_fault_detail_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_SWITCH_OVER_MS, var.set_bringup_switch_over_ms_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_RUN_MS, var.set_bringup_run_ms_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MAX_SPEED_DHZ, var.set_bringup_max_speed_dhz_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MAX_CURRENT_REFERENCE_MA, var.set_bringup_max_current_reference_ma_sensor)
-    await _bind_sensor(config, CONF_BRINGUP_MAX_PHASE_CURRENT_REPORTED_MA, var.set_bringup_max_phase_current_reported_ma_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_ALPHA_RAW_S16, var.set_debug_v_alpha_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_BETA_RAW_S16, var.set_debug_v_beta_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_Q_RAW_S16, var.set_debug_v_q_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_D_RAW_S16, var.set_debug_v_d_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_U_RAW_S16, var.set_debug_v_u_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_V_RAW_S16, var.set_debug_v_v_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_W_RAW_S16, var.set_debug_v_w_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_V_AMP_RAW_S16, var.set_debug_v_amp_raw_s16_sensor)
-    await _bind_sensor(config, CONF_DEBUG_PHASE_IA_MA, var.set_debug_phase_ia_ma_sensor)
-    await _bind_sensor(config, CONF_DEBUG_PHASE_IB_MA, var.set_debug_phase_ib_ma_sensor)
-    await _bind_sensor(config, CONF_DEBUG_PHASE_IC_MA, var.set_debug_phase_ic_ma_sensor)
 
-    if CONF_ESC_STATE in config:
-        s = await text_sensor.new_text_sensor(config[CONF_ESC_STATE])
-        cg.add(var.set_esc_state_text_sensor(s))
-    if CONF_LAST_CMD_ERROR in config:
-        s = await text_sensor.new_text_sensor(config[CONF_LAST_CMD_ERROR])
-        cg.add(var.set_last_cmd_error_text_sensor(s))
-    if CONF_FAULT_DETAIL in config:
-        s = await text_sensor.new_text_sensor(config[CONF_FAULT_DETAIL])
-        cg.add(var.set_fault_detail_text_sensor(s))
-    if CONF_CURRENT_FAULTS in config:
-        s = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULTS])
-        cg.add(var.set_current_faults_text_sensor(s))
-    if CONF_OCCURRED_FAULTS in config:
-        s = await text_sensor.new_text_sensor(config[CONF_OCCURRED_FAULTS])
-        cg.add(var.set_occurred_faults_text_sensor(s))
-    if CONF_CAPABILITIES_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_CAPABILITIES_TEXT])
-        cg.add(var.set_capabilities_text_sensor(s))
-    if CONF_BRINGUP_STATE_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_STATE_TEXT])
-        cg.add(var.set_bringup_state_text_sensor(s))
-    if CONF_BRINGUP_RESULT_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_RESULT_TEXT])
-        cg.add(var.set_bringup_result_text_sensor(s))
-    if CONF_BRINGUP_TEST_ID_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_TEST_ID_TEXT])
-        cg.add(var.set_bringup_test_id_text_sensor(s))
-    if CONF_BRINGUP_CURRENT_FAULTS_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_CURRENT_FAULTS_TEXT])
-        cg.add(var.set_bringup_current_faults_text_sensor(s))
-    if CONF_BRINGUP_OCCURRED_FAULTS_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_OCCURRED_FAULTS_TEXT])
-        cg.add(var.set_bringup_occurred_faults_text_sensor(s))
+    if CONF_CURRENT_FAULT in config:
+        s = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULT])
+        cg.add(var.set_current_fault_text_sensor(s))
     if CONF_DEBUG_LOG_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_DEBUG_LOG_TEXT])
         cg.add(var.set_debug_log_text_sensor(s))
-    if CONF_CONFIG_STATUS_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_CONFIG_STATUS_TEXT])
-        cg.add(var.set_config_status_text_sensor(s))
-    if CONF_DIAG_BLOCKED_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_DIAG_BLOCKED_TEXT])
-        cg.add(var.set_diag_blocked_text_sensor(s))
-    if CONF_DIAG_FAULT_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_DIAG_FAULT_TEXT])
-        cg.add(var.set_diag_fault_text_sensor(s))
-    if CONF_DIAG_STARTUP_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_DIAG_STARTUP_TEXT])
-        cg.add(var.set_diag_startup_text_sensor(s))
-    if CONF_BOARD_CONFIG_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_BOARD_CONFIG_TEXT])
-        cg.add(var.set_board_config_text_sensor(s))
     if CONF_BRINGUP_TEST_SELECT in config:
         sel = await select.new_select(config[CONF_BRINGUP_TEST_SELECT], options=BRINGUP_TEST_OPTIONS)
         await cg.register_parented(sel, var)

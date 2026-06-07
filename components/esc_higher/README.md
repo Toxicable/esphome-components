@@ -50,23 +50,13 @@ esc_higher:
   run_forced_timer_diff_pwm_test:
     name: "Run Forced Timer Diff PWM Test"
 
-  esc_state:
-    name: "ESC State"
-  last_cmd_error:
-    name: "Last Command Error"
-  fault_detail:
-    name: "Fault Detail"
-  current_faults:
-    name: "Current Faults"
-  occurred_faults:
-    name: "Occurred Faults"
+  current_fault:
+    name: "Current Fault"
 
   bus_voltage:
     name: "Bus Voltage"
-  input_current:
-    name: "Input Current"
-  motor_current:
-    name: "Motor Current"
+  current:
+    name: "Current"
   mechanical_speed:
     name: "Mechanical Speed"
   target_speed:
@@ -146,11 +136,12 @@ esc_higher:
 
 ## Behavior changes
 
-- The user-facing state and fault fields are text sensors on their primary names: `esc_state`, `last_cmd_error`, `fault_detail`, `current_faults`, `occurred_faults`.
-- The old raw sequence counters and duplicate raw state/fault sensors are no longer part of the recommended public surface.
+- The public issue/status surface is a single `current_fault` text sensor.
+- The old raw sequence counters, config-status text, diagnostic text, and per-category state/fault entities are no longer accepted by the schema.
 - Speed control and speed telemetry are now RPM-facing in Home Assistant.
-- `bus_voltage`, `input_current`, `motor_current`, and `controller_temperature` use real HA-facing units.
-- Rejected commands are now logged in ESPHome using the decoded firmware error string, even if you did not configure diagnostic entities.
+- `bus_voltage`, `current`, and `controller_temperature` use real HA-facing units.
+- `current` maps to firmware `TELEMETRY.current_mA`; the reserved current slot at telemetry offset 12 is not exposed.
+- Rejected commands are logged in ESPHome using the decoded firmware error string.
 - If you press `start_motor` before applying a motor config, the STM32 will reject it with `motor_config_missing` and ESPHome will log that rejection.
 - `motor_config` is no longer provisioned automatically at startup; use `apply_motor_config` to push it to the STM32 explicitly.
 
@@ -166,7 +157,7 @@ esc_higher:
 
 ## Motor config provisioning
 
-`motor_config` is optional. When present, the component serializes the fields to the STM32 `MotorConfig_t` struct and `apply_motor_config` provisions it through the config begin/write/validate/commit flow.
+`motor_config` is optional. When present, the component serializes the fields to the STM32 `MotorConfig_t` struct and `apply_motor_config` provisions it through the config begin/write/validate/commit flow. Command phases wait for the matching STM32 command-result sequence; config-data chunks are written through `CONFIG_DATA` and checked through `STATUS.last_cmd_error`.
 
 Required fields:
 - `pole_pairs`

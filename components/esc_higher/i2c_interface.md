@@ -65,6 +65,12 @@ Notes:
 |   `0x71` | `DEBUG_READ`      | w/r    |   64 |
 |   `0x72` | `DEBUG_CTRL`      | write  |    1 |
 |   `0x73` | `DEBUG_INFO2`     | read   |   20 |
+|   `0x80` | `CONFIG_DATA`     | w/r    |   64 |
+|   `0x90` | `DIAG_BLOCKED`    | read   |   16 |
+|   `0x91` | `DIAG_FAULT`      | read   |   32 |
+|   `0x92` | `DIAG_STARTUP`    | read   |   32 |
+|   `0x93` | `CONFIG_STATUS`   | read   |   49 |
+|   `0xA0` | `BOARD_CONFIG`    | read   |   56 |
 
 ## `ID` register `0x00`
 
@@ -130,7 +136,19 @@ Capability bits:
 - `9`: faults still active
 - `10`: latched faults present
 - `11`: current_limit_exceeded
+- `12`: startup guard stopped
 - `17`: unknown register
+- `24`: offset calibration start failed
+- `25`: offset calibration timeout
+- `26`: offset calibration not ready
+- `27`: test 102 stage timeout
+- `28`: motor config missing
+- `30`: config CRC failed
+- `31`: config schema unsupported
+- `32`: config not begun
+- `33`: config already in progress
+- `34`: config offset exceeded
+- `35`: board limit exceeded
 
 Bring-up failure details are reported in `BRINGUP.result` / `BRINGUP.failure_code`, not in `last_cmd_error`.
 
@@ -200,6 +218,12 @@ Supported opcodes:
 - `0x09`: `RUN_BRINGUP_TEST`
 - `0x0A`: `RUN_MOTOR_TUNING`
 - `0x0B`: `SET_BRINGUP_PROFILE`
+- `0x10`: `CONFIG_BEGIN`
+- `0x11`: `CONFIG_WRITE_CHUNK` legacy 4-byte command chunk path
+- `0x12`: `CONFIG_VALIDATE`
+- `0x13`: `CONFIG_COMMIT`
+- `0x14`: `CONFIG_READ`
+- `0x15`: `CONFIG_ERASE`
 
 `SET_SPEED_RAMP`:
 
@@ -251,6 +275,26 @@ pass. The command saves, disables, and restores the command watchdog around the
 entire workflow. Read `TUNING` for the orchestration result and `BRINGUP` for
 the active or most recent subtest.
 
+`CONFIG_BEGIN`:
+
+- `param0`: expected wire-config size, currently `123`
+- `param1`: schema version, currently `3`
+- `param2`: CRC32 over the wire config with the CRC field skipped
+
+`CONFIG_VALIDATE`, `CONFIG_COMMIT`, and `CONFIG_ERASE` use zero parameters.
+Hosts should wait for `STATUS.last_cmd_seq` to match the command sequence and
+then check `STATUS.last_cmd_error`.
+
+`CONFIG_DATA` chunk write:
+
+```text
+[addr+w] [0x80] [offset_lo] [offset_hi] [payload...]
+```
+
+Payload length must be `1..61` bytes. The firmware updates
+`STATUS.last_cmd_error` immediately after each chunk write, so hosts can read
+`STATUS` after every chunk and stop on the first non-zero error.
+
 ## `TELEMETRY` register `0x30`
 
 High-level live telemetry only. Do not expose FOC internals here.
@@ -264,8 +308,8 @@ High-level live telemetry only. Do not expose FOC internals here.
 |      4 | `status_flags`           | `u16` |    - |
 |      6 | `current_faults`         | `u16` |    - |
 |      8 | `vbus_mV`                | `u32` |   mV |
-|     12 | `ibus_mA`                | `i32` |   mA |
-|     16 | `motor_current_mA`       | `i32` |   mA |
+|     12 | `reserved_current_mA`    | `i32` |   mA |
+|     16 | `current_mA`             | `i32` |   mA |
 |     20 | `speed_dHz`              | `i32` |  dHz |
 |     24 | `duty_centi_pct`         | `i16` | % × 100 |
 |     26 | `last_cmd_seq`           | `u8`  |    - |
@@ -280,8 +324,9 @@ High-level live telemetry only. Do not expose FOC internals here.
 
 Notes:
 
-- `motor_current_mA` is a high-level estimate of current magnitude.
-- `ibus_mA` is zero if unavailable.
+- `current_mA` is the single host-facing current value. It is currently the
+  firmware's high-level phase-current magnitude estimate.
+- `reserved_current_mA` remains zero and is not exposed by Home Assistant.
 - `drive_limit_centi_pct` is optional and currently zero.
 - `debug0` / `debug1` are reserved for bring-up diagnostics. For test `102`,
   `debug0` reports the current CCR spread after a vector attempt, and `debug1`

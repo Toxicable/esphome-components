@@ -204,11 +204,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_vbus_mv_sensor(sensor::Sensor* s) {
     vbus_mv_sensor_ = s;
   }
-  void set_ibus_ma_sensor(sensor::Sensor* s) {
-    ibus_ma_sensor_ = s;
-  }
-  void set_motor_current_ma_sensor(sensor::Sensor* s) {
-    motor_current_ma_sensor_ = s;
+  void set_current_sensor(sensor::Sensor* s) {
+    current_sensor_ = s;
   }
   void set_speed_dhz_sensor(sensor::Sensor* s) {
     speed_dhz_sensor_ = s;
@@ -370,6 +367,9 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void set_fault_detail_text_sensor(text_sensor::TextSensor* s) {
     fault_detail_text_sensor_ = s;
   }
+  void set_current_fault_text_sensor(text_sensor::TextSensor* s) {
+    current_fault_text_sensor_ = s;
+  }
   void set_status_flags_text_sensor(text_sensor::TextSensor* s) {
     status_flags_text_sensor_ = s;
   }
@@ -378,21 +378,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   }
   void set_occurred_faults_text_sensor(text_sensor::TextSensor* s) {
     occurred_faults_text_sensor_ = s;
-  }
-  void set_config_status_text_sensor(text_sensor::TextSensor* s) {
-    config_status_text_sensor_ = s;
-  }
-  void set_diag_blocked_text_sensor(text_sensor::TextSensor* s) {
-    diag_blocked_text_sensor_ = s;
-  }
-  void set_diag_fault_text_sensor(text_sensor::TextSensor* s) {
-    diag_fault_text_sensor_ = s;
-  }
-  void set_diag_startup_text_sensor(text_sensor::TextSensor* s) {
-    diag_startup_text_sensor_ = s;
-  }
-  void set_board_config_text_sensor(text_sensor::TextSensor* s) {
-    board_config_text_sensor_ = s;
   }
   void set_capabilities_text_sensor(text_sensor::TextSensor* s) {
     capabilities_text_sensor_ = s;
@@ -430,7 +415,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
                         uint16_t* dropped, uint16_t* crc16);
   bool read_debug_chunk_(uint16_t offset, uint8_t length, uint8_t* out);
   bool publish_debug_log_(uint32_t debug_seq, uint16_t export_len, uint16_t capacity, uint16_t dropped, uint16_t crc16);
-  bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2);
+  bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2, uint8_t* seq_out = nullptr);
+  bool wait_for_command_result_(uint8_t seq, const char* label, uint32_t timeout_ms = 250);
   bool initialize_();
   bool configure_watchdog_();
   static uint16_t crc16_ccitt_false_(const uint8_t* data, size_t len);
@@ -463,16 +449,8 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t REG_DEBUG_READ = 0x71;
   static constexpr uint8_t REG_DEBUG_CTRL = 0x72;
 
-  // Diagnostic registers
-  static constexpr uint8_t REG_DIAG_BLOCKED = 0x90;
-  static constexpr uint8_t REG_DIAG_FAULT = 0x91;
-  static constexpr uint8_t REG_DIAG_STARTUP = 0x92;
-
   // Config status register (read-only)
   static constexpr uint8_t REG_CONFIG_STATUS = 0x93;
-
-  // Board config register (read-only)
-  static constexpr uint8_t REG_BOARD_CONFIG = 0xA0;
 
   static constexpr uint16_t CAP_DEBUG_LOG = 1u << 7;
   static constexpr uint16_t DEBUG_BUFFER_SIZE = 4096;
@@ -580,8 +558,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   sensor::Sensor* watchdog_ms_left_sensor_{nullptr};
 
   sensor::Sensor* vbus_mv_sensor_{nullptr};
-  sensor::Sensor* ibus_ma_sensor_{nullptr};
-  sensor::Sensor* motor_current_ma_sensor_{nullptr};
+  sensor::Sensor* current_sensor_{nullptr};
   sensor::Sensor* speed_dhz_sensor_{nullptr};
   sensor::Sensor* duty_centi_pct_sensor_{nullptr};
   sensor::Sensor* temp_mc_sensor_{nullptr};
@@ -640,16 +617,12 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   text_sensor::TextSensor* esc_state_text_sensor_{nullptr};
   text_sensor::TextSensor* last_cmd_error_text_sensor_{nullptr};
   text_sensor::TextSensor* fault_detail_text_sensor_{nullptr};
+  text_sensor::TextSensor* current_fault_text_sensor_{nullptr};
   text_sensor::TextSensor* status_flags_text_sensor_{nullptr};
   text_sensor::TextSensor* current_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* occurred_faults_text_sensor_{nullptr};
   text_sensor::TextSensor* mc_state_text_sensor_{nullptr};
   text_sensor::TextSensor* capabilities_text_sensor_{nullptr};
-  text_sensor::TextSensor* diag_blocked_text_sensor_{nullptr};
-  text_sensor::TextSensor* diag_fault_text_sensor_{nullptr};
-  text_sensor::TextSensor* diag_startup_text_sensor_{nullptr};
-  text_sensor::TextSensor* config_status_text_sensor_{nullptr};
-  text_sensor::TextSensor* board_config_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_state_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_result_text_sensor_{nullptr};
   text_sensor::TextSensor* bringup_test_id_text_sensor_{nullptr};

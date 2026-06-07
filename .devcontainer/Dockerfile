@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/devcontainers/python:3.11-bookworm
 
-ARG ESPHOME_VERSION=2026.4.5
+ARG ESPHOME_VERSION=2026.5.3
 ARG OMP_VERSION=v15.3.2
 
 # Remove Yarn repo to avoid expired key during apt-get update; not needed here.

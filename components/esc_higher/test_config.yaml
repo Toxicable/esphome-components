@@ -28,3 +28,15 @@ esc_higher:
   speed_ramp_time_ms: 750
   speed_target:
     name: "Speed Target"
+  current_fault:
+    name: "Current Fault"
+  bus_voltage:
+    name: "Bus Voltage"
+  current:
+    name: "Current"
+  mechanical_speed:
+    name: "Mechanical Speed"
+  target_speed:
+    name: "Target Speed"
+  controller_temperature:
+    name: "Controller Temperature"

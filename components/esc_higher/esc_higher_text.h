@@ -83,6 +83,18 @@ static const char* last_cmd_error_to_cstr(uint8_t v) {
       return "test102_stage_timeout";
     case 28:
       return "motor_config_missing";
+    case 30:
+      return "config_crc_failed";
+    case 31:
+      return "config_schema_unsupported";
+    case 32:
+      return "config_not_begin";
+    case 33:
+      return "config_in_progress";
+    case 34:
+      return "config_offset_exceeded";
+    case 35:
+      return "board_limit_exceeded";
     default:
       return "unknown";
   }
@@ -277,6 +289,18 @@ static const char* opcode_to_cstr(uint8_t v) {
       return "RUN_MOTOR_TUNING";
     case 0x0B:
       return "SET_BRINGUP_PROFILE";
+    case 0x10:
+      return "CONFIG_BEGIN";
+    case 0x11:
+      return "CONFIG_WRITE_CHUNK";
+    case 0x12:
+      return "CONFIG_VALIDATE";
+    case 0x13:
+      return "CONFIG_COMMIT";
+    case 0x14:
+      return "CONFIG_READ";
+    case 0x15:
+      return "CONFIG_ERASE";
     default:
       return "unknown";
   }

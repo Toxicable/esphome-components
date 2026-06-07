@@ -64,6 +64,21 @@ uint32_t crc32_ieee_continue_(uint32_t crc, const uint8_t* data, size_t len) {
   return crc;
 }
 
+std::string current_fault_text_(uint8_t esc_state, uint8_t fault_detail, uint16_t current_faults,
+                                uint16_t status_flags, uint8_t bringup_state, uint8_t bringup_result) {
+  if (current_faults != 0)
+    return fault_bitmask_to_names(current_faults);
+  if ((status_flags & (1u << 2)) != 0)
+    return "watchdog_timeout";
+  if (fault_detail != 0)
+    return fault_detail_to_cstr(fault_detail);
+  if ((bringup_state == 3 || bringup_state == 4) && bringup_result != 0 && bringup_result != 17)
+    return std::string("bringup_") + bringup_result_to_cstr(bringup_result);
+  if (esc_state == 4)
+    return "fault";
+  return "none";
+}
+
 }  // namespace
 
 void ESCHigherStartButton::press_action() {
@@ -387,10 +402,11 @@ bool ESCHigherComponent::publish_debug_log_(
   publish_text(this->debug_log_text_sensor_, summary);
   return true;
 }
-bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2) {
+bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2, uint8_t* seq_out) {
   uint8_t tx[17]{0};
+  const uint8_t seq = this->command_seq_++;
   tx[0] = REG_COMMAND;
-  tx[1] = this->command_seq_++;
+  tx[1] = seq;
   tx[2] = opcode;
   tx[3] = 0;
   tx[4] = 0;
@@ -406,6 +422,8 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
   tx[14] = static_cast<uint8_t>((param2 >> 8) & 0xFF);
   tx[15] = static_cast<uint8_t>((param2 >> 16) & 0xFF);
   tx[16] = static_cast<uint8_t>((param2 >> 24) & 0xFF);
+  if (seq_out != nullptr)
+    *seq_out = seq;
 
   ESP_LOGI(TAG, "Cmd %s (seq %u, p0=%d, p1=%d, p2=%d)",
            opcode_to_cstr(opcode), tx[1], param0, param1, param2);
@@ -415,6 +433,26 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
     return true;
   ESP_LOGW(TAG, "Cmd %s (seq %u, p0=%d, p1=%d, p2=%d) failed: %s",
            opcode_to_cstr(opcode), tx[1], param0, param1, param2, i2c_error_to_cstr(err));
+  return false;
+}
+
+bool ESCHigherComponent::wait_for_command_result_(uint8_t seq, const char* label, uint32_t timeout_ms) {
+  const uint32_t start = millis();
+  while ((millis() - start) <= timeout_ms) {
+    uint8_t status[16]{0};
+    if (this->read_register_(REG_STATUS, status, sizeof(status))) {
+      if (status[3] == seq) {
+        this->maybe_log_command_result_(status[3], status[4], status[1], status[2], status[5], u16_(status, 6),
+                                        u16_(status, 8));
+        if (status[4] == 0)
+          return true;
+        ESP_LOGW(TAG, "%s rejected: %s", label, last_cmd_error_to_cstr(status[4]));
+        return false;
+      }
+    }
+    delay(5);
+  }
+  ESP_LOGW(TAG, "%s timed out waiting for command result seq=%u", label, static_cast<unsigned>(seq));
   return false;
 }
 
@@ -552,7 +590,10 @@ bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
 }
 
 bool ESCHigherComponent::config_begin(uint16_t size, uint8_t schema, uint32_t crc) {
-  return this->write_command_(OPCODE_CONFIG_BEGIN, static_cast<int32_t>(size), static_cast<int32_t>(schema), static_cast<int32_t>(crc));
+  uint8_t seq = 0;
+  if (!this->write_command_(OPCODE_CONFIG_BEGIN, static_cast<int32_t>(size), static_cast<int32_t>(schema), static_cast<int32_t>(crc), &seq))
+    return false;
+  return this->wait_for_command_result_(seq, "config_begin");
 }
 
 bool ESCHigherComponent::config_write_chunk(uint16_t offset, const uint8_t* data, size_t len) {
@@ -568,23 +609,39 @@ bool ESCHigherComponent::config_write_chunk(uint16_t offset, const uint8_t* data
   tx[2] = static_cast<uint8_t>((offset >> 8) & 0xFF);
   std::memcpy(tx + 3, data, len);
   const i2c::ErrorCode err = this->write(tx, 3 + len);
-  if (err == i2c::ERROR_OK)
+  if (err == i2c::ERROR_OK) {
+    uint8_t status[16]{0};
+    if (this->read_register_(REG_STATUS, status, sizeof(status)) && status[4] != 0) {
+      ESP_LOGW(TAG, "Config write chunk offset=%u len=%u rejected: %s",
+               static_cast<unsigned>(offset), static_cast<unsigned>(len), last_cmd_error_to_cstr(status[4]));
+      return false;
+    }
     return true;
+  }
   ESP_LOGW(TAG, "Config write chunk offset=%u len=%u failed: %s",
            static_cast<unsigned>(offset), static_cast<unsigned>(len), i2c_error_to_cstr(err));
   return false;
 }
 
 bool ESCHigherComponent::config_validate() {
-  return this->write_command_(OPCODE_CONFIG_VALIDATE, 0, 0, 0);
+  uint8_t seq = 0;
+  if (!this->write_command_(OPCODE_CONFIG_VALIDATE, 0, 0, 0, &seq))
+    return false;
+  return this->wait_for_command_result_(seq, "config_validate");
 }
 
 bool ESCHigherComponent::config_commit() {
-  return this->write_command_(OPCODE_CONFIG_COMMIT, 0, 0, 0);
+  uint8_t seq = 0;
+  if (!this->write_command_(OPCODE_CONFIG_COMMIT, 0, 0, 0, &seq))
+    return false;
+  return this->wait_for_command_result_(seq, "config_commit");
 }
 
 bool ESCHigherComponent::config_erase() {
-  return this->write_command_(OPCODE_CONFIG_ERASE, 0, 0, 0);
+  uint8_t seq = 0;
+  if (!this->write_command_(OPCODE_CONFIG_ERASE, 0, 0, 0, &seq))
+    return false;
+  return this->wait_for_command_result_(seq, "config_erase");
 }
 
 bool ESCHigherComponent::config_provision(const uint8_t* data, size_t len) {
@@ -774,7 +831,10 @@ void ESCHigherComponent::update() {
       publish_sensor(status_flags_sensor_, u16_(status, 10));
       publish_text(status_flags_text_sensor_, bitmask_to_names(u16_(status, 10), STATUS_FLAG_NAMES, 8));
       publish_sensor(watchdog_ms_left_sensor_, u16_(status, 12));
+      publish_text(current_fault_text_sensor_, current_fault_text_(status[1], status[5], u16_(status, 6),
+                                                                   u16_(status, 10), status[14], status[15]));
     } else {
+      publish_text(current_fault_text_sensor_, "i2c_error");
       all_ok = false;
     }
   }
@@ -794,9 +854,10 @@ void ESCHigherComponent::update() {
       publish_text(status_flags_text_sensor_, bitmask_to_names(u16_(tel, 4), STATUS_FLAG_NAMES, 8));
       publish_sensor(current_faults_sensor_, u16_(tel, 6));
       publish_text(current_faults_text_sensor_, fault_bitmask_to_names(u16_(tel, 6)));
+      publish_text(current_fault_text_sensor_, current_fault_text_(tel[1], tel[27], u16_(tel, 6),
+                                                                   u16_(tel, 4), 0, 0));
       publish_sensor(vbus_mv_sensor_, u32_(tel, 8) / 1000.0f);
-      publish_sensor(ibus_ma_sensor_, i32_(tel, 12) / 1000.0f);
-      publish_sensor(motor_current_ma_sensor_, i32_(tel, 16) / 1000.0f);
+      publish_sensor(current_sensor_, i32_(tel, 16) / 1000.0f);
       publish_sensor(speed_dhz_sensor_, i32_(tel, 20) * 6.0f);
       publish_sensor(duty_centi_pct_sensor_, i16_(tel, 24));
       publish_sensor(last_cmd_seq_sensor_, tel[26]);
@@ -808,6 +869,7 @@ void ESCHigherComponent::update() {
       publish_sensor(drive_limit_centi_pct_sensor_, u16_(tel, 38));
       publish_sensor(uptime_s_sensor_, u32_(tel, 40));
     } else {
+      publish_text(current_fault_text_sensor_, "i2c_error");
       all_ok = false;
     }
   }
@@ -856,6 +918,10 @@ void ESCHigherComponent::update() {
       publish_sensor(bringup_max_speed_dhz_sensor_, i16_(bringup, 56));
       publish_sensor(bringup_max_current_reference_ma_sensor_, u16_(bringup, 58));
       publish_sensor(bringup_max_phase_current_reported_ma_sensor_, u16_(bringup, 60));
+      if (bringup[4] == 3 || bringup[4] == 4) {
+        publish_text(current_fault_text_sensor_, current_fault_text_(bringup[33], bringup[48], u16_(bringup, 28),
+                                                                     0, bringup[4], bringup[5]));
+      }
       const bool bringup_terminal = (bringup[1] == 0) && (bringup[4] == 2 || bringup[4] == 3 || bringup[4] == 4);
       if (bringup_terminal) {
         const bool new_report = this->last_bringup_report_seq_ != bringup[0];
@@ -937,123 +1003,6 @@ void ESCHigherComponent::update() {
       } else {
         all_ok = false;
       }
-    }
-  }
-
-  // Read diagnostic registers
-  if (diag_blocked_text_sensor_ != nullptr) {
-    uint8_t diag[16]{0};
-    if (this->read_register_(REG_DIAG_BLOCKED, diag, sizeof(diag))) {
-      char buf[128];
-      uint8_t cmd = diag[0];
-      uint8_t state = diag[1];
-      uint16_t cur_faults = u16_(diag, 2);
-      uint16_t occ_faults = u16_(diag, 4);
-      bool config_ready = diag[6] != 0;
-      uint8_t reason = diag[7];
-      int32_t detail = i32_(diag, 8);
-      std::snprintf(buf, sizeof(buf), "blocked cmd=0x%02X state=%u faults=0x%04X/0x%04X config=%u reason=%u detail=%d",
-                    cmd, state, cur_faults, occ_faults, config_ready, reason, detail);
-      publish_text(diag_blocked_text_sensor_, buf);
-    } else {
-      all_ok = false;
-    }
-  }
-
-  if (diag_fault_text_sensor_ != nullptr) {
-    uint8_t diag[32]{0};
-    if (this->read_register_(REG_DIAG_FAULT, diag, sizeof(diag))) {
-      char buf[256];
-      uint16_t fault_code = u16_(diag, 0);
-      uint8_t state = diag[2];
-      int32_t forced_spd = i32_(diag, 3);
-      int32_t obs_spd = i32_(diag, 7);
-      bool reliable = diag[11] != 0;
-      bool bemf = diag[12] != 0;
-      bool variance = diag[13] != 0;
-      int32_t ref_ma = i32_(diag, 14);
-      int32_t phase_ma = i32_(diag, 18);
-      uint32_t vbus_mv = u32_(diag, 22);
-      std::snprintf(buf, sizeof(buf), "fault=0x%04X state=%u forced=%d obs=%d reliable=%u bemf=%u var=%u ref=%dma phase=%dmA vbus=%umV",
-                    fault_code, state, forced_spd, obs_spd, reliable, bemf, variance, ref_ma, phase_ma, vbus_mv);
-      publish_text(diag_fault_text_sensor_, buf);
-    } else {
-      all_ok = false;
-    }
-  }
-
-  if (diag_startup_text_sensor_ != nullptr) {
-    uint8_t diag[32]{0};
-    if (this->read_register_(REG_DIAG_STARTUP, diag, sizeof(diag))) {
-      char buf[256];
-      uint8_t result = diag[0];
-      uint8_t exit_reason = diag[1];
-      bool seen_start = diag[2] != 0;
-      bool seen_switch = diag[3] != 0;
-      bool seen_run = diag[4] != 0;
-      uint32_t hold_ms = u32_(diag, 5);
-      int32_t forced_spd = i32_(diag, 9);
-      int32_t obs_spd = i32_(diag, 13);
-      int32_t obs_err = i32_(diag, 17);
-      bool reliable = diag[21] != 0;
-      bool bemf = diag[22] != 0;
-      bool variance = diag[23] != 0;
-      int32_t phase_max = i32_(diag, 24);
-      int32_t ref_max = i32_(diag, 28);
-      std::snprintf(buf, sizeof(buf), "startup result=%u exit=%u start=%u switch=%u run=%u hold=%ums forced=%d obs=%d err=%d reliable=%u bemf=%u var=%u phase_max=%dma ref_max=%dma",
-                    result, exit_reason, seen_start, seen_switch, seen_run, hold_ms, forced_spd, obs_spd, obs_err, reliable, bemf, variance, phase_max, ref_max);
-      publish_text(diag_startup_text_sensor_, buf);
-    } else {
-      all_ok = false;
-    }
-  }
-
-  // Read board config register
-  if (board_config_text_sensor_ != nullptr) {
-    uint8_t board[56]{0};
-    if (this->read_register_(REG_BOARD_CONFIG, board, sizeof(board))) {
-      char buf[256];
-      uint32_t schema = u32_(board, 0);
-      uint32_t board_id = u32_(board, 4);
-      uint32_t hw_rev = u32_(board, 8);
-      float rshunt = *(float*)&board[12];
-      float amp_gain = *(float*)&board[16];
-      float adc_ref = *(float*)&board[20];
-      float vbus_part = *(float*)&board[24];
-      uint32_t pwm_hz = u32_(board, 28);
-      uint16_t deadtime = u16_(board, 32);
-      uint16_t reg_rate = u16_(board, 34);
-      uint16_t max_current = u16_(board, 36);
-      uint16_t max_vbus = u16_(board, 38);
-      uint16_t min_vbus = u16_(board, 40);
-      int16_t max_temp = i16_(board, 42);
-      float curr_conv = *(float*)&board[44];
-      uint32_t features = u32_(board, 48);
-      std::snprintf(buf, sizeof(buf), "board schema=%u id=%u hw=%u rshunt=%.4fOhm gain=%.1fx adc=%.1fV vbus_div=%.2f pwm=%uHz dt=%uns reg=%uHz max_I=%umA vbus=%u-%umV temp=%dC conv=%.1f flags=0x%08X",
-                    schema, board_id, hw_rev, rshunt, amp_gain, adc_ref, vbus_part, pwm_hz, deadtime, reg_rate, max_current, max_vbus, min_vbus, max_temp, curr_conv, features);
-      publish_text(board_config_text_sensor_, buf);
-    } else {
-      all_ok = false;
-    }
-  }
-
-  // Read config status register
-  if (config_status_text_sensor_ != nullptr) {
-    uint8_t status[49]{0};
-    if (this->read_register_(REG_CONFIG_STATUS, status, sizeof(status))) {
-      char buf[256];
-      bool present = status[0] != 0;
-      bool valid = status[1] != 0;
-      bool applied = status[2] != 0;
-      uint32_t crc = u32_(status, 3);
-      uint32_t generation = u32_(status, 7);
-      uint16_t schema = u16_(status, 11);
-      uint32_t last_error = u32_(status, 45);
-      std::snprintf(buf, sizeof(buf), "config present=%u valid=%u applied=%u crc=0x%08X gen=%u schema=%u name=%.*s error=%u",
-                    present, valid, applied, crc, generation, schema, 32, (const char*)&status[13], last_error);
-      publish_text(config_status_text_sensor_, buf);
-    } else {
-      all_ok = false;
     }
   }
 
