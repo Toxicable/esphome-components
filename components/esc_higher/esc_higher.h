@@ -70,24 +70,11 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   void setup() override;
   void update() override;
   void dump_config() override;
-
-  void set_disable_watchdog(bool value) {
-    disable_watchdog_ = value;
-  }
-  void set_watchdog_timeout_ms(uint32_t value) {
-    watchdog_timeout_ms_ = value;
-  }
   void set_speed_ramp_target_dhz(int32_t value) {
     speed_ramp_target_dhz_ = value;
   }
   void set_speed_ramp_time_ms(int32_t value) {
     speed_ramp_time_ms_ = value;
-  }
-  void set_bringup_test_duration_ms(int32_t value) {
-    bringup_test_duration_ms_ = value;
-  }
-  void set_bringup_test_options(int32_t value) {
-    bringup_test_options_ = value;
   }
   void set_bringup_test_id(uint8_t value) {
     bringup_test_id_ = value;
@@ -489,12 +476,15 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr uint8_t OPCODE_SET_SPEED_RAMP = 0x04;
   static constexpr uint8_t OPCODE_ESTOP = 0x05;
   static constexpr uint8_t OPCODE_SET_WATCHDOG = 0x07;
+  static constexpr int32_t COMMAND_WATCHDOG_TIMEOUT_MS = 500;
   static constexpr uint8_t OPCODE_RUN_BRINGUP_TEST = 0x09;
   static constexpr uint8_t BRINGUP_TEST_FULL_SPIN_SEQUENCE = 101;
   static constexpr uint8_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR = 102;
   static constexpr uint8_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM = 103;
+  static constexpr int32_t BRINGUP_TEST_FULL_SPIN_DURATION_MS = 5000;
   static constexpr int32_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS = 50;
   static constexpr int32_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS = 1000;
+  static constexpr int32_t BRINGUP_TEST_OPTIONS_DEFAULT = 0;
   static constexpr int32_t BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1;
 
   // Config provisioning commands
@@ -547,12 +537,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   uint16_t mc_run_current_limit_dwell_ms_{1000};
   uint16_t mc_normal_start_guard_extra_ms_{500};
 
-
-  int32_t bringup_test_duration_ms_{5000};
-  int32_t bringup_test_options_{0};
   uint8_t bringup_test_id_{BRINGUP_TEST_FULL_SPIN_SEQUENCE};
-  bool disable_watchdog_{false};
-  uint32_t watchdog_timeout_ms_{500};
   bool initialized_{false};
   uint32_t next_init_retry_ms_{0};
   uint16_t capabilities_{0};

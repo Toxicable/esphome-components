@@ -2,6 +2,7 @@
 
 #include "esc_higher_text.h"
 
+#include <cmath>
 #include <cstddef>
 #include <algorithm>
 #include <cstdio>
@@ -112,12 +113,12 @@ void ESCHigherBringupTestSelect::control(const std::string& value) {
 void ESCHigherSpeedTargetNumber::control(float value) {
   if (this->parent_ == nullptr)
     return;
-  const int32_t target = static_cast<int32_t>(value);
-  if (!this->parent_->set_speed_target_dhz_and_send(target)) {
-    ESP_LOGW(TAG, "Failed to set speed target dHz=%d", static_cast<int>(target));
+  const int32_t target_dhz = static_cast<int32_t>(std::lround(value / 6.0f));
+  if (!this->parent_->set_speed_target_dhz_and_send(target_dhz)) {
+    ESP_LOGW(TAG, "Failed to set speed target rpm=%.0f", value);
     return;
   }
-  this->publish_state(static_cast<float>(target));
+  this->publish_state(static_cast<float>(target_dhz) * 6.0f);
 }
 
 void ESCHigherComponent::setup() {
@@ -370,13 +371,8 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
 }
 
 bool ESCHigherComponent::configure_watchdog_() {
-  const uint32_t timeout_ms = this->disable_watchdog_ ? 0 : this->watchdog_timeout_ms_;
-  if (this->disable_watchdog_) {
-    ESP_LOGI(TAG, "Disabling command watchdog");
-  } else {
-    ESP_LOGI(TAG, "Setting command watchdog to %u ms", static_cast<unsigned>(timeout_ms));
-  }
-  if (this->write_command_(OPCODE_SET_WATCHDOG, static_cast<int32_t>(timeout_ms), 0, 0))
+  ESP_LOGI(TAG, "Setting command watchdog to %u ms", static_cast<unsigned>(COMMAND_WATCHDOG_TIMEOUT_MS));
+  if (this->write_command_(OPCODE_SET_WATCHDOG, COMMAND_WATCHDOG_TIMEOUT_MS, 0, 0))
     return true;
   ESP_LOGW(TAG, "Failed to configure command watchdog");
   return false;
@@ -450,24 +446,19 @@ void ESCHigherComponent::set_mc_revup(uint8_t idx, uint16_t duration_ms, int16_t
 
 bool ESCHigherComponent::run_bringup_test() {
   const uint8_t test_id = bringup_test_id_;
-  int32_t duration_ms = bringup_test_duration_ms_;
+  int32_t duration_ms = BRINGUP_TEST_FULL_SPIN_DURATION_MS;
   if (test_id == BRINGUP_TEST_BRIDGE_STATIC_VECTOR)
     duration_ms = BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS;
-  else if (test_id == BRINGUP_TEST_FORCED_TIMER_DIFF_PWM) {
-    if (duration_ms == 5000)
-      duration_ms = BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS;
-  } else if (test_id != BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
+  else if (test_id == BRINGUP_TEST_FORCED_TIMER_DIFF_PWM)
+    duration_ms = BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS;
+  else if (test_id != BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
     ESP_LOGW(TAG, "Unsupported bringup test id: %u", static_cast<unsigned>(test_id));
     return false;
   }
 
-  constexpr int32_t OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1 << 0;
-
-  int32_t options = bringup_test_options_;
-
-  if (test_id == BRINGUP_TEST_FULL_SPIN_SEQUENCE) {
-    options &= ~OPT_ALLOW_FORCED_TIMER_DIFF_PWM;
-  }
+  int32_t options = BRINGUP_TEST_OPTIONS_DEFAULT;
+  if (test_id == BRINGUP_TEST_FORCED_TIMER_DIFF_PWM)
+    options |= BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM;
 
   this->force_next_bringup_debug_read_ = true;
   return this->write_command_(OPCODE_RUN_BRINGUP_TEST, test_id, duration_ms, options);
@@ -479,18 +470,17 @@ bool ESCHigherComponent::run_bridge_static_vector_test() {
     OPCODE_RUN_BRINGUP_TEST,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS,
-    bringup_test_options_
+    BRINGUP_TEST_OPTIONS_DEFAULT
   );
 }
 
 bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
-  constexpr int32_t OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1 << 0;
   this->force_next_bringup_debug_read_ = true;
   return this->write_command_(
     OPCODE_RUN_BRINGUP_TEST,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS,
-    bringup_test_options_ | OPT_ALLOW_FORCED_TIMER_DIFF_PWM
+    BRINGUP_TEST_OPTIONS_DEFAULT | BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM
   );
 }
 
@@ -740,13 +730,13 @@ void ESCHigherComponent::update() {
       publish_sensor(vbus_mv_sensor_, u32_(tel, 8) / 1000.0f);
       publish_sensor(ibus_ma_sensor_, i32_(tel, 12) / 1000.0f);
       publish_sensor(motor_current_ma_sensor_, i32_(tel, 16) / 1000.0f);
-      publish_sensor(speed_dhz_sensor_, i32_(tel, 20));
+      publish_sensor(speed_dhz_sensor_, i32_(tel, 20) * 6.0f);
       publish_sensor(duty_centi_pct_sensor_, i16_(tel, 24));
       publish_sensor(last_cmd_seq_sensor_, tel[26]);
       publish_sensor(fault_detail_sensor_, tel[27]);
       publish_text(fault_detail_text_sensor_, fault_detail_to_cstr(tel[27]));
       publish_sensor(temp_mc_sensor_, i32_(tel, 28) / 1000.0f);
-      publish_sensor(target_speed_dhz_sensor_, i32_(tel, 32));
+      publish_sensor(target_speed_dhz_sensor_, i32_(tel, 32) * 6.0f);
       publish_sensor(watchdog_ms_left_sensor_, u16_(tel, 36));
       publish_sensor(drive_limit_centi_pct_sensor_, u16_(tel, 38));
       publish_sensor(uptime_s_sensor_, u32_(tel, 40));
@@ -1013,12 +1003,9 @@ void ESCHigherComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "esc_higher:");
   LOG_I2C_DEVICE(this);
   LOG_UPDATE_INTERVAL(this);
-  ESP_LOGCONFIG(TAG, "  disable_watchdog: %s", this->disable_watchdog_ ? "true" : "false");
-  ESP_LOGCONFIG(TAG, "  watchdog_timeout_ms: %u", static_cast<unsigned>(this->watchdog_timeout_ms_));
-  ESP_LOGCONFIG(TAG, "  speed_ramp_target_dhz: %d", static_cast<int>(speed_ramp_target_dhz_));
+  ESP_LOGCONFIG(TAG, "  watchdog_timeout_ms: %u", static_cast<unsigned>(COMMAND_WATCHDOG_TIMEOUT_MS));
+  ESP_LOGCONFIG(TAG, "  speed_ramp_target_rpm: %.0f", static_cast<double>(speed_ramp_target_dhz_) * 6.0);
   ESP_LOGCONFIG(TAG, "  speed_ramp_time_ms: %d", static_cast<int>(speed_ramp_time_ms_));
-  ESP_LOGCONFIG(TAG, "  bringup_test_duration_ms: %d", static_cast<int>(bringup_test_duration_ms_));
-  ESP_LOGCONFIG(TAG, "  bringup_test_options: 0x%08X", static_cast<unsigned>(bringup_test_options_));
   ESP_LOGCONFIG(TAG, "  bringup_test_id: %u", static_cast<unsigned>(bringup_test_id_));
 }
 

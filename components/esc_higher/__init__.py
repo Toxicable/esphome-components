@@ -48,11 +48,6 @@ ESCHigherSpeedTargetNumber = esc_higher_ns.class_(
     "ESCHigherSpeedTargetNumber", number.Number
 )
 
-CONF_DISABLE_WATCHDOG = "disable_watchdog"
-CONF_WATCHDOG_TIMEOUT_MS = "watchdog_timeout_ms"
-CONF_BRINGUP_TEST_DURATION_MS = "bringup_test_duration_ms"
-CONF_BRINGUP_TEST_OPTIONS = "bringup_test_options"
-
 CONF_PROTO_MAJOR = "proto_major"
 CONF_PROTO_MINOR = "proto_minor"
 CONF_FW_MAJOR = "fw_major"
@@ -61,29 +56,27 @@ CONF_HW_ID = "hw_id"
 CONF_MAX_BLOCK_LEN = "max_block_len"
 CONF_CAPABILITIES = "capabilities"
 
-CONF_SEQ = "seq"
-CONF_TELEMETRY_SEQ = "telemetry_seq"
 CONF_BRINGUP_SEQ = "bringup_seq"
-CONF_DEBUG_SEQ = "debug_seq"
 CONF_ESC_STATE = "esc_state"
-CONF_MC_STATE = "mc_state"
-CONF_LAST_CMD_SEQ = "last_cmd_seq"
 CONF_LAST_CMD_ERROR = "last_cmd_error"
 CONF_FAULT_DETAIL = "fault_detail"
 CONF_CURRENT_FAULTS = "current_faults"
 CONF_OCCURRED_FAULTS = "occurred_faults"
-CONF_STATUS_FLAGS = "status_flags"
-CONF_WATCHDOG_MS_LEFT = "watchdog_ms_left"
-
-CONF_VBUS_MV = "vbus_mv"
-CONF_IBUS_MA = "ibus_ma"
-CONF_MOTOR_CURRENT_MA = "motor_current_ma"
-CONF_SPEED_DHZ = "speed_dhz"
+CONF_BUS_VOLTAGE = "bus_voltage"
+CONF_INPUT_CURRENT = "input_current"
+CONF_MOTOR_CURRENT = "motor_current"
+CONF_MECHANICAL_SPEED = "mechanical_speed"
 CONF_DUTY_CENTI_PCT = "duty_centi_pct"
-CONF_TEMP_MC = "temp_mc"
-CONF_TARGET_SPEED_DHZ = "target_speed_dhz"
+CONF_CONTROLLER_TEMPERATURE = "controller_temperature"
+CONF_TARGET_SPEED = "target_speed"
 CONF_DRIVE_LIMIT_CENTI_PCT = "drive_limit_centi_pct"
-CONF_UPTIME_S = "uptime_s"
+
+CONF_VBUS_MV_LEGACY = "vbus_mv"
+CONF_IBUS_MA_LEGACY = "ibus_ma"
+CONF_MOTOR_CURRENT_MA_LEGACY = "motor_current_ma"
+CONF_SPEED_DHZ_LEGACY = "speed_dhz"
+CONF_TEMP_MC_LEGACY = "temp_mc"
+CONF_TARGET_SPEED_DHZ_LEGACY = "target_speed_dhz"
 
 CONF_BRINGUP_ACTIVE = "bringup_active"
 CONF_BRINGUP_TEST_ID = "bringup_test_id_state"
@@ -133,14 +126,12 @@ CONF_DEBUG_PHASE_IA_MA = "phase_iA_mA"
 CONF_DEBUG_PHASE_IB_MA = "phase_iB_mA"
 CONF_DEBUG_PHASE_IC_MA = "phase_iC_mA"
 
-CONF_ESC_STATE_TEXT = "esc_state_text"
-CONF_LAST_CMD_ERROR_TEXT = "last_cmd_error_text"
-CONF_FAULT_DETAIL_TEXT = "fault_detail_text"
-CONF_STATUS_FLAGS_TEXT = "status_flags_text"
-CONF_CURRENT_FAULTS_TEXT = "current_faults_text"
-CONF_OCCURRED_FAULTS_TEXT = "occurred_faults_text"
+CONF_ESC_STATE_TEXT_LEGACY = "esc_state_text"
+CONF_LAST_CMD_ERROR_TEXT_LEGACY = "last_cmd_error_text"
+CONF_FAULT_DETAIL_TEXT_LEGACY = "fault_detail_text"
+CONF_CURRENT_FAULTS_TEXT_LEGACY = "current_faults_text"
+CONF_OCCURRED_FAULTS_TEXT_LEGACY = "occurred_faults_text"
 CONF_CAPABILITIES_TEXT = "capabilities_text"
-CONF_MC_STATE_TEXT = "mc_state_text"
 CONF_BRINGUP_STATE_TEXT = "bringup_state_text"
 CONF_BRINGUP_RESULT_TEXT = "bringup_result_text"
 CONF_BRINGUP_TEST_ID_TEXT = "bringup_test_id_text"
@@ -161,9 +152,12 @@ CONF_ESTOP = "estop"
 CONF_RUN_BRINGUP_TEST = "run_bringup_test"
 CONF_RUN_BRIDGE_STATIC_VECTOR_TEST = "run_bridge_static_vector_test"
 CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST = "run_forced_timer_diff_pwm_test"
-CONF_SPEED_TARGET_DHZ = "speed_target_dhz"
-CONF_SPEED_RAMP_TARGET_DHZ = "speed_ramp_target_dhz"
+CONF_SPEED_TARGET = "speed_target"
+CONF_SPEED_RAMP_TARGET_RPM = "speed_ramp_target_rpm"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
+
+CONF_SPEED_TARGET_DHZ_LEGACY = "speed_target_dhz"
+CONF_SPEED_RAMP_TARGET_DHZ_LEGACY = "speed_ramp_target_dhz"
 
 # Motor config provisioning
 CONF_MOTOR_CONFIG = "motor_config"
@@ -220,6 +214,27 @@ def _diagnostic_sensor_schema():
 async def _bind_sensor(config, key, setter):
     if key in config:
         s = await sensor.new_sensor(config[key])
+        cg.add(setter(s))
+
+
+def _first_present(config, *keys):
+    for key in keys:
+        if key in config:
+            return key
+    return None
+
+
+async def _bind_sensor_alias(config, keys, setter):
+    key = _first_present(config, *keys)
+    if key is not None:
+        s = await sensor.new_sensor(config[key])
+        cg.add(setter(s))
+
+
+async def _bind_text_sensor_alias(config, keys, setter):
+    key = _first_present(config, *keys)
+    if key is not None:
+        s = await text_sensor.new_text_sensor(config[key])
         cg.add(setter(s))
 
 
@@ -313,16 +328,6 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(ESCHigherComponent),
-            cv.Optional(CONF_DISABLE_WATCHDOG, default=False): cv.boolean,
-            cv.Optional(CONF_WATCHDOG_TIMEOUT_MS, default=500): cv.int_range(
-                min=0, max=2147483647
-            ),
-            cv.Optional(CONF_BRINGUP_TEST_DURATION_MS, default=5000): cv.int_range(
-                min=0, max=2147483647
-            ),
-            cv.Optional(CONF_BRINGUP_TEST_OPTIONS, default=0): cv.int_range(
-                min=0, max=2147483647
-            ),
             cv.Optional(CONF_PROTO_MAJOR): _raw_sensor_schema(),
             cv.Optional(CONF_PROTO_MINOR): _raw_sensor_schema(),
             cv.Optional(CONF_FW_MAJOR): _raw_sensor_schema(),
@@ -330,40 +335,52 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_HW_ID): _raw_sensor_schema(),
             cv.Optional(CONF_MAX_BLOCK_LEN): _raw_sensor_schema(),
             cv.Optional(CONF_CAPABILITIES): _raw_sensor_schema(),
-            cv.Optional(CONF_SEQ): _raw_sensor_schema(),
-            cv.Optional(CONF_TELEMETRY_SEQ): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_SEQ): _raw_sensor_schema(),
-            cv.Optional(CONF_DEBUG_SEQ): _raw_sensor_schema(),
-            cv.Optional(CONF_ESC_STATE): _raw_sensor_schema(),
-            cv.Optional(CONF_MC_STATE): _raw_sensor_schema(),
-            cv.Optional(CONF_LAST_CMD_SEQ): _raw_sensor_schema(),
-            cv.Optional(CONF_LAST_CMD_ERROR): _raw_sensor_schema(),
-            cv.Optional(CONF_FAULT_DETAIL): _raw_sensor_schema(),
-            cv.Optional(CONF_CURRENT_FAULTS): _raw_sensor_schema(),
-            cv.Optional(CONF_OCCURRED_FAULTS): _raw_sensor_schema(),
-            cv.Optional(CONF_STATUS_FLAGS): _raw_sensor_schema(),
-            cv.Optional(CONF_WATCHDOG_MS_LEFT): _diagnostic_sensor_schema(),
-            cv.Optional(CONF_VBUS_MV): sensor.sensor_schema(
+            cv.Optional(CONF_BUS_VOLTAGE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_VOLT,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_VOLTAGE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_IBUS_MA): sensor.sensor_schema(
+            cv.Optional(CONF_VBUS_MV_LEGACY): sensor.sensor_schema(
+                unit_of_measurement=UNIT_VOLT,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_VOLTAGE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_INPUT_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
                 entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
             ),
-            cv.Optional(CONF_MOTOR_CURRENT_MA): sensor.sensor_schema(
+            cv.Optional(CONF_IBUS_MA_LEGACY): sensor.sensor_schema(
+                unit_of_measurement=UNIT_AMPERE,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_CURRENT,
+                state_class=STATE_CLASS_MEASUREMENT,
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+            ),
+            cv.Optional(CONF_MOTOR_CURRENT): sensor.sensor_schema(
                 unit_of_measurement=UNIT_AMPERE,
                 accuracy_decimals=3,
                 device_class=DEVICE_CLASS_CURRENT,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_SPEED_DHZ): sensor.sensor_schema(
-                unit_of_measurement="dHz",
+            cv.Optional(CONF_MOTOR_CURRENT_MA_LEGACY): sensor.sensor_schema(
+                unit_of_measurement=UNIT_AMPERE,
+                accuracy_decimals=3,
+                device_class=DEVICE_CLASS_CURRENT,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_MECHANICAL_SPEED): sensor.sensor_schema(
+                unit_of_measurement="rpm",
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_SPEED_DHZ_LEGACY): sensor.sensor_schema(
+                unit_of_measurement="rpm",
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
@@ -372,14 +389,25 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=2,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_TEMP_MC): sensor.sensor_schema(
+            cv.Optional(CONF_CONTROLLER_TEMPERATURE): sensor.sensor_schema(
                 unit_of_measurement=UNIT_CELSIUS,
                 accuracy_decimals=1,
                 device_class=DEVICE_CLASS_TEMPERATURE,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_TARGET_SPEED_DHZ): sensor.sensor_schema(
-                unit_of_measurement="dHz",
+            cv.Optional(CONF_TEMP_MC_LEGACY): sensor.sensor_schema(
+                unit_of_measurement=UNIT_CELSIUS,
+                accuracy_decimals=1,
+                device_class=DEVICE_CLASS_TEMPERATURE,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_TARGET_SPEED): sensor.sensor_schema(
+                unit_of_measurement="rpm",
+                accuracy_decimals=0,
+                state_class=STATE_CLASS_MEASUREMENT,
+            ),
+            cv.Optional(CONF_TARGET_SPEED_DHZ_LEGACY): sensor.sensor_schema(
+                unit_of_measurement="rpm",
                 accuracy_decimals=0,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
@@ -388,7 +416,6 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=2,
                 state_class=STATE_CLASS_MEASUREMENT,
             ),
-            cv.Optional(CONF_UPTIME_S): _diagnostic_sensor_schema(),
             cv.Optional(CONF_BRINGUP_ACTIVE): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_ID): _raw_sensor_schema(),
             cv.Optional(CONF_BRINGUP_STEP_ID): _raw_sensor_schema(),
@@ -438,14 +465,17 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_DEBUG_PHASE_IA_MA): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_PHASE_IB_MA): _raw_sensor_schema(),
             cv.Optional(CONF_DEBUG_PHASE_IC_MA): _raw_sensor_schema(),
-            cv.Optional(CONF_ESC_STATE_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_LAST_CMD_ERROR_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_FAULT_DETAIL_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_STATUS_FLAGS_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_CURRENT_FAULTS_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_OCCURRED_FAULTS_TEXT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_ESC_STATE): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_ESC_STATE_TEXT_LEGACY): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_LAST_CMD_ERROR): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_LAST_CMD_ERROR_TEXT_LEGACY): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_FAULT_DETAIL): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_FAULT_DETAIL_TEXT_LEGACY): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_CURRENT_FAULTS): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_CURRENT_FAULTS_TEXT_LEGACY): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_OCCURRED_FAULTS): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_OCCURRED_FAULTS_TEXT_LEGACY): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_CAPABILITIES_TEXT): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_MC_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_STATE_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_RESULT_TEXT): text_sensor.text_sensor_schema(),
             cv.Optional(CONF_BRINGUP_TEST_ID_TEXT): text_sensor.text_sensor_schema(),
@@ -488,10 +518,14 @@ CONFIG_SCHEMA = (
                 icon="mdi:play-box-multiple",
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
-            cv.Optional(CONF_SPEED_TARGET_DHZ): number.number_schema(
+            cv.Optional(CONF_SPEED_TARGET): number.number_schema(
                 ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
             ),
-            cv.Optional(CONF_SPEED_RAMP_TARGET_DHZ, default=1000): cv.int_,
+            cv.Optional(CONF_SPEED_TARGET_DHZ_LEGACY): number.number_schema(
+                ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
+            ),
+            cv.Optional(CONF_SPEED_RAMP_TARGET_RPM, default=6000): cv.int_,
+            cv.Optional(CONF_SPEED_RAMP_TARGET_DHZ_LEGACY): cv.int_,
             cv.Optional(CONF_SPEED_RAMP_TIME_MS, default=1000): cv.int_range(
                 min=0, max=2147483647
             ),
@@ -508,12 +542,11 @@ async def to_code(config):
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
-    cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
-    cg.add(var.set_watchdog_timeout_ms(config[CONF_WATCHDOG_TIMEOUT_MS]))
-    cg.add(var.set_bringup_test_duration_ms(
-        config[CONF_BRINGUP_TEST_DURATION_MS]))
-    cg.add(var.set_bringup_test_options(config[CONF_BRINGUP_TEST_OPTIONS]))
-    cg.add(var.set_speed_ramp_target_dhz(config[CONF_SPEED_RAMP_TARGET_DHZ]))
+    speed_ramp_target_rpm = config.get(
+        CONF_SPEED_RAMP_TARGET_RPM,
+        int(config.get(CONF_SPEED_RAMP_TARGET_DHZ_LEGACY, 1000) * 6),
+    )
+    cg.add(var.set_speed_ramp_target_dhz(int(round(speed_ramp_target_rpm / 6.0))))
     cg.add(var.set_speed_ramp_time_ms(config[CONF_SPEED_RAMP_TIME_MS]))
 
     if CONF_MOTOR_CONFIG in config:
@@ -528,28 +561,15 @@ async def to_code(config):
     await _bind_sensor(config, CONF_HW_ID, var.set_hw_id_sensor)
     await _bind_sensor(config, CONF_MAX_BLOCK_LEN, var.set_max_block_len_sensor)
     await _bind_sensor(config, CONF_CAPABILITIES, var.set_capabilities_sensor)
-    await _bind_sensor(config, CONF_SEQ, var.set_status_seq_sensor)
-    await _bind_sensor(config, CONF_TELEMETRY_SEQ, var.set_telemetry_seq_sensor)
     await _bind_sensor(config, CONF_BRINGUP_SEQ, var.set_bringup_seq_sensor)
-    await _bind_sensor(config, CONF_DEBUG_SEQ, var.set_debug_seq_sensor)
-    await _bind_sensor(config, CONF_ESC_STATE, var.set_esc_state_sensor)
-    await _bind_sensor(config, CONF_MC_STATE, var.set_mc_state_sensor)
-    await _bind_sensor(config, CONF_LAST_CMD_SEQ, var.set_last_cmd_seq_sensor)
-    await _bind_sensor(config, CONF_LAST_CMD_ERROR, var.set_last_cmd_error_sensor)
-    await _bind_sensor(config, CONF_FAULT_DETAIL, var.set_fault_detail_sensor)
-    await _bind_sensor(config, CONF_CURRENT_FAULTS, var.set_current_faults_sensor)
-    await _bind_sensor(config, CONF_OCCURRED_FAULTS, var.set_occurred_faults_sensor)
-    await _bind_sensor(config, CONF_STATUS_FLAGS, var.set_status_flags_sensor)
-    await _bind_sensor(config, CONF_WATCHDOG_MS_LEFT, var.set_watchdog_ms_left_sensor)
-    await _bind_sensor(config, CONF_VBUS_MV, var.set_vbus_mv_sensor)
-    await _bind_sensor(config, CONF_IBUS_MA, var.set_ibus_ma_sensor)
-    await _bind_sensor(config, CONF_MOTOR_CURRENT_MA, var.set_motor_current_ma_sensor)
-    await _bind_sensor(config, CONF_SPEED_DHZ, var.set_speed_dhz_sensor)
+    await _bind_sensor_alias(config, (CONF_BUS_VOLTAGE, CONF_VBUS_MV_LEGACY), var.set_vbus_mv_sensor)
+    await _bind_sensor_alias(config, (CONF_INPUT_CURRENT, CONF_IBUS_MA_LEGACY), var.set_ibus_ma_sensor)
+    await _bind_sensor_alias(config, (CONF_MOTOR_CURRENT, CONF_MOTOR_CURRENT_MA_LEGACY), var.set_motor_current_ma_sensor)
+    await _bind_sensor_alias(config, (CONF_MECHANICAL_SPEED, CONF_SPEED_DHZ_LEGACY), var.set_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DUTY_CENTI_PCT, var.set_duty_centi_pct_sensor)
-    await _bind_sensor(config, CONF_TEMP_MC, var.set_temp_mc_sensor)
-    await _bind_sensor(config, CONF_TARGET_SPEED_DHZ, var.set_target_speed_dhz_sensor)
+    await _bind_sensor_alias(config, (CONF_CONTROLLER_TEMPERATURE, CONF_TEMP_MC_LEGACY), var.set_temp_mc_sensor)
+    await _bind_sensor_alias(config, (CONF_TARGET_SPEED, CONF_TARGET_SPEED_DHZ_LEGACY), var.set_target_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DRIVE_LIMIT_CENTI_PCT, var.set_drive_limit_centi_pct_sensor)
-    await _bind_sensor(config, CONF_UPTIME_S, var.set_uptime_s_sensor)
     await _bind_sensor(config, CONF_BRINGUP_ACTIVE, var.set_bringup_active_sensor)
     await _bind_sensor(config, CONF_BRINGUP_TEST_ID, var.set_bringup_test_id_sensor)
     await _bind_sensor(config, CONF_BRINGUP_STEP_ID, var.set_bringup_step_id_sensor)
@@ -595,30 +615,30 @@ async def to_code(config):
     await _bind_sensor(config, CONF_DEBUG_PHASE_IB_MA, var.set_debug_phase_ib_ma_sensor)
     await _bind_sensor(config, CONF_DEBUG_PHASE_IC_MA, var.set_debug_phase_ic_ma_sensor)
 
-    if CONF_ESC_STATE_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_ESC_STATE_TEXT])
-        cg.add(var.set_esc_state_text_sensor(s))
-    if CONF_LAST_CMD_ERROR_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_LAST_CMD_ERROR_TEXT])
-        cg.add(var.set_last_cmd_error_text_sensor(s))
-    if CONF_FAULT_DETAIL_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_FAULT_DETAIL_TEXT])
-        cg.add(var.set_fault_detail_text_sensor(s))
-    if CONF_STATUS_FLAGS_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_STATUS_FLAGS_TEXT])
-        cg.add(var.set_status_flags_text_sensor(s))
-    if CONF_CURRENT_FAULTS_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULTS_TEXT])
-        cg.add(var.set_current_faults_text_sensor(s))
-    if CONF_OCCURRED_FAULTS_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_OCCURRED_FAULTS_TEXT])
-        cg.add(var.set_occurred_faults_text_sensor(s))
+    await _bind_text_sensor_alias(config, (CONF_ESC_STATE, CONF_ESC_STATE_TEXT_LEGACY), var.set_esc_state_text_sensor)
+    await _bind_text_sensor_alias(
+        config,
+        (CONF_LAST_CMD_ERROR, CONF_LAST_CMD_ERROR_TEXT_LEGACY),
+        var.set_last_cmd_error_text_sensor,
+    )
+    await _bind_text_sensor_alias(
+        config,
+        (CONF_FAULT_DETAIL, CONF_FAULT_DETAIL_TEXT_LEGACY),
+        var.set_fault_detail_text_sensor,
+    )
+    await _bind_text_sensor_alias(
+        config,
+        (CONF_CURRENT_FAULTS, CONF_CURRENT_FAULTS_TEXT_LEGACY),
+        var.set_current_faults_text_sensor,
+    )
+    await _bind_text_sensor_alias(
+        config,
+        (CONF_OCCURRED_FAULTS, CONF_OCCURRED_FAULTS_TEXT_LEGACY),
+        var.set_occurred_faults_text_sensor,
+    )
     if CONF_CAPABILITIES_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_CAPABILITIES_TEXT])
         cg.add(var.set_capabilities_text_sensor(s))
-    if CONF_MC_STATE_TEXT in config:
-        s = await text_sensor.new_text_sensor(config[CONF_MC_STATE_TEXT])
-        cg.add(var.set_mc_state_text_sensor(s))
     if CONF_BRINGUP_STATE_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_BRINGUP_STATE_TEXT])
         cg.add(var.set_bringup_state_text_sensor(s))
@@ -678,12 +698,12 @@ async def to_code(config):
     if CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST in config:
         b = await button.new_button(config[CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST])
         await cg.register_parented(b, var)
-    if CONF_SPEED_TARGET_DHZ in config:
+    speed_target_key = _first_present(config, CONF_SPEED_TARGET, CONF_SPEED_TARGET_DHZ_LEGACY)
+    if speed_target_key is not None:
         n = await number.new_number(
-            config[CONF_SPEED_TARGET_DHZ],
-            min_value=-100000,
-            max_value=100000,
-            step=1,
+            config[speed_target_key],
+            min_value=-10000,
+            max_value=10000,
+            step=6,
         )
         cg.add(n.set_parent(var))
-

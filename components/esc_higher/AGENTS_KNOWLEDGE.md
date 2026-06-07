@@ -26,28 +26,27 @@ Component-scoped notes for `components/esc_higher`.
   - `start_motor` -> `0x01`
   - `stop_motor` -> `0x02`
   - `clear_faults` -> `0x03`
-  - Speed setpoint slider `speed_target_dhz` -> `0x04` (`param0=<slider value>`, `param1=speed_ramp_time_ms`)
+  - Speed setpoint slider `speed_target` -> `0x04` (`param0=<slider value converted to firmware dHz>`, `param1=speed_ramp_time_ms`)
   - `estop` -> `0x05`
   - Bring-up controls:
     - `bringup_profile` is a fixed-option select for requested profiles `0..8` and sends `0x0B` (`param0=<selected profile index>`)
     - the component sends the selected `bringup_profile` again after ID/watchdog setup, so HA reconnects reapply the normal-start profile
     - `bringup_test_select` chooses `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), or `103` (`forced_timer_diff_pwm`)
-    - `run_bringup_test` -> `0x09` (`param0=<selected test_id>`, `param1=bringup_test_duration_ms` for `101`/`103` or `50` for `102`, `param2=bringup_test_options`)
-    - `run_bridge_static_vector_test` -> `0x09` (`param0=102`, `param1=50`, `param2=bringup_test_options`)
-    - `run_forced_timer_diff_pwm_test` -> `0x09` (`param0=103`, `param1=1000`, `param2=bringup_test_options`)
+    - `run_bringup_test` -> `0x09` (`param0=<selected test_id>`, `param1=5000` for `101`, `50` for `102`, `1000` for `103`, `param2=0` except forced diff PWM adds bit `0`)
+    - `run_bridge_static_vector_test` -> `0x09` (`param0=102`, `param1=50`, `param2=0`)
+    - `run_forced_timer_diff_pwm_test` -> `0x09` (`param0=103`, `param1=1000`, `param2=1`)
 - STATUS/TELEMETRY decoding uses byte offsets from `i2c_interface.md` text ordering; if firmware layout changes, update offsets in `esc_higher.cpp`.
-- `seq` is the STATUS sequence sensor; telemetry, bring-up, and debug snapshots have their own sequence sensors.
-- `fault_detail` lives at STATUS byte `5` and TELEMETRY byte `27`; keep both raw (`fault_detail`) and text (`fault_detail_text`) sensors aligned to that enum mapping.
-- String text sensors are available for enum/bitmask fields: `esc_state_text`, `last_cmd_error_text`, `status_flags_text`, `current_faults_text`, `occurred_faults_text`, `capabilities_text`, `bringup_state_text`, `bringup_result_text`, `bringup_test_id_text`.
+- `fault_detail` lives at STATUS byte `5` and TELEMETRY byte `27`; user-facing state/fault entities are text sensors on the primary keys `esc_state`, `last_cmd_error`, `fault_detail`, `current_faults`, and `occurred_faults`.
+- Additional text sensors remain available for `capabilities_text`, `bringup_state_text`, `bringup_result_text`, and `bringup_test_id_text`.
 - Bring-up result code `19` maps to `no_differential_pwm`.
 - `current_faults_text` and `occurred_faults_text` publish named MCSDK fault bits (pipe-delimited) from the 16-bit fault bitmap, with `none` when zero.
 - Fault text output includes only documented MCSDK bits; any non-documented set bits are emitted as `unknown_bits` (no synthetic `reserved*` labels).
 - `i2c_interface.md` is treated as externally owned specification text; implement code to match it, but do not edit it unless explicitly requested.
 - I2C register reads and command writes are single-shot (no internal retry loop).
-- Top-level config programs the command watchdog at startup: `disable_watchdog: true` sends `SET_WATCHDOG(param0=0)`, otherwise `watchdog_timeout_ms` defaults to `500`; `disable_watchdog` defaults false.
-- `watchdog_ms_left` is reported in raw milliseconds from `STATUS[12]`; do not divide it before publishing.
+- The component always programs the command watchdog to `500 ms` at startup; watchdog disable/override is no longer exposed in YAML.
 - `BRINGUP` snapshots expose status, result, fault-bit snapshots, and test metadata; text sensors should decode `bringup_current_faults_at_test` and `bringup_occurred_faults_at_test` with the same fault map as live status.
 - `bringup_profile_index`, `bringup_profile_count`, `bringup_profile_flags`, and `bringup_profile_summary` are read-only report fields from the STM32; they do not mirror the requested `bringup_profile` select directly.
 - Terminal bring-up reports read `DEBUG_INFO`/`DEBUG_READ` automatically when the STM advertises `CAP_DEBUG_LOG`; full debug lines go to ESPHome logs and the `debug_log` text sensor carries a short summary.
-- `ibus_ma` is reserved for real DC input current and should be presented as unknown/diagnostic while STM32 returns zero. `motor_current_ma` is motor phase-current telemetry.
+- `input_current` is reserved for real DC input current and should be presented as unknown/diagnostic while STM32 returns zero. `motor_current` is motor phase-current telemetry.
+- Home Assistant-facing speed entities are RPM-based even though the STM32 wire format remains `dHz`.
 - Host bring-up commands now carry an explicit test ID. Supported IDs are `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), and `103` (`forced_timer_diff_pwm`); `BRINGUP.test_id` remains the report field.
