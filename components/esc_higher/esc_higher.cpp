@@ -19,20 +19,6 @@ namespace esc_higher {
 static const char* const TAG = "esc_higher";
 namespace {
 constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
-// horrible delete
-static const char* const BRINGUP_PROFILE_OPTIONS[] = {
-  "0 known-good 4.0s 8/9/10A",
-  "1 gentle 5.7s 1.8/1.8/2.0A",
-  "2 moderate 5.6s 1.5/1.6/1.8A",
-  "3 gentle moderate 5.8s",
-  "4 faster pickup 4.4s",
-  "5 low current 2.2A",
-  "6 low current 2.4A",
-  "7 observer min 400 mechanical rpm",
-  "8 observer min 600 mechanical rpm",
-};
-// horrible delete
-constexpr uint8_t BRINGUP_PROFILE_OPTION_COUNT = sizeof(BRINGUP_PROFILE_OPTIONS) / sizeof(BRINGUP_PROFILE_OPTIONS[0]);
 
 template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
   if (sensor != nullptr)
