@@ -17,22 +17,18 @@ external_components:
     refresh: 0s
     components: [esc_higher]
 
-i2c:
-  id: i2c_bus
-  sda: GPIO21
-  scl: GPIO22
-  frequency: 400kHz
-
 esc_higher:
   id: esc
-  i2c_id: i2c_bus
+  i2c_id: i2c_ext
   update_interval: 100ms
   address: 0x34
+
 
   speed_ramp_target_rpm: 7200
   speed_ramp_time_ms: 750
   speed_target:
     name: "Speed Target"
+
 
   start_motor:
     name: "ESC Start"
@@ -40,17 +36,18 @@ esc_higher:
     name: "ESC Stop"
   clear_faults:
     name: "ESC Clear Faults"
+  # what's stop vs estop
   estop:
     name: "ESC E-Stop"
 
-  bringup_test_select:
-    name: "Bringup Test"
-  run_bringup_test:
-    name: "Run Bringup Test"
-  run_bridge_static_vector_test:
-    name: "Run Bridge Static Vector Test"
-  run_forced_timer_diff_pwm_test:
-    name: "Run Forced Timer Diff PWM Test"
+  # bringup_test_select:
+  #   name: "Bringup Test"
+  # run_bringup_test:
+  #   name: "Run Bringup Test"
+  # run_bridge_static_vector_test:
+  #   name: "Run Bridge Static Vector Test"
+  # run_forced_timer_diff_pwm_test:
+  #   name: "Run Forced Timer Diff PWM Test"
 
   esc_state:
     name: "ESC State"
@@ -66,7 +63,7 @@ esc_higher:
   bus_voltage:
     name: "Bus Voltage"
   input_current:
-    name: "Bus Current"
+    name: "Input Current"
   motor_current:
     name: "Motor Current"
   mechanical_speed:
@@ -78,32 +75,72 @@ esc_higher:
   controller_temperature:
     name: "Controller Temperature"
 
-  debug_log:
-    name: "Debug Log Summary"
+  # debug_log:
+  #   name: "Debug Log Summary"
 
-  # Optional STM32 motor config provisioning at startup:
-  # motor_config:
-  #   name: "MyMotor"
-  #   pole_pairs: 6
-  #   rs_ohm: 0.078
-  #   ls_h: 0.000030
-  #   ke_vll_rms_per_krpm: 0.50
-  #   max_current_mA: 15000
-  #   startup_current_limit_mA: 10000
-  #   run_current_limit_mA: 4000
-  #   max_speed_unit: 2100
-  #   observer_min_speed_unit: 83
-  #   observer_min_fly_speed_unit: 42
-  #   revup:
-  #     - duration_ms: 400
-  #       final_speed_unit: 20
-  #       final_current_mA: 8000
-  #     - duration_ms: 800
-  #       final_speed_unit: 58
-  #       final_current_mA: 9000
-  #     - duration_ms: 2000
-  #       final_speed_unit: 150
-  #       final_current_mA: 10000
+  motor_config:
+    name: "d2836_750kv_4s"
+
+    pole_pairs: 6
+
+    # Electrical model from the previous working-ish setup
+    rs_ohm: 0.078
+    ls_h: 0.000030
+    ke_vll_rms_per_krpm: 0.50
+
+    # Current limits
+    max_current_mA: 15000
+    startup_current_limit_mA: 10000
+    run_current_limit_mA: 4000
+
+    # These look like mechanical dHz / MCSDK speed units in your current interface:
+    # rpm / 6 = dHz
+    # 12600 rpm -> 2100 dHz
+    # 500 rpm -> 83 dHz
+    # 250 rpm -> 42 dHz
+    max_speed_unit: 2100
+    observer_min_speed_unit: 83
+    observer_min_fly_speed_unit: 42
+
+    startup_consistency_tests: 2
+    variance_percentage: 40
+    speed_band_upper_16ths: 17
+    speed_band_lower_16ths: 15
+
+    # Keep these as current generated/default values if you have them exposed;
+    # these placeholders may need replacing with the firmware defaults.
+    bemf_consistency_gain: 64
+    bemf_consistency_tolerance: 64
+    transition_duration_ms: 25
+
+    run_current_limit_dwell_ms: 200
+    normal_start_guard_extra_ms: 1000
+
+    revup:
+      # Previous known-good-ish:
+      # 400ms -> 120rpm -> 8A
+      # 800ms -> 350rpm -> 9A
+      # 2000ms -> 900rpm -> 10A
+      # Converted rpm to speed_unit/dHz by rpm / 6.
+      - duration_ms: 400
+        final_speed_unit: 20
+        final_current_mA: 8000
+
+      - duration_ms: 800
+        final_speed_unit: 58
+        final_current_mA: 9000
+
+      - duration_ms: 2000
+        final_speed_unit: 150
+        final_current_mA: 10000
+
+      - duration_ms: 0
+        final_speed_unit: 0
+        final_current_mA: 0
+
+      - duration_ms: 0
+        final_speed_unit: 0
+        final_current_mA: 0
 ```
 
 ## Behavior changes

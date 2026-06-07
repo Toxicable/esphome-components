@@ -478,7 +478,13 @@ async def to_code(config):
     await _bind_sensor(config, CONF_MAX_BLOCK_LEN, var.set_max_block_len_sensor)
     await _bind_sensor(config, CONF_CAPABILITIES, var.set_capabilities_sensor)
     await _bind_sensor(config, CONF_BRINGUP_SEQ, var.set_bringup_seq_sensor)
+    await _bind_sensor(config, CONF_BUS_VOLTAGE, var.set_vbus_mv_sensor)
+    await _bind_sensor(config, CONF_INPUT_CURRENT, var.set_ibus_ma_sensor)
+    await _bind_sensor(config, CONF_MOTOR_CURRENT, var.set_motor_current_ma_sensor)
+    await _bind_sensor(config, CONF_MECHANICAL_SPEED, var.set_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DUTY_CENTI_PCT, var.set_duty_centi_pct_sensor)
+    await _bind_sensor(config, CONF_CONTROLLER_TEMPERATURE, var.set_temp_mc_sensor)
+    await _bind_sensor(config, CONF_TARGET_SPEED, var.set_target_speed_dhz_sensor)
     await _bind_sensor(config, CONF_DRIVE_LIMIT_CENTI_PCT, var.set_drive_limit_centi_pct_sensor)
     await _bind_sensor(config, CONF_BRINGUP_ACTIVE, var.set_bringup_active_sensor)
     await _bind_sensor(config, CONF_BRINGUP_TEST_ID, var.set_bringup_test_id_sensor)
@@ -525,6 +531,21 @@ async def to_code(config):
     await _bind_sensor(config, CONF_DEBUG_PHASE_IB_MA, var.set_debug_phase_ib_ma_sensor)
     await _bind_sensor(config, CONF_DEBUG_PHASE_IC_MA, var.set_debug_phase_ic_ma_sensor)
 
+    if CONF_ESC_STATE in config:
+        s = await text_sensor.new_text_sensor(config[CONF_ESC_STATE])
+        cg.add(var.set_esc_state_text_sensor(s))
+    if CONF_LAST_CMD_ERROR in config:
+        s = await text_sensor.new_text_sensor(config[CONF_LAST_CMD_ERROR])
+        cg.add(var.set_last_cmd_error_text_sensor(s))
+    if CONF_FAULT_DETAIL in config:
+        s = await text_sensor.new_text_sensor(config[CONF_FAULT_DETAIL])
+        cg.add(var.set_fault_detail_text_sensor(s))
+    if CONF_CURRENT_FAULTS in config:
+        s = await text_sensor.new_text_sensor(config[CONF_CURRENT_FAULTS])
+        cg.add(var.set_current_faults_text_sensor(s))
+    if CONF_OCCURRED_FAULTS in config:
+        s = await text_sensor.new_text_sensor(config[CONF_OCCURRED_FAULTS])
+        cg.add(var.set_occurred_faults_text_sensor(s))
     if CONF_CAPABILITIES_TEXT in config:
         s = await text_sensor.new_text_sensor(config[CONF_CAPABILITIES_TEXT])
         cg.add(var.set_capabilities_text_sensor(s))
