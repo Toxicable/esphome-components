@@ -94,6 +94,10 @@ void ESCHigherRunForcedTimerDiffPwmTestButton::press_action() {
   this->parent_->run_forced_timer_diff_pwm_test();
 }
 
+void ESCHigherApplyMotorConfigButton::press_action() {
+  this->parent_->apply_motor_config();
+}
+
 void ESCHigherBringupTestSelect::control(const std::string& value) {
   if (this->parent_ == nullptr)
     return;
@@ -433,9 +437,6 @@ bool ESCHigherComponent::initialize_() {
   if (!this->configure_watchdog_())
     return false;
 
-  if (this->provision_config_) {
-    this->config_provision_with_crc();
-  }
   return true;
 }
 
@@ -507,6 +508,23 @@ bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS,
     BRINGUP_TEST_OPTIONS_DEFAULT | BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM
   );
+}
+
+bool ESCHigherComponent::apply_motor_config() {
+  if (!this->provision_config_) {
+    ESP_LOGW(TAG, "apply_motor_config requested, but no motor_config block is configured");
+    return false;
+  }
+  if (!this->initialized_) {
+    ESP_LOGW(TAG, "apply_motor_config requested before component initialization completed");
+    return false;
+  }
+  if (!this->config_provision_with_crc()) {
+    ESP_LOGW(TAG, "Motor config provisioning failed");
+    return false;
+  }
+  ESP_LOGI(TAG, "Motor config applied successfully");
+  return true;
 }
 
 bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {

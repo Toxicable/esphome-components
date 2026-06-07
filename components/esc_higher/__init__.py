@@ -41,6 +41,9 @@ ESCHigherRunBridgeStaticVectorTestButton = esc_higher_ns.class_(
 ESCHigherRunForcedTimerDiffPwmTestButton = esc_higher_ns.class_(
     "ESCHigherRunForcedTimerDiffPwmTestButton", button.Button
 )
+ESCHigherApplyMotorConfigButton = esc_higher_ns.class_(
+    "ESCHigherApplyMotorConfigButton", button.Button
+)
 ESCHigherBringupTestSelect = esc_higher_ns.class_(
     "ESCHigherBringupTestSelect", select.Select
 )
@@ -140,6 +143,7 @@ CONF_ESTOP = "estop"
 CONF_RUN_BRINGUP_TEST = "run_bringup_test"
 CONF_RUN_BRIDGE_STATIC_VECTOR_TEST = "run_bridge_static_vector_test"
 CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST = "run_forced_timer_diff_pwm_test"
+CONF_APPLY_MOTOR_CONFIG = "apply_motor_config"
 CONF_SPEED_TARGET = "speed_target"
 CONF_SPEED_RAMP_TARGET_RPM = "speed_ramp_target_rpm"
 CONF_SPEED_RAMP_TIME_MS = "speed_ramp_time_ms"
@@ -441,6 +445,11 @@ CONFIG_SCHEMA = (
                 icon="mdi:play-box-multiple",
                 entity_category=ENTITY_CATEGORY_CONFIG,
             ),
+            cv.Optional(CONF_APPLY_MOTOR_CONFIG): button.button_schema(
+                ESCHigherApplyMotorConfigButton,
+                icon="mdi:content-save-cog",
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
             cv.Optional(CONF_SPEED_TARGET): number.number_schema(
                 ESCHigherSpeedTargetNumber, icon="mdi:ramp-right"
             ),
@@ -607,6 +616,9 @@ async def to_code(config):
         await cg.register_parented(b, var)
     if CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST in config:
         b = await button.new_button(config[CONF_RUN_FORCED_TIMER_DIFF_PWM_TEST])
+        await cg.register_parented(b, var)
+    if CONF_APPLY_MOTOR_CONFIG in config:
+        b = await button.new_button(config[CONF_APPLY_MOTOR_CONFIG])
         await cg.register_parented(b, var)
     if CONF_SPEED_TARGET in config:
         n = await number.new_number(

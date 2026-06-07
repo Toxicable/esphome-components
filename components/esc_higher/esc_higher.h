@@ -55,6 +55,11 @@ class ESCHigherRunForcedTimerDiffPwmTestButton : public button::Button, public P
   void press_action() override;
 };
 
+class ESCHigherApplyMotorConfigButton : public button::Button, public Parented<ESCHigherComponent> {
+ public:
+  void press_action() override;
+};
+
 class ESCHigherBringupTestSelect : public select::Select, public Parented<ESCHigherComponent> {
  public:
   void control(const std::string& value) override;
@@ -120,6 +125,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   bool run_bringup_test();
   bool run_bridge_static_vector_test();
   bool run_forced_timer_diff_pwm_test();
+  bool apply_motor_config();
   bool set_speed_target_dhz_and_send(int32_t target_dhz);
 
   // Config provisioning

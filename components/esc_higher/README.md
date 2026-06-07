@@ -36,18 +36,19 @@ esc_higher:
     name: "ESC Stop"
   clear_faults:
     name: "ESC Clear Faults"
-  # what's stop vs estop
   estop:
     name: "ESC E-Stop"
+  apply_motor_config:
+    name: "Apply Motor Config"
 
-  # bringup_test_select:
-  #   name: "Bringup Test"
-  # run_bringup_test:
-  #   name: "Run Bringup Test"
-  # run_bridge_static_vector_test:
-  #   name: "Run Bridge Static Vector Test"
-  # run_forced_timer_diff_pwm_test:
-  #   name: "Run Forced Timer Diff PWM Test"
+  bringup_test_select:
+    name: "Bringup Test"
+  run_bringup_test:
+    name: "Run Bringup Test"
+  run_bridge_static_vector_test:
+    name: "Run Bridge Static Vector Test"
+  run_forced_timer_diff_pwm_test:
+    name: "Run Forced Timer Diff PWM Test"
 
   esc_state:
     name: "ESC State"
@@ -150,22 +151,8 @@ esc_higher:
 - Speed control and speed telemetry are now RPM-facing in Home Assistant.
 - `bus_voltage`, `input_current`, `motor_current`, and `controller_temperature` use real HA-facing units.
 - Rejected commands are now logged in ESPHome using the decoded firmware error string, even if you did not configure diagnostic entities.
-- If you press `start_motor` before provisioning or loading a motor config, the STM32 will reject it with `motor_config_missing` and ESPHome will log that rejection.
-
-Legacy YAML keys are still accepted for compatibility:
-- `speed_target_dhz`
-- `speed_ramp_target_dhz`
-- `vbus_mv`
-- `ibus_ma`
-- `motor_current_ma`
-- `speed_dhz`
-- `target_speed_dhz`
-- `temp_mc`
-- `esc_state_text`
-- `last_cmd_error_text`
-- `fault_detail_text`
-- `current_faults_text`
-- `occurred_faults_text`
+- If you press `start_motor` before applying a motor config, the STM32 will reject it with `motor_config_missing` and ESPHome will log that rejection.
+- `motor_config` is no longer provisioned automatically at startup; use `apply_motor_config` to push it to the STM32 explicitly.
 
 ## Bring-up command behavior
 
@@ -179,7 +166,7 @@ Legacy YAML keys are still accepted for compatibility:
 
 ## Motor config provisioning
 
-`motor_config` is optional. When present, the component serializes the fields to the STM32 `MotorConfig_t` struct at startup, computes CRC-32, and provisions it through the config begin/write/validate/commit flow.
+`motor_config` is optional. When present, the component serializes the fields to the STM32 `MotorConfig_t` struct and `apply_motor_config` provisions it through the config begin/write/validate/commit flow.
 
 Required fields:
 - `pole_pairs`
