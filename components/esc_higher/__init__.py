@@ -144,7 +144,7 @@ def _validate_motor_config():
         cv.Required(CONF_MC_OBSERVER_MIN_SPEED_UNIT): cv.int_range(min=0, max=65535),
         cv.Required(CONF_MC_OBSERVER_MIN_FLY_SPEED_UNIT): cv.int_range(min=0, max=65535),
         cv.Optional(CONF_MC_STARTUP_CONSISTENCY_TESTS, default=8): cv.int_range(min=1, max=65535),
-        cv.Optional(CONF_MC_VARIANCE_PERCENTAGE, default=10): cv.int_range(min=1, max=65535),
+        cv.Optional(CONF_MC_VARIANCE_PERCENTAGE, default=10): cv.int_range(min=1, max=511),
         cv.Optional(CONF_MC_SPEED_BAND_UPPER_16THS, default=16): cv.int_range(min=1, max=65535),
         cv.Optional(CONF_MC_SPEED_BAND_LOWER_16THS, default=16): cv.int_range(min=1, max=65535),
         cv.Optional(CONF_MC_BEMF_CONSISTENCY_GAIN, default=128): cv.int_range(min=0, max=65535),
