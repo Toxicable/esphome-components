@@ -833,6 +833,17 @@ void ESCHigherComponent::update() {
       publish_sensor(watchdog_ms_left_sensor_, u16_(status, 12));
       publish_text(current_fault_text_sensor_, current_fault_text_(status[1], status[5], u16_(status, 6),
                                                                    u16_(status, 10), status[14], status[15]));
+      uint8_t fault_detail = status[5];
+      if (fault_detail != this->last_logged_fault_detail_) {
+        this->last_logged_fault_detail_ = fault_detail;
+        if (fault_detail != 0) {
+          ESP_LOGW(TAG, "Fault detected: %s (detail=%u, esc_state=%s, mc_state=%s, current_faults=0x%04X, occurred_faults=0x%04X, watchdog_ms_left=%u)",
+                   fault_detail_to_cstr(fault_detail), static_cast<unsigned>(fault_detail),
+                   esc_state_to_cstr(status[1]), mc_state_to_cstr(status[2]),
+                   static_cast<unsigned>(u16_(status, 6)), static_cast<unsigned>(u16_(status, 8)),
+                   static_cast<unsigned>(u16_(status, 12)));
+        }
+      }
     } else {
       publish_text(current_fault_text_sensor_, "i2c_error");
       all_ok = false;
