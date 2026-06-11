@@ -6,7 +6,7 @@ from esphome.components.ledc import output as ledc_output
 from esphome.const import CONF_FREQUENCY, CONF_ID, CONF_PIN
 
 DEPENDENCIES = ["ledc"]
-AUTO_LOAD = ["ledc"]
+AUTO_LOAD = ["ledc", "output"]
 
 drv8243_ns = cg.esphome_ns.namespace("drv8243")
 
