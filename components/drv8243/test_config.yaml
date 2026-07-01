@@ -1,0 +1,48 @@
+esphome:
+  name: drv8243-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+substitutions:
+  wifi_ssid: "compile-placeholder"
+  wifi_password: "compile-placeholder"
+  api_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ota_password: "compile-placeholder"
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ drv8243 ]
+
+wifi:
+  ssid: "${wifi_ssid}"
+  password: "${wifi_password}"
+
+api:
+  encryption:
+    key: "${api_encryption_key}"
+
+ota:
+  - platform: esphome
+    password: "${ota_password}"
+
+drv8243:
+  id: bridge
+  nsleep_pin: GPIO5
+  nfault_pin: GPIO10
+  min_level: 0.05
+  exponent: 1.0
+  ch1_id: bridge_ch1
+  ch2_id: bridge_ch2
+  ch1:
+    pin: GPIO6
+    frequency: 20000 Hz
+  ch2:
+    pin: GPIO7
+    frequency: 20000 Hz

@@ -4,6 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "bq25756_bus.h"
+#include "bq25756_service.h"
+
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/select/select.h"
@@ -15,8 +18,10 @@
 namespace esphome {
 namespace bq25756 {
 
-class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
+class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public ::bq25756_core::RegisterBus {
  public:
+  BQ25756Component();
+
   void set_disable_watchdog(bool disable_watchdog) {
     disable_watchdog_ = disable_watchdog;
   }
@@ -124,27 +129,14 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   void update() override;
   void dump_config() override;
 
+  bool read_registers(uint8_t reg, uint8_t *data, size_t len) override;
+  bool write_registers(uint8_t reg, const uint8_t *data, size_t len) override;
+
   bool dump_registers_0x00_0x3D();
 
  protected:
-  struct Reg16Value {
-    uint16_t raw_le{0};
-    uint8_t lsb{0};
-    uint8_t msb{0};
-  };
-
-  bool read_byte_(uint8_t reg, uint8_t &value);
-  bool read_bytes_(uint8_t reg, uint8_t *data, size_t len);
-  bool write_byte_(uint8_t reg, uint8_t value);
-  bool write_u16_le_(uint8_t reg, uint16_t value);
-  bool read_u16_le_(uint8_t reg, Reg16Value &value);
-  bool update_register_bits_(uint8_t reg, uint8_t mask, uint8_t value_bits);
-  bool read_control_states_(bool &charge_enabled, bool &hiz_mode, bool &reverse_mode, uint8_t &watchdog_code);
-  void publish_status_texts_(uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault);
+  void publish_status_texts_(const ::bq25756_core::Status &status);
   void publish_control_states_();
-  const char *charge_status_to_string_(uint8_t charge_status) const;
-  const char *ts_status_to_string_(uint8_t ts_status) const;
-  const char *mppt_status_to_string_(uint8_t mppt_status) const;
   bool initialize_();
   bool apply_configured_limits_();
   bool apply_configured_pin_overrides_();
@@ -152,6 +144,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice {
   void maybe_log_event_(
     uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault, float iac_ma, float ibat_ma, float vac_mv, float vbat_mv
   );
+
+  ::bq25756_core::Bq25756Service service_;
 
   sensor::Sensor *iac_current_sensor_{nullptr};
   sensor::Sensor *ibat_current_sensor_{nullptr};

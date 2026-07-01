@@ -1,0 +1,98 @@
+esphome:
+  name: bq25756-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+substitutions:
+  wifi_ssid: "compile-placeholder"
+  wifi_password: "compile-placeholder"
+  api_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ota_password: "compile-placeholder"
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ bq25756 ]
+
+wifi:
+  ssid: "${wifi_ssid}"
+  password: "${wifi_password}"
+
+api:
+  encryption:
+    key: "${api_encryption_key}"
+
+ota:
+  - platform: esphome
+    password: "${ota_password}"
+
+i2c:
+  id: i2c_ext
+  sda: GPIO35
+  scl: GPIO36
+  scan: true
+  frequency: 400kHz
+
+bq25756:
+  id: charger
+  i2c_id: i2c_ext
+  address: 0x6B
+  update_interval: 1s
+  disable_watchdog: true
+  event_logging: true
+  disable_ce_pin: true
+  disable_ilim_hiz_pin: true
+  disable_ichg_pin: true
+  charge_voltage_limit_mv: 1536
+  charge_current_limit_ma: 5000
+  input_current_dpm_limit_ma: 3000
+  input_voltage_dpm_limit_mv: 12000
+  fb_to_pack_voltage_scale: 10.94
+  iac_current:
+    name: "Charger Input Current"
+  vac_voltage:
+    name: "Charger Input Voltage"
+  ibat_current:
+    name: "Charger Output Current"
+  vbat_voltage:
+    name: "Charger Output Voltage"
+  ts_percent:
+    name: "Charger TS Percent"
+  vfb_voltage:
+    name: "Charger VFB Voltage"
+  vfb_reg_target:
+    name: "Charger VFB REG Target"
+  vbat_ov_rising_fb:
+    name: "Charger VBAT OV Rising FB"
+  vbat_ov_falling_fb:
+    name: "Charger VBAT OV Falling FB"
+  vbat_ov_rising_pack:
+    name: "Charger VBAT OV Rising Pack"
+  vbat_ov_falling_pack:
+    name: "Charger VBAT OV Falling Pack"
+  charge_status:
+    name: "Charge Status"
+  ts_status:
+    name: "Charger TS Status"
+  mppt_status:
+    name: "Charger MPPT Status"
+  status_flags:
+    name: "Charger Status Flags"
+  charge_enable:
+    name: "Charger Charge Enable"
+  hiz_mode:
+    name: "Charger HIZ Mode"
+  reverse_mode:
+    name: "Charger Reverse Mode"
+  watchdog:
+    name: "Charger Watchdog"
+  watchdog_reset:
+    name: "Charger Watchdog Reset"
+  dump_registers:
+    name: "Charger Dump Registers"

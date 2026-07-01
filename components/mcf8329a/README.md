@@ -157,6 +157,17 @@ Safety guardrails:
 - Tuning entry (`tune_initial_params` or manual tuning keys) requires baseline hardware/current keys:
   `csa_gain_v_per_v`, `base_current_amps`, `phase_current_limit_percent`, `open_loop_limit_source`, and `lock_mode`.
 
+## Code organization
+
+This component is being refactored toward the shared layout in `../../ARCHITECTURE.md`.
+
+- `mcf8329a_client.*` owns I2C transport helpers, register/bitfield constants, command helpers, and decode helpers.
+- `mcf8329a_tuning.*` owns the guarded initial-tune and MPET state machines.
+- `mcf8329a_tables.h` owns shared lookup/decode tables.
+- `mcf8329a.h` / `mcf8329a.cpp` own ESPHome entities, YAML-facing behavior, logging, and runtime orchestration.
+
+The `.cpp` files compile as normal sibling translation units; do not include implementation `.cpp` files from another `.cpp`.
+
 Auto bring-up buttons:
 - `tune_initial_params` runs a guarded discovery sweep targeting closed-loop entry at `11%`, then a refinement sweep around the first successful set using manual-handoff variants by default; discovery now starts with mid/high open-loop accel candidates (with fallback), uses adaptive per-candidate timeout plus an open-loop dwell heating guard, and ranks candidates by measured handoff quality (fast closed-loop entry, low overspeed, low feedback mismatch) before printing best values at `INFO` level for manual YAML copy.
 - `run_mpet` starts MPET (`CMD + KE + MECH + WRITE_SHADOW`), logs 1Hz MPET status (`ALGO_STATUS_MPET`, algorithm state, speed triplet), and prints a one-shot summary (elapsed time, visited-state mask, status bits, active MPET profile) on done/fault/timeout; on success it also logs extracted keys (`motor_bemf_const`, `speed_loop_kp_code`, `speed_loop_ki_code`) for manual YAML copy.

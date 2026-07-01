@@ -1,5 +1,3 @@
-#if !defined(MCF8329A_EMBED_IMPL) || defined(MCF8329A_EMBED_IMPL_INCLUDE)
-
 #include "mcf8329a_client.h"
 
 #include "esphome/core/hal.h"
@@ -276,5 +274,3 @@ uint32_t MCF8329AClient::build_control_word_(bool is_read, uint16_t offset, bool
 
 }  // namespace mcf8329a
 }  // namespace esphome
-
-#endif  // !MCF8329A_EMBED_IMPL || MCF8329A_EMBED_IMPL_INCLUDE

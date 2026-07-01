@@ -1,7 +1,5 @@
 #include "drv8243.h"
 
-#include <cmath>
-
 #include "esphome/components/ledc/ledc_output.h"
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
@@ -10,27 +8,6 @@ namespace esphome {
 namespace drv8243 {
 
 static const char* const TAG = "drv8243";
-
-// Handshake timings
-static constexpr uint32_t SLEEP_FORCE_MS = 2;
-static constexpr uint32_t READY_WAIT_TIMEOUT_US = 5000;
-static constexpr uint32_t ACK_WAIT_TIMEOUT_US = 5000;
-static constexpr uint32_t POLL_STEP_US = 10;
-// ACK pulse: keep close to lower edge to reduce risk of stretching above ~40us
-static constexpr uint32_t ACK_PULSE_US = 22;
-
-const char* DRV8243Output::handshake_result_str_(DRV8243Output::HandshakeResult r) const {
-  switch (r) {
-    case DRV8243Output::HandshakeResult::NOT_RUN:
-      return "not_run";
-    case DRV8243Output::HandshakeResult::SUCCESS:
-      return "success";
-    case DRV8243Output::HandshakeResult::FAILED:
-      return "failed";
-    default:
-      return "unknown";
-  }
-}
 
 void DRV8243Output::dump_config() {
   ESP_LOGCONFIG(TAG, "DRV8243 Output");
@@ -79,7 +56,7 @@ void DRV8243Output::dump_config() {
     ESP_LOGCONFIG(TAG, "  Polarity pin: NOT SET");
   }
 
-  ESP_LOGCONFIG(TAG, "  Handshake: %s", handshake_result_str_(handshake_result_));
+  ESP_LOGCONFIG(TAG, "  Handshake: %s", ::drv8243_core::handshake_result_to_string(handshake_result_));
 }
 
 void DRV8243Output::setup() {
@@ -101,52 +78,13 @@ void DRV8243Output::setup() {
   if (out2_pin_) {
     out2_pin_->setup();
     out2_pin_->pin_mode(gpio::FLAG_OUTPUT);
-    out2_pin_->digital_write(flip_polarity_);
+    this->service_.set_static_polarity(flip_polarity_);
   }
 
-  handshake_result_ = do_handshake_();
-  if (handshake_result_ != DRV8243Output::HandshakeResult::SUCCESS) {
+  handshake_result_ = this->service_.handshake();
+  if (handshake_result_ != ::drv8243_core::HandshakeResult::SUCCESS) {
     mark_failed();
   }
-}
-
-DRV8243Output::HandshakeResult DRV8243Output::do_handshake_() {
-  if (!nsleep_pin_ || !nfault_pin_)
-    return DRV8243Output::HandshakeResult::FAILED;
-
-  // Force sleep then wake
-  nsleep_pin_->digital_write(false);
-  delay(SLEEP_FORCE_MS);
-  nsleep_pin_->digital_write(true);
-
-  // Wait for nFAULT LOW (device-ready indication)
-  bool saw_ready_low = false;
-  uint32_t ready_start = micros();
-  while ((micros() - ready_start) < READY_WAIT_TIMEOUT_US) {
-    if (!nfault_pin_->digital_read()) {  // LOW
-      saw_ready_low = true;
-      break;
-    }
-    delayMicroseconds(POLL_STEP_US);
-  }
-
-  // ACK pulse
-  nsleep_pin_->digital_write(false);
-  delayMicroseconds(ACK_PULSE_US);
-  nsleep_pin_->digital_write(true);
-
-  if (!saw_ready_low)
-    return DRV8243Output::HandshakeResult::FAILED;
-
-  // Confirm nFAULT HIGH after ACK
-  uint32_t start = micros();
-  while ((micros() - start) < ACK_WAIT_TIMEOUT_US) {
-    if (nfault_pin_->digital_read())  // HIGH
-      return DRV8243Output::HandshakeResult::SUCCESS;
-    delayMicroseconds(POLL_STEP_US);
-  }
-
-  return DRV8243Output::HandshakeResult::FAILED;
 }
 
 void DRV8243Output::write_state(float state) {
@@ -171,34 +109,35 @@ void DRV8243Output::write_to_output_(output::FloatOutput* out, float state) {
 
   // Only drive OUT2 polarity if configured as a GPIO pin.
   if (out2_pin_) {
-    out2_pin_->digital_write(flip_polarity_);
+    this->service_.set_static_polarity(flip_polarity_);
   }
 
-  if (state <= 0.0005f) {
-    out->set_level(0.0f);
-    return;
-  }
+  out->set_level(::drv8243_core::shaped_output_level(state, min_level_, exponent_));
+}
 
-  float x = state;
-  if (x < 0.0f) {
-    x = 0.0f;
-  }
-  if (x > 1.0f)
-    x = 1.0f;
+void DRV8243Output::write_nsleep(bool level) {
+  if (this->nsleep_pin_ != nullptr)
+    this->nsleep_pin_->digital_write(level);
+}
 
-  float y;
-  if (exponent_ <= 0.0f) {
-    y = min_level_ + (1.0f - min_level_) * x;
-  } else {
-    y = min_level_ + (1.0f - min_level_) * powf(x, exponent_);
-  }
+bool DRV8243Output::read_nfault(bool *level) {
+  if (this->nfault_pin_ == nullptr || level == nullptr)
+    return false;
+  *level = this->nfault_pin_->digital_read();
+  return true;
+}
 
-  if (y < 0.0f)
-    y = 0.0f;
-  if (y > 1.0f)
-    y = 1.0f;
+void DRV8243Output::write_out2(bool level) {
+  if (this->out2_pin_ != nullptr)
+    this->out2_pin_->digital_write(level);
+}
 
-  out->set_level(y);
+void DRV8243Output::delay_ms(uint32_t ms) {
+  delay(ms);
+}
+
+void DRV8243Output::delay_us(uint32_t us) {
+  delayMicroseconds(us);
 }
 
 void DRV8243ChannelOutput::write_state(float state) {

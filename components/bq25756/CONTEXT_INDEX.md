@@ -2,15 +2,23 @@
 
 ## Read Order
 1. `components/bq25756/AGENTS_KNOWLEDGE.md`
-2. `components/bq25756/README.md`
-3. `components/bq25756/__init__.py`
-4. `components/bq25756/bq25756.h`
-5. `components/bq25756/bq25756.cpp`
+2. `ARCHITECTURE.md`
+3. `components/bq25756/README.md`
+4. `components/bq25756/__init__.py`
+5. `components/bq25756/bq25756_bus.h`
+6. `components/bq25756/bq25756_protocol.h`
+7. `components/bq25756/bq25756_protocol.cpp`
+8. `components/bq25756/bq25756_service.h`
+9. `components/bq25756/bq25756_service.cpp`
+10. `components/bq25756/bq25756.h`
+11. `components/bq25756/bq25756.cpp`
 
 ## Edit Map
 - `__init__.py`: ESPHome schema, entity wiring, codegen bindings.
-- `bq25756.h`: component class surface, entity pointers, helper declarations.
-- `bq25756.cpp`: register map, setup/update flow, control writes, ADC decode, status publishing.
+- `bq25756_bus.h`: host register bus boundary for reusable core code.
+- `bq25756_protocol.*`: register map, status decoding, ADC decoding, limit encoders.
+- `bq25756_service.*`: reusable BQ25756 behavior built on `RegisterBus`.
+- `bq25756.h` / `bq25756.cpp`: ESPHome component wrapper, logging, entities, and I2C adapter.
 - `README.md`: user-facing configuration and supported entities.
 - `AGENTS_KNOWLEDGE.md`: active component invariants and datasheet-backed gotchas.
 

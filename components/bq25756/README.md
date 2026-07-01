@@ -90,6 +90,15 @@ bq25756:
 - Select: `watchdog` (`disable`, `40s`, `80s`, `160s`)
 - Buttons: `watchdog_reset`, `dump_registers`
 
+## Code organization
+
+This component follows the shared layout in `../../ARCHITECTURE.md`.
+
+- `bq25756_protocol.*` contains the register map, status decoding, ADC decoding, and limit encoders.
+- `bq25756_bus.h` defines the host register bus interface.
+- `bq25756_service.*` contains the reusable device behavior and talks through a small register-bus interface.
+- `bq25756.h` / `bq25756.cpp` are the ESPHome wrapper that owns YAML-facing entities, logging, and the ESPHome I2C adapter.
+
 ## Notes
 
 - The BQ25756 ADC result registers are little-endian in the I2C map: the low byte is at the base register and the high byte is at the next address.

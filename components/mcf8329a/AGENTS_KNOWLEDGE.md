@@ -15,11 +15,7 @@ Component-scoped active guidance for `components/mcf8329a`.
 - Transport and register helpers live in `mcf8329a_client.cpp/.h`; component register methods delegate to `MCF8329AClient`.
 - Tuning logic is isolated in `mcf8329a_tuning.cpp/.h` (`MCF8329ATuningController`); component owns orchestration.
 - Shared decode/lookup tables are centralized in `mcf8329a_tables.h`.
-
-## Build Mode
-- `to_code()` adds `-DMCF8329A_EMBED_IMPL`.
-- In embed mode, `mcf8329a.cpp` includes `mcf8329a_client.cpp` and `mcf8329a_tuning.cpp`.
-- Embedded file-scope `static` identifiers must stay uniquely prefixed to avoid redefinition collisions.
+- `mcf8329a.cpp`, `mcf8329a_client.cpp`, and `mcf8329a_tuning.cpp` compile as normal sibling translation units; do not include `.cpp` files into other `.cpp` files.
 
 ## Config and Guardrails
 - Required YAML keys: `mode`, `brake_mode`, `motor_bemf_const`, `max_speed_hz`.

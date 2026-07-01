@@ -11,89 +11,29 @@ namespace bq25756 {
 
 namespace {
 static const char *const TAG = "bq25756";
-
-constexpr uint8_t REG15_TIMER_CONTROL = 0x15;
-constexpr uint8_t REG17_CHARGER_CONTROL = 0x17;
-constexpr uint8_t REG18_PIN_CONTROL = 0x18;
-constexpr uint8_t REG19_POWER_PATH_CONTROL = 0x19;
-constexpr uint8_t REG21_CHARGER_STATUS_1 = 0x21;
-constexpr uint8_t REG22_CHARGER_STATUS_2 = 0x22;
-constexpr uint8_t REG23_CHARGER_STATUS_3 = 0x23;
-constexpr uint8_t REG24_FAULT_STATUS = 0x24;
-constexpr uint8_t REG2B_ADC_CONTROL = 0x2B;
-constexpr uint8_t REG2C_ADC_CHANNEL_CONTROL = 0x2C;
-constexpr uint8_t REG2D_IAC_ADC = 0x2D;
-constexpr uint8_t REG2F_IBAT_ADC = 0x2F;
-constexpr uint8_t REG31_VAC_ADC = 0x31;
-constexpr uint8_t REG33_VBAT_ADC = 0x33;
-constexpr uint8_t REG37_TS_ADC = 0x37;
-constexpr uint8_t REG39_VFB_ADC = 0x39;
-constexpr uint8_t REG3D_PART_INFORMATION = 0x3D;
-
-constexpr uint8_t REG15_WATCHDOG_MASK = 0x30;
-constexpr uint8_t REG17_WD_RST_MASK = 0x20;
-constexpr uint8_t REG17_DIS_CE_PIN_MASK = 0x10;
-constexpr uint8_t REG17_EN_HIZ_MASK = 0x04;
-constexpr uint8_t REG17_EN_CHG_MASK = 0x01;
-constexpr uint8_t REG18_EN_ICHG_PIN_MASK = 0x80;
-constexpr uint8_t REG18_EN_ILIM_HIZ_PIN_MASK = 0x40;
-constexpr uint8_t REG19_EN_REV_MASK = 0x01;
-
-constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;
-constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
-constexpr uint8_t REG2C_IAC_ADC_DIS_MASK = 0x80;
-constexpr uint8_t REG2C_IBAT_ADC_DIS_MASK = 0x40;
-constexpr uint8_t REG2C_VAC_ADC_DIS_MASK = 0x20;
-constexpr uint8_t REG2C_VBAT_ADC_DIS_MASK = 0x10;
-constexpr uint8_t REG2C_TS_ADC_DIS_MASK = 0x04;
-constexpr uint8_t REG2C_VFB_ADC_DIS_MASK = 0x02;
-
-constexpr uint8_t PART_NUM_MASK = 0x78;
-constexpr uint8_t BQ25756_PART_NUM_BITS = 0x10;
-
-constexpr float IAC_CURRENT_LSB_MA = 0.8f;
-constexpr float IBAT_CURRENT_LSB_MA = 2.0f;
-constexpr float VOLTAGE_LSB_MV = 2.0f;
-constexpr float TS_PERCENT_LSB = 0.09765625f;
-
-constexpr uint16_t REG00_VFB_REG_MASK = 0x001F;
-constexpr uint16_t REG02_ICHG_REG_MASK = 0x07FC;
-constexpr uint16_t REG06_IAC_DPM_MASK = 0x07FC;
-constexpr uint16_t REG08_VAC_DPM_MASK = 0x3FFC;
-constexpr float VBAT_OV_RISING_MULTIPLIER = 1.04f;
-constexpr float VBAT_OV_FALLING_MULTIPLIER = 1.02f;
 }  // namespace
+
+BQ25756Component::BQ25756Component() : service_(this) {}
 
 bool BQ25756Component::set_charge_enabled(bool enabled) {
   this->log_charge_enable_precheck_(enabled);
-  return this->update_register_bits_(
-    REG17_CHARGER_CONTROL, REG17_EN_CHG_MASK, enabled ? REG17_EN_CHG_MASK : 0x00
-  );
+  return this->service_.set_charge_enabled(enabled);
 }
 
 bool BQ25756Component::set_hiz_mode(bool enabled) {
-  return this->update_register_bits_(
-    REG17_CHARGER_CONTROL, REG17_EN_HIZ_MASK, enabled ? REG17_EN_HIZ_MASK : 0x00
-  );
+  return this->service_.set_hiz_mode(enabled);
 }
 
 bool BQ25756Component::set_reverse_mode(bool enabled) {
-  return this->update_register_bits_(
-    REG19_POWER_PATH_CONTROL, REG19_EN_REV_MASK, enabled ? REG19_EN_REV_MASK : 0x00
-  );
+  return this->service_.set_reverse_mode(enabled);
 }
 
 bool BQ25756Component::set_watchdog_code(uint8_t code) {
-  if (code > 0x03) {
-    return false;
-  }
-  return this->update_register_bits_(
-    REG15_TIMER_CONTROL, REG15_WATCHDOG_MASK, static_cast<uint8_t>(code << 4)
-  );
+  return this->service_.set_watchdog_code(code);
 }
 
 bool BQ25756Component::reset_watchdog() {
-  return this->update_register_bits_(REG17_CHARGER_CONTROL, REG17_WD_RST_MASK, REG17_WD_RST_MASK);
+  return this->service_.reset_watchdog();
 }
 
 void BQ25756Component::setup() {
@@ -112,12 +52,12 @@ void BQ25756Component::setup() {
 
 bool BQ25756Component::initialize_() {
   uint8_t part_info = 0;
-  if (!this->read_byte_(REG3D_PART_INFORMATION, part_info)) {
+  if (!this->service_.read_byte(::bq25756_core::REG3D_PART_INFORMATION, part_info)) {
     ESP_LOGW(TAG, "Failed to read REG3D (part information); device not responding yet");
     return false;
   }
 
-  if ((part_info & PART_NUM_MASK) != BQ25756_PART_NUM_BITS) {
+  if ((part_info & ::bq25756_core::PART_NUM_MASK) != ::bq25756_core::BQ25756_PART_NUM_BITS) {
     ESP_LOGW(TAG, "Unexpected REG3D=0x%02X; PART_NUM does not match BQ25756", part_info);
     return false;
   }
@@ -126,11 +66,11 @@ bool BQ25756Component::initialize_() {
 
   if (this->disable_watchdog_) {
     uint8_t reg15 = 0;
-    if (!this->read_byte_(REG15_TIMER_CONTROL, reg15)) {
+    if (!this->service_.read_byte(::bq25756_core::REG15_TIMER_CONTROL, reg15)) {
       ESP_LOGW(TAG, "Failed to read REG15 (timer control)");
       return false;
     }
-    if ((reg15 & REG15_WATCHDOG_MASK) != 0) {
+    if ((reg15 & ::bq25756_core::REG15_WATCHDOG_MASK) != 0) {
       if (!this->set_watchdog_code(0)) {
         ESP_LOGW(TAG, "Failed to disable watchdog via REG15");
         return false;
@@ -170,103 +110,91 @@ void BQ25756Component::update() {
     this->status_clear_warning();
   }
 
-  uint8_t status1 = 0;
-  uint8_t status2 = 0;
-  uint8_t status3 = 0;
-  uint8_t fault = 0;
-  if (!this->read_byte_(REG21_CHARGER_STATUS_1, status1) || !this->read_byte_(REG22_CHARGER_STATUS_2, status2) ||
-      !this->read_byte_(REG23_CHARGER_STATUS_3, status3) || !this->read_byte_(REG24_FAULT_STATUS, fault)) {
+  ::bq25756_core::Status status;
+  if (!this->service_.read_status(status)) {
     ESP_LOGW(TAG, "Failed reading charger status registers");
     this->status_set_warning();
     return;
   }
 
-  Reg16Value iac{};
-  Reg16Value ibat{};
-  Reg16Value vac{};
-  Reg16Value vbat{};
-  Reg16Value ts{};
-  Reg16Value vfb{};
   const bool need_vfb = this->vfb_voltage_sensor_ != nullptr;
 
-  if (!this->read_u16_le_(REG2D_IAC_ADC, iac) || !this->read_u16_le_(REG2F_IBAT_ADC, ibat) ||
-      !this->read_u16_le_(REG31_VAC_ADC, vac) || !this->read_u16_le_(REG33_VBAT_ADC, vbat) ||
-      !this->read_u16_le_(REG37_TS_ADC, ts) || (need_vfb && !this->read_u16_le_(REG39_VFB_ADC, vfb))) {
+  ::bq25756_core::Measurements measurements;
+  if (!this->service_.read_measurements(measurements, need_vfb)) {
     ESP_LOGW(TAG, "Failed reading one or more ADC registers");
     this->status_set_warning();
     return;
   }
 
-  const float iac_ma = static_cast<float>(static_cast<int16_t>(iac.raw_le)) * IAC_CURRENT_LSB_MA;
-  const float ibat_ma = static_cast<float>(static_cast<int16_t>(ibat.raw_le)) * IBAT_CURRENT_LSB_MA;
-  const float vac_mv = static_cast<float>(vac.raw_le) * VOLTAGE_LSB_MV;
-  const float vbat_mv = static_cast<float>(vbat.raw_le) * VOLTAGE_LSB_MV;
-  const float ts_percent = static_cast<float>(ts.raw_le) * TS_PERCENT_LSB;
-  const float vfb_mv = static_cast<float>(vfb.raw_le);
+  this->maybe_log_event_(
+    status.status1, status.status2, status.status3, status.fault, measurements.iac_ma, measurements.ibat_ma,
+    measurements.vac_mv, measurements.vbat_mv
+  );
 
-  this->maybe_log_event_(status1, status2, status3, fault, iac_ma, ibat_ma, vac_mv, vbat_mv);
-
-  ESP_LOGD(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status1, status2, status3, fault);
+  ESP_LOGD(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status.status1, status.status2, status.status3, status.fault);
   ESP_LOGD(
     TAG,
     "IAC=%.1f mA (0x%04X [%02X %02X]), IBAT=%.0f mA (0x%04X [%02X %02X]), "
     "VAC=%.0f mV (0x%04X [%02X %02X]), VBAT=%.0f mV (0x%04X [%02X %02X]), "
     "TS=%.3f%% (0x%04X [%02X %02X])%s",
-    iac_ma,
-    iac.raw_le,
-    iac.lsb,
-    iac.msb,
-    ibat_ma,
-    ibat.raw_le,
-    ibat.lsb,
-    ibat.msb,
-    vac_mv,
-    vac.raw_le,
-    vac.lsb,
-    vac.msb,
-    vbat_mv,
-    vbat.raw_le,
-    vbat.lsb,
-    vbat.msb,
-    ts_percent,
-    ts.raw_le,
-    ts.lsb,
-    ts.msb,
+    measurements.iac_ma,
+    measurements.iac.raw_le,
+    measurements.iac.lsb,
+    measurements.iac.msb,
+    measurements.ibat_ma,
+    measurements.ibat.raw_le,
+    measurements.ibat.lsb,
+    measurements.ibat.msb,
+    measurements.vac_mv,
+    measurements.vac.raw_le,
+    measurements.vac.lsb,
+    measurements.vac.msb,
+    measurements.vbat_mv,
+    measurements.vbat.raw_le,
+    measurements.vbat.lsb,
+    measurements.vbat.msb,
+    measurements.ts_percent,
+    measurements.ts.raw_le,
+    measurements.ts.lsb,
+    measurements.ts.msb,
     need_vfb ? "" : ", VFB=disabled"
   );
   if (need_vfb) {
-    ESP_LOGD(TAG, "VFB=%.0f mV (0x%04X [%02X %02X])", vfb_mv, vfb.raw_le, vfb.lsb, vfb.msb);
+    ESP_LOGD(
+      TAG, "VFB=%.0f mV (0x%04X [%02X %02X])", measurements.vfb_mv, measurements.vfb.raw_le,
+      measurements.vfb.lsb, measurements.vfb.msb
+    );
   }
 
   if (this->iac_current_sensor_ != nullptr) {
-    this->iac_current_sensor_->publish_state(iac_ma);
+    this->iac_current_sensor_->publish_state(measurements.iac_ma);
   }
   if (this->ibat_current_sensor_ != nullptr) {
-    this->ibat_current_sensor_->publish_state(ibat_ma);
+    this->ibat_current_sensor_->publish_state(measurements.ibat_ma);
   }
   if (this->vac_voltage_sensor_ != nullptr) {
-    this->vac_voltage_sensor_->publish_state(vac_mv);
+    this->vac_voltage_sensor_->publish_state(measurements.vac_mv);
   }
   if (this->vbat_voltage_sensor_ != nullptr) {
-    this->vbat_voltage_sensor_->publish_state(vbat_mv);
+    this->vbat_voltage_sensor_->publish_state(measurements.vbat_mv);
   }
   if (this->ts_percent_sensor_ != nullptr) {
-    this->ts_percent_sensor_->publish_state(ts_percent);
+    this->ts_percent_sensor_->publish_state(measurements.ts_percent);
   }
   if (this->vfb_voltage_sensor_ != nullptr) {
-    this->vfb_voltage_sensor_->publish_state(vfb_mv);
+    this->vfb_voltage_sensor_->publish_state(measurements.vfb_mv);
   }
 
   if (this->vfb_reg_target_sensor_ != nullptr || this->vbat_ov_rising_fb_sensor_ != nullptr ||
       this->vbat_ov_falling_fb_sensor_ != nullptr || this->vbat_ov_rising_pack_sensor_ != nullptr ||
       this->vbat_ov_falling_pack_sensor_ != nullptr) {
-    Reg16Value vfb_reg{};
-    if (!this->read_u16_le_(0x00, vfb_reg)) {
+    ::bq25756_core::Reg16Value vfb_reg{};
+    if (!this->service_.read_u16_le(::bq25756_core::REG00_CHARGE_VOLTAGE_LIMIT, vfb_reg)) {
       ESP_LOGW(TAG, "Failed reading REG0x00 for VFB/VBAT_OV threshold diagnostics");
     } else {
-      const float vfb_reg_mv = 1504.0f + static_cast<float>(vfb_reg.raw_le & REG00_VFB_REG_MASK) * 2.0f;
-      const float vbat_ov_rising_fb_mv = vfb_reg_mv * VBAT_OV_RISING_MULTIPLIER;
-      const float vbat_ov_falling_fb_mv = vfb_reg_mv * VBAT_OV_FALLING_MULTIPLIER;
+      const float vfb_reg_mv = ::bq25756_core::vfb_reg_target_mv(vfb_reg.raw_le);
+      const float vbat_ov_rising_fb_mv = vfb_reg_mv * ::bq25756_core::VBAT_OV_RISING_MULTIPLIER;
+      const float vbat_ov_falling_fb_mv = vfb_reg_mv * ::bq25756_core::VBAT_OV_FALLING_MULTIPLIER;
       if (this->vfb_reg_target_sensor_ != nullptr) {
         this->vfb_reg_target_sensor_->publish_state(vfb_reg_mv);
       }
@@ -289,7 +217,7 @@ void BQ25756Component::update() {
     }
   }
 
-  this->publish_status_texts_(status1, status2, status3, fault);
+  this->publish_status_texts_(status);
   this->publish_control_states_();
   this->status_clear_warning();
 }
@@ -344,7 +272,7 @@ void BQ25756Component::dump_config() {
 
 bool BQ25756Component::dump_registers_0x00_0x3D() {
   std::array<uint8_t, 0x3E> regs{};
-  if (!this->read_bytes_(0x00, regs.data(), regs.size())) {
+  if (!this->service_.read_bytes(0x00, regs.data(), regs.size())) {
     ESP_LOGW(TAG, "Failed register dump read for 0x00..0x3D");
     return false;
   }
@@ -369,11 +297,7 @@ bool BQ25756Component::dump_registers_0x00_0x3D() {
   return true;
 }
 
-bool BQ25756Component::read_byte_(uint8_t reg, uint8_t &value) {
-  return this->read_bytes_(reg, &value, 1);
-}
-
-bool BQ25756Component::read_bytes_(uint8_t reg, uint8_t *data, size_t len) {
+bool BQ25756Component::read_registers(uint8_t reg, uint8_t *data, size_t len) {
   if (len == 0) {
     return true;
   }
@@ -388,82 +312,36 @@ bool BQ25756Component::read_bytes_(uint8_t reg, uint8_t *data, size_t len) {
   return this->read(data, len) == i2c::ERROR_OK;
 }
 
-bool BQ25756Component::write_byte_(uint8_t reg, uint8_t value) {
-  return this->write_bytes(reg, &value, 1);
-}
-
-bool BQ25756Component::write_u16_le_(uint8_t reg, uint16_t value) {
-  const uint8_t raw[2] = {
-    static_cast<uint8_t>(value & 0xFF),
-    static_cast<uint8_t>((value >> 8) & 0xFF),
-  };
-  return this->write_bytes(reg, raw, sizeof(raw));
-}
-
-bool BQ25756Component::read_u16_le_(uint8_t reg, Reg16Value &value) {
-  uint8_t raw[2] = {0, 0};
-  if (!this->read_bytes_(reg, raw, sizeof(raw))) {
-    return false;
-  }
-  value.lsb = raw[0];
-  value.msb = raw[1];
-  value.raw_le = static_cast<uint16_t>(raw[0]) | (static_cast<uint16_t>(raw[1]) << 8);
-  return true;
-}
-
-bool BQ25756Component::update_register_bits_(uint8_t reg, uint8_t mask, uint8_t value_bits) {
-  uint8_t current = 0;
-  if (!this->read_byte_(reg, current)) {
-    return false;
-  }
-  const uint8_t updated = static_cast<uint8_t>((current & ~mask) | (value_bits & mask));
-  if (updated == current) {
+bool BQ25756Component::write_registers(uint8_t reg, const uint8_t *data, size_t len) {
+  if (len == 0) {
     return true;
   }
-  return this->write_byte_(reg, updated);
+  return this->write_bytes(reg, data, len);
 }
 
-bool BQ25756Component::read_control_states_(
-  bool &charge_enabled, bool &hiz_mode, bool &reverse_mode, uint8_t &watchdog_code
-) {
-  uint8_t reg15 = 0;
-  uint8_t reg17 = 0;
-  uint8_t reg19 = 0;
-  if (!this->read_byte_(REG15_TIMER_CONTROL, reg15) || !this->read_byte_(REG17_CHARGER_CONTROL, reg17) ||
-      !this->read_byte_(REG19_POWER_PATH_CONTROL, reg19)) {
-    return false;
-  }
-
-  charge_enabled = (reg17 & REG17_EN_CHG_MASK) != 0;
-  hiz_mode = (reg17 & REG17_EN_HIZ_MASK) != 0;
-  reverse_mode = (reg19 & REG19_EN_REV_MASK) != 0;
-  watchdog_code = static_cast<uint8_t>((reg15 & REG15_WATCHDOG_MASK) >> 4);
-  return true;
-}
-
-void BQ25756Component::publish_status_texts_(uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault) {
-  const bool pg_good = (status2 & 0x80) != 0;
-  const bool watchdog_expired = (status1 & 0x08) != 0;
-  const bool iac_dpm_active = (status1 & 0x40) != 0;
-  const bool vac_dpm_active = (status1 & 0x20) != 0;
-  const bool reverse_active = (status3 & 0x04) != 0;
-  const bool cv_timer_expired = (status3 & 0x08) != 0;
-  const bool charge_timer_expired = (fault & 0x04) != 0;
-  const bool vac_uv_fault = (fault & 0x80) != 0;
-  const bool vac_ov_fault = (fault & 0x40) != 0;
-  const bool ibat_ocp_fault = (fault & 0x20) != 0;
-  const bool vbat_ov_fault = (fault & 0x10) != 0;
-  const bool thermal_shutdown = (fault & 0x08) != 0;
-  const bool drv_sup_fault = (fault & 0x02) != 0;
+void BQ25756Component::publish_status_texts_(const ::bq25756_core::Status &status) {
+  const bool pg_good = (status.status2 & 0x80) != 0;
+  const bool watchdog_expired = (status.status1 & 0x08) != 0;
+  const bool iac_dpm_active = (status.status1 & 0x40) != 0;
+  const bool vac_dpm_active = (status.status1 & 0x20) != 0;
+  const bool reverse_active = (status.status3 & 0x04) != 0;
+  const bool cv_timer_expired = (status.status3 & 0x08) != 0;
+  const bool charge_timer_expired = (status.fault & 0x04) != 0;
+  const bool vac_uv_fault = (status.fault & 0x80) != 0;
+  const bool vac_ov_fault = (status.fault & 0x40) != 0;
+  const bool ibat_ocp_fault = (status.fault & 0x20) != 0;
+  const bool vbat_ov_fault = (status.fault & 0x10) != 0;
+  const bool thermal_shutdown = (status.fault & 0x08) != 0;
+  const bool drv_sup_fault = (status.fault & 0x02) != 0;
 
   if (this->charge_status_text_sensor_ != nullptr) {
-    this->charge_status_text_sensor_->publish_state(this->charge_status_to_string_(status1 & 0x07));
+    this->charge_status_text_sensor_->publish_state(::bq25756_core::charge_status_to_string(status.status1 & 0x07));
   }
   if (this->ts_status_text_sensor_ != nullptr) {
-    this->ts_status_text_sensor_->publish_state(this->ts_status_to_string_((status2 >> 4) & 0x07));
+    this->ts_status_text_sensor_->publish_state(::bq25756_core::ts_status_to_string((status.status2 >> 4) & 0x07));
   }
   if (this->mppt_status_text_sensor_ != nullptr) {
-    this->mppt_status_text_sensor_->publish_state(this->mppt_status_to_string_(status2 & 0x03));
+    this->mppt_status_text_sensor_->publish_state(::bq25756_core::mppt_status_to_string(status.status2 & 0x03));
   }
 
   if (this->status_flags_text_sensor_ != nullptr) {
@@ -519,119 +397,33 @@ void BQ25756Component::publish_control_states_() {
     return;
   }
 
-  bool charge_enabled = false;
-  bool hiz_mode = false;
-  bool reverse_mode = false;
-  uint8_t watchdog_code = 0;
-  if (!this->read_control_states_(charge_enabled, hiz_mode, reverse_mode, watchdog_code)) {
+  ::bq25756_core::ControlStates states;
+  if (!this->service_.read_control_states(states)) {
     ESP_LOGW(TAG, "Failed to refresh control states");
     return;
   }
 
   if (this->charge_enable_switch_ != nullptr) {
-    this->charge_enable_switch_->publish_state(charge_enabled);
+    this->charge_enable_switch_->publish_state(states.charge_enabled);
   }
   if (this->hiz_mode_switch_ != nullptr) {
-    this->hiz_mode_switch_->publish_state(hiz_mode);
+    this->hiz_mode_switch_->publish_state(states.hiz_mode);
   }
   if (this->reverse_mode_switch_ != nullptr) {
-    this->reverse_mode_switch_->publish_state(reverse_mode);
+    this->reverse_mode_switch_->publish_state(states.reverse_mode);
   }
   if (this->watchdog_select_ != nullptr) {
-    this->watchdog_select_->publish_state(static_cast<size_t>(watchdog_code));
-  }
-}
-
-const char *BQ25756Component::charge_status_to_string_(uint8_t charge_status) const {
-  switch (charge_status) {
-    case 0:
-      return "not_charging";
-    case 1:
-      return "trickle";
-    case 2:
-      return "precharge";
-    case 3:
-      return "fast_cc";
-    case 4:
-      return "taper_cv";
-    case 5:
-      return "reserved_5";
-    case 6:
-      return "topoff";
-    case 7:
-      return "termination_done";
-    default:
-      return "unknown";
-  }
-}
-
-const char *BQ25756Component::ts_status_to_string_(uint8_t ts_status) const {
-  switch (ts_status) {
-    case 0:
-      return "normal";
-    case 1:
-      return "warm";
-    case 2:
-      return "cool";
-    case 3:
-      return "cold";
-    case 4:
-      return "hot";
-    default:
-      return "reserved";
-  }
-}
-
-const char *BQ25756Component::mppt_status_to_string_(uint8_t mppt_status) const {
-  switch (mppt_status) {
-    case 0:
-      return "disabled";
-    case 1:
-      return "enabled_idle";
-    case 2:
-      return "sweeping";
-    case 3:
-      return "max_power_detected";
-    default:
-      return "unknown";
+    this->watchdog_select_->publish_state(static_cast<size_t>(states.watchdog_code));
   }
 }
 
 bool BQ25756Component::ensure_adc_enabled_() {
   uint8_t reg2b = 0;
-  if (!this->read_byte_(REG2B_ADC_CONTROL, reg2b)) {
-    ESP_LOGW(TAG, "Failed to read REG2B (ADC control)");
-    return false;
-  }
-
-  const uint8_t reg2b_new =
-    static_cast<uint8_t>((reg2b | REG2B_ADC_EN_MASK) & ~REG2B_ADC_RATE_MASK);
-  if (reg2b_new != reg2b && !this->write_byte_(REG2B_ADC_CONTROL, reg2b_new)) {
-    ESP_LOGW(TAG, "Failed to write REG2B (0x%02X -> 0x%02X)", reg2b, reg2b_new);
-    return false;
-  }
-
+  uint8_t reg2b_new = 0;
   uint8_t reg2c = 0;
-  if (!this->read_byte_(REG2C_ADC_CHANNEL_CONTROL, reg2c)) {
-    ESP_LOGW(TAG, "Failed to read REG2C (ADC channel control)");
-    return false;
-  }
-
-  uint8_t reg2c_new = static_cast<uint8_t>(
-    reg2c &
-    static_cast<uint8_t>(
-      ~(REG2C_IAC_ADC_DIS_MASK | REG2C_IBAT_ADC_DIS_MASK | REG2C_VAC_ADC_DIS_MASK | REG2C_VBAT_ADC_DIS_MASK |
-        REG2C_TS_ADC_DIS_MASK)
-    )
-  );
-  if (this->vfb_voltage_sensor_ != nullptr) {
-    reg2c_new = static_cast<uint8_t>(reg2c_new & ~REG2C_VFB_ADC_DIS_MASK);
-  } else {
-    reg2c_new = static_cast<uint8_t>(reg2c_new | REG2C_VFB_ADC_DIS_MASK);
-  }
-
-  if (reg2c_new != reg2c && !this->write_byte_(REG2C_ADC_CHANNEL_CONTROL, reg2c_new)) {
-    ESP_LOGW(TAG, "Failed to write REG2C (0x%02X -> 0x%02X)", reg2c, reg2c_new);
+  uint8_t reg2c_new = 0;
+  if (!this->service_.ensure_adc_enabled(this->vfb_voltage_sensor_ != nullptr, reg2b, reg2b_new, reg2c, reg2c_new)) {
+    ESP_LOGW(TAG, "ADC configuration write failed");
     return false;
   }
 
@@ -652,9 +444,9 @@ void BQ25756Component::maybe_log_event_(
     return;
   }
 
-  const char *const charge = this->charge_status_to_string_(status1 & 0x07);
-  const char *const ts = this->ts_status_to_string_((status2 >> 4) & 0x07);
-  const char *const mppt = this->mppt_status_to_string_(status2 & 0x03);
+  const char *const charge = ::bq25756_core::charge_status_to_string(status1 & 0x07);
+  const char *const ts = ::bq25756_core::ts_status_to_string((status2 >> 4) & 0x07);
+  const char *const mppt = ::bq25756_core::mppt_status_to_string(status2 & 0x03);
   const bool pg_good = (status2 & 0x80) != 0;
 
   ESP_LOGI(
@@ -682,120 +474,52 @@ void BQ25756Component::maybe_log_event_(
 }
 
 bool BQ25756Component::apply_configured_limits_() {
-  if (this->has_charge_voltage_limit_mv_) {
-    const uint16_t code = static_cast<uint16_t>((this->charge_voltage_limit_mv_ - 1504) / 2);
-    const uint16_t raw = static_cast<uint16_t>(code & REG00_VFB_REG_MASK);
-    if (!this->write_u16_le_(0x00, raw)) {
-      ESP_LOGW(TAG, "Failed writing REG0x00 (charge_voltage_limit_mv)");
-      return false;
-    }
-  }
-
-  if (this->has_charge_current_limit_ma_) {
-    const uint16_t code = static_cast<uint16_t>(this->charge_current_limit_ma_ / 50);
-    const uint16_t raw = static_cast<uint16_t>((code << 2) & REG02_ICHG_REG_MASK);
-    if (!this->write_u16_le_(0x02, raw)) {
-      ESP_LOGW(TAG, "Failed writing REG0x02 (charge_current_limit_ma)");
-      return false;
-    }
-  }
-
-  if (this->has_input_current_dpm_limit_ma_) {
-    const uint16_t code = static_cast<uint16_t>(this->input_current_dpm_limit_ma_ / 50);
-    const uint16_t raw = static_cast<uint16_t>((code << 2) & REG06_IAC_DPM_MASK);
-    if (!this->write_u16_le_(0x06, raw)) {
-      ESP_LOGW(TAG, "Failed writing REG0x06 (input_current_dpm_limit_ma)");
-      return false;
-    }
-  }
-
-  if (this->has_input_voltage_dpm_limit_mv_) {
-    const uint16_t code = static_cast<uint16_t>(this->input_voltage_dpm_limit_mv_ / 20);
-    const uint16_t raw = static_cast<uint16_t>((code << 2) & REG08_VAC_DPM_MASK);
-    if (!this->write_u16_le_(0x08, raw)) {
-      ESP_LOGW(TAG, "Failed writing REG0x08 (input_voltage_dpm_limit_mv)");
-      return false;
-    }
+  if (!this->service_.apply_limits(
+        this->has_charge_voltage_limit_mv_, this->charge_voltage_limit_mv_, this->has_charge_current_limit_ma_,
+        this->charge_current_limit_ma_, this->has_input_current_dpm_limit_ma_, this->input_current_dpm_limit_ma_,
+        this->has_input_voltage_dpm_limit_mv_, this->input_voltage_dpm_limit_mv_
+      )) {
+    ESP_LOGW(TAG, "Failed writing one or more configured charge/input limits");
+    return false;
   }
 
   return true;
 }
 
 bool BQ25756Component::apply_configured_pin_overrides_() {
-  if (this->disable_ce_pin_) {
-    if (!this->update_register_bits_(REG17_CHARGER_CONTROL, REG17_DIS_CE_PIN_MASK, REG17_DIS_CE_PIN_MASK)) {
-      ESP_LOGW(TAG, "Failed setting REG17.DIS_CE_PIN");
-      return false;
-    }
-  }
-
-  if (this->disable_ilim_hiz_pin_) {
-    if (!this->update_register_bits_(REG18_PIN_CONTROL, REG18_EN_ILIM_HIZ_PIN_MASK, 0x00)) {
-      ESP_LOGW(TAG, "Failed clearing REG18.EN_ILIM_HIZ_PIN");
-      return false;
-    }
-  }
-
-  if (this->disable_ichg_pin_) {
-    if (!this->update_register_bits_(REG18_PIN_CONTROL, REG18_EN_ICHG_PIN_MASK, 0x00)) {
-      ESP_LOGW(TAG, "Failed clearing REG18.EN_ICHG_PIN");
-      return false;
-    }
+  if (!this->service_.apply_pin_overrides(this->disable_ce_pin_, this->disable_ilim_hiz_pin_, this->disable_ichg_pin_)) {
+    ESP_LOGW(TAG, "Failed applying one or more pin control overrides");
+    return false;
   }
   return true;
 }
 
 void BQ25756Component::log_charge_enable_precheck_(bool requested_on) {
-  uint8_t reg17 = 0;
-  uint8_t reg19 = 0;
-  uint8_t status1 = 0;
-  uint8_t status2 = 0;
-  uint8_t status3 = 0;
-  uint8_t fault = 0;
-  Reg16Value iac{};
-  Reg16Value ibat{};
-  Reg16Value vac{};
-  Reg16Value vbat{};
-
-  const bool ok = this->read_byte_(REG17_CHARGER_CONTROL, reg17) && this->read_byte_(REG19_POWER_PATH_CONTROL, reg19) &&
-                  this->read_byte_(REG21_CHARGER_STATUS_1, status1) && this->read_byte_(REG22_CHARGER_STATUS_2, status2) &&
-                  this->read_byte_(REG23_CHARGER_STATUS_3, status3) && this->read_byte_(REG24_FAULT_STATUS, fault) &&
-                  this->read_u16_le_(REG2D_IAC_ADC, iac) && this->read_u16_le_(REG2F_IBAT_ADC, ibat) &&
-                  this->read_u16_le_(REG31_VAC_ADC, vac) && this->read_u16_le_(REG33_VBAT_ADC, vbat);
-
-  if (!ok) {
+  ::bq25756_core::ChargePrecheckSnapshot snapshot;
+  if (!this->service_.read_charge_precheck(snapshot)) {
     ESP_LOGW(TAG, "Precheck: charge_enable->%s snapshot unavailable (read failed)", requested_on ? "on" : "off");
     return;
   }
-
-  const float iac_ma = static_cast<float>(static_cast<int16_t>(iac.raw_le)) * IAC_CURRENT_LSB_MA;
-  const float ibat_ma = static_cast<float>(static_cast<int16_t>(ibat.raw_le)) * IBAT_CURRENT_LSB_MA;
-  const float vac_mv = static_cast<float>(vac.raw_le) * VOLTAGE_LSB_MV;
-  const float vbat_mv = static_cast<float>(vbat.raw_le) * VOLTAGE_LSB_MV;
-  const bool en_chg = (reg17 & REG17_EN_CHG_MASK) != 0;
-  const bool en_hiz = (reg17 & REG17_EN_HIZ_MASK) != 0;
-  const bool dis_ce_pin = (reg17 & REG17_DIS_CE_PIN_MASK) != 0;
-  const bool en_rev = (reg19 & REG19_EN_REV_MASK) != 0;
 
   ESP_LOGI(
     TAG,
     "Precheck: req_charge_enable=%s reg17=0x%02X en_chg=%u en_hiz=%u dis_ce_pin=%u reg19=0x%02X en_rev=%u "
     "status=%02X/%02X/%02X fault=%02X vac=%.0fmV vbat=%.0fmV iac=%.1fmA ibat=%.0fmA",
     requested_on ? "on" : "off",
-    reg17,
-    en_chg ? 1 : 0,
-    en_hiz ? 1 : 0,
-    dis_ce_pin ? 1 : 0,
-    reg19,
-    en_rev ? 1 : 0,
-    status1,
-    status2,
-    status3,
-    fault,
-    vac_mv,
-    vbat_mv,
-    iac_ma,
-    ibat_ma
+    snapshot.reg17,
+    snapshot.en_chg ? 1 : 0,
+    snapshot.en_hiz ? 1 : 0,
+    snapshot.dis_ce_pin ? 1 : 0,
+    snapshot.reg19,
+    snapshot.en_rev ? 1 : 0,
+    snapshot.status.status1,
+    snapshot.status.status2,
+    snapshot.status.status3,
+    snapshot.status.fault,
+    snapshot.measurements.vac_mv,
+    snapshot.measurements.vbat_mv,
+    snapshot.measurements.iac_ma,
+    snapshot.measurements.ibat_ma
   );
 }
 

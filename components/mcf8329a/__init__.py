@@ -948,7 +948,6 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
-    cg.add_build_flag("-DMCF8329A_EMBED_IMPL")
 
     apply_codegen_setters(var, config, RUNTIME_SETTER_SPECS, optional=False)
     apply_codegen_setters(var, config, REQUIRED_MOTOR_SETTER_SPECS, optional=False)

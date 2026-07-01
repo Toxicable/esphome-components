@@ -64,3 +64,12 @@ Notes:
 - `out2_pin` is not optional electrically: OUT2 must be driven or tied to a defined level to avoid floating (use `out2_pin`, `ch2`, or a fixed external tie/pull).
 - `out2_pin` is intended for simple polarity/control, not PWM.
 - Dynamic direction control (forward/reverse in firmware) should use `ch1` + `ch2`; `out2_pin` with `flip_polarity` is a fixed polarity setting.
+
+## Code organization
+
+This component follows the shared layout in `../../ARCHITECTURE.md`.
+
+- `drv8243_bus.h` defines the host pin/timing interface.
+- `drv8243_protocol.*` contains handshake result strings and host-independent output shaping.
+- `drv8243_service.*` contains the reusable nSLEEP/nFAULT handshake and static polarity operations.
+- `drv8243.h` / `drv8243.cpp` are the ESPHome wrapper that owns GPIO/output adapters, logging, and YAML-facing behavior.

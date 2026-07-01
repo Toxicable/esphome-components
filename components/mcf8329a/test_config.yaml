@@ -1,0 +1,136 @@
+esphome:
+  name: mcf8329a-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+substitutions:
+  wifi_ssid: "compile-placeholder"
+  wifi_password: "compile-placeholder"
+  api_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ota_password: "compile-placeholder"
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ mcf8329a ]
+
+wifi:
+  ssid: "${wifi_ssid}"
+  password: "${wifi_password}"
+
+api:
+  encryption:
+    key: "${api_encryption_key}"
+
+ota:
+  - platform: esphome
+    password: "${ota_password}"
+
+i2c:
+  id: i2c_ext
+  sda: GPIO35
+  scl: GPIO36
+  scan: true
+  frequency: 50kHz
+
+mcf8329a:
+  id: mcf
+  address: 0x01
+  i2c_id: i2c_ext
+  update_interval: 100ms
+
+  mode: double_align
+  brake_mode: recirculation
+  motor_bemf_const: 0x5F
+  max_speed_hz: 900
+
+  align_time: 100ms
+  direction_mode: cw
+  csa_gain_v_per_v: 40
+  base_current_amps: 10.0
+  phase_current_limit_percent: 30
+  align_or_slow_current_limit_percent: 20
+  open_loop_limit_source: ol_ilimit
+  lock_mode: retry
+
+  open_loop_ilimit_percent: 20
+  open_loop_accel_hz_per_s: 75
+  open_loop_accel2_hz_per_s2: 100
+  auto_handoff_enable: true
+  open_to_closed_handoff_percent: 20
+  theta_error_ramp_rate: 0.2
+  cl_slow_acc_hz_per_s: 40
+
+  lock_ilimit_percent: 40
+  hw_lock_ilimit_percent: 40
+  lock_retry_time: 2s
+  lock_ilimit_deglitch_ms: 5.0
+  hw_lock_ilimit_deglitch_us: 7
+  abn_speed_lock_enable: true
+  abn_bemf_lock_enable: true
+  no_motor_lock_enable: true
+  lock_abn_speed_threshold_percent: 200
+  abnormal_bemf_threshold_percent: 40
+  no_motor_threshold_percent: 20
+
+  speed_loop_kp_code: 0
+  speed_loop_ki_code: 0
+  speed_ramp_up_percent_per_s: 20.0
+  speed_ramp_down_percent_per_s: 30.0
+  start_boost_percent: 18.0
+  start_boost_hold_ms: 150
+
+  clear_mpet_on_startup: true
+  auto_tickle_watchdog: false
+  allow_unsafe_current_limits: false
+
+  mpet_use_dedicated_params: true
+  mpet_open_loop_curr_ref_percent: 40
+  mpet_open_loop_speed_ref_percent: 35
+  mpet_open_loop_slew_hz_per_s: 3.0
+  mpet_timeout_ms: 180000
+
+  brake_time: 100ms
+
+  brake:
+    name: "Brake"
+  direction:
+    name: "Direction"
+  speed_percent:
+    name: "Speed %"
+  clear_faults:
+    name: "Clear Faults"
+  watchdog_tickle:
+    name: "Watchdog Tickle"
+  tune_initial_params:
+    name: "Tune Initial Params"
+  run_mpet:
+    name: "Run MPET"
+
+  fault_active:
+    name: "Fault Active"
+  sys_enable:
+    name: "Sys Enable"
+  current_fault:
+    name: "Current Fault"
+
+  vm_voltage:
+    name: "VM Voltage"
+  duty_cmd_percent:
+    name: "Duty Cmd %"
+  volt_mag_percent:
+    name: "Volt Mag %"
+  motor_bemf_constant:
+    name: "Motor BEMF Const"
+  speed_fdbk_hz:
+    name: "Speed Fdbk Hz"
+  speed_ref_open_loop_hz:
+    name: "Speed Ref Open Loop Hz"
+  fg_speed_fdbk_hz:
+    name: "FG Speed Fdbk Hz"

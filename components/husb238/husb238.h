@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <string>
 
+#include "husb238_bus.h"
+#include "husb238_service.h"
+
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
@@ -16,12 +19,18 @@ namespace husb238 {
 
 class HUSB238VoltageSelect;
 
-class HUSB238Component : public PollingComponent, public i2c::I2CDevice {
+class HUSB238Component : public PollingComponent, public i2c::I2CDevice, public ::husb238_core::RegisterBus {
  public:
+  HUSB238Component();
+
   void setup() override;
   void update() override;
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
+
+  bool read_register(uint8_t reg, uint8_t *value) override;
+  bool write_register(uint8_t reg, uint8_t value) override;
+  void delay_ms(uint32_t ms) override;
 
   void set_initial_request_voltage(uint8_t voltage) { this->initial_request_voltage_ = voltage; }
   void set_request_on_boot(bool request_on_boot) { this->request_on_boot_ = request_on_boot; }
@@ -40,21 +49,13 @@ class HUSB238Component : public PollingComponent, public i2c::I2CDevice {
   bool hard_reset();
 
  protected:
-  bool read_reg_(uint8_t reg, uint8_t *value);
-  bool write_reg_(uint8_t reg, uint8_t value);
-
   void publish_voltage_select_(uint8_t voltage);
-  std::string build_available_pdos_string_(const uint8_t *pdo_regs) const;
+  std::string build_available_pdos_string_(const ::husb238_core::SourcePdo *pdos) const;
 
-  static uint8_t pdo_select_code_(uint8_t voltage);
-  static uint8_t status_voltage_to_volts_(uint8_t code);
-  static float current_code_to_amps_(uint8_t code);
-  static float legacy_5v_current_to_amps_(uint8_t code);
-  static const char *pd_response_to_string_(uint8_t code);
   void maybe_run_boot_request_(bool attached);
 
+  ::husb238_core::HusbService service_;
   uint8_t initial_request_voltage_{0};
-  uint8_t last_requested_voltage_{0};
   bool request_on_boot_{true};
   bool boot_request_pending_{false};
   uint32_t boot_request_due_ms_{0};

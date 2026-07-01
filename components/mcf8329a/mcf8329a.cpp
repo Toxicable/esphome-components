@@ -11,13 +11,6 @@
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
-#ifdef MCF8329A_EMBED_IMPL
-#define MCF8329A_EMBED_IMPL_INCLUDE
-#include "mcf8329a_client.cpp"
-#include "mcf8329a_tuning.cpp"
-#undef MCF8329A_EMBED_IMPL_INCLUDE
-#endif
-
 namespace esphome {
 namespace mcf8329a {
 

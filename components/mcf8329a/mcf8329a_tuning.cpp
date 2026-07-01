@@ -1,5 +1,3 @@
-#if !defined(MCF8329A_EMBED_IMPL) || defined(MCF8329A_EMBED_IMPL_INCLUDE)
-
 #include "mcf8329a_tuning.h"
 
 #include "mcf8329a.h"
@@ -1419,5 +1417,3 @@ void MCF8329ATuningController::update(bool normal_operation_ready, bool fault_ac
 
 }  // namespace mcf8329a
 }  // namespace esphome
-
-#endif  // !MCF8329A_EMBED_IMPL || MCF8329A_EMBED_IMPL_INCLUDE

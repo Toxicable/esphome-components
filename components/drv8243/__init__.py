@@ -89,7 +89,6 @@ CONFIG_SCHEMA = cv.All(
 async def _build_ledc_output(ledc_config):
     cg.add_define("USE_LEDC")
     cg.add_define("USE_LEDC_OUTPUT")
-    cg.add_global(cg.RawExpression('#include "esphome/components/ledc/ledc_output.h"'))
     await ledc_output.to_code(ledc_config)
     return await cg.get_variable(ledc_config[CONF_ID])
 

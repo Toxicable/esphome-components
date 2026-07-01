@@ -5,7 +5,8 @@ Quick file map for low-context edits in `components/mcf8329a`.
 ## Read Order
 1. `AGENTS_KNOWLEDGE.md` (active invariants only)
 2. `CONTEXT_INDEX.md` (this file)
-3. Only the target file(s) below for your change
+3. `../../ARCHITECTURE.md` for the shared component split pattern
+4. Only the target file(s) below for your change
 
 ## Edit Map
 - YAML schema and validation:

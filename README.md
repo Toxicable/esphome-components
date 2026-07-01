@@ -1,5 +1,8 @@
 # esphome-components
 
+## Architecture
+Reusable chip components can split host-independent protocol/service code from the ESPHome wrapper. See `ARCHITECTURE.md` for the shared layout and naming rules.
+
 ## LLM ingestion
 Use `tools/pdf_to_text.py` to generate `<pdf>.txt` from PDFs, and provide the `.txt` file to LLMs instead of the PDF. The tool strips embedded `\x00` bytes automatically so the output stays searchable as plain text.
 

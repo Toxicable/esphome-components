@@ -1,16 +1,23 @@
 #pragma once
 
+#include <cstdint>
+
 #include "esphome/components/output/float_output.h"
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
+
+#include "drv8243_bus.h"
+#include "drv8243_service.h"
 
 namespace esphome {
 namespace drv8243 {
 
 class DRV8243ChannelOutput;
 
-class DRV8243Output : public Component, public output::FloatOutput {
+class DRV8243Output : public Component, public output::FloatOutput, public ::drv8243_core::PinBus {
  public:
+  DRV8243Output() : service_(this) {}
+
   void set_nsleep_pin(GPIOPin* pin) {
     nsleep_pin_ = pin;
   }
@@ -57,10 +64,11 @@ class DRV8243Output : public Component, public output::FloatOutput {
   void write_channel(uint8_t channel, float state);
 
  protected:
-  enum class HandshakeResult : uint8_t { NOT_RUN = 0, SUCCESS, FAILED, UNVERIFIED };
-
-  HandshakeResult do_handshake_();
-  const char* handshake_result_str_(HandshakeResult r) const;
+  void write_nsleep(bool level) override;
+  bool read_nfault(bool *level) override;
+  void write_out2(bool level) override;
+  void delay_ms(uint32_t ms) override;
+  void delay_us(uint32_t us) override;
   void write_to_output_(output::FloatOutput* out, float state);
 
   GPIOPin* nsleep_pin_{nullptr};
@@ -77,7 +85,8 @@ class DRV8243Output : public Component, public output::FloatOutput {
   DRV8243ChannelOutput* ch1_output_{nullptr};
   DRV8243ChannelOutput* ch2_output_{nullptr};
 
-  HandshakeResult handshake_result_{HandshakeResult::NOT_RUN};
+  ::drv8243_core::Drv8243Service service_;
+  ::drv8243_core::HandshakeResult handshake_result_{::drv8243_core::HandshakeResult::NOT_RUN};
 };
 
 class DRV8243ChannelOutput : public Component, public output::FloatOutput {
