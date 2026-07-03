@@ -17,8 +17,12 @@ Quick file map for low-context edits in `components/mcf8329a`.
   `mcf8329a.cpp`, `mcf8329a.h`
 - Motor config register application path:
   `mcf8329a.cpp` (`apply_motor_config_`)
-- I2C/register transport + low-level helpers:
-  `mcf8329a_client.cpp`, `mcf8329a_client.h`
+- Reusable bus boundary:
+  `mcf8329a_bus.h`
+- Register facts, control-word encoding, decode helpers, and state labels:
+  `mcf8329a_protocol.cpp`, `mcf8329a_protocol.h`
+- Reusable register access + chip command helpers:
+  `mcf8329a_service.cpp`, `mcf8329a_service.h`
 - Tuning state machine and MPET flow:
   `mcf8329a_tuning.cpp`, `mcf8329a_tuning.h`
 - Shared lookup/decode tables used by runtime+tuning:

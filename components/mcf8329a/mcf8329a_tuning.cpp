@@ -163,7 +163,7 @@ struct MCF8329ATuningController::Impl {
       this->parent_->brake_switch_->publish_state(false);
     }
 
-    if (!this->parent_->comms_client_.set_mpet_characterization_bits()) {
+    if (!this->parent_->service_.set_mpet_characterization_bits()) {
       ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to set MPET command bits");
       return;
     }
@@ -370,7 +370,7 @@ struct MCF8329ATuningController::Impl {
       TUNING_TAG,
       "  open_loop_accel_hz_per_s: %.2f",
       this->parent_ != nullptr
-        ? this->parent_->comms_client_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code)
+        ? this->parent_->service_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code)
         : 0.0f
     );
     ESP_LOGI(
@@ -382,7 +382,7 @@ struct MCF8329ATuningController::Impl {
       TUNING_TAG,
       "  open_to_closed_handoff_percent: %.1f",
       this->parent_ != nullptr
-        ? this->parent_->comms_client_.decode_open_to_closed_handoff_percent(candidate.handoff_code)
+        ? this->parent_->service_.decode_open_to_closed_handoff_percent(candidate.handoff_code)
         : 0.0f
     );
     ESP_LOGI(
@@ -512,14 +512,14 @@ struct MCF8329ATuningController::Impl {
 
     uint32_t closed_loop4 = 0;
     max_speed_hz = this->parent_->cfg_max_speed_set_
-                     ? this->parent_->comms_client_.decode_max_speed_hz(this->parent_->cfg_max_speed_code_)
+                     ? this->parent_->service_.decode_max_speed_hz(this->parent_->cfg_max_speed_code_)
                      : 0.0f;
     if (this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
       const uint16_t max_speed_code = static_cast<uint16_t>(
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >>
         CLOSED_LOOP4_MAX_SPEED_SHIFT
       );
-      max_speed_hz = this->parent_->comms_client_.decode_max_speed_hz(max_speed_code);
+      max_speed_hz = this->parent_->service_.decode_max_speed_hz(max_speed_code);
     }
     if (max_speed_hz <= 0.0f) {
       return false;
@@ -534,9 +534,9 @@ struct MCF8329ATuningController::Impl {
       return false;
     }
 
-    ref_ol_hz = this->parent_->comms_client_.decode_speed_hz(static_cast<int32_t>(raw_ref), max_speed_hz);
-    fdbk_hz = this->parent_->comms_client_.decode_speed_hz(static_cast<int32_t>(raw_fdbk), max_speed_hz);
-    fg_hz = this->parent_->comms_client_.decode_fg_speed_hz(raw_fg, max_speed_hz);
+    ref_ol_hz = this->parent_->service_.decode_speed_hz(static_cast<int32_t>(raw_ref), max_speed_hz);
+    fdbk_hz = this->parent_->service_.decode_speed_hz(static_cast<int32_t>(raw_fdbk), max_speed_hz);
+    fg_hz = this->parent_->service_.decode_fg_speed_hz(raw_fg, max_speed_hz);
     return true;
   }
 
@@ -579,7 +579,7 @@ struct MCF8329ATuningController::Impl {
     }
 
     float max_speed_hz = this->parent_->cfg_max_speed_set_
-                           ? this->parent_->comms_client_.decode_max_speed_hz(this->parent_->cfg_max_speed_code_)
+                           ? this->parent_->service_.decode_max_speed_hz(this->parent_->cfg_max_speed_code_)
                            : 0.0f;
     uint32_t closed_loop4 = 0;
     if (this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
@@ -587,17 +587,17 @@ struct MCF8329ATuningController::Impl {
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >>
         CLOSED_LOOP4_MAX_SPEED_SHIFT
       );
-      max_speed_hz = this->parent_->comms_client_.decode_max_speed_hz(max_speed_code);
+      max_speed_hz = this->parent_->service_.decode_max_speed_hz(max_speed_code);
     }
     if (max_speed_hz <= 0.0f) {
       return false;
     }
 
     const float handoff_percent =
-      this->parent_->comms_client_.decode_open_to_closed_handoff_percent(candidate.handoff_code & 0x1Fu);
+      this->parent_->service_.decode_open_to_closed_handoff_percent(candidate.handoff_code & 0x1Fu);
     const float handoff_hz = max_speed_hz * handoff_percent / 100.0f;
     const float ol_accel_hz_per_s =
-      this->parent_->comms_client_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code);
+      this->parent_->service_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code);
     if (ol_accel_hz_per_s <= 0.0f) {
       return false;
     }
@@ -739,8 +739,8 @@ struct MCF8329ATuningController::Impl {
       "handoff_samples=%u avg_track=%.1fHz avg_mismatch=%.1fHz peak_ratio=%.2f",
       static_cast<unsigned>(reach_ms),
       static_cast<int>(score),
-      this->parent_->comms_client_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code),
-      this->parent_->comms_client_.decode_open_to_closed_handoff_percent(candidate.handoff_code),
+      this->parent_->service_.decode_open_loop_accel_hz_per_s(candidate.open_loop_accel_a1_code),
+      this->parent_->service_.decode_open_to_closed_handoff_percent(candidate.handoff_code),
       static_cast<unsigned>(metrics.sample_count),
       avg_tracking_hz,
       avg_mismatch_hz,

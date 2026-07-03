@@ -159,12 +159,14 @@ Safety guardrails:
 
 ## Code organization
 
-This component is being refactored toward the shared layout in `../../ARCHITECTURE.md`.
+This component follows the shared layout in `../../ARCHITECTURE.md`.
 
-- `mcf8329a_client.*` owns I2C transport helpers, register/bitfield constants, command helpers, and decode helpers.
+- `mcf8329a_bus.h` defines the reusable register-bus interface.
+- `mcf8329a_protocol.*` owns register/bitfield constants, control-word encoding, decode helpers, and state/label mappings.
+- `mcf8329a_service.*` owns reusable register access and chip command helpers on top of the bus interface.
 - `mcf8329a_tuning.*` owns the guarded initial-tune and MPET state machines.
 - `mcf8329a_tables.h` owns shared lookup/decode tables.
-- `mcf8329a.h` / `mcf8329a.cpp` own ESPHome entities, YAML-facing behavior, logging, and runtime orchestration.
+- `mcf8329a.h` / `mcf8329a.cpp` own ESPHome entities, YAML-facing behavior, logging, runtime orchestration, and the I2C bus adapter.
 
 The `.cpp` files compile as normal sibling translation units; do not include implementation `.cpp` files from another `.cpp`.
 

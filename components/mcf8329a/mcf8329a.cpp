@@ -14,10 +14,12 @@
 namespace esphome {
 namespace mcf8329a {
 
-using namespace regs;
+using namespace ::mcf8329a_core::regs;
 
 static const char* const TAG = "mcf8329a";
 static constexpr uint32_t FIXED_INTER_BYTE_DELAY_US = 100u;
+MCF8329AComponent::MCF8329AComponent() : service_(this) {}
+
 MCF8329AComponent::~MCF8329AComponent() {
   delete this->tuning_controller_;
   this->tuning_controller_ = nullptr;
@@ -106,7 +108,6 @@ void MCF8329AComponent::setup() {
   this->start_boost_active_ = false;
   this->start_boost_until_ms_ = 0u;
   this->last_ramp_update_ms_ = 0u;
-  this->comms_client_.set_device(this);
   if (this->tuning_controller_ == nullptr) {
     this->tuning_controller_ = new MCF8329ATuningController(this);
   }
@@ -205,12 +206,12 @@ void MCF8329AComponent::update() {
       this->fg_speed_fdbk_hz_sensor_ != nullptr || speed_diag_due) {
     uint32_t closed_loop4 = 0;
     float max_speed_hz =
-      this->cfg_max_speed_set_ ? this->comms_client_.decode_max_speed_hz(this->cfg_max_speed_code_) : 0.0f;
+      this->cfg_max_speed_set_ ? this->service_.decode_max_speed_hz(this->cfg_max_speed_code_) : 0.0f;
     if (this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
       const uint16_t max_speed_code = static_cast<uint16_t>(
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
       );
-      max_speed_hz = this->comms_client_.decode_max_speed_hz(max_speed_code);
+      max_speed_hz = this->service_.decode_max_speed_hz(max_speed_code);
     }
 
     if (max_speed_hz > 0.0f) {
@@ -226,18 +227,18 @@ void MCF8329AComponent::update() {
 
       if (this->read_reg32(REG_SPEED_FDBK, raw_speed_fdbk)) {
         speed_fdbk_hz =
-          this->comms_client_.decode_speed_hz(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz);
+          this->service_.decode_speed_hz(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz);
         speed_fdbk_ok = true;
       }
 
       if (this->read_reg32(REG_SPEED_REF_OPEN_LOOP, raw_speed_ref_open_loop)) {
         speed_ref_open_loop_hz =
-          this->comms_client_.decode_speed_hz(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz);
+          this->service_.decode_speed_hz(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz);
         speed_ref_open_loop_ok = true;
       }
 
       if (this->read_reg32(REG_FG_SPEED_FDBK, raw_fg_speed_fdbk)) {
-        fg_speed_fdbk_hz = this->comms_client_.decode_fg_speed_hz(raw_fg_speed_fdbk, max_speed_hz);
+        fg_speed_fdbk_hz = this->service_.decode_fg_speed_hz(raw_fg_speed_fdbk, max_speed_hz);
         fg_speed_fdbk_ok = true;
       }
 
@@ -272,7 +273,7 @@ void MCF8329AComponent::update() {
   }
 
   if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw)) {
-    const float vm_voltage = this->comms_client_.decode_vm_voltage(vm_voltage_raw);
+    const float vm_voltage = this->service_.decode_vm_voltage(vm_voltage_raw);
     if (this->vm_voltage_sensor_ != nullptr) {
       this->vm_voltage_sensor_->publish_state(vm_voltage);
     }
@@ -517,7 +518,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config max speed: %.1f Hz electrical (code=%u)",
-      this->comms_client_.decode_max_speed_hz(this->cfg_max_speed_code_),
+      this->service_.decode_max_speed_hz(this->cfg_max_speed_code_),
       static_cast<unsigned>(this->cfg_max_speed_code_)
     );
   } else {
@@ -559,7 +560,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config open-loop accel A1: %.2f Hz/s (code=%u)",
-      this->comms_client_.decode_open_loop_accel_hz_per_s(this->cfg_open_loop_accel_),
+      this->service_.decode_open_loop_accel_hz_per_s(this->cfg_open_loop_accel_),
       static_cast<unsigned>(this->cfg_open_loop_accel_)
     );
   } else {
@@ -585,7 +586,7 @@ void MCF8329AComponent::dump_config() {
     ESP_LOGCONFIG(
       TAG,
       "  Motor config open->closed handoff threshold: %.1f%% MAX_SPEED (code=%u)",
-      this->comms_client_.decode_open_to_closed_handoff_percent(
+      this->service_.decode_open_to_closed_handoff_percent(
         this->cfg_open_to_closed_handoff_threshold_
       ),
       static_cast<unsigned>(this->cfg_open_to_closed_handoff_threshold_)
@@ -1504,7 +1505,7 @@ bool MCF8329AComponent::apply_motor_config_() {
   const uint16_t effective_max_speed_code = static_cast<uint16_t>(
     (closed_loop4_effective & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
   );
-  const float effective_max_speed_hz = this->comms_client_.decode_max_speed_hz(effective_max_speed_code);
+  const float effective_max_speed_hz = this->service_.decode_max_speed_hz(effective_max_speed_code);
   const uint8_t effective_ilimit = static_cast<uint8_t>(
     (fault_config1_effective & FAULT_CONFIG1_ILIMIT_MASK) >> FAULT_CONFIG1_ILIMIT_SHIFT
   );
@@ -1611,10 +1612,10 @@ bool MCF8329AComponent::apply_motor_config_() {
     effective_open_loop_limit_use_ilimit ? "ilimit" : "ol_ilimit",
     static_cast<unsigned>(effective_ol_ilimit),
     static_cast<unsigned>(tables::LOCK_ILIMIT_PERCENT[effective_ol_ilimit & 0x0Fu]),
-    this->comms_client_.decode_open_loop_accel_hz_per_s(effective_ol_accel),
+    this->service_.decode_open_loop_accel_hz_per_s(effective_ol_accel),
     tables::OPEN_LOOP_ACCEL2_HZ_PER_S2[effective_ol_accel2 & 0x0Fu],
     YESNO(effective_auto_handoff),
-    this->comms_client_.decode_open_to_closed_handoff_percent(effective_handoff_threshold),
+    this->service_.decode_open_to_closed_handoff_percent(effective_handoff_threshold),
     tables::THETA_ERROR_RAMP_RATE[effective_theta_error_ramp_rate & 0x07u],
     tables::CL_SLOW_ACC_HZ_PER_S[effective_cl_slow_acc & 0x0Fu],
     effective_mpet_use_dedicated_params ? "dedicated" : "startup",
@@ -1651,28 +1652,102 @@ bool MCF8329AComponent::apply_motor_config_() {
 }
 
 bool MCF8329AComponent::read_reg32(uint16_t offset, uint32_t& value) {
-  return this->comms_client_.read_reg32(offset, value);
+  return this->service_.read_reg32(offset, value);
 }
 
 bool MCF8329AComponent::read_reg16(uint16_t offset, uint16_t& value) {
-  return this->comms_client_.read_reg16(offset, value);
+  return this->service_.read_reg16(offset, value);
 }
 
 bool MCF8329AComponent::write_reg32(uint16_t offset, uint32_t value) {
-  return this->comms_client_.write_reg32(offset, value);
+  return this->service_.write_reg32(offset, value);
 }
 
 bool MCF8329AComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
-  return this->comms_client_.update_bits32(offset, mask, value);
+  return this->service_.update_bits32(offset, mask, value);
+}
+
+bool MCF8329AComponent::read_register32(uint16_t offset, uint32_t* value) {
+  if (value == nullptr || this->bus_ == nullptr) {
+    return false;
+  }
+
+  const uint32_t control_word = ::mcf8329a_core::build_control_word(true, offset, true);
+  const uint8_t cw[3] = {
+    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+    static_cast<uint8_t>(control_word & 0xFF),
+  };
+  uint8_t rx[4] = {0, 0, 0, 0};
+  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+    return false;
+  }
+
+  *value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) |
+           (static_cast<uint32_t>(rx[2]) << 16) | (static_cast<uint32_t>(rx[3]) << 24);
+  return true;
+}
+
+bool MCF8329AComponent::read_register16(uint16_t offset, uint16_t* value) {
+  if (value == nullptr || this->bus_ == nullptr) {
+    return false;
+  }
+
+  const uint32_t control_word = ::mcf8329a_core::build_control_word(true, offset, false);
+  const uint8_t cw[3] = {
+    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+    static_cast<uint8_t>(control_word & 0xFF),
+  };
+  uint8_t rx[2] = {0, 0};
+  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+    return false;
+  }
+
+  *value = static_cast<uint16_t>(rx[0]) | (static_cast<uint16_t>(rx[1]) << 8);
+  return true;
+}
+
+bool MCF8329AComponent::write_register32(uint16_t offset, uint32_t value) {
+  if (this->bus_ == nullptr) {
+    return false;
+  }
+
+  const uint32_t control_word = ::mcf8329a_core::build_control_word(false, offset, true);
+  const uint8_t tx[7] = {
+    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+    static_cast<uint8_t>(control_word & 0xFF),
+    static_cast<uint8_t>(value & 0xFF),
+    static_cast<uint8_t>((value >> 8) & 0xFF),
+    static_cast<uint8_t>((value >> 16) & 0xFF),
+    static_cast<uint8_t>((value >> 24) & 0xFF),
+  };
+  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
+  if (err != i2c::ERROR_OK) {
+    ESP_LOGW(
+      TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
+    );
+    return false;
+  }
+  return true;
+}
+
+void MCF8329AComponent::delay_microseconds(uint32_t delay_us) {
+  delay_microseconds_safe(delay_us);
 }
 
 bool MCF8329AComponent::set_brake_override(bool brake_on) {
-  if (!this->comms_client_.set_brake_input(brake_on)) {
+  if (!this->service_.set_brake_input(brake_on)) {
     return false;
   }
 
   uint8_t brake_input_value = 0u;
-  if (this->comms_client_.read_brake_input(brake_input_value)) {
+  if (this->service_.read_brake_input(brake_input_value)) {
     ESP_LOGI(
       TAG,
       "Brake override write: request=%s brake_input=%u(%s)",
@@ -1686,19 +1761,19 @@ bool MCF8329AComponent::set_brake_override(bool brake_on) {
 }
 
 bool MCF8329AComponent::set_direction_mode(const std::string& direction_mode) {
-  MCF8329AClient::DirectionInputMode mode = MCF8329AClient::DirectionInputMode::HARDWARE;
+  ::mcf8329a_core::DirectionInputMode mode = ::mcf8329a_core::DirectionInputMode::HARDWARE;
   if (direction_mode == "cw") {
-    mode = MCF8329AClient::DirectionInputMode::CW;
+    mode = ::mcf8329a_core::DirectionInputMode::CW;
   } else if (direction_mode == "ccw") {
-    mode = MCF8329AClient::DirectionInputMode::CCW;
+    mode = ::mcf8329a_core::DirectionInputMode::CCW;
   }
 
-  if (!this->comms_client_.set_direction_input(mode)) {
+  if (!this->service_.set_direction_input(mode)) {
     return false;
   }
 
   uint8_t direction_input_value = 0u;
-  if (this->comms_client_.read_direction_input(direction_input_value)) {
+  if (this->service_.read_direction_input(direction_input_value)) {
     ESP_LOGI(
       TAG,
       "Direction write: request=%s dir_input=%u(%s)",
@@ -1746,7 +1821,7 @@ bool MCF8329AComponent::apply_speed_command_(float speed_percent, const char* re
     }
   }
 
-  if (!this->comms_client_.write_speed_command_raw(digital_speed_ctrl)) {
+  if (!this->service_.write_speed_command_raw(digital_speed_ctrl)) {
     return false;
   }
 
@@ -1904,7 +1979,7 @@ void MCF8329AComponent::pulse_clear_faults() {
   // MPET_BEMF fault condition can remain true while MPET bits are set.
   (void)this->clear_mpet_bits_("clear_faults");
 
-  if (!this->comms_client_.pulse_clear_faults()) {
+  if (!this->service_.pulse_clear_faults()) {
     ESP_LOGW(TAG, "Failed to pulse CLR_FLT");
     return;
   }
@@ -1945,7 +2020,7 @@ void MCF8329AComponent::pulse_clear_faults() {
 
 void MCF8329AComponent::pulse_watchdog_tickle() {
   ESP_LOGD(TAG, "Pulsing watchdog tickle");
-  if (!this->comms_client_.pulse_watchdog_tickle()) {
+  if (!this->service_.pulse_watchdog_tickle()) {
     ESP_LOGW(TAG, "Failed to pulse watchdog tickle");
   }
   this->last_watchdog_tickle_ms_ = millis();
@@ -1993,8 +2068,8 @@ bool MCF8329AComponent::clear_mpet_bits_(const char* context) {
   bool changed = false;
   uint32_t before = 0;
   uint32_t after = 0;
-  if (!this->comms_client_.clear_mpet_bits(&changed, &before, &after)) {
-    ESP_LOGW(TAG, "[%s] Failed to clear MPET bits via client", context);
+  if (!this->service_.clear_mpet_bits(&changed, &before, &after)) {
+    ESP_LOGW(TAG, "[%s] Failed to clear MPET bits via service", context);
     return false;
   }
 
@@ -2174,7 +2249,7 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
                         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
                       )
                     : 0u;
-  const float configured_max_speed_hz = this->comms_client_.decode_max_speed_hz(configured_max_speed_code);
+  const float configured_max_speed_hz = this->service_.decode_max_speed_hz(configured_max_speed_code);
 
   if (algo_debug1_ok && algo_debug2_ok && pin_config_ok && closed_loop2_ok && mtr_params_ok && closed_loop3_ok && closed_loop4_ok) {
     ESP_LOGW(
@@ -2334,136 +2409,23 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
 }
 
 const char* MCF8329AComponent::mode_to_string_(uint8_t mode) const {
-  switch (mode) {
-    case 0:
-      return "align";
-    case 1:
-      return "double_align";
-    case 2:
-      return "ipd";
-    case 3:
-      return "slow_first_cycle";
-    default:
-      return "unknown";
-  }
+  return ::mcf8329a_core::mode_to_string(mode);
 }
 
 const char* MCF8329AComponent::align_time_to_string_(uint8_t code) const {
-  static const char* const kAlignTimeLabels[16] = {
-    "10ms",
-    "50ms",
-    "100ms",
-    "200ms",
-    "300ms",
-    "400ms",
-    "500ms",
-    "750ms",
-    "1000ms",
-    "1500ms",
-    "2000ms",
-    "3000ms",
-    "4000ms",
-    "5000ms",
-    "7500ms",
-    "10000ms",
-  };
-  return kAlignTimeLabels[code & 0x0Fu];
+  return ::mcf8329a_core::align_time_to_string(code);
 }
 
 const char* MCF8329AComponent::brake_mode_to_string_(uint8_t code) const {
-  switch (code) {
-    case 0:
-      return "hiz";
-    case 1:
-      return "recirculation";
-    case 2:
-      return "low_side_brake";
-    case 3:
-      return "low_side_brake_alt";
-    case 4:
-      return "active_spin_down";
-    default:
-      return "reserved";
-  }
+  return ::mcf8329a_core::brake_mode_to_string(code);
 }
 
 const char* MCF8329AComponent::brake_time_to_string_(uint8_t code) const {
-  static const char* const kBrakeTimeLabels[16] = {
-    "1ms",
-    "1ms",
-    "1ms",
-    "1ms",
-    "1ms",
-    "5ms",
-    "10ms",
-    "50ms",
-    "100ms",
-    "250ms",
-    "500ms",
-    "1000ms",
-    "2500ms",
-    "5000ms",
-    "10000ms",
-    "15000ms",
-  };
-  return kBrakeTimeLabels[code & 0x0Fu];
+  return ::mcf8329a_core::brake_time_to_string(code);
 }
 
 const char* MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const {
-  switch (state) {
-    case 0x0000:
-      return "MOTOR_IDLE";
-    case 0x0001:
-      return "MOTOR_ISD";
-    case 0x0002:
-      return "MOTOR_TRISTATE";
-    case 0x0003:
-      return "MOTOR_BRAKE_ON_START";
-    case 0x0004:
-      return "MOTOR_IPD";
-    case 0x0005:
-      return "MOTOR_SLOW_FIRST_CYCLE";
-    case 0x0006:
-      return "MOTOR_ALIGN";
-    case 0x0007:
-      return "MOTOR_OPEN_LOOP";
-    case 0x0008:
-      return "MOTOR_CLOSED_LOOP_UNALIGNED";
-    case 0x0009:
-      return "MOTOR_CLOSED_LOOP_ALIGNED";
-    case 0x000A:
-      return "MOTOR_CLOSED_LOOP_ACTIVE_BRAKING";
-    case 0x000B:
-      return "MOTOR_SOFT_STOP";
-    case 0x000C:
-      return "MOTOR_RECIRCULATE_STOP";
-    case 0x000D:
-      return "MOTOR_BRAKE_ON_STOP";
-    case 0x000E:
-      return "MOTOR_FAULT";
-    case 0x000F:
-      return "MOTOR_MPET_MOTOR_STOP_CHECK";
-    case 0x0010:
-      return "MOTOR_MPET_MOTOR_STOP_WAIT";
-    case 0x0011:
-      return "MOTOR_MPET_MOTOR_BRAKE";
-    case 0x0012:
-      return "MOTOR_MPET_ALGORITHM_PARAMETERS_INIT";
-    case 0x0013:
-      return "MOTOR_MPET_RL_MEASURE";
-    case 0x0014:
-      return "MOTOR_MPET_KE_MEASURE";
-    case 0x0015:
-      return "MOTOR_MPET_STALL_CURRENT_MEASURE";
-    case 0x0016:
-      return "MOTOR_MPET_TORQUE_MODE";
-    case 0x0017:
-      return "MOTOR_MPET_DONE";
-    case 0x0018:
-      return "MOTOR_MPET_FAULT";
-    default:
-      return "MOTOR_STATE_UNKNOWN";
-  }
+  return ::mcf8329a_core::algorithm_state_to_string(state);
 }
 
 void MCF8329AComponent::log_algorithm_state_transition_(uint32_t algo_status, const char* context) {
@@ -2531,72 +2493,19 @@ void MCF8329AComponent::log_algorithm_state_transition_(uint32_t algo_status, co
 }
 
 const char* MCF8329AComponent::lock_mode_to_string_(uint8_t mode) const {
-  switch (mode & 0x0Fu) {
-    case 0:
-    case 1:
-      return "latched_tristate";
-    case 2:
-    case 3:
-      return "latched_low_side_brake";
-    case 4:
-    case 5:
-      return "retry_tristate";
-    case 6:
-    case 7:
-      return "retry_low_side_brake";
-    case 8:
-      return "report_only";
-    default:
-      return "disabled";
-  }
+  return ::mcf8329a_core::lock_mode_to_string(mode);
 }
 
 const char* MCF8329AComponent::lock_retry_time_to_string_(uint8_t code) const {
-  static const char* const kLockRetryLabels[16] = {
-    "300ms",
-    "500ms",
-    "1s",
-    "2s",
-    "3s",
-    "4s",
-    "5s",
-    "6s",
-    "7s",
-    "8s",
-    "9s",
-    "10s",
-    "11s",
-    "12s",
-    "13s",
-    "14s",
-  };
-  return kLockRetryLabels[code & 0x0Fu];
+  return ::mcf8329a_core::lock_retry_time_to_string(code);
 }
 
 const char* MCF8329AComponent::brake_input_to_string_(uint32_t brake_input_value) const {
-  switch (brake_input_value & 0x3u) {
-    case 0x0:
-      return "hardware";
-    case 0x1:
-      return "brake_on";
-    case 0x2:
-      return "brake_off";
-    default:
-      return "reserved";
-  }
+  return ::mcf8329a_core::brake_input_to_string(brake_input_value);
 }
 
 const char* MCF8329AComponent::direction_input_to_string_(uint32_t direction_input_value) const {
-  switch (direction_input_value & 0x3u) {
-    case 0x0:
-      return "hardware";
-    case 0x1:
-      return "cw";
-    case 0x2:
-      return "ccw";
-    default:
-      return "reserved";
-  }
+  return ::mcf8329a_core::direction_input_to_string(direction_input_value);
 }
 
 void MCF8329AComponent::publish_algo_status_(uint32_t algo_status) {

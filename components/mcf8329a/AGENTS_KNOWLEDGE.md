@@ -11,11 +11,12 @@ Component-scoped active guidance for `components/mcf8329a`.
 
 ## Architecture
 - Monolith ESPHome integration style: controls/telemetry/buttons are configured inline under `mcf8329a:`.
-- Register/bitfield constants are centralized in `mcf8329a_client.h` (`namespace regs`).
-- Transport and register helpers live in `mcf8329a_client.cpp/.h`; component register methods delegate to `MCF8329AClient`.
+- `mcf8329a_bus.h` defines the host-agnostic register transport boundary used by the core service.
+- Register/bitfield constants, control-word encoding, decode helpers, and state/label mappings live in `mcf8329a_protocol.cpp/.h` (`namespace mcf8329a_core`).
+- Reusable register access and chip command helpers live in `mcf8329a_service.cpp/.h`; the ESPHome wrapper owns I2C transactions by implementing `mcf8329a_core::RegisterBus`.
 - Tuning logic is isolated in `mcf8329a_tuning.cpp/.h` (`MCF8329ATuningController`); component owns orchestration.
 - Shared decode/lookup tables are centralized in `mcf8329a_tables.h`.
-- `mcf8329a.cpp`, `mcf8329a_client.cpp`, and `mcf8329a_tuning.cpp` compile as normal sibling translation units; do not include `.cpp` files into other `.cpp` files.
+- `mcf8329a.cpp`, `mcf8329a_protocol.cpp`, `mcf8329a_service.cpp`, and `mcf8329a_tuning.cpp` compile as normal sibling translation units; do not include `.cpp` files into other `.cpp` files.
 
 ## Config and Guardrails
 - Required YAML keys: `mode`, `brake_mode`, `motor_bemf_const`, `max_speed_hz`.

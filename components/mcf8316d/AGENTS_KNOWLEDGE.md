@@ -3,6 +3,7 @@
 Component-scoped notes for `components/mcf8316d`.
 
 - Adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), and fault-triggered speed shutdown that defers lock-family handling to configured lock modes.
+- Shared architecture split: `mcf8316d_bus.h` defines the reusable bus boundary, `mcf8316d_protocol.*` owns register/bitfield facts plus pure helpers, `mcf8316d_service.*` owns reusable transport/command helpers, `mcf8316d_tuning.*` owns startup/debug tuning workflows, and `mcf8316d.cpp/.h` keep ESPHome integration plus top-level orchestration.
 - Use monolith integration style: configure controls/telemetry/buttons inline under `mcf8316d:` (for example
   `brake`, `direction`, `speed_percent`, `clear_faults`, `fault_summary`) rather than separate platform blocks.
 - Should follow repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.

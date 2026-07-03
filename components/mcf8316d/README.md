@@ -1,6 +1,12 @@
 # mcf8316d
 
 Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
+This component now follows the shared layout in `../../ARCHITECTURE.md`:
+- `mcf8316d_bus.h` defines the reusable register-bus interface.
+- `mcf8316d_protocol.*` owns register/bitfield constants, control-word encoding, and pure string/decode helpers.
+- `mcf8316d_service.*` owns reusable register access and chip command helpers on top of the bus interface.
+- `mcf8316d_tuning.*` owns startup-tune profiles plus sweep/probe debug workflows.
+- `mcf8316d.h` / `mcf8316d.cpp` own ESPHome entities, logging, high-level runtime orchestration, and the ESPHome I2C bus adapter.
 `inter_byte_delay_us` is currently informational and not applied when using standard ESPHome I2C transactions.
 Startup now runs an I2C preflight sequence that scans addresses `0x00..0x7E`; scan failures only raise a warning and the component keeps retrying communications before entering normal operation.
 The component forces MPET control bits off during setup so manual bring-up does not auto-enter MPET.

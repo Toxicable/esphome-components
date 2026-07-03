@@ -13,7 +13,9 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 
-#include "mcf8329a_client.h"
+#include "mcf8329a_bus.h"
+#include "mcf8329a_protocol.h"
+#include "mcf8329a_service.h"
 
 namespace esphome {
 namespace mcf8329a {
@@ -98,12 +100,20 @@ class MCF8329ARunMPETButton : public button::Button {
   MCF8329AComponent* parent_{nullptr};
 };
 
-class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
+class MCF8329AComponent : public PollingComponent,
+                          public i2c::I2CDevice,
+                          public ::mcf8329a_core::RegisterBus {
  public:
+  MCF8329AComponent();
   ~MCF8329AComponent();
   void setup() override;
   void update() override;
   void dump_config() override;
+
+  bool read_register32(uint16_t offset, uint32_t *value) override;
+  bool read_register16(uint16_t offset, uint16_t *value) override;
+  bool write_register32(uint16_t offset, uint32_t value) override;
+  void delay_microseconds(uint32_t delay_us) override;
 
   bool read_reg32(uint16_t offset, uint32_t& value);
   bool read_reg16(uint16_t offset, uint16_t& value);
@@ -485,7 +495,7 @@ class MCF8329AComponent : public PollingComponent, public i2c::I2CDevice {
   uint16_t last_algorithm_state_{0xFFFFu};
   uint32_t startup_profile_last_check_ms_{0u};
   uint32_t startup_profile_last_recovery_ms_{0u};
-  MCF8329AClient comms_client_{};
+  ::mcf8329a_core::MCF8329AService service_;
   MCF8329ATuningController* tuning_controller_{nullptr};
 
   MCF8329ABrakeSwitch* brake_switch_{nullptr};

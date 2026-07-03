@@ -2,10 +2,7 @@
 
 #include <cstdint>
 
-#include "esphome/components/i2c/i2c.h"
-
-namespace esphome {
-namespace mcf8329a {
+namespace mcf8329a_core {
 
 namespace regs {
 
@@ -182,48 +179,27 @@ inline constexpr uint32_t FAULT_WATCHDOG = (1u << 3);
 
 }  // namespace regs
 
-class MCF8329AClient {
- public:
-  enum class DirectionInputMode : uint8_t {
-    HARDWARE = 0,
-    CW = 1,
-    CCW = 2,
-  };
-
-  MCF8329AClient() = default;
-
-  void set_device(i2c::I2CDevice* device) {
-    device_ = device;
-  }
-
-  bool read_reg32(uint16_t offset, uint32_t& value) const;
-  bool read_reg16(uint16_t offset, uint16_t& value) const;
-  bool write_reg32(uint16_t offset, uint32_t value) const;
-  bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const;
-
-  float decode_vm_voltage(uint32_t raw) const;
-  float decode_max_speed_hz(uint16_t code) const;
-  float decode_speed_hz(int32_t raw, float max_speed_hz) const;
-  float decode_fg_speed_hz(uint32_t raw, float max_speed_hz) const;
-  float decode_open_loop_accel_hz_per_s(uint8_t code) const;
-  float decode_open_to_closed_handoff_percent(uint8_t code) const;
-
-  bool set_brake_input(bool brake_on) const;
-  bool read_brake_input(uint8_t& brake_input_code) const;
-  bool set_direction_input(DirectionInputMode mode) const;
-  bool read_direction_input(uint8_t& direction_input_code) const;
-  bool write_speed_command_raw(uint16_t digital_speed_ctrl) const;
-  bool set_mpet_characterization_bits() const;
-  bool pulse_clear_faults() const;
-  bool pulse_watchdog_tickle() const;
-  bool clear_mpet_bits(bool* changed = nullptr, uint32_t* before = nullptr, uint32_t* after = nullptr) const;
-
- private:
-  bool ensure_device_() const;
-  uint32_t build_control_word_(bool is_read, uint16_t offset, bool is_32bit) const;
-
-  i2c::I2CDevice* device_{nullptr};
+enum class DirectionInputMode : uint8_t {
+  HARDWARE = 0,
+  CW = 1,
+  CCW = 2,
 };
 
-}  // namespace mcf8329a
-}  // namespace esphome
+uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit);
+float decode_vm_voltage(uint32_t raw);
+float decode_max_speed_hz(uint16_t code);
+float decode_speed_hz(int32_t raw, float max_speed_hz);
+float decode_fg_speed_hz(uint32_t raw, float max_speed_hz);
+float decode_open_loop_accel_hz_per_s(uint8_t code);
+float decode_open_to_closed_handoff_percent(uint8_t code);
+const char *mode_to_string(uint8_t mode);
+const char *align_time_to_string(uint8_t code);
+const char *brake_mode_to_string(uint8_t code);
+const char *brake_time_to_string(uint8_t code);
+const char *algorithm_state_to_string(uint16_t state);
+const char *lock_mode_to_string(uint8_t mode);
+const char *lock_retry_time_to_string(uint8_t code);
+const char *brake_input_to_string(uint32_t brake_input_value);
+const char *direction_input_to_string(uint32_t direction_input_value);
+
+}  // namespace mcf8329a_core
