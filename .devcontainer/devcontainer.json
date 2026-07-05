@@ -8,7 +8,6 @@
   "mounts": [
     "source=${localEnv:HOME}/.codex,target=/home/vscode/.codex,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached",
-    "source=${localEnv:HOME}/.omp,target=/home/vscode/.omp,type=bind,consistency=cached",
     "source=esphome-components-vscode-server,target=/home/vscode/.vscode-server,type=volume",
     "source=esphome-components-code-server,target=/home/vscode/.local/share/code-server,type=volume",
     "source=esphome-components-code-server-config,target=/home/vscode/.config/code-server,type=volume",
