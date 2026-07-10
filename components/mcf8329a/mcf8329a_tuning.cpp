@@ -58,6 +58,7 @@ struct MCF8329ATuningController::Impl {
     this->initial_tune_candidate_index_ = 0u;
     this->initial_tune_stage_started_ms_ = 0u;
     this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_mpet_wait_logged_ = false;
     this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->initial_tune_closed_loop_seen_ms_ = 0u;
@@ -109,6 +110,7 @@ struct MCF8329ATuningController::Impl {
     this->initial_tune_candidate_index_ = 0u;
     this->initial_tune_stage_started_ms_ = millis();
     this->initial_tune_waiting_fault_recovery_ = false;
+    this->initial_tune_mpet_wait_logged_ = false;
     this->initial_tune_last_fault_clear_ms_ = 0u;
     this->initial_tune_closed_loop_seen_ = false;
     this->initial_tune_closed_loop_seen_ms_ = 0u;
@@ -229,6 +231,7 @@ struct MCF8329ATuningController::Impl {
   static constexpr uint32_t INITIAL_TUNE_HANDOFF_GUARD_GRACE_MS = 250u;
   static constexpr uint32_t INITIAL_TUNE_COOLDOWN_MS = 700u;
   static constexpr uint32_t INITIAL_TUNE_FAULT_RECOVERY_PULSE_INTERVAL_MS = 500u;
+  static constexpr uint32_t INITIAL_TUNE_MPET_EXIT_TIMEOUT_MS = 3000u;
   // Large low-kV motors can spend a long dwell in KE measurement.
   static constexpr uint32_t DEFAULT_MPET_RUN_TIMEOUT_MS = 120000u;
   static constexpr uint32_t MPET_STATUS_LOG_INTERVAL_MS = 1000u;
@@ -246,6 +249,10 @@ struct MCF8329ATuningController::Impl {
 
   bool is_closed_loop_state_(uint16_t algo_state) const {
     return algo_state == 0x0008u || algo_state == 0x0009u;
+  }
+
+  bool is_mpet_state_(uint16_t algo_state) const {
+    return algo_state >= 0x000Fu && algo_state <= 0x0018u;
   }
 
   bool read_algorithm_state_(uint16_t& algo_state) const {
@@ -864,6 +871,25 @@ struct MCF8329ATuningController::Impl {
         if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_SETTLE_MS) {
           return;
         }
+        uint16_t algo_state = 0;
+        if (this->read_algorithm_state_(algo_state) && this->is_mpet_state_(algo_state)) {
+          (void)this->parent_->clear_mpet_bits_("initial_tune_wait");
+          if (!this->initial_tune_mpet_wait_logged_) {
+            ESP_LOGI(
+              TUNING_TAG,
+              "Initial tune waiting for MPET state to exit: 0x%04X(%s)",
+              static_cast<unsigned>(algo_state),
+              this->parent_->algorithm_state_to_string_(algo_state)
+            );
+            this->initial_tune_mpet_wait_logged_ = true;
+          }
+          if ((now - this->initial_tune_stage_started_ms_) < INITIAL_TUNE_MPET_EXIT_TIMEOUT_MS) {
+            return;
+          }
+          this->fail_initial_tune_candidate_("MPET state did not exit", now);
+          return;
+        }
+        this->initial_tune_mpet_wait_logged_ = false;
         if (!this->parent_->apply_speed_command_(INITIAL_TUNE_SPEED_PERCENT, "initial_tune_start", true)) {
           this->fail_initial_tune_candidate_("speed command failed", now);
           return;
@@ -1355,6 +1381,7 @@ struct MCF8329ATuningController::Impl {
   uint8_t initial_tune_candidate_index_{0u};
   uint32_t initial_tune_stage_started_ms_{0u};
   bool initial_tune_waiting_fault_recovery_{false};
+  bool initial_tune_mpet_wait_logged_{false};
   uint32_t initial_tune_last_fault_clear_ms_{0u};
   bool initial_tune_closed_loop_seen_{false};
   uint32_t initial_tune_closed_loop_seen_ms_{0u};
