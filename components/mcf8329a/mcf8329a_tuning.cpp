@@ -86,6 +86,8 @@ struct MCF8329ATuningController::Impl {
     this->mpet_speed_loop_saved_ = false;
     this->mpet_saved_closed_loop3_ = 0u;
     this->mpet_saved_closed_loop4_ = 0u;
+    this->mpet_pin_config_saved_ = false;
+    this->mpet_saved_pin_config_ = 0u;
   }
 
   void start_initial_tune() {
@@ -290,33 +292,47 @@ struct MCF8329ATuningController::Impl {
 
     uint32_t closed_loop3 = 0u;
     uint32_t closed_loop4 = 0u;
+    uint32_t pin_config = 0u;
     if (!this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
-        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4) ||
+        !this->parent_->read_reg32(REG_PIN_CONFIG, pin_config)) {
       return false;
     }
 
     this->mpet_saved_closed_loop3_ = closed_loop3;
     this->mpet_saved_closed_loop4_ = closed_loop4;
     this->mpet_speed_loop_saved_ = true;
+    this->mpet_saved_pin_config_ = pin_config;
+    this->mpet_pin_config_saved_ = true;
 
     const uint32_t zero_kp_closed_loop3 = closed_loop3 & ~CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK;
     const uint32_t zero_kp_ki_closed_loop4 =
       closed_loop4 & ~(CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK | CLOSED_LOOP4_SPD_LOOP_KI_MASK);
+    const uint32_t mpet_pin_config = pin_config | PIN_CONFIG_VDC_FILTER_DISABLE_MASK;
     if ((zero_kp_closed_loop3 != closed_loop3 &&
          !this->parent_->write_reg32(REG_CLOSED_LOOP3, zero_kp_closed_loop3)) ||
         (zero_kp_ki_closed_loop4 != closed_loop4 &&
-         !this->parent_->write_reg32(REG_CLOSED_LOOP4, zero_kp_ki_closed_loop4))) {
+         !this->parent_->write_reg32(REG_CLOSED_LOOP4, zero_kp_ki_closed_loop4)) ||
+        (mpet_pin_config != pin_config &&
+         !this->parent_->write_reg32(REG_PIN_CONFIG, mpet_pin_config))) {
       this->restore_mpet_speed_loop_(false);
       return false;
     }
 
-    ESP_LOGI(TUNING_TAG, "MPET: temporarily cleared SPD_LOOP_KP/KI for characterization");
+    ESP_LOGI(
+      TUNING_TAG,
+      "MPET: temporarily cleared SPD_LOOP_KP/KI and disabled Vdc filter for characterization"
+    );
     return true;
   }
 
   void restore_mpet_speed_loop_(bool keep_mpet_results) {
     if (!this->mpet_speed_loop_saved_ || this->parent_ == nullptr) {
       return;
+    }
+    if (this->mpet_pin_config_saved_) {
+      (void)this->parent_->write_reg32(REG_PIN_CONFIG, this->mpet_saved_pin_config_);
+      this->mpet_pin_config_saved_ = false;
     }
     if (keep_mpet_results) {
       this->mpet_speed_loop_saved_ = false;
@@ -1469,6 +1485,8 @@ struct MCF8329ATuningController::Impl {
   bool mpet_speed_loop_saved_{false};
   uint32_t mpet_saved_closed_loop3_{0u};
   uint32_t mpet_saved_closed_loop4_{0u};
+  bool mpet_pin_config_saved_{false};
+  uint32_t mpet_saved_pin_config_{0u};
 };
 
 MCF8329ATuningController::MCF8329ATuningController(MCF8329AComponent* parent)

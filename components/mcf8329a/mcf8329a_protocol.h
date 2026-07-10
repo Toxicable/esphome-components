@@ -16,6 +16,7 @@ inline constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
 inline constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
 inline constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
 inline constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
+inline constexpr uint32_t PIN_CONFIG_VDC_FILTER_DISABLE_MASK = (1u << 27);
 inline constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
 inline constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
 inline constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
