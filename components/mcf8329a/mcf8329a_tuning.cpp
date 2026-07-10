@@ -305,12 +305,16 @@ struct MCF8329ATuningController::Impl {
     this->mpet_saved_pin_config_ = pin_config;
     this->mpet_pin_config_saved_ = true;
 
-    const uint32_t zero_kp_closed_loop3 = closed_loop3 & ~CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK;
+    const uint32_t zero_mpet_closed_loop3 =
+      closed_loop3 & ~(CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK |
+                       CLOSED_LOOP3_CURR_LOOP_KP_MASK |
+                       CLOSED_LOOP3_CURR_LOOP_KI_MASK |
+                       CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK);
     const uint32_t zero_kp_ki_closed_loop4 =
       closed_loop4 & ~(CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK | CLOSED_LOOP4_SPD_LOOP_KI_MASK);
     const uint32_t mpet_pin_config = pin_config | PIN_CONFIG_VDC_FILTER_DISABLE_MASK;
-    if ((zero_kp_closed_loop3 != closed_loop3 &&
-         !this->parent_->write_reg32(REG_CLOSED_LOOP3, zero_kp_closed_loop3)) ||
+    if ((zero_mpet_closed_loop3 != closed_loop3 &&
+         !this->parent_->write_reg32(REG_CLOSED_LOOP3, zero_mpet_closed_loop3)) ||
         (zero_kp_ki_closed_loop4 != closed_loop4 &&
          !this->parent_->write_reg32(REG_CLOSED_LOOP4, zero_kp_ki_closed_loop4)) ||
         (mpet_pin_config != pin_config &&
@@ -321,7 +325,8 @@ struct MCF8329ATuningController::Impl {
 
     ESP_LOGI(
       TUNING_TAG,
-      "MPET: temporarily cleared SPD_LOOP_KP/KI and disabled Vdc filter for characterization"
+      "MPET: temporarily enabled BEMF self-measurement, cleared current/speed PI gains, "
+      "and disabled Vdc filter"
     );
     return true;
   }
