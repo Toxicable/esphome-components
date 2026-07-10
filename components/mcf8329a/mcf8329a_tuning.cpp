@@ -170,6 +170,12 @@ struct MCF8329ATuningController::Impl {
     this->parent_->pulse_clear_faults();
     (void)this->parent_->clear_mpet_bits_("mpet_prepare");
 
+    if (!this->parent_->service_.release_speed_override()) {
+      ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to release digital speed override");
+      return;
+    }
+    ESP_LOGI(TUNING_TAG, "MPET: released digital speed override for internal MPET control");
+
     if (!this->prepare_mpet_speed_loop_()) {
       ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to enter zero speed-loop-gain mode");
       return;

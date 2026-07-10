@@ -107,6 +107,10 @@ bool MCF8329AService::write_speed_command_raw(uint16_t digital_speed_ctrl) const
   );
 }
 
+bool MCF8329AService::release_speed_override() const {
+  return this->update_bits32(REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK, 0u);
+}
+
 bool MCF8329AService::set_mpet_characterization_bits() const {
   return this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_RUN_MASK, ALGO_DEBUG2_MPET_RUN_MASK);
 }

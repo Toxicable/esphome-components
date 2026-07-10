@@ -28,6 +28,7 @@ class MCF8329AService {
   bool set_direction_input(DirectionInputMode mode) const;
   bool read_direction_input(uint8_t &direction_input_code) const;
   bool write_speed_command_raw(uint16_t digital_speed_ctrl) const;
+  bool release_speed_override() const;
   bool set_mpet_characterization_bits() const;
   bool write_mpet_results_to_shadow() const;
   bool pulse_clear_faults() const;
