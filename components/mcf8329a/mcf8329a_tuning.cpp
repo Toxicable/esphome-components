@@ -16,7 +16,7 @@
 namespace esphome {
 namespace mcf8329a {
 
-using namespace regs;
+using namespace ::mcf8329a_core::regs;
 
 static const char* const TUNING_TAG = "mcf8329a";
 struct InitialTuneCandidate {
