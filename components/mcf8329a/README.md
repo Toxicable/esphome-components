@@ -45,6 +45,20 @@ mcf8329a:
   # motor_bemf_const: 0x39
   # max_speed_hz: 1260 (for 4S full charge, 16.8V)
 
+  # Provisional example: 4250-size, 560kV motor with 14 rotor poles.
+  # Stator slot/winding count is not a substitute for rotor pole count.
+  # For full 6S (25.2V): max_speed_hz ~= 1646 electrical Hz.
+  # KtPH_N ~= 97980 / (560 * 14) ~= 12.5mV/Hz, nearest Table 7-4 code 0x3C.
+  # motor_bemf_const: 0x3C
+  # max_speed_hz: 1646
+
+  # Bench-validated 750kV starting point from PoolCleaner bring-up:
+  # open_loop_accel_hz_per_s: 100
+  # open_to_closed_handoff_percent: 16
+  # The automatic tuner reported 500Hz/s and 16% as its best telemetry result,
+  # but that setting physically stalled and buzzed. Use the validated 100/16
+  # combination as the starting point and verify shaft rotation under load.
+
   ## Hardware baseline (required before tuning / tune_initial_params):
   # align_time: 100ms
   # direction_mode: cw

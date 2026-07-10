@@ -83,6 +83,9 @@ struct MCF8329ATuningController::Impl {
     this->mpet_states_seen_mask_ = 0u;
     this->mpet_last_status_raw_ = 0u;
     this->mpet_last_status_valid_ = false;
+    this->mpet_speed_loop_saved_ = false;
+    this->mpet_saved_closed_loop3_ = 0u;
+    this->mpet_saved_closed_loop4_ = 0u;
   }
 
   void start_initial_tune() {
@@ -157,6 +160,11 @@ struct MCF8329ATuningController::Impl {
     this->parent_->pulse_clear_faults();
     (void)this->parent_->clear_mpet_bits_("mpet_prepare");
 
+    if (!this->prepare_mpet_speed_loop_()) {
+      ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to enter zero speed-loop-gain mode");
+      return;
+    }
+
     if (!this->parent_->set_brake_override(false)) {
       ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to release brake");
       return;
@@ -166,6 +174,7 @@ struct MCF8329ATuningController::Impl {
     }
 
     if (!this->parent_->service_.set_mpet_characterization_bits()) {
+      this->restore_mpet_speed_loop_(false);
       ESP_LOGW(TUNING_TAG, "MPET characterization aborted: failed to set MPET command bits");
       return;
     }
@@ -272,6 +281,52 @@ struct MCF8329ATuningController::Impl {
     this->parent_->start_boost_until_ms_ = 0u;
     this->parent_->last_ramp_update_ms_ = 0u;
     (void)this->parent_->apply_speed_command_(0.0f, reason, true);
+  }
+
+  bool prepare_mpet_speed_loop_() {
+    if (this->parent_ == nullptr) {
+      return false;
+    }
+
+    uint32_t closed_loop3 = 0u;
+    uint32_t closed_loop4 = 0u;
+    if (!this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
+        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+      return false;
+    }
+
+    this->mpet_saved_closed_loop3_ = closed_loop3;
+    this->mpet_saved_closed_loop4_ = closed_loop4;
+    this->mpet_speed_loop_saved_ = true;
+
+    const uint32_t zero_kp_closed_loop3 = closed_loop3 & ~CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK;
+    const uint32_t zero_kp_ki_closed_loop4 =
+      closed_loop4 & ~(CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK | CLOSED_LOOP4_SPD_LOOP_KI_MASK);
+    if ((zero_kp_closed_loop3 != closed_loop3 &&
+         !this->parent_->write_reg32(REG_CLOSED_LOOP3, zero_kp_closed_loop3)) ||
+        (zero_kp_ki_closed_loop4 != closed_loop4 &&
+         !this->parent_->write_reg32(REG_CLOSED_LOOP4, zero_kp_ki_closed_loop4))) {
+      this->restore_mpet_speed_loop_(false);
+      return false;
+    }
+
+    ESP_LOGI(TUNING_TAG, "MPET: temporarily cleared SPD_LOOP_KP/KI for characterization");
+    return true;
+  }
+
+  void restore_mpet_speed_loop_(bool keep_mpet_results) {
+    if (!this->mpet_speed_loop_saved_ || this->parent_ == nullptr) {
+      return;
+    }
+    if (keep_mpet_results) {
+      this->mpet_speed_loop_saved_ = false;
+      return;
+    }
+
+    (void)this->parent_->write_reg32(REG_CLOSED_LOOP3, this->mpet_saved_closed_loop3_);
+    (void)this->parent_->write_reg32(REG_CLOSED_LOOP4, this->mpet_saved_closed_loop4_);
+    this->mpet_speed_loop_saved_ = false;
+    ESP_LOGI(TUNING_TAG, "MPET: restored SPD_LOOP_KP/KI after unsuccessful characterization");
   }
 
   bool apply_tune_candidate_(const InitialTuneCandidate& candidate) {
@@ -1333,6 +1388,7 @@ struct MCF8329ATuningController::Impl {
       this->mpet_characterization_active_ = false;
       this->clear_runtime_speed_command_("mpet_done");
       (void)this->parent_->clear_mpet_bits_("mpet_done");
+      this->restore_mpet_speed_loop_(true);
       this->log_mpet_summary_("done", now, algo_state, algo_state_ok);
       ESP_LOGI(TUNING_TAG, "MPET characterization completed successfully");
       this->log_mpet_results_();
@@ -1345,6 +1401,7 @@ struct MCF8329ATuningController::Impl {
       this->mpet_characterization_active_ = false;
       this->clear_runtime_speed_command_("mpet_fault");
       (void)this->parent_->clear_mpet_bits_("mpet_fault");
+      this->restore_mpet_speed_loop_(false);
       this->parent_->pulse_clear_faults();
       this->log_mpet_summary_("fault", now, algo_state, algo_state_ok);
       ESP_LOGW(
@@ -1364,6 +1421,7 @@ struct MCF8329ATuningController::Impl {
       this->mpet_characterization_active_ = false;
       this->clear_runtime_speed_command_("mpet_timeout");
       (void)this->parent_->clear_mpet_bits_("mpet_timeout");
+      this->restore_mpet_speed_loop_(false);
       this->parent_->pulse_clear_faults();
       this->log_mpet_summary_("timeout", now, algo_state, algo_state_ok);
       ESP_LOGW(
@@ -1408,6 +1466,9 @@ struct MCF8329ATuningController::Impl {
   uint32_t mpet_states_seen_mask_{0u};
   uint32_t mpet_last_status_raw_{0u};
   bool mpet_last_status_valid_{false};
+  bool mpet_speed_loop_saved_{false};
+  uint32_t mpet_saved_closed_loop3_{0u};
+  uint32_t mpet_saved_closed_loop4_{0u};
 };
 
 MCF8329ATuningController::MCF8329ATuningController(MCF8329AComponent* parent)
