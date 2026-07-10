@@ -1147,27 +1147,13 @@ bool MCF8329AComponent::apply_motor_config_() {
        CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK);
   }
   if (this->cfg_motor_bemf_const_set_) {
-    const uint32_t motor_res =
-      (closed_loop2_next & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT;
-    const uint32_t motor_ind =
-      (closed_loop2_next & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT;
-    if (motor_res == 0u) {
+    if (this->cfg_motor_res_code_set_) {
       closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_RES_MASK) |
-                          (CLOSED_LOOP_SEED_MOTOR_RES << CLOSED_LOOP2_MOTOR_RES_SHIFT);
-      ESP_LOGW(
-        TAG,
-        "Seeding MOTOR_RES from 0 to %u while applying cfg_motor_bemf_const",
-        static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_RES)
-      );
+                          (static_cast<uint32_t>(this->cfg_motor_res_code_) << CLOSED_LOOP2_MOTOR_RES_SHIFT);
     }
-    if (motor_ind == 0u) {
+    if (this->cfg_motor_ind_code_set_) {
       closed_loop2_next = (closed_loop2_next & ~CLOSED_LOOP2_MOTOR_IND_MASK) |
-                          (CLOSED_LOOP_SEED_MOTOR_IND << CLOSED_LOOP2_MOTOR_IND_SHIFT);
-      ESP_LOGW(
-        TAG,
-        "Seeding MOTOR_IND from 0 to %u while applying cfg_motor_bemf_const",
-        static_cast<unsigned>(CLOSED_LOOP_SEED_MOTOR_IND)
-      );
+                          (static_cast<uint32_t>(this->cfg_motor_ind_code_) << CLOSED_LOOP2_MOTOR_IND_SHIFT);
     }
   }
   if (closed_loop2_next != closed_loop2) {

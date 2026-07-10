@@ -141,6 +141,14 @@ class MCF8329AComponent : public PollingComponent,
     cfg_motor_bemf_const_ = cfg_motor_bemf_const;
     cfg_motor_bemf_const_set_ = true;
   }
+  void set_cfg_motor_res_code(uint8_t cfg_motor_res_code) {
+    cfg_motor_res_code_ = cfg_motor_res_code;
+    cfg_motor_res_code_set_ = true;
+  }
+  void set_cfg_motor_ind_code(uint8_t cfg_motor_ind_code) {
+    cfg_motor_ind_code_ = cfg_motor_ind_code;
+    cfg_motor_ind_code_set_ = true;
+  }
   void set_cfg_brake_mode(uint8_t cfg_brake_mode) {
     cfg_brake_mode_ = cfg_brake_mode;
     cfg_brake_mode_set_ = true;
@@ -398,6 +406,8 @@ class MCF8329AComponent : public PollingComponent,
   bool cfg_mpet_open_loop_speed_ref_set_{false};
   bool cfg_mpet_open_loop_slew_set_{false};
   bool cfg_motor_bemf_const_set_{false};
+  bool cfg_motor_res_code_set_{false};
+  bool cfg_motor_ind_code_set_{false};
   bool cfg_brake_mode_set_{false};
   bool cfg_brake_time_set_{false};
   bool cfg_mode_set_{false};
@@ -435,6 +445,8 @@ class MCF8329AComponent : public PollingComponent,
   uint8_t cfg_mpet_open_loop_speed_ref_{0};
   uint8_t cfg_mpet_open_loop_slew_{0};
   uint8_t cfg_motor_bemf_const_{0};
+  uint8_t cfg_motor_res_code_{0};
+  uint8_t cfg_motor_ind_code_{0};
   uint8_t cfg_brake_mode_{0};
   uint8_t cfg_brake_time_{0};
   uint8_t cfg_mode_{0};

@@ -52,9 +52,10 @@ inline constexpr uint32_t ALGO_DEBUG2_MPET_CMD_MASK = (1u << 5);
 inline constexpr uint32_t ALGO_DEBUG2_MPET_KE_MASK = (1u << 2);
 inline constexpr uint32_t ALGO_DEBUG2_MPET_MECH_MASK = (1u << 1);
 inline constexpr uint32_t ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK = (1u << 0);
+inline constexpr uint32_t ALGO_DEBUG2_MPET_RUN_MASK =
+  ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_KE_MASK | ALGO_DEBUG2_MPET_MECH_MASK;
 inline constexpr uint32_t ALGO_DEBUG2_MPET_ALL_MASK =
-  ALGO_DEBUG2_MPET_CMD_MASK | ALGO_DEBUG2_MPET_KE_MASK | ALGO_DEBUG2_MPET_MECH_MASK |
-  ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
+  ALGO_DEBUG2_MPET_RUN_MASK | ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK;
 
 inline constexpr uint32_t ALGO_STATUS_DUTY_CMD_MASK = (0x0FFFu << 4);
 inline constexpr uint32_t ALGO_STATUS_DUTY_CMD_SHIFT = 4;
@@ -109,8 +110,6 @@ inline constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_SHIFT = 14;
 inline constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_MASK = 0x3FFFu;
 inline constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_SHIFT = 0;
 
-inline constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_RES = 0x01u;
-inline constexpr uint32_t CLOSED_LOOP_SEED_MOTOR_IND = 0x01u;
 
 inline constexpr uint32_t GD_CONFIG1_CSA_GAIN_MASK = 0x3u;
 inline constexpr uint32_t GD_CONFIG1_CSA_GAIN_SHIFT = 0;

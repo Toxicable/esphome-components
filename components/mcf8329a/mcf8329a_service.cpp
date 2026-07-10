@@ -108,7 +108,17 @@ bool MCF8329AService::write_speed_command_raw(uint16_t digital_speed_ctrl) const
 }
 
 bool MCF8329AService::set_mpet_characterization_bits() const {
-  return this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, ALGO_DEBUG2_MPET_ALL_MASK);
+  return this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_RUN_MASK, ALGO_DEBUG2_MPET_RUN_MASK);
+}
+
+bool MCF8329AService::write_mpet_results_to_shadow() const {
+  if (!this->update_bits32(
+        REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK
+      )) {
+    return false;
+  }
+  this->bus_->delay_microseconds(2000u);
+  return this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, 0u);
 }
 
 bool MCF8329AService::pulse_clear_faults() const {

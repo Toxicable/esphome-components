@@ -27,6 +27,8 @@ CONF_AUTO_TICKLE_WATCHDOG = "auto_tickle_watchdog"
 CONF_CLEAR_MPET_ON_STARTUP = "clear_mpet_on_startup"
 CONF_ALLOW_UNSAFE_CURRENT_LIMITS = "allow_unsafe_current_limits"
 CONF_MOTOR_BEMF_CONST = "motor_bemf_const"
+CONF_MOTOR_RES_CODE = "motor_res_code"
+CONF_MOTOR_IND_CODE = "motor_ind_code"
 CONF_BRAKE_MODE_CFG = "brake_mode"
 CONF_BRAKE_TIME_CFG = "brake_time"
 CONF_MODE_CFG = "mode"
@@ -692,6 +694,8 @@ REQUIRED_MOTOR_SETTER_SPECS = (
 )
 
 OPTIONAL_MOTOR_SETTER_SPECS = (
+    (CONF_MOTOR_RES_CODE, "set_cfg_motor_res_code", None),
+    (CONF_MOTOR_IND_CODE, "set_cfg_motor_ind_code", None),
     (CONF_BRAKE_TIME_CFG, "set_cfg_brake_time", None),
     (CONF_ALIGN_TIME, "set_cfg_align_time", None),
     (CONF_DIRECTION_MODE_CFG, "set_cfg_direction_mode", None),
@@ -829,6 +833,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_START_BOOST_HOLD_MS, default=0): cv.int_range(min=0),
             cv.Optional(CONF_ALLOW_UNSAFE_CURRENT_LIMITS, default=False): cv.boolean,
             cv.Required(CONF_MOTOR_BEMF_CONST): cv.int_range(min=1, max=255),
+            cv.Optional(CONF_MOTOR_RES_CODE): cv.int_range(min=1, max=255),
+            cv.Optional(CONF_MOTOR_IND_CODE): cv.int_range(min=1, max=255),
             cv.Required(CONF_BRAKE_MODE_CFG): cv.enum(BRAKE_MODE_OPTIONS, lower=True),
             cv.Optional(CONF_BRAKE_TIME_CFG): cv.enum(BRAKE_TIME_OPTIONS, lower=True),
             cv.Required(CONF_MODE_CFG): cv.enum(MODE_OPTIONS, lower=True),

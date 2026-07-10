@@ -157,6 +157,14 @@ struct MCF8329ATuningController::Impl {
       ESP_LOGW(TUNING_TAG, "MPET characterization is already running");
       return;
     }
+    if (!this->motor_parameters_ready_()) {
+      ESP_LOGW(
+        TUNING_TAG,
+        "MPET characterization blocked: configure non-zero motor_res_code and motor_ind_code "
+        "or program valid MOTOR_RES/MOTOR_IND values first"
+      );
+      return;
+    }
 
     this->clear_runtime_speed_command_("mpet_prepare");
     this->parent_->pulse_clear_faults();
@@ -306,8 +314,7 @@ struct MCF8329ATuningController::Impl {
     this->mpet_pin_config_saved_ = true;
 
     const uint32_t zero_mpet_closed_loop3 =
-      closed_loop3 & ~(CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK |
-                       CLOSED_LOOP3_CURR_LOOP_KP_MASK |
+      closed_loop3 & ~(CLOSED_LOOP3_CURR_LOOP_KP_MASK |
                        CLOSED_LOOP3_CURR_LOOP_KI_MASK |
                        CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK);
     const uint32_t zero_kp_ki_closed_loop4 =
@@ -325,9 +332,35 @@ struct MCF8329ATuningController::Impl {
 
     ESP_LOGI(
       TUNING_TAG,
-      "MPET: temporarily enabled BEMF self-measurement, cleared current/speed PI gains, "
+      "MPET: cleared current/speed PI gains, "
       "and disabled Vdc filter"
     );
+    return true;
+  }
+
+  bool motor_parameters_ready_() const {
+    if (this->parent_ == nullptr) {
+      return false;
+    }
+    uint32_t closed_loop2 = 0u;
+    if (!this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2)) {
+      ESP_LOGW(TUNING_TAG, "MPET: failed to read CLOSED_LOOP2 motor parameters");
+      return false;
+    }
+    const uint8_t motor_res = static_cast<uint8_t>(
+      (closed_loop2 & CLOSED_LOOP2_MOTOR_RES_MASK) >> CLOSED_LOOP2_MOTOR_RES_SHIFT
+    );
+    const uint8_t motor_ind = static_cast<uint8_t>(
+      (closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT
+    );
+    if (motor_res == 0u || motor_ind == 0u) {
+      ESP_LOGW(
+        TUNING_TAG,
+        "MPET: MOTOR_RES/MOTOR_IND are invalid (res=%u ind=%u)",
+        static_cast<unsigned>(motor_res), static_cast<unsigned>(motor_ind)
+      );
+      return false;
+    }
     return true;
   }
 
@@ -1180,9 +1213,11 @@ struct MCF8329ATuningController::Impl {
     uint32_t closed_loop2 = 0;
     uint32_t closed_loop3 = 0;
     uint32_t closed_loop4 = 0;
+    uint32_t mtr_params = 0;
     if (!this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2) ||
         !this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
-        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4) ||
+        !this->parent_->read_reg32(REG_MTR_PARAMS, mtr_params)) {
       ESP_LOGW(TUNING_TAG, "MPET finished but failed to read parameter registers");
       return;
     }
@@ -1193,9 +1228,8 @@ struct MCF8329ATuningController::Impl {
     const uint8_t motor_ind = static_cast<uint8_t>(
       (closed_loop2 & CLOSED_LOOP2_MOTOR_IND_MASK) >> CLOSED_LOOP2_MOTOR_IND_SHIFT
     );
-    const uint8_t motor_bemf_const = static_cast<uint8_t>(
-      (closed_loop3 & CLOSED_LOOP3_MOTOR_BEMF_CONST_MASK) >>
-      CLOSED_LOOP3_MOTOR_BEMF_CONST_SHIFT
+    const uint8_t measured_motor_bemf_const = static_cast<uint8_t>(
+      (mtr_params & MTR_PARAMS_MOTOR_BEMF_CONST_MASK) >> MTR_PARAMS_MOTOR_BEMF_CONST_SHIFT
     );
     const uint16_t speed_loop_kp_code = static_cast<uint16_t>(
       (((closed_loop3 & CLOSED_LOOP3_SPD_LOOP_KP_MSB_MASK) >>
@@ -1211,15 +1245,16 @@ struct MCF8329ATuningController::Impl {
 
     ESP_LOGI(
       TUNING_TAG,
-      "MPET result: motor_res=%u motor_ind=%u motor_bemf_const=0x%02X speed_loop_kp_code=%u speed_loop_ki_code=%u",
+      "MPET result: configured_motor_res=%u configured_motor_ind=%u measured_motor_bemf_const=0x%02X "
+      "speed_loop_kp_code=%u speed_loop_ki_code=%u",
       static_cast<unsigned>(motor_res),
       static_cast<unsigned>(motor_ind),
-      static_cast<unsigned>(motor_bemf_const),
+      static_cast<unsigned>(measured_motor_bemf_const),
       static_cast<unsigned>(speed_loop_kp_code),
       static_cast<unsigned>(speed_loop_ki_code)
     );
     ESP_LOGI(TUNING_TAG, "MPET result: copy these keys into your YAML under mcf8329a:");
-    ESP_LOGI(TUNING_TAG, "  motor_bemf_const: 0x%02X", static_cast<unsigned>(motor_bemf_const));
+    ESP_LOGI(TUNING_TAG, "  motor_bemf_const: 0x%02X", static_cast<unsigned>(measured_motor_bemf_const));
     ESP_LOGI(TUNING_TAG, "  speed_loop_kp_code: %u", static_cast<unsigned>(speed_loop_kp_code));
     ESP_LOGI(TUNING_TAG, "  speed_loop_ki_code: %u", static_cast<unsigned>(speed_loop_ki_code));
   }
@@ -1408,6 +1443,9 @@ struct MCF8329ATuningController::Impl {
     if (algo_state_ok && algo_state == 0x0017u) {
       this->mpet_characterization_active_ = false;
       this->clear_runtime_speed_command_("mpet_done");
+      if (!this->parent_->service_.write_mpet_results_to_shadow()) {
+        ESP_LOGW(TUNING_TAG, "MPET completed but failed to write results to shadow registers");
+      }
       (void)this->parent_->clear_mpet_bits_("mpet_done");
       this->restore_mpet_speed_loop_(true);
       this->log_mpet_summary_("done", now, algo_state, algo_state_ok);

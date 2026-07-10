@@ -29,6 +29,7 @@ class MCF8329AService {
   bool read_direction_input(uint8_t &direction_input_code) const;
   bool write_speed_command_raw(uint16_t digital_speed_ctrl) const;
   bool set_mpet_characterization_bits() const;
+  bool write_mpet_results_to_shadow() const;
   bool pulse_clear_faults() const;
   bool pulse_watchdog_tickle() const;
   bool clear_mpet_bits(bool *changed = nullptr, uint32_t *before = nullptr, uint32_t *after = nullptr) const;
