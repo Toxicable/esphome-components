@@ -357,6 +357,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool ts_pin_config_deferred_{false};
   bool predischarge_config_deferred_{false};
   bool autonomous_balancing_config_deferred_{false};
+  bool configuration_reapply_pending_{false};
   bool event_log_initialized_{false};
   uint8_t last_fet_status_{0};
   uint16_t last_alarm_status_{0};
@@ -371,6 +372,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool output_request_pending_{false};
   bool output_request_expected_enabled_{false};
   uint32_t output_request_started_ms_{0};
+  uint32_t last_cell16_diagnostic_ms_{0};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
   uint32_t boot_config_apply_delay_ms_{10000};

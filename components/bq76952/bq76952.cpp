@@ -45,6 +45,7 @@ constexpr uint16_t SUBCMD_FET_ENABLE = 0x0022;
 constexpr uint16_t SUBCMD_MANUFACTURING_STATUS = 0x0057;
 constexpr uint16_t SUBCMD_DASTATUS6 = 0x0076;
 constexpr uint16_t SUBCMD_DASTATUS7 = 0x0077;
+constexpr uint16_t SUBCMD_DASTATUS4 = 0x0074;
 constexpr uint16_t SUBCMD_RESET_PASSQ = 0x0082;
 constexpr uint16_t SUBCMD_RESET = 0x0012;
 constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
@@ -255,7 +256,8 @@ void BQ76952Component::setup() {
 }
 
 void BQ76952Component::update() {
-  if (this->regulator_config_deferred_ || this->current_limit_config_deferred_ || this->ts_pin_config_deferred_ ||
+  if (this->configuration_reapply_pending_ || this->regulator_config_deferred_ ||
+      this->current_limit_config_deferred_ || this->ts_pin_config_deferred_ ||
       this->predischarge_config_deferred_ || this->autonomous_balancing_config_deferred_) {
     const uint32_t now = millis();
     if (now < this->deferred_boot_config_apply_ms_) {
@@ -268,7 +270,14 @@ void BQ76952Component::update() {
         this->deferred_boot_config_log_ms_ = now + 15000;
       }
     } else {
-      ESP_LOGI(TAG, "Post-boot delay elapsed; applying deferred boot configuration writes");
+      if (now >= this->deferred_boot_config_log_ms_) {
+        ESP_LOGI(
+          TAG,
+          configuration_reapply_pending_ ? "Connection recovery: reapplying requested configuration"
+                                         : "Post-boot delay elapsed; applying deferred boot configuration writes"
+        );
+        this->deferred_boot_config_log_ms_ = now + 5000u;
+      }
       if (!this->apply_requested_configuration_()) {
         this->status_set_warning();
       }
@@ -285,6 +294,13 @@ void BQ76952Component::update() {
 
   if (!this->read_u16_(REG_CONTROL_STATUS, control_status)) {
     ESP_LOGW(TAG, "Failed to read Control Status");
+    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+        this->has_predischarge_config_() || this->has_autonomous_balancing_config_() ||
+        this->has_boot_mode_config_()) {
+      this->configuration_reapply_pending_ = true;
+      this->deferred_boot_config_apply_ms_ = millis();
+      this->deferred_boot_config_log_ms_ = 0;
+    }
     this->status_set_warning();
     return;
   }
@@ -462,6 +478,49 @@ void BQ76952Component::update() {
     }
     const uint8_t raw_index = cell_read_map_[i];
     cell_voltage_sensors_[i]->publish_state(static_cast<float>(raw_cell_mv[raw_index]) / 1000.0f);
+  }
+
+  // Cell 16 has an independent raw-ADC representation in DASTATUS4.  When its
+  // processed voltage diverges sharply from the other populated cells, report
+  // both paths so a physical/ADC fault can be distinguished from calibration
+  // or command-read corruption.
+  if (explicit_cell_map_ && cell_count_ > 1 && cell_read_map_[cell_count_ - 1] == 15 &&
+      (millis() - last_cell16_diagnostic_ms_) >= 5000u) {
+    int32_t other_cell_sum_mv = 0;
+    for (uint8_t i = 0; i < cell_count_ - 1; i++) {
+      other_cell_sum_mv += raw_cell_mv[cell_read_map_[i]];
+    }
+    const int16_t other_cell_average_mv =
+      static_cast<int16_t>(other_cell_sum_mv / static_cast<int32_t>(cell_count_ - 1));
+    const int16_t cell16_mv = raw_cell_mv[15];
+    if (std::abs(static_cast<int>(cell16_mv) - static_cast<int>(other_cell_average_mv)) >= 200) {
+      last_cell16_diagnostic_ms_ = millis();
+      uint8_t dastatus4[32]{};
+      int16_t cell16_reread_mv = 0;
+      if (this->read_subcommand_(SUBCMD_DASTATUS4, dastatus4, sizeof(dastatus4)) &&
+          this->read_i16_(static_cast<uint8_t>(REG_CELL1_VOLTAGE + 15 * 2), cell16_reread_mv)) {
+        const uint32_t raw_u32 = static_cast<uint32_t>(dastatus4[24]) |
+                                 (static_cast<uint32_t>(dastatus4[25]) << 8) |
+                                 (static_cast<uint32_t>(dastatus4[26]) << 16) |
+                                 (static_cast<uint32_t>(dastatus4[27]) << 24);
+        const int32_t cell16_adc_counts = static_cast<int32_t>(raw_u32);
+        // The TRM specifies approximately 0.722 uV/count for these untrimmed counts.
+        const int32_t cell16_adc_uv = static_cast<int32_t>(
+          std::lround(static_cast<double>(cell16_adc_counts) * 0.722)
+        );
+        ESP_LOGW(
+          TAG,
+          "Cell 16 diagnostic: command=%d mV reread=%d mV raw_adc=%ld counts (~%ld mV) peer_avg=%d mV",
+          static_cast<int>(cell16_mv),
+          static_cast<int>(cell16_reread_mv),
+          static_cast<long>(cell16_adc_counts),
+          static_cast<long>(cell16_adc_uv / 1000),
+          static_cast<int>(other_cell_average_mv)
+        );
+      } else {
+        ESP_LOGW(TAG, "Failed to collect Cell 16 DASTATUS4 diagnostic");
+      }
+    }
   }
   if (largest_intercell_voltage_sensor_ != nullptr && cell_count_ >= 2) {
     int16_t min_cell_mv = raw_cell_mv[cell_read_map_[0]];
@@ -1112,12 +1171,6 @@ bool BQ76952Component::apply_requested_configuration() {
 }
 
 bool BQ76952Component::apply_requested_configuration_() {
-  this->regulator_config_deferred_ = false;
-  this->current_limit_config_deferred_ = false;
-  this->ts_pin_config_deferred_ = false;
-  this->predischarge_config_deferred_ = false;
-  this->autonomous_balancing_config_deferred_ = false;
-
   bool ok = true;
   if (!this->apply_regulator_config_()) {
     ok = false;
@@ -1140,6 +1193,13 @@ bool BQ76952Component::apply_requested_configuration_() {
 
   if (!ok) {
     this->status_set_warning();
+  } else {
+    this->regulator_config_deferred_ = false;
+    this->current_limit_config_deferred_ = false;
+    this->ts_pin_config_deferred_ = false;
+    this->predischarge_config_deferred_ = false;
+    this->autonomous_balancing_config_deferred_ = false;
+    this->configuration_reapply_pending_ = false;
   }
   return ok;
 }
