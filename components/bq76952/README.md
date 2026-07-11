@@ -30,6 +30,7 @@ bq76952:
 
   ## Core
   cell_count: 4
+  # cell_channels: [1, 2, 3, 16]
   update_interval: 20ms
   # boot_config_apply_delay: 60s
 
@@ -283,6 +284,7 @@ Thermistors:
 Cell mapping:
 - `cell1_voltage` through `cell16_voltage` are mapped to the first populated differential cell-voltage commands seen at startup
 - this supports sparse physical layouts such as a 4S pack wired onto higher-numbered VC pins
+- `cell_channels` overrides voltage-based detection with an explicit ordered list of raw VC differential channels; use it for known sparse layouts, such as `[1, 2, 3, 16]`
 
 ## Migration
 

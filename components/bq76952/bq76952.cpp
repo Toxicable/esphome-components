@@ -382,28 +382,37 @@ void BQ76952Component::update() {
   }
 
   if (!cell_map_initialized_) {
-    std::array<uint8_t, 16> present_indices{};
-    uint8_t present_count = 0;
-    for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
-      if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
-        present_indices[present_count++] = i;
+    if (!explicit_cell_map_) {
+      std::array<uint8_t, 16> present_indices{};
+      uint8_t present_count = 0;
+      for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
+        if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
+          present_indices[present_count++] = i;
+        }
       }
-    }
-    if (present_count >= cell_count_) {
-      for (uint8_t i = 0; i < cell_count_; i++) {
-        cell_read_map_[i] = present_indices[i];
-      }
-    } else {
-      for (uint8_t i = 0; i < cell_count_; i++) {
-        cell_read_map_[i] = i;
+      if (present_count >= cell_count_) {
+        for (uint8_t i = 0; i < cell_count_; i++) {
+          cell_read_map_[i] = present_indices[i];
+        }
+      } else {
+        ESP_LOGW(
+          TAG,
+          "Detected only %u plausible cell channels for configured cell_count=%u; using sequential channels",
+          static_cast<unsigned>(present_count),
+          static_cast<unsigned>(cell_count_)
+        );
+        for (uint8_t i = 0; i < cell_count_; i++) {
+          cell_read_map_[i] = i;
+        }
       }
     }
     for (uint8_t i = 0; i < cell_count_; i++) {
       ESP_LOGI(
         TAG,
-        "Cell %u mapped to command Cell %u Voltage",
+        "Cell %u mapped to raw command Cell %u Voltage (%d mV)",
         static_cast<unsigned>(i + 1),
-        static_cast<unsigned>(cell_read_map_[i] + 1)
+        static_cast<unsigned>(cell_read_map_[i] + 1),
+        static_cast<int>(raw_cell_mv[cell_read_map_[i]])
       );
     }
     cell_map_initialized_ = true;

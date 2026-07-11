@@ -159,6 +159,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
     largest_intercell_voltage_sensor_ = sensor;
   }
   void set_cell_voltage_sensor(uint8_t index, sensor::Sensor* sensor);
+  void set_cell_channel(uint8_t index, uint8_t channel) {
+    if (index >= 1 && index <= cell_read_map_.size() && channel >= 1 && channel <= cell_read_map_.size()) {
+      cell_read_map_[index - 1] = channel - 1;
+      explicit_cell_map_ = true;
+    }
+  }
   void set_current_sensor(sensor::Sensor* sensor) {
     current_sensor_ = sensor;
   }
@@ -344,6 +350,7 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool event_logging_{false};
   bool xchg_debug_burst_{false};
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  bool explicit_cell_map_{false};
   bool cell_map_initialized_{false};
   bool regulator_config_deferred_{false};
   bool current_limit_config_deferred_{false};
