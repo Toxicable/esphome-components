@@ -243,10 +243,14 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool has_predischarge_config_() const;
   bool has_autonomous_balancing_config_() const;
   bool has_boot_mode_config_() const;
+  bool has_requested_configuration_() const;
   bool apply_boot_modes_();
-  bool apply_requested_configuration_();
+  bool apply_requested_configuration_(bool force_live_reapply);
+  void request_configuration_reconciliation_(const char* reason, uint32_t delay_ms, bool force_live_reapply);
+  bool run_configuration_reconciliation_(uint32_t now);
+  void note_communication_failure_();
   bool apply_boot_mode_startup_defaults_();
-  bool apply_regulator_config_();
+  bool apply_regulator_config_(bool force_live_reapply);
   bool load_unit_scaling_();
   bool apply_ts_pin_config_();
   bool apply_predischarge_config_();
@@ -352,12 +356,12 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
   bool explicit_cell_map_{false};
   bool cell_map_initialized_{false};
-  bool regulator_config_deferred_{false};
-  bool current_limit_config_deferred_{false};
-  bool ts_pin_config_deferred_{false};
-  bool predischarge_config_deferred_{false};
-  bool autonomous_balancing_config_deferred_{false};
-  bool configuration_reapply_pending_{false};
+  bool configuration_pending_{false};
+  bool configuration_force_live_reapply_{false};
+  bool live_boot_modes_pending_{false};
+  bool communication_seen_{false};
+  bool communication_online_{false};
+  const char* configuration_reason_{"none"};
   bool event_log_initialized_{false};
   uint8_t last_fet_status_{0};
   uint16_t last_alarm_status_{0};
@@ -373,8 +377,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool output_request_expected_enabled_{false};
   uint32_t output_request_started_ms_{0};
   uint32_t last_cell16_diagnostic_ms_{0};
-  uint32_t deferred_boot_config_log_ms_{0};
-  uint32_t deferred_boot_config_apply_ms_{0};
+  uint32_t configuration_due_ms_{0};
+  uint32_t configuration_retry_log_ms_{0};
+  uint32_t next_configuration_audit_ms_{0};
   uint32_t boot_config_apply_delay_ms_{10000};
 
 

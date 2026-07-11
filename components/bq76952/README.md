@@ -213,6 +213,9 @@ Notes:
 - these writes require `FULLACCESS`
 - the component may enter `CONFIG_UPDATE` to apply them
 - `boot_config_apply_delay` controls when those writes happen after boot (default `10s`)
+- configuration is reconciled only after the BQ76952 answers a Control/Battery/FET probe; failed applications remain pending and retry after communication recovers
+- the same desired-state reconciliation runs after detected reconnection and every 60 seconds, restoring TS pins, regulators, Vcell mode, protections, balancing, and live sleep/FET policy without rebooting the ESP
+- periodic audits are read/compare-first and do not cycle regulators whose requested data-memory and live state do not need forced restoration
 - entering `CONFIG_UPDATE` briefly turns FETs off, so do not power the ESP from a path that depends on switched PACK output during configuration writes
 - `reg1_voltage` implies `REG1` should be enabled if you do not explicitly set `reg1_enabled`
 - `reg0_enabled` remains explicit because whether the external BREG preregulator path is populated is board-specific and cannot be inferred safely

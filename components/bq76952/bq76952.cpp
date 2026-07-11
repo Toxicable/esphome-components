@@ -219,9 +219,6 @@ void BQ76952Component::set_cell_voltage_sensor(uint8_t index, sensor::Sensor* se
 }
 
 void BQ76952Component::setup() {
-  if (!this->load_unit_scaling_()) {
-    ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
-  }
   if (state_of_charge_sensor_ != nullptr) {
     const uint32_t pref_key = SOC_PREF_NAMESPACE | static_cast<uint32_t>(this->address_);
     soc_pref_ = global_preferences->make_preference<SocPersistedState>(pref_key);
@@ -229,61 +226,18 @@ void BQ76952Component::setup() {
     load_soc_state_();
   }
 
-  const bool defer_configuration = this->has_regulator_config_() || this->has_current_limit_config_() ||
-                                   this->has_ts_pin_config_() || this->has_predischarge_config_() ||
-                                   this->has_autonomous_balancing_config_();
-  if (defer_configuration) {
-    this->regulator_config_deferred_ = this->has_regulator_config_();
-    this->current_limit_config_deferred_ = this->has_current_limit_config_();
-    this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
-    this->predischarge_config_deferred_ = this->has_predischarge_config_();
-    this->autonomous_balancing_config_deferred_ = this->has_autonomous_balancing_config_();
-    this->deferred_boot_config_log_ms_ = 0;
-    this->deferred_boot_config_apply_ms_ = millis() + boot_config_apply_delay_ms_;
+  if (this->has_requested_configuration_()) {
+    this->request_configuration_reconciliation_("boot", boot_config_apply_delay_ms_, true);
+    this->live_boot_modes_pending_ = this->has_boot_mode_config_();
     ESP_LOGI(
       TAG,
-      "Deferring boot configuration writes for %u ms after boot",
+      "Scheduled desired-configuration reconciliation for %u ms after boot",
       static_cast<unsigned>(boot_config_apply_delay_ms_)
     );
-    // Apply live mode commands now to cover the delay window. The shared
-    // configuration path reapplies them after CONFIG_UPDATE completes.
-    if (!this->apply_boot_modes_()) {
-      this->status_set_warning();
-    }
-  } else if (!this->apply_requested_configuration_()) {
-    this->status_set_warning();
   }
 }
 
 void BQ76952Component::update() {
-  if (this->configuration_reapply_pending_ || this->regulator_config_deferred_ ||
-      this->current_limit_config_deferred_ || this->ts_pin_config_deferred_ ||
-      this->predischarge_config_deferred_ || this->autonomous_balancing_config_deferred_) {
-    const uint32_t now = millis();
-    if (now < this->deferred_boot_config_apply_ms_) {
-      if (now >= this->deferred_boot_config_log_ms_) {
-        ESP_LOGI(
-          TAG,
-          "Boot configuration writes still deferred: waiting for %u ms post-boot delay",
-          static_cast<unsigned>(boot_config_apply_delay_ms_)
-        );
-        this->deferred_boot_config_log_ms_ = now + 15000;
-      }
-    } else {
-      if (now >= this->deferred_boot_config_log_ms_) {
-        ESP_LOGI(
-          TAG,
-          configuration_reapply_pending_ ? "Connection recovery: reapplying requested configuration"
-                                         : "Post-boot delay elapsed; applying deferred boot configuration writes"
-        );
-        this->deferred_boot_config_log_ms_ = now + 5000u;
-      }
-      if (!this->apply_requested_configuration_()) {
-        this->status_set_warning();
-      }
-    }
-  }
-
   uint16_t control_status = 0;
   uint16_t battery_status = 0;
   uint8_t fet_status = 0;
@@ -294,24 +248,61 @@ void BQ76952Component::update() {
 
   if (!this->read_u16_(REG_CONTROL_STATUS, control_status)) {
     ESP_LOGW(TAG, "Failed to read Control Status");
-    if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
-        this->has_predischarge_config_() || this->has_autonomous_balancing_config_() ||
-        this->has_boot_mode_config_()) {
-      this->configuration_reapply_pending_ = true;
-      this->deferred_boot_config_apply_ms_ = millis();
-      this->deferred_boot_config_log_ms_ = 0;
-    }
+    this->note_communication_failure_();
     this->status_set_warning();
     return;
   }
   if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
     ESP_LOGW(TAG, "Failed to read Battery Status");
+    this->note_communication_failure_();
     this->status_set_warning();
     return;
   }
   if (!this->read_byte_(REG_FET_STATUS, fet_status)) {
     ESP_LOGW(TAG, "Failed to read FET Status");
+    this->note_communication_failure_();
     this->status_set_warning();
+    return;
+  }
+
+  const uint32_t now = millis();
+  const bool first_connection = !this->communication_seen_;
+  const bool recovered_connection = this->communication_seen_ && !this->communication_online_;
+  this->communication_seen_ = true;
+  this->communication_online_ = true;
+  if (first_connection || recovered_connection) {
+    ESP_LOGI(TAG, first_connection ? "BQ76952 communication established" : "BQ76952 communication recovered");
+    if (!this->load_unit_scaling_()) {
+      ESP_LOGW(TAG, "Using default scaling (current: 1mA/LSB, pack/stack/load pin: 10mV/LSB)");
+    }
+  }
+  if (recovered_connection) {
+    this->request_configuration_reconciliation_("connection recovery", 0, true);
+    this->live_boot_modes_pending_ = this->has_boot_mode_config_();
+    this->cell_map_initialized_ = false;
+    this->event_log_initialized_ = false;
+  }
+
+  if (this->live_boot_modes_pending_) {
+    ESP_LOGI(TAG, "Reconciliation: applying live boot modes");
+    if (!this->apply_boot_modes_()) {
+      this->status_set_warning();
+    } else {
+      this->live_boot_modes_pending_ = false;
+    }
+  }
+
+  if (!this->configuration_pending_ && this->has_requested_configuration_() &&
+      static_cast<int32_t>(now - this->next_configuration_audit_ms_) >= 0) {
+    this->request_configuration_reconciliation_("periodic audit", 0, false);
+  }
+  if (this->configuration_pending_ && static_cast<int32_t>(now - this->configuration_due_ms_) >= 0) {
+    if (!this->run_configuration_reconciliation_(now)) {
+      this->status_set_warning();
+      return;
+    }
+    // CONFIG_UPDATE can change the live state. Publish a coherent snapshot on
+    // the next poll instead of mixing pre- and post-reconciliation values.
     return;
   }
 
@@ -918,9 +909,23 @@ bool BQ76952Component::set_sleep_allowed(bool allowed) {
     ESP_LOGW(TAG, "Failed to send sleep mode subcommand 0x%04X", static_cast<unsigned>(command));
     return false;
   }
-  delay_microseconds_safe(800);
-  ESP_LOGI(TAG, "Action result: sleep_allowed=%s", allowed ? "on" : "off");
-  return true;
+  const uint32_t start_ms = millis();
+  do {
+    uint16_t battery_status = 0;
+    if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
+      ESP_LOGW(TAG, "Failed to verify Battery Status after sleep mode command");
+      return false;
+    }
+    const bool actual_allowed = (battery_status & BATTERY_STATUS_SLEEP_EN) != 0;
+    if (actual_allowed == allowed) {
+      ESP_LOGI(TAG, "Action result: sleep_allowed=%s", actual_allowed ? "on" : "off");
+      return true;
+    }
+    delay_microseconds_safe(1000);
+  } while ((millis() - start_ms) < 50u);
+
+  ESP_LOGW(TAG, "SLEEP_EN did not reach requested state (requested=%s)", allowed ? "enabled" : "disabled");
+  return false;
 }
 
 bool BQ76952Component::clear_alarm_latches() {
@@ -952,7 +957,7 @@ bool BQ76952Component::reset_passed_charge_counter() {
 }
 
 bool BQ76952Component::program_factory_otp_defaults() {
-  if (!this->apply_requested_configuration_()) {
+  if (!this->apply_requested_configuration_(true)) {
     ESP_LOGW(TAG, "Factory OTP programming aborted: failed to apply requested live configuration first");
     return false;
   }
@@ -1166,13 +1171,62 @@ bool BQ76952Component::has_boot_mode_config_() const {
   return autonomous_fet_mode_ != BOOT_PRESERVE || sleep_mode_ != BOOT_PRESERVE;
 }
 
-bool BQ76952Component::apply_requested_configuration() {
-  return this->apply_requested_configuration_();
+bool BQ76952Component::has_requested_configuration_() const {
+  return this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
+         this->has_predischarge_config_() || this->has_autonomous_balancing_config_() ||
+         this->has_boot_mode_config_();
 }
 
-bool BQ76952Component::apply_requested_configuration_() {
+void BQ76952Component::request_configuration_reconciliation_(
+  const char* reason, uint32_t delay_ms, bool force_live_reapply
+) {
+  this->configuration_pending_ = true;
+  this->configuration_reason_ = reason;
+  this->configuration_due_ms_ = millis() + delay_ms;
+  this->configuration_force_live_reapply_ = this->configuration_force_live_reapply_ || force_live_reapply;
+  this->configuration_retry_log_ms_ = 0;
+}
+
+void BQ76952Component::note_communication_failure_() {
+  if (this->communication_online_) {
+    ESP_LOGW(TAG, "BQ76952 communication lost; desired configuration will be reconciled after recovery");
+  }
+  this->communication_online_ = false;
+}
+
+bool BQ76952Component::run_configuration_reconciliation_(uint32_t now) {
+  if (static_cast<int32_t>(now - this->configuration_retry_log_ms_) >= 0) {
+    ESP_LOGI(TAG, "Reconciliation: applying desired configuration (reason=%s)", this->configuration_reason_);
+    this->configuration_retry_log_ms_ = now + 5000u;
+  }
+  const bool force_live_reapply = this->configuration_force_live_reapply_;
+  this->configuration_force_live_reapply_ = false;
+  if (!this->apply_requested_configuration_(force_live_reapply)) {
+    this->configuration_due_ms_ = now + 1000u;
+    return false;
+  }
+  ESP_LOGI(TAG, "Reconciliation complete (reason=%s)", this->configuration_reason_);
+  this->configuration_pending_ = false;
+  this->configuration_force_live_reapply_ = false;
+  this->configuration_reason_ = "none";
+  this->next_configuration_audit_ms_ = now + 60000u;
+  return true;
+}
+
+bool BQ76952Component::apply_requested_configuration() {
+  const bool ok = this->apply_requested_configuration_(true);
+  if (ok) {
+    this->configuration_pending_ = false;
+    this->configuration_force_live_reapply_ = false;
+    this->configuration_reason_ = "none";
+    this->next_configuration_audit_ms_ = millis() + 60000u;
+  }
+  return ok;
+}
+
+bool BQ76952Component::apply_requested_configuration_(bool force_live_reapply) {
   bool ok = true;
-  if (!this->apply_regulator_config_()) {
+  if (!this->apply_regulator_config_(force_live_reapply)) {
     ok = false;
   }
   if (!this->apply_ts_pin_config_()) {
@@ -1193,13 +1247,6 @@ bool BQ76952Component::apply_requested_configuration_() {
 
   if (!ok) {
     this->status_set_warning();
-  } else {
-    this->regulator_config_deferred_ = false;
-    this->current_limit_config_deferred_ = false;
-    this->ts_pin_config_deferred_ = false;
-    this->predischarge_config_deferred_ = false;
-    this->autonomous_balancing_config_deferred_ = false;
-    this->configuration_reapply_pending_ = false;
   }
   return ok;
 }
@@ -1261,7 +1308,7 @@ bool BQ76952Component::apply_boot_mode_startup_defaults_() {
   return ok;
 }
 
-bool BQ76952Component::apply_regulator_config_() {
+bool BQ76952Component::apply_regulator_config_(bool force_live_reapply) {
   if (!this->has_regulator_config_()) {
     return true;
   }
@@ -1314,15 +1361,17 @@ bool BQ76952Component::apply_regulator_config_() {
     }
   }
 
-  const bool reg0_reapply_requested = has_reg0_config_ && reg0_enabled_;
-  if (precheck_ok && target_reg12 == reg12 && target_reg0 == reg0 && !reg0_reapply_requested) {
+  const bool regulator_live_reapply_requested =
+    force_live_reapply && ((has_reg0_config_ && reg0_enabled_) ||
+                           (has_reg1_enabled_config_ && reg1_enabled_));
+  if (precheck_ok && target_reg12 == reg12 && target_reg0 == reg0 && !regulator_live_reapply_requested) {
     ESP_LOGI(TAG, "REG0/REG1 configuration already matches requested values; skipping CONFIG_UPDATE");
     return true;
   }
   if (!precheck_ok) {
     ESP_LOGW(TAG, "REG0/REG1 pre-check incomplete; proceeding with CONFIG_UPDATE");
-  } else if (reg0_reapply_requested && target_reg12 == reg12 && target_reg0 == reg0) {
-    ESP_LOGI(TAG, "REG0 requested on and config already matches; forcing reapply path for live regulator state");
+  } else if (regulator_live_reapply_requested && target_reg12 == reg12 && target_reg0 == reg0) {
+    ESP_LOGI(TAG, "Regulator config already matches; forcing reapply path for live REG0/REG1 state");
   }
 
   if (!this->set_cfgupdate_mode_(true)) {
@@ -1376,7 +1425,7 @@ bool BQ76952Component::apply_regulator_config_() {
     }
   }
 
-  const bool direct_reg_bringup = reg0_reapply_requested;
+  const bool direct_reg_bringup = regulator_live_reapply_requested;
   if (ok && direct_reg_bringup) {
     ESP_LOGI(
       TAG,
