@@ -284,7 +284,7 @@ Thermistors:
 Cell mapping:
 - `cell1_voltage` through `cell16_voltage` are mapped to the first populated differential cell-voltage commands seen at startup
 - this supports sparse physical layouts such as a 4S pack wired onto higher-numbered VC pins
-- `cell_channels` overrides voltage-based detection with an explicit ordered list of raw VC differential channels; use it for known sparse layouts, such as `[1, 2, 3, 16]`
+- `cell_channels` overrides voltage-based detection with an explicit ordered list of raw VC differential channels and also defines the boot-applied `Vcell Mode` protection mask; use it for known sparse layouts, such as `[1, 2, 3, 16]`
 
 ## Migration
 

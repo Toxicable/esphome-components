@@ -1691,37 +1691,49 @@ bool BQ76952Component::apply_current_limit_config_() {
   if (!this->has_current_limit_config_()) {
     return true;
   }
-  std::array<int16_t, 16> raw_cell_mv{};
-  uint8_t present_indices[16]{};
-  uint8_t present_count = 0;
-  for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
-    if (!this->read_i16_(static_cast<uint8_t>(REG_CELL1_VOLTAGE + i * 2), raw_cell_mv[i])) {
-      ESP_LOGW(TAG, "Failed reading Cell %u voltage for Vcell Mode auto-detect", static_cast<unsigned>(i + 1));
+  uint16_t vcell_mode_mask = 0;
+  if (explicit_cell_map_) {
+    for (uint8_t i = 0; i < cell_count_; i++) {
+      vcell_mode_mask |= static_cast<uint16_t>(1u << cell_read_map_[i]);
+    }
+    ESP_LOGI(
+      TAG,
+      "Configured Vcell Mode from explicit cell_channels: count=%u mask=0x%04X",
+      static_cast<unsigned>(cell_count_),
+      static_cast<unsigned>(vcell_mode_mask)
+    );
+  } else {
+    std::array<int16_t, 16> raw_cell_mv{};
+    uint8_t present_indices[16]{};
+    uint8_t present_count = 0;
+    for (uint8_t i = 0; i < raw_cell_mv.size(); i++) {
+      if (!this->read_i16_(static_cast<uint8_t>(REG_CELL1_VOLTAGE + i * 2), raw_cell_mv[i])) {
+        ESP_LOGW(TAG, "Failed reading Cell %u voltage for Vcell Mode auto-detect", static_cast<unsigned>(i + 1));
+        return false;
+      }
+      if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
+        present_indices[present_count++] = i;
+      }
+    }
+    if (present_count < cell_count_) {
+      ESP_LOGW(
+        TAG,
+        "Vcell Mode auto-detect found %u active channels (<cell_count=%u)",
+        static_cast<unsigned>(present_count),
+        static_cast<unsigned>(cell_count_)
+      );
       return false;
     }
-    if (raw_cell_mv[i] > CELL_PRESENT_THRESHOLD_MV) {
-      present_indices[present_count++] = i;
+    for (uint8_t i = 0; i < cell_count_; i++) {
+      vcell_mode_mask |= static_cast<uint16_t>(1u << present_indices[i]);
     }
-  }
-  if (present_count < cell_count_) {
-    ESP_LOGW(
+    ESP_LOGI(
       TAG,
-      "Vcell Mode auto-detect found %u active channels (<cell_count=%u)",
-      static_cast<unsigned>(present_count),
-      static_cast<unsigned>(cell_count_)
+      "Auto-detected Vcell Mode from active channels: count=%u mask=0x%04X",
+      static_cast<unsigned>(cell_count_),
+      static_cast<unsigned>(vcell_mode_mask)
     );
-    return false;
   }
-  uint16_t vcell_mode_mask = 0;
-  for (uint8_t i = 0; i < cell_count_; i++) {
-    vcell_mode_mask |= static_cast<uint16_t>(1u << present_indices[i]);
-  }
-  ESP_LOGI(
-    TAG,
-    "Auto-detected Vcell Mode from active channels: count=%u mask=0x%04X",
-    static_cast<unsigned>(cell_count_),
-    static_cast<unsigned>(vcell_mode_mask)
-  );
 
   uint16_t battery_status = 0;
   if (!this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
