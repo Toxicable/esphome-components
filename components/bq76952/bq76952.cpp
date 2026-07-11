@@ -223,8 +223,10 @@ void BQ76952Component::setup() {
     load_soc_state_();
   }
 
-  if (this->has_regulator_config_() || this->has_current_limit_config_() || this->has_ts_pin_config_() ||
-      this->has_predischarge_config_() || this->has_autonomous_balancing_config_()) {
+  const bool defer_configuration = this->has_regulator_config_() || this->has_current_limit_config_() ||
+                                   this->has_ts_pin_config_() || this->has_predischarge_config_() ||
+                                   this->has_autonomous_balancing_config_();
+  if (defer_configuration) {
     this->regulator_config_deferred_ = this->has_regulator_config_();
     this->current_limit_config_deferred_ = this->has_current_limit_config_();
     this->ts_pin_config_deferred_ = this->has_ts_pin_config_();
@@ -237,24 +239,12 @@ void BQ76952Component::setup() {
       "Deferring boot configuration writes for %u ms after boot",
       static_cast<unsigned>(boot_config_apply_delay_ms_)
     );
-  } else {
-    if (!this->apply_regulator_config_()) {
+    // Apply live mode commands now to cover the delay window. The shared
+    // configuration path reapplies them after CONFIG_UPDATE completes.
+    if (!this->apply_boot_modes_()) {
       this->status_set_warning();
     }
-    if (!this->apply_ts_pin_config_()) {
-      this->status_set_warning();
-    }
-    if (!this->apply_predischarge_config_()) {
-      this->status_set_warning();
-    }
-    if (!this->apply_autonomous_balancing_config_()) {
-      this->status_set_warning();
-    }
-    if (!this->apply_current_limit_config_()) {
-      this->status_set_warning();
-    }
-  }
-  if (!this->apply_boot_modes_()) {
+  } else if (!this->apply_requested_configuration_()) {
     this->status_set_warning();
   }
 }
@@ -274,26 +264,9 @@ void BQ76952Component::update() {
       }
     } else {
       ESP_LOGI(TAG, "Post-boot delay elapsed; applying deferred boot configuration writes");
-      if (this->regulator_config_deferred_ && !this->apply_regulator_config_()) {
+      if (!this->apply_requested_configuration_()) {
         this->status_set_warning();
       }
-      if (this->ts_pin_config_deferred_ && !this->apply_ts_pin_config_()) {
-        this->status_set_warning();
-      }
-      if (this->predischarge_config_deferred_ && !this->apply_predischarge_config_()) {
-        this->status_set_warning();
-      }
-      if (this->autonomous_balancing_config_deferred_ && !this->apply_autonomous_balancing_config_()) {
-        this->status_set_warning();
-      }
-      if (!this->apply_current_limit_config_()) {
-        this->status_set_warning();
-      }
-      this->regulator_config_deferred_ = false;
-      this->current_limit_config_deferred_ = false;
-      this->ts_pin_config_deferred_ = false;
-      this->predischarge_config_deferred_ = false;
-      this->autonomous_balancing_config_deferred_ = false;
     }
   }
 

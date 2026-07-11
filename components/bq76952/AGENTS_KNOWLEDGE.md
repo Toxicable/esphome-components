@@ -15,6 +15,8 @@ Component-scoped notes for `components/bq76952`.
 - `REG12 Config (0x9236)` encodes `REG1_EN` in bit `0` and `REG1V[2:0]` in bits `3:1` (not bits `3` and `2:0` respectively). YAML voltage option values and C++ masks/shifts must match that layout.
 - Matching `REG0 Config` / `REG12 Config` bytes do not prove the live preregulator state is active; when `reg0_enabled` is requested, the component should force a reapply/reset path instead of trusting the pre-check match alone.
 - Boot-time regulator/TS/current-limit writes use `boot_config_apply_delay` (default `10s`) instead of waiting for ESP32 OTA pending-verify to clear, so users can push config-apply logs into a post-Wi-Fi window.
+- Runtime sleep/FET mode commands must be reapplied after the deferred CONFIG_UPDATE batch because exiting CONFIG_UPDATE can restore the data-memory mode policy and undo the command sent during `setup()`.
+- Immediate and deferred boot configuration must converge through `apply_requested_configuration_()`; keep only the pre-delay live mode command separate so setup and deferred write ordering cannot drift again.
 - The setup-time deferred-write gate must include `has_ts_pin_config_()`: if TS config is the only requested boot write and it is applied immediately, TS1 can be left on its silicon default (`0x07`) and TS3 on `0x00` instead of the YAML-requested thermistor mode.
 - If `predischarge_enabled` is requested, deferred boot-apply bookkeeping must include a dedicated predischarge flag; otherwise a `PDSG_EN`-only configuration will be scheduled for delayed apply but never actually written.
 - Boot-applied regulator, TS-pin, FET-option, protection, and boot-mode writes are always enabled at startup; there is no longer a public HA `apply_configuration` button.
