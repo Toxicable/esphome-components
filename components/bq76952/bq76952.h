@@ -368,6 +368,9 @@ class BQ76952Component : public PollingComponent, public i2c::I2CDevice {
   bool last_xchg_raw_{false};
   uint16_t last_fet_control_subcommand_{0};
   uint32_t last_fet_control_subcommand_ms_{0};
+  bool output_request_pending_{false};
+  bool output_request_expected_enabled_{false};
+  uint32_t output_request_started_ms_{0};
   uint32_t deferred_boot_config_log_ms_{0};
   uint32_t deferred_boot_config_apply_ms_{0};
   uint32_t boot_config_apply_delay_ms_{10000};

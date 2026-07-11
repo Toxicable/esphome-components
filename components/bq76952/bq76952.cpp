@@ -93,6 +93,11 @@ constexpr int16_t CELL_PRESENT_THRESHOLD_MV = 500;
 
 constexpr uint16_t DM_ENABLED_PROTECTIONS_A = 0x9261;
 constexpr uint16_t DM_ENABLED_PROTECTIONS_C = 0x9263;
+constexpr uint16_t DM_CELL1_GAIN = 0x9180;
+constexpr uint16_t DM_CELL9_GAIN = 0x9190;
+constexpr uint16_t DM_CELL16_GAIN = 0x919E;
+constexpr uint16_t DM_TOS_GAIN = 0x91A2;
+constexpr uint16_t DM_VCELL_OFFSET = 0x91B0;
 constexpr uint16_t DM_VCELL_MODE = 0x9304;
 constexpr uint16_t DM_FET_OPTIONS = 0x9308;
 constexpr uint16_t DM_BALANCING_CONFIGURATION = 0x9335;
@@ -327,6 +332,36 @@ void BQ76952Component::update() {
   if (fault_sensor_ != nullptr) {
     fault_sensor_->publish_state(this->fault_to_string_(battery_status, safety_status_a, safety_status_b, safety_status_c));
   }
+  if (output_request_pending_) {
+    const bool actual_chg = (fet_status & FET_STATUS_CHG) != 0;
+    const bool actual_dsg = (fet_status & FET_STATUS_DSG) != 0;
+    const bool expected = output_request_expected_enabled_;
+    if (actual_chg == expected && actual_dsg == expected) {
+      ESP_LOGI(
+        TAG,
+        "Action result: output_enabled=%s (CHG=%s DSG=%s)",
+        expected ? "on" : "off",
+        actual_chg ? "on" : "off",
+        actual_dsg ? "on" : "off"
+      );
+      output_request_pending_ = false;
+    } else if ((millis() - output_request_started_ms_) >= 1500u) {
+      const std::string alarm_flags = this->alarm_flags_to_string_(alarm_status);
+      const std::string safety_flags =
+        this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c);
+      ESP_LOGW(
+        TAG,
+        "Output request '%s' not applied within 1500 ms: actual CHG=%s DSG=%s state=%s alarm=%s safety=%s",
+        expected ? "on" : "off",
+        actual_chg ? "on" : "off",
+        actual_dsg ? "on" : "off",
+        this->bms_state_to_string_(battery_status, control_status),
+        alarm_flags.c_str(),
+        safety_flags.c_str()
+      );
+      output_request_pending_ = false;
+    }
+  }
   this->maybe_log_event_(
     control_status, battery_status, fet_status, alarm_status, need_alarm_status, safety_status_a, safety_status_b,
     safety_status_c, need_safety_status
@@ -387,6 +422,36 @@ void BQ76952Component::update() {
         static_cast<unsigned>(cell_read_map_[i] + 1),
         static_cast<int>(raw_cell_mv[cell_read_map_[i]])
       );
+    }
+
+    uint16_t cell1_gain = 0;
+    uint16_t cell9_gain = 0;
+    uint16_t cell16_gain = 0;
+    uint16_t tos_gain = 0;
+    uint16_t vcell_offset = 0;
+    if (this->read_data_memory_u16_(DM_CELL1_GAIN, cell1_gain) &&
+        this->read_data_memory_u16_(DM_CELL9_GAIN, cell9_gain) &&
+        this->read_data_memory_u16_(DM_CELL16_GAIN, cell16_gain) &&
+        this->read_data_memory_u16_(DM_TOS_GAIN, tos_gain) &&
+        this->read_data_memory_u16_(DM_VCELL_OFFSET, vcell_offset)) {
+      ESP_LOGI(
+        TAG,
+        "Voltage calibration: cell1_gain=%d cell9_gain=%d cell16_gain=%d tos_gain=%u vcell_offset=%d mV",
+        static_cast<int>(static_cast<int16_t>(cell1_gain)),
+        static_cast<int>(static_cast<int16_t>(cell9_gain)),
+        static_cast<int>(static_cast<int16_t>(cell16_gain)),
+        static_cast<unsigned>(tos_gain),
+        static_cast<int>(static_cast<int16_t>(vcell_offset))
+      );
+    } else {
+      ESP_LOGW(TAG, "Failed reading voltage calibration diagnostics");
+    }
+
+    uint16_t active_balancing_mask = 0;
+    if (this->read_subcommand_u16_(0x0083, active_balancing_mask)) {
+      ESP_LOGI(TAG, "Active cell balancing mask: 0x%04X", static_cast<unsigned>(active_balancing_mask));
+    } else {
+      ESP_LOGW(TAG, "Failed reading active cell balancing mask");
     }
     cell_map_initialized_ = true;
   }
@@ -737,115 +802,14 @@ bool BQ76952Component::set_output_enabled(bool enabled) {
   }
 
   const uint16_t command = enabled ? SUBCMD_ALL_FETS_ON : SUBCMD_ALL_FETS_OFF;
-  const bool expected_chg = enabled;
-  const bool expected_dsg = enabled;
-
   if (!this->write_subcommand_(command)) {
     ESP_LOGW(TAG, "Failed to send output control subcommand 0x%04X", static_cast<unsigned>(command));
     return false;
   }
-  delay_microseconds_safe(800);
-
-  uint8_t fet_status = 0;
-  uint16_t battery_status = 0;
-  if (!this->read_byte_(REG_FET_STATUS, fet_status) || !this->read_u16_(REG_BATTERY_STATUS, battery_status)) {
-    ESP_LOGW(TAG, "Failed to verify FET state after output command");
-    return false;
-  }
-
-  const bool actual_chg = (fet_status & FET_STATUS_CHG) != 0;
-  const bool actual_dsg = (fet_status & FET_STATUS_DSG) != 0;
-  if (actual_chg != expected_chg || actual_dsg != expected_dsg) {
-    uint16_t current_mfg_status = manufacturing_status;
-    (void) this->read_subcommand_u16_(SUBCMD_MANUFACTURING_STATUS, current_mfg_status);
-
-    uint16_t alarm_status = 0;
-    const bool have_alarm_status = this->read_u16_(REG_ALARM_STATUS, alarm_status);
-
-    uint8_t safety_status_a = 0;
-    uint8_t safety_status_b = 0;
-    uint8_t safety_status_c = 0;
-    const bool have_safety_status = this->read_byte_(REG_SAFETY_STATUS_A, safety_status_a) &&
-                                    this->read_byte_(REG_SAFETY_STATUS_B, safety_status_b) &&
-                                    this->read_byte_(REG_SAFETY_STATUS_C, safety_status_c);
-
-    std::string blockers;
-    auto append_blocker = [&](const char *value) {
-      if (!blockers.empty()) {
-        blockers += ',';
-      }
-      blockers += value;
-    };
-
-    if ((current_mfg_status & MANUFACTURING_STATUS_FET_EN) == 0) {
-      append_blocker("fet_en=0");
-    }
-    if ((battery_status & BATTERY_STATUS_CFGUPDATE) != 0) {
-      append_blocker("cfgupdate=1");
-    }
-    if ((battery_status & BATTERY_STATUS_SLEEP) != 0) {
-      append_blocker("sleep=1");
-    }
-    if ((battery_status & BATTERY_STATUS_SS) != 0) {
-      append_blocker("ss=1");
-    }
-    if ((battery_status & BATTERY_STATUS_PF) != 0) {
-      append_blocker("pf=1");
-    }
-    if (have_alarm_status) {
-      if ((alarm_status & ALARM_STATUS_XCHG) != 0) {
-        append_blocker("xchg");
-      }
-      if ((alarm_status & ALARM_STATUS_XDSG) != 0) {
-        append_blocker("xdsg");
-      }
-    }
-    if (!actual_chg && expected_chg) {
-      append_blocker("chg_off");
-    }
-    if (!actual_dsg && expected_dsg) {
-      append_blocker("dsg_off");
-    }
-    if (actual_chg && !expected_chg) {
-      append_blocker("chg_on_unexpected");
-    }
-    if (actual_dsg && !expected_dsg) {
-      append_blocker("dsg_on_unexpected");
-    }
-    if (blockers.empty()) {
-      append_blocker("none_identified");
-    }
-
-    const std::string alarm_flags = have_alarm_status ? this->alarm_flags_to_string_(alarm_status) : "unread";
-    const std::string safety_flags =
-      have_safety_status ? this->safety_status_flags_to_string_(safety_status_a, safety_status_b, safety_status_c) : "unread";
-
-    ESP_LOGW(
-      TAG,
-      "Output request '%s' blocked. expected=CHG:%s DSG:%s actual=CHG:%s DSG:%s FET_EN=%s SS=%s PF=%s "
-      "alarm=%s safety=%s blockers=%s",
-      enabled ? "on" : "off",
-      expected_chg ? "on" : "off",
-      expected_dsg ? "on" : "off",
-      actual_chg ? "on" : "off",
-      actual_dsg ? "on" : "off",
-      (current_mfg_status & MANUFACTURING_STATUS_FET_EN) ? "1" : "0",
-      (battery_status & BATTERY_STATUS_SS) ? "1" : "0",
-      (battery_status & BATTERY_STATUS_PF) ? "1" : "0",
-      alarm_flags.c_str(),
-      safety_flags.c_str(),
-      blockers.c_str()
-    );
-    return false;
-  }
-
-  ESP_LOGI(
-    TAG,
-    "Action result: output_enabled=%s (CHG=%s DSG=%s)",
-    actual_chg && actual_dsg ? "on" : "off",
-    actual_chg ? "on" : "off",
-    actual_dsg ? "on" : "off"
-  );
+  output_request_pending_ = true;
+  output_request_expected_enabled_ = enabled;
+  output_request_started_ms_ = millis();
+  ESP_LOGI(TAG, "Action accepted: output_enabled=%s; waiting for FET evaluation", enabled ? "on" : "off");
   return true;
 }
 
