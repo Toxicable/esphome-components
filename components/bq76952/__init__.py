@@ -21,9 +21,11 @@ AUTO_LOAD = ["button", "sensor", "switch", "text_sensor"]
 
 bq76952_ns = cg.esphome_ns.namespace("bq76952")
 
-BQ76952CellChemistry = bq76952_ns.enum("BQ76952CellChemistry")
-BQ76952CurrentGainPolicy = bq76952_ns.enum("BQ76952CurrentGainPolicy")
-BQ76952ThermistorMode = bq76952_ns.enum("BQ76952ThermistorMode")
+BQ76952CellChemistry = bq76952_ns.enum("BQ76952CellChemistry", is_class=True)
+BQ76952CurrentGainPolicy = bq76952_ns.enum(
+    "BQ76952CurrentGainPolicy", is_class=True
+)
+BQ76952ThermistorMode = bq76952_ns.enum("BQ76952ThermistorMode", is_class=True)
 
 BQ76952RegulatorConfig = bq76952_ns.struct("BQ76952RegulatorConfig")
 BQ76952ThermistorConfig = bq76952_ns.struct("BQ76952ThermistorConfig")
@@ -390,7 +392,7 @@ def _validate_config(config):
     for sensor_key, mode_key in sensor_modes:
         if (
             sensor_key in config
-            and thermistors[mode_key] == BQ76952ThermistorMode.DISABLED
+            and str(thermistors[mode_key]) == "disabled"
         ):
             raise cv.Invalid(
                 f"{sensor_key} requires thermistors.{mode_key} to be enabled"
