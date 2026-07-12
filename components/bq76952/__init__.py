@@ -20,6 +20,7 @@ DEPENDENCIES = ["i2c"]
 AUTO_LOAD = ["button", "sensor", "switch", "text_sensor"]
 
 bq76952_ns = cg.esphome_ns.namespace("bq76952")
+BQ76952Config = bq76952_ns.struct("BQ76952Config")
 BQ76952Component = bq76952_ns.class_(
     "BQ76952Component", cg.PollingComponent, i2c.I2CDevice)
 BQ76952OutputEnabledSwitch = bq76952_ns.class_(
@@ -285,83 +286,106 @@ CONFIG_SCHEMA = cv.All(
 )
 
 
+def _append_optional(args, config, key, has_field, value_field):
+    if key in config:
+        args.append((has_field, True))
+        args.append((value_field, config[key]))
+
+
+def _build_cpp_config(config):
+    cell_read_map = list(range(16))
+    explicit_cell_map = CONF_CELL_CHANNELS in config
+    if explicit_cell_map:
+        for index, channel in enumerate(config[CONF_CELL_CHANNELS]):
+            cell_read_map[index] = channel - 1
+
+    args = [
+        ("cell_count_", config[CONF_CELL_COUNT]),
+        ("cell_read_map_", cell_read_map),
+        ("explicit_cell_map_", explicit_cell_map),
+        ("sense_resistor_milliohm_", config[CONF_SENSE_RESISTOR_MILLIOHM]),
+        ("boot_config_apply_delay_ms_", config[CONF_BOOT_CONFIG_APPLY_DELAY].total_milliseconds),
+        ("autonomous_fet_mode_", config[CONF_OTP_AUTONOMOUS_FET_MODE]),
+        ("sleep_mode_", config[CONF_OTP_SLEEP_MODE]),
+    ]
+
+    _append_optional(args, config, CONF_REG0_ENABLED,
+                     "has_reg0_config_", "reg0_enabled_")
+
+    if CONF_REG1_ENABLED in config or CONF_REG1_VOLTAGE in config:
+        args.append(("has_reg1_enabled_config_", True))
+        args.append(("reg1_enabled_", config.get(CONF_REG1_ENABLED, True)))
+    _append_optional(args, config, CONF_REG1_VOLTAGE,
+                     "has_reg1_voltage_config_", "reg1_voltage_code_")
+
+    if CONF_TS1_TEMPERATURE in config:
+        args.extend([
+            ("has_ts1_config_", True),
+            ("ts1_pullup_180k_", config[CONF_TS1_TEMPERATURE][CONF_PULLUP]),
+        ])
+    if CONF_TS2_TEMPERATURE in config:
+        args.extend([
+            ("has_ts2_config_", True),
+            ("ts2_pullup_180k_", config[CONF_TS2_TEMPERATURE][CONF_PULLUP]),
+        ])
+    if CONF_TS3_TEMPERATURE in config:
+        args.extend([
+            ("has_ts3_config_", True),
+            ("ts3_pullup_180k_", config[CONF_TS3_TEMPERATURE][CONF_PULLUP]),
+        ])
+
+    _append_optional(args, config, CONF_PREDISCHARGE_ENABLED,
+                     "has_predischarge_setting_", "predischarge_enabled_")
+    _append_optional(args, config, CONF_SLEEP_CHARGE_ENABLED,
+                     "has_sleep_charge_setting_", "sleep_charge_enabled_")
+    _append_optional(args, config, CONF_AUTONOMOUS_BALANCING_ENABLED,
+                     "has_autonomous_balancing_setting_", "autonomous_balancing_enabled_")
+    _append_optional(args, config, CONF_NOMINAL_CAPACITY_AH,
+                     "has_nominal_capacity_ah_", "nominal_capacity_ah_")
+
+    _append_optional(args, config, CONF_CELL_UNDERVOLTAGE_LIMIT_MV,
+                     "has_cell_undervoltage_limit_", "cell_undervoltage_limit_mv_")
+    _append_optional(args, config, CONF_CELL_UNDERVOLTAGE_DELAY_MS,
+                     "has_cell_undervoltage_delay_", "cell_undervoltage_delay_ms_")
+    _append_optional(args, config, CONF_CELL_OVERVOLTAGE_LIMIT_MV,
+                     "has_cell_overvoltage_limit_", "cell_overvoltage_limit_mv_")
+    _append_optional(args, config, CONF_CELL_OVERVOLTAGE_DELAY_MS,
+                     "has_cell_overvoltage_delay_", "cell_overvoltage_delay_ms_")
+
+    _append_optional(args, config, CONF_CHARGE_CURRENT_LIMIT_A,
+                     "has_charge_current_limit_", "charge_current_limit_a_")
+    _append_optional(args, config, CONF_CHARGE_CURRENT_DELAY_MS,
+                     "has_charge_current_delay_", "charge_current_delay_ms_")
+    _append_optional(args, config, CONF_DISCHARGE_CURRENT_LIMIT_A,
+                     "has_discharge_current_limit_", "discharge_current_limit_a_")
+    _append_optional(args, config, CONF_DISCHARGE_CURRENT_DELAY_MS,
+                     "has_discharge_current_delay_", "discharge_current_delay_ms_")
+    _append_optional(args, config, CONF_DISCHARGE_CURRENT_LIMIT_2_A,
+                     "has_discharge_current_limit_2_", "discharge_current_limit_2_a_")
+    _append_optional(args, config, CONF_DISCHARGE_CURRENT_DELAY_2_MS,
+                     "has_discharge_current_delay_2_", "discharge_current_delay_2_ms_")
+    _append_optional(args, config, CONF_DISCHARGE_CURRENT_LIMIT_3_A,
+                     "has_discharge_current_limit_3_", "discharge_current_limit_3_a_")
+    _append_optional(args, config, CONF_DISCHARGE_CURRENT_DELAY_3_S,
+                     "has_discharge_current_delay_3_", "discharge_current_delay_3_s_")
+    _append_optional(args, config, CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV,
+                     "has_scd_threshold_", "scd_threshold_mv_")
+    _append_optional(args, config, CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US,
+                     "has_scd_delay_", "scd_delay_us_")
+    _append_optional(args, config, CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S,
+                     "has_scd_recovery_time_", "scd_recovery_time_s_")
+    _append_optional(args, config, CONF_CURRENT_RECOVERY_TIME_S,
+                     "has_current_recovery_time_", "current_recovery_time_s_")
+
+    return cg.StructInitializer(BQ76952Config, *args)
+
+
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
-    cg.add(var.set_cell_count(config[CONF_CELL_COUNT]))
-    if CONF_CELL_CHANNELS in config:
-        for index, channel in enumerate(config[CONF_CELL_CHANNELS], start=1):
-            cg.add(var.set_cell_channel(index, channel))
-    cg.add(var.set_sense_resistor_milliohm(
-        config[CONF_SENSE_RESISTOR_MILLIOHM]))
-    cg.add(var.set_autonomous_fet_mode(config[CONF_OTP_AUTONOMOUS_FET_MODE]))
-    cg.add(var.set_sleep_mode(config[CONF_OTP_SLEEP_MODE]))
-    if CONF_PREDISCHARGE_ENABLED in config:
-        cg.add(var.set_predischarge_enabled(config[CONF_PREDISCHARGE_ENABLED]))
-    if CONF_SLEEP_CHARGE_ENABLED in config:
-        cg.add(var.set_sleep_charge_enabled(config[CONF_SLEEP_CHARGE_ENABLED]))
-    if CONF_AUTONOMOUS_BALANCING_ENABLED in config:
-        cg.add(var.set_autonomous_balancing_enabled(
-            config[CONF_AUTONOMOUS_BALANCING_ENABLED]))
-    if CONF_CELL_UNDERVOLTAGE_LIMIT_MV in config:
-        cg.add(var.set_cell_undervoltage_limit_mv(
-            config[CONF_CELL_UNDERVOLTAGE_LIMIT_MV]))
-    if CONF_CELL_UNDERVOLTAGE_DELAY_MS in config:
-        cg.add(var.set_cell_undervoltage_delay_ms(
-            config[CONF_CELL_UNDERVOLTAGE_DELAY_MS]))
-    if CONF_CELL_OVERVOLTAGE_LIMIT_MV in config:
-        cg.add(var.set_cell_overvoltage_limit_mv(
-            config[CONF_CELL_OVERVOLTAGE_LIMIT_MV]))
-    if CONF_CELL_OVERVOLTAGE_DELAY_MS in config:
-        cg.add(var.set_cell_overvoltage_delay_ms(
-            config[CONF_CELL_OVERVOLTAGE_DELAY_MS]))
-    if CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV in config:
-        cg.add(
-            var.set_scd_threshold_mv(
-                config[CONF_SHORT_CIRCUIT_IN_DISCHARGE_THRESHOLD_MV]
-            )
-        )
-    if CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US in config:
-        cg.add(
-            var.set_scd_delay_us(config[CONF_SHORT_CIRCUIT_IN_DISCHARGE_DELAY_US])
-        )
-    if CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S in config:
-        cg.add(
-            var.set_scd_recovery_time_s(
-                config[CONF_SHORT_CIRCUIT_IN_DISCHARGE_RECOVERY_TIME_S]
-            )
-        )
-    if CONF_CHARGE_CURRENT_LIMIT_A in config:
-        cg.add(var.set_charge_current_limit_a(config[CONF_CHARGE_CURRENT_LIMIT_A]))
-    if CONF_DISCHARGE_CURRENT_LIMIT_A in config:
-        cg.add(var.set_discharge_current_limit_a(config[CONF_DISCHARGE_CURRENT_LIMIT_A]))
-    if CONF_DISCHARGE_CURRENT_LIMIT_2_A in config:
-        cg.add(var.set_discharge_current_limit_2_a(config[CONF_DISCHARGE_CURRENT_LIMIT_2_A]))
-    if CONF_DISCHARGE_CURRENT_LIMIT_3_A in config:
-        cg.add(var.set_discharge_current_limit_3_a(config[CONF_DISCHARGE_CURRENT_LIMIT_3_A]))
-    if CONF_CHARGE_CURRENT_DELAY_MS in config:
-        cg.add(var.set_charge_current_delay_ms(config[CONF_CHARGE_CURRENT_DELAY_MS]))
-    if CONF_DISCHARGE_CURRENT_DELAY_MS in config:
-        cg.add(var.set_discharge_current_delay_ms(config[CONF_DISCHARGE_CURRENT_DELAY_MS]))
-    if CONF_DISCHARGE_CURRENT_DELAY_2_MS in config:
-        cg.add(var.set_discharge_current_delay_2_ms(config[CONF_DISCHARGE_CURRENT_DELAY_2_MS]))
-    if CONF_DISCHARGE_CURRENT_DELAY_3_S in config:
-        cg.add(var.set_discharge_current_delay_3_s(config[CONF_DISCHARGE_CURRENT_DELAY_3_S]))
-    if CONF_CURRENT_RECOVERY_TIME_S in config:
-        cg.add(var.set_current_recovery_time_s(config[CONF_CURRENT_RECOVERY_TIME_S]))
-    if CONF_REG0_ENABLED in config:
-        cg.add(var.set_reg0_enabled(config[CONF_REG0_ENABLED]))
-    if CONF_REG1_ENABLED in config:
-        cg.add(var.set_reg1_enabled(config[CONF_REG1_ENABLED]))
-    elif CONF_REG1_VOLTAGE in config:
-        cg.add(var.set_reg1_enabled(True))
-    if CONF_REG1_VOLTAGE in config:
-        cg.add(var.set_reg1_voltage(config[CONF_REG1_VOLTAGE]))
-    cg.add(var.set_boot_config_apply_delay_ms(config[CONF_BOOT_CONFIG_APPLY_DELAY].total_milliseconds))
-    if CONF_NOMINAL_CAPACITY_AH in config:
-        cg.add(var.set_nominal_capacity_ah(config[CONF_NOMINAL_CAPACITY_AH]))
+    cg.add(var.set_config(_build_cpp_config(config)))
 
     if CONF_BAT_VOLTAGE in config:
         sens = await sensor.new_sensor(config[CONF_BAT_VOLTAGE])
@@ -393,15 +417,12 @@ async def to_code(config):
     if CONF_TS1_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_TS1_TEMPERATURE])
         cg.add(var.set_ts1_temperature_sensor(sens))
-        cg.add(var.set_ts1_pullup_180k(config[CONF_TS1_TEMPERATURE][CONF_PULLUP]))
     if CONF_TS2_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_TS2_TEMPERATURE])
         cg.add(var.set_ts2_temperature_sensor(sens))
-        cg.add(var.set_ts2_pullup_180k(config[CONF_TS2_TEMPERATURE][CONF_PULLUP]))
     if CONF_TS3_TEMPERATURE in config:
         sens = await sensor.new_sensor(config[CONF_TS3_TEMPERATURE])
         cg.add(var.set_ts3_temperature_sensor(sens))
-        cg.add(var.set_ts3_pullup_180k(config[CONF_TS3_TEMPERATURE][CONF_PULLUP]))
 
     if CONF_BMS_STATE in config:
         ts = await text_sensor.new_text_sensor(config[CONF_BMS_STATE])
