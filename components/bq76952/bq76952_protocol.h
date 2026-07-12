@@ -30,6 +30,8 @@ class BQ76952Protocol : public i2c::I2CDevice {
   bool read_subcommand(uint16_t subcommand, uint8_t *data, size_t length);
   bool write_subcommand(uint16_t subcommand, const uint8_t *data, size_t length);
 
+  bool read_data_memory(uint16_t address, uint8_t *data, size_t length);
+  bool write_data_memory(uint16_t address, const uint8_t *data, size_t length);
   bool read_data_memory_u8(uint16_t address, uint8_t &value);
   bool read_data_memory_u16(uint16_t address, uint16_t &value);
   bool write_data_memory_u8(uint16_t address, uint8_t value);
@@ -41,7 +43,7 @@ class BQ76952Protocol : public i2c::I2CDevice {
  private:
   bool wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms);
   bool read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length);
-  bool verify_transfer_buffer(const uint8_t *data, size_t length, uint8_t checksum) const;
+  bool verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length, uint8_t checksum) const;
 
   bool crc_enabled_{false};
 };
