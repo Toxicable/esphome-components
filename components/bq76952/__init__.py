@@ -21,6 +21,7 @@ AUTO_LOAD = ["button", "sensor", "switch", "text_sensor"]
 
 bq76952_ns = cg.esphome_ns.namespace("bq76952")
 
+BQ76952CellChemistry = bq76952_ns.enum("BQ76952CellChemistry")
 BQ76952CurrentGainPolicy = bq76952_ns.enum("BQ76952CurrentGainPolicy")
 BQ76952ThermistorMode = bq76952_ns.enum("BQ76952ThermistorMode")
 
@@ -30,14 +31,14 @@ BQ76952PrechargeConfig = bq76952_ns.struct("BQ76952PrechargeConfig")
 BQ76952PredischargeConfig = bq76952_ns.struct("BQ76952PredischargeConfig")
 BQ76952FetConfig = bq76952_ns.struct("BQ76952FetConfig")
 BQ76952BalancingConfig = bq76952_ns.struct("BQ76952BalancingConfig")
-BQ76952VoltageProtectionConfig = bq76952_ns.struct(
-    "BQ76952VoltageProtectionConfig"
+BQ76952CellVoltageProtectionConfig = bq76952_ns.struct(
+    "BQ76952CellVoltageProtectionConfig"
 )
 BQ76952CurrentProtectionConfig = bq76952_ns.struct(
     "BQ76952CurrentProtectionConfig"
 )
-BQ76952SlowCurrentProtectionConfig = bq76952_ns.struct(
-    "BQ76952SlowCurrentProtectionConfig"
+BQ76952LongDurationCurrentProtectionConfig = bq76952_ns.struct(
+    "BQ76952LongDurationCurrentProtectionConfig"
 )
 BQ76952ShortCircuitProtectionConfig = bq76952_ns.struct(
     "BQ76952ShortCircuitProtectionConfig"
@@ -55,20 +56,18 @@ BQ76952Component = bq76952_ns.class_(
 BQ76952OutputEnabledSwitch = bq76952_ns.class_(
     "BQ76952OutputEnabledSwitch", switch_.Switch
 )
-BQ76952AutonomousFetSwitch = bq76952_ns.class_(
-    "BQ76952AutonomousFetSwitch", switch_.Switch
+BQ76952AutonomousSwitch = bq76952_ns.class_(
+    "BQ76952AutonomousSwitch", switch_.Switch
 )
 BQ76952ClearAlarmsButton = bq76952_ns.class_(
     "BQ76952ClearAlarmsButton", button.Button
-)
-BQ76952ResetPassedChargeButton = bq76952_ns.class_(
-    "BQ76952ResetPassedChargeButton", button.Button
 )
 BQ76952ProgramFactoryOtpButton = bq76952_ns.class_(
     "BQ76952ProgramFactoryOtpButton", button.Button
 )
 
 CONF_CELL_COUNT = "cell_count"
+CONF_CELL_CHEMISTRY = "cell_chemistry"
 CONF_SENSE_RESISTOR_MILLIOHM = "sense_resistor_milliohm"
 CONF_I2C_CRC_ENABLED = "i2c_crc_enabled"
 CONF_CURRENT_GAIN_POLICY = "current_gain_policy"
@@ -86,7 +85,7 @@ CONF_TS2 = "ts2"
 CONF_TS3 = "ts3"
 
 CONF_FET = "fet"
-CONF_AUTONOMOUS_ENABLED = "autonomous_enabled"
+CONF_AUTONOMOUS = "autonomous"
 CONF_SLEEP_CHARGE_ENABLED = "sleep_charge_enabled"
 CONF_BODY_DIODE_THRESHOLD_MA = "body_diode_threshold_ma"
 CONF_PRECHARGE = "precharge"
@@ -99,10 +98,10 @@ CONF_STOP_DELTA_MV = "stop_delta_mv"
 
 CONF_BALANCING = "balancing"
 CONF_CHARGING_ENABLED = "charging_enabled"
-CONF_RELAXED_ENABLED = "relaxed_enabled"
+CONF_RELAXED_BALANCING_ENABLED = "relaxed_balancing_enabled"
+CONF_RELAXED_CURRENT_THRESHOLD_A = "relaxed_current_threshold_a"
 CONF_MINIMUM_CELL_VOLTAGE_MV = "minimum_cell_voltage_mv"
 CONF_START_DELTA_MV = "start_delta_mv"
-CONF_IDLE_CURRENT_THRESHOLD_A = "idle_current_threshold_a"
 CONF_MINIMUM_TEMPERATURE_C = "minimum_temperature_c"
 CONF_MAXIMUM_TEMPERATURE_C = "maximum_temperature_c"
 CONF_MAXIMUM_BALANCED_CELLS = "maximum_balanced_cells"
@@ -146,15 +145,18 @@ CONF_BMS_STATE = "bms_state"
 CONF_FAULT = "fault"
 CONF_FET_STATUS_FLAGS = "fet_status_flags"
 CONF_OUTPUT_ENABLED_CONTROL = "output_enabled_control"
-CONF_AUTONOMOUS_FET_CONTROL = "autonomous_fet_control"
+CONF_AUTONOMOUS_CONTROL = "autonomous_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
-CONF_RESET_PASSED_CHARGE = "reset_passed_charge"
 CONF_PROGRAM_FACTORY_OTP = "program_factory_otp"
 
 CELL_VOLTAGE_KEYS = [f"cell{index}_voltage" for index in range(1, 17)]
 
+CELL_CHEMISTRY_OPTIONS = {
+    "lithium_ion": BQ76952CellChemistry.LITHIUM_ION,
+}
+
 CURRENT_GAIN_POLICY_OPTIONS = {
-    "preserve_existing": BQ76952CurrentGainPolicy.PRESERVE_EXISTING,
+    "factory_calibration": BQ76952CurrentGainPolicy.FACTORY_CALIBRATION,
     "derive_from_shunt": BQ76952CurrentGainPolicy.DERIVE_FROM_SHUNT,
 }
 
@@ -172,7 +174,24 @@ REGULATOR_VOLTAGE_OPTIONS = {
     "5.0v": 0x0E,
 }
 
-SCD_THRESHOLD_OPTIONS = (10, 20, 40, 60, 80, 100, 125, 150, 175, 200, 250, 300, 350, 400, 450, 500)
+SCD_THRESHOLD_OPTIONS = (
+    10,
+    20,
+    40,
+    60,
+    80,
+    100,
+    125,
+    150,
+    175,
+    200,
+    250,
+    300,
+    350,
+    400,
+    450,
+    500,
+)
 
 
 def _validate_scd_delay_us(value):
@@ -221,7 +240,7 @@ PREDISCHARGE_SCHEMA = cv.Schema(
 
 FET_SCHEMA = cv.Schema(
     {
-        cv.Required(CONF_AUTONOMOUS_ENABLED): cv.boolean,
+        cv.Required(CONF_AUTONOMOUS): cv.boolean,
         cv.Required(CONF_SLEEP_CHARGE_ENABLED): cv.boolean,
         cv.Required(CONF_BODY_DIODE_THRESHOLD_MA): cv.int_range(
             min=-32768, max=32767
@@ -234,20 +253,20 @@ FET_SCHEMA = cv.Schema(
 BALANCING_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_CHARGING_ENABLED): cv.boolean,
-        cv.Required(CONF_RELAXED_ENABLED): cv.boolean,
+        cv.Required(CONF_RELAXED_BALANCING_ENABLED): cv.boolean,
+        cv.Required(CONF_RELAXED_CURRENT_THRESHOLD_A): cv.float_range(min=0),
         cv.Required(CONF_MINIMUM_CELL_VOLTAGE_MV): cv.int_range(
             min=0, max=5000
         ),
         cv.Required(CONF_START_DELTA_MV): cv.int_range(min=0, max=1000),
         cv.Required(CONF_STOP_DELTA_MV): cv.int_range(min=0, max=1000),
-        cv.Required(CONF_IDLE_CURRENT_THRESHOLD_A): cv.float_range(min=0),
         cv.Required(CONF_MINIMUM_TEMPERATURE_C): cv.int_range(min=-128, max=127),
         cv.Required(CONF_MAXIMUM_TEMPERATURE_C): cv.int_range(min=-128, max=127),
         cv.Required(CONF_MAXIMUM_BALANCED_CELLS): cv.int_range(min=0, max=16),
     }
 )
 
-VOLTAGE_PROTECTION_SCHEMA = cv.Schema(
+CELL_VOLTAGE_PROTECTION_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_ENABLED): cv.boolean,
         cv.Required(CONF_THRESHOLD_MV): cv.int_range(min=1000, max=6000),
@@ -264,7 +283,7 @@ CURRENT_PROTECTION_SCHEMA = cv.Schema(
     }
 )
 
-SLOW_CURRENT_PROTECTION_SCHEMA = cv.Schema(
+LONG_DURATION_CURRENT_PROTECTION_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_ENABLED): cv.boolean,
         cv.Required(CONF_THRESHOLD_A): cv.float_range(min=0.001),
@@ -295,12 +314,14 @@ TEMPERATURE_PROTECTION_SCHEMA = cv.Schema(
 
 PROTECTION_SCHEMA = cv.Schema(
     {
-        cv.Required(CONF_CELL_UNDERVOLTAGE): VOLTAGE_PROTECTION_SCHEMA,
-        cv.Required(CONF_CELL_OVERVOLTAGE): VOLTAGE_PROTECTION_SCHEMA,
+        cv.Required(CONF_CELL_UNDERVOLTAGE): CELL_VOLTAGE_PROTECTION_SCHEMA,
+        cv.Required(CONF_CELL_OVERVOLTAGE): CELL_VOLTAGE_PROTECTION_SCHEMA,
         cv.Required(CONF_CHARGE_OVERCURRENT): CURRENT_PROTECTION_SCHEMA,
         cv.Required(CONF_DISCHARGE_OVERCURRENT_1): CURRENT_PROTECTION_SCHEMA,
         cv.Required(CONF_DISCHARGE_OVERCURRENT_2): CURRENT_PROTECTION_SCHEMA,
-        cv.Required(CONF_DISCHARGE_OVERCURRENT_3): SLOW_CURRENT_PROTECTION_SCHEMA,
+        cv.Required(
+            CONF_DISCHARGE_OVERCURRENT_3
+        ): LONG_DURATION_CURRENT_PROTECTION_SCHEMA,
         cv.Required(CONF_DISCHARGE_SHORT_CIRCUIT): SHORT_CIRCUIT_PROTECTION_SCHEMA,
         cv.Required(CONF_TEMPERATURE): TEMPERATURE_PROTECTION_SCHEMA,
         cv.Required(CONF_CURRENT_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
@@ -318,23 +339,47 @@ VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
 def _validate_config(config):
     cell_count = config[CONF_CELL_COUNT]
     precharge = config[CONF_FET][CONF_PRECHARGE]
+    predischarge = config[CONF_FET][CONF_PREDISCHARGE]
     balancing = config[CONF_BALANCING]
     temperature = config[CONF_PROTECTIONS][CONF_TEMPERATURE]
     thermistors = config[CONF_THERMISTORS]
 
-    if precharge[CONF_ENABLED] and precharge[CONF_STOP_CELL_VOLTAGE_MV] <= precharge[CONF_START_CELL_VOLTAGE_MV]:
-        raise cv.Invalid("precharge stop_cell_voltage_mv must exceed start_cell_voltage_mv")
+    if (
+        precharge[CONF_ENABLED]
+        and precharge[CONF_STOP_CELL_VOLTAGE_MV]
+        <= precharge[CONF_START_CELL_VOLTAGE_MV]
+    ):
+        raise cv.Invalid(
+            "precharge stop_cell_voltage_mv must exceed start_cell_voltage_mv"
+        )
+
+    if (
+        predischarge[CONF_ENABLED]
+        and predischarge[CONF_TIMEOUT_MS] == 0
+        and predischarge[CONF_STOP_DELTA_MV] == 0
+    ):
+        raise cv.Invalid(
+            "enabled predischarge requires a non-zero timeout_ms or stop_delta_mv"
+        )
 
     if balancing[CONF_STOP_DELTA_MV] > balancing[CONF_START_DELTA_MV]:
         raise cv.Invalid("balancing stop_delta_mv must not exceed start_delta_mv")
     if balancing[CONF_MAXIMUM_BALANCED_CELLS] > cell_count:
         raise cv.Invalid("maximum_balanced_cells must not exceed cell_count")
-    if balancing[CONF_MINIMUM_TEMPERATURE_C] >= balancing[CONF_MAXIMUM_TEMPERATURE_C]:
-        raise cv.Invalid("balancing minimum_temperature_c must be below maximum_temperature_c")
+    if (
+        balancing[CONF_MINIMUM_TEMPERATURE_C]
+        >= balancing[CONF_MAXIMUM_TEMPERATURE_C]
+    ):
+        raise cv.Invalid(
+            "balancing minimum_temperature_c must be below maximum_temperature_c"
+        )
 
     if temperature[CONF_CHARGE_MINIMUM_C] >= temperature[CONF_CHARGE_MAXIMUM_C]:
         raise cv.Invalid("charge_minimum_c must be below charge_maximum_c")
-    if temperature[CONF_DISCHARGE_MINIMUM_C] >= temperature[CONF_DISCHARGE_MAXIMUM_C]:
+    if (
+        temperature[CONF_DISCHARGE_MINIMUM_C]
+        >= temperature[CONF_DISCHARGE_MAXIMUM_C]
+    ):
         raise cv.Invalid("discharge_minimum_c must be below discharge_maximum_c")
 
     for index, key in enumerate(CELL_VOLTAGE_KEYS, start=1):
@@ -347,8 +392,13 @@ def _validate_config(config):
         (CONF_TS3_TEMPERATURE, CONF_TS3),
     )
     for sensor_key, mode_key in sensor_modes:
-        if sensor_key in config and thermistors[mode_key] == BQ76952ThermistorMode.DISABLED:
-            raise cv.Invalid(f"{sensor_key} requires thermistors.{mode_key} to be enabled")
+        if (
+            sensor_key in config
+            and thermistors[mode_key] == BQ76952ThermistorMode.DISABLED
+        ):
+            raise cv.Invalid(
+                f"{sensor_key} requires thermistors.{mode_key} to be enabled"
+            )
 
     return config
 
@@ -356,6 +406,9 @@ def _validate_config(config):
 schema = {
     cv.GenerateID(): cv.declare_id(BQ76952Component),
     cv.Required(CONF_CELL_COUNT): cv.int_range(min=3, max=16),
+    cv.Required(CONF_CELL_CHEMISTRY): cv.enum(
+        CELL_CHEMISTRY_OPTIONS, lower=True
+    ),
     cv.Required(CONF_SENSE_RESISTOR_MILLIOHM): cv.float_range(min=0.001),
     cv.Required(CONF_I2C_CRC_ENABLED): cv.boolean,
     cv.Required(CONF_CURRENT_GAIN_POLICY): cv.enum(
@@ -412,17 +465,15 @@ schema = {
     cv.Optional(CONF_OUTPUT_ENABLED_CONTROL): switch_.switch_schema(
         BQ76952OutputEnabledSwitch, entity_category=ENTITY_CATEGORY_CONFIG
     ),
-    cv.Optional(CONF_AUTONOMOUS_FET_CONTROL): switch_.switch_schema(
-        BQ76952AutonomousFetSwitch, entity_category=ENTITY_CATEGORY_CONFIG
+    cv.Optional(CONF_AUTONOMOUS_CONTROL): switch_.switch_schema(
+        BQ76952AutonomousSwitch, entity_category=ENTITY_CATEGORY_CONFIG
     ),
     cv.Optional(CONF_CLEAR_ALARMS): button.button_schema(
         BQ76952ClearAlarmsButton, entity_category=ENTITY_CATEGORY_CONFIG
     ),
-    cv.Optional(CONF_RESET_PASSED_CHARGE): button.button_schema(
-        BQ76952ResetPassedChargeButton, entity_category=ENTITY_CATEGORY_CONFIG
-    ),
     cv.Optional(CONF_PROGRAM_FACTORY_OTP): button.button_schema(
-        BQ76952ProgramFactoryOtpButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+        BQ76952ProgramFactoryOtpButton,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
     ),
 }
 
@@ -438,7 +489,9 @@ CONFIG_SCHEMA = cv.All(
 
 
 def _struct(type_, config, fields):
-    return cg.StructInitializer(type_, *((field, config[key]) for field, key in fields))
+    return cg.StructInitializer(
+        type_, *((field, config[key]) for field, key in fields)
+    )
 
 
 def _build_cpp_config(config):
@@ -478,9 +531,12 @@ def _build_cpp_config(config):
     )
     fet = cg.StructInitializer(
         BQ76952FetConfig,
-        ("autonomous_enabled", config[CONF_FET][CONF_AUTONOMOUS_ENABLED]),
+        ("autonomous", config[CONF_FET][CONF_AUTONOMOUS]),
         ("sleep_charge_enabled", config[CONF_FET][CONF_SLEEP_CHARGE_ENABLED]),
-        ("body_diode_threshold_ma", config[CONF_FET][CONF_BODY_DIODE_THRESHOLD_MA]),
+        (
+            "body_diode_threshold_ma",
+            config[CONF_FET][CONF_BODY_DIODE_THRESHOLD_MA],
+        ),
         ("precharge", precharge),
         ("predischarge", predischarge),
     )
@@ -489,20 +545,20 @@ def _build_cpp_config(config):
         config[CONF_BALANCING],
         (
             ("charging_enabled", CONF_CHARGING_ENABLED),
-            ("relaxed_enabled", CONF_RELAXED_ENABLED),
+            ("relaxed_balancing_enabled", CONF_RELAXED_BALANCING_ENABLED),
+            ("relaxed_current_threshold_a", CONF_RELAXED_CURRENT_THRESHOLD_A),
             ("minimum_cell_voltage_mv", CONF_MINIMUM_CELL_VOLTAGE_MV),
             ("start_delta_mv", CONF_START_DELTA_MV),
             ("stop_delta_mv", CONF_STOP_DELTA_MV),
-            ("idle_current_threshold_a", CONF_IDLE_CURRENT_THRESHOLD_A),
             ("minimum_temperature_c", CONF_MINIMUM_TEMPERATURE_C),
             ("maximum_temperature_c", CONF_MAXIMUM_TEMPERATURE_C),
             ("maximum_balanced_cells", CONF_MAXIMUM_BALANCED_CELLS),
         ),
     )
 
-    def voltage(name):
+    def cell_voltage(name):
         return _struct(
-            BQ76952VoltageProtectionConfig,
+            BQ76952CellVoltageProtectionConfig,
             config[CONF_PROTECTIONS][name],
             (
                 ("enabled", CONF_ENABLED),
@@ -524,7 +580,7 @@ def _build_cpp_config(config):
         )
 
     ocd3 = _struct(
-        BQ76952SlowCurrentProtectionConfig,
+        BQ76952LongDurationCurrentProtectionConfig,
         config[CONF_PROTECTIONS][CONF_DISCHARGE_OVERCURRENT_3],
         (
             ("enabled", CONF_ENABLED),
@@ -557,20 +613,30 @@ def _build_cpp_config(config):
     )
     protections = cg.StructInitializer(
         BQ76952ProtectionConfig,
-        ("cell_undervoltage", voltage(CONF_CELL_UNDERVOLTAGE)),
-        ("cell_overvoltage", voltage(CONF_CELL_OVERVOLTAGE)),
+        ("cell_undervoltage", cell_voltage(CONF_CELL_UNDERVOLTAGE)),
+        ("cell_overvoltage", cell_voltage(CONF_CELL_OVERVOLTAGE)),
         ("charge_overcurrent", current(CONF_CHARGE_OVERCURRENT)),
-        ("discharge_overcurrent_1", current(CONF_DISCHARGE_OVERCURRENT_1)),
-        ("discharge_overcurrent_2", current(CONF_DISCHARGE_OVERCURRENT_2)),
+        (
+            "discharge_overcurrent_1",
+            current(CONF_DISCHARGE_OVERCURRENT_1),
+        ),
+        (
+            "discharge_overcurrent_2",
+            current(CONF_DISCHARGE_OVERCURRENT_2),
+        ),
         ("discharge_overcurrent_3", ocd3),
         ("discharge_short_circuit", scd),
         ("temperature", temperature),
-        ("current_recovery_time_s", config[CONF_PROTECTIONS][CONF_CURRENT_RECOVERY_TIME_S]),
+        (
+            "current_recovery_time_s",
+            config[CONF_PROTECTIONS][CONF_CURRENT_RECOVERY_TIME_S],
+        ),
     )
 
     return cg.StructInitializer(
         BQ76952Config,
         ("cell_count", config[CONF_CELL_COUNT]),
+        ("cell_chemistry", config[CONF_CELL_CHEMISTRY]),
         ("sense_resistor_milliohm", config[CONF_SENSE_RESISTOR_MILLIOHM]),
         ("i2c_crc_enabled", config[CONF_I2C_CRC_ENABLED]),
         ("current_gain_policy", config[CONF_CURRENT_GAIN_POLICY]),
@@ -592,7 +658,10 @@ async def to_code(config):
         (CONF_BAT_VOLTAGE, var.set_bat_voltage_sensor),
         (CONF_PACK_VOLTAGE, var.set_pack_voltage_sensor),
         (CONF_LD_VOLTAGE, var.set_ld_voltage_sensor),
-        (CONF_LARGEST_INTERCELL_VOLTAGE, var.set_largest_intercell_voltage_sensor),
+        (
+            CONF_LARGEST_INTERCELL_VOLTAGE,
+            var.set_largest_intercell_voltage_sensor,
+        ),
         (CONF_CURRENT, var.set_current_sensor),
         (CONF_STATE_OF_CHARGE, var.set_state_of_charge_sensor),
         (CONF_DIE_TEMPERATURE, var.set_die_temperature_sensor),
@@ -624,15 +693,12 @@ async def to_code(config):
         control = await switch_.new_switch(config[CONF_OUTPUT_ENABLED_CONTROL])
         await cg.register_parented(control, var)
         cg.add(var.set_output_enabled_switch(control))
-    if CONF_AUTONOMOUS_FET_CONTROL in config:
-        control = await switch_.new_switch(config[CONF_AUTONOMOUS_FET_CONTROL])
+    if CONF_AUTONOMOUS_CONTROL in config:
+        control = await switch_.new_switch(config[CONF_AUTONOMOUS_CONTROL])
         await cg.register_parented(control, var)
-        cg.add(var.set_autonomous_fet_switch(control))
+        cg.add(var.set_autonomous_switch(control))
     if CONF_CLEAR_ALARMS in config:
         control = await button.new_button(config[CONF_CLEAR_ALARMS])
-        await cg.register_parented(control, var)
-    if CONF_RESET_PASSED_CHARGE in config:
-        control = await button.new_button(config[CONF_RESET_PASSED_CHARGE])
         await cg.register_parented(control, var)
     if CONF_PROGRAM_FACTORY_OTP in config:
         control = await button.new_button(config[CONF_PROGRAM_FACTORY_OTP])
