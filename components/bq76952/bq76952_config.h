@@ -14,7 +14,7 @@ enum class BQ76952CellChemistry : uint8_t {
 // Keep the device's existing calibrated current gain, or calculate a new gain
 // from sense_resistor_milliohm when configuration is applied.
 enum class BQ76952CurrentGainPolicy : uint8_t {
-  FACTORY_CALIBRATION = 0,
+  KEEP_EXISTING_CALIBRATION = 0,
   DERIVE_FROM_SHUNT = 1,
 };
 
@@ -149,7 +149,7 @@ struct BQ76952Config {
   BQ76952CellChemistry cell_chemistry{BQ76952CellChemistry::LITHIUM_ION};
   float sense_resistor_milliohm{1.0f};
   bool i2c_crc_enabled{false};
-  BQ76952CurrentGainPolicy current_gain_policy{BQ76952CurrentGainPolicy::FACTORY_CALIBRATION};
+  BQ76952CurrentGainPolicy current_gain_policy{BQ76952CurrentGainPolicy::KEEP_EXISTING_CALIBRATION};
   BQ76952RegulatorConfig regulators{};
   BQ76952ThermistorConfig thermistors{};
   BQ76952FetConfig fet{};
