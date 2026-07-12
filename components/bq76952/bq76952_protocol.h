@@ -37,15 +37,21 @@ class BQ76952Protocol : public i2c::I2CDevice {
   bool write_data_memory_u8(uint16_t address, uint8_t value);
   bool write_data_memory_u16(uint16_t address, uint16_t value);
 
-  bool set_config_update(bool enabled, bool crc_after_exit = false);
+  bool set_config_update(bool enabled);
+
+  // Sets the desired device framing. Startup probing still begins without CRC
+  // so a device with either existing Comm Type can be reached safely.
   void set_crc_enabled(bool enabled);
 
  private:
+  bool read_bytes_with_mode(uint8_t command, uint8_t *data, size_t length, bool crc_enabled);
+  bool write_bytes_with_mode(uint8_t command, const uint8_t *data, size_t length, bool crc_enabled);
   bool wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms);
   bool read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length);
   bool verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length, uint8_t checksum) const;
 
   bool crc_enabled_{false};
+  bool desired_crc_enabled_{false};
 };
 
 }  // namespace bq76952
