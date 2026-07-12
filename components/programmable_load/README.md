@@ -6,7 +6,7 @@ Provides:
 - Current setpoint control with adaptive ramping (fast/medium/slow based on error)
 - Unconfirmed-move tracking to wait for INA response before overdriving
 - Safety interlocks: NTC presence, minimum input voltage, over-temperature
-- Battery/lead DCR estimation during upward ramping
+- Battery/lead DCR estimation during upward and downward current steps
 - Temperature-proportional fan PWM control
 
 ## Configuration (optional items commented out)
@@ -110,7 +110,9 @@ programmable_load:
 - The control loop runs at `control_period_ms` (default 50 ms) via an internal interval.
 - Ramp rates are tiered: fast (>5 A error), medium (>2 A), then fixed steps that decrease as the target is approached.
 - Unconfirmed-move tracking limits each ramp step to prevent overshoot when the INA sensor has not yet responded.
-- DCR estimation captures the V/I baseline when a new non-zero setpoint is applied, accumulates samples during upward ramping, and publishes a least-squares fit across all samples.
+- DCR estimation captures the V/I baseline when a new non-zero setpoint is applied and accepts signed samples from either upward or downward current movement.
+- Samples with less than 0.25 A movement from the baseline are ignored, repeated sensor conversions are de-duplicated, and the newest 64 distinct samples are retained.
+- The last valid DCR remains published while a new step is accumulating enough valid samples, rather than temporarily becoming unknown.
 - Fan PWM ramps linearly between `fan_start_temp_c` and `fan_full_temp_c`.
 
 - `fan_full_temp_c` must be greater than `fan_start_temp_c`.

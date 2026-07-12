@@ -8,6 +8,9 @@ namespace esphome {
 namespace programmable_load {
 
 static const char *const TAG = "programmable_load";
+static constexpr float DCR_MIN_CURRENT_DELTA_A = 0.25f;
+static constexpr float DCR_DUPLICATE_CURRENT_EPSILON_A = 0.01f;
+static constexpr float DCR_DUPLICATE_VOLTAGE_EPSILON_V = 0.001f;
 
 void ProgrammableLoadComponent::setup() {
   ESP_LOGCONFIG(TAG, "ProgrammableLoadComponent: control_period=%u ms", this->control_period_ms_);
@@ -94,6 +97,8 @@ void ProgrammableLoadComponent::set_target(float amps) {
                     && this->voltage_sensor_->has_state()
                     && !std::isnan(this->voltage_sensor_->state);
 
+  // Clear the sample window but retain the last valid published result until
+  // this step produces a replacement.
   this->reset_dcr_();
 
   if (current_ok && voltage_ok) {
@@ -123,7 +128,7 @@ void ProgrammableLoadComponent::force_off() {
   this->unconfirmed_rise_a_ = 0.0f;
   this->unconfirmed_fall_a_ = 0.0f;
 
-  // Reset DCR tracking.
+  // Reset DCR tracking, retaining the most recent valid result.
   this->dcr_start_voltage_v_ = std::numeric_limits<float>::quiet_NaN();
   this->dcr_start_current_a_ = std::numeric_limits<float>::quiet_NaN();
   this->reset_dcr_();
@@ -213,78 +218,89 @@ void ProgrammableLoadComponent::clear_faults_() {
 
 void ProgrammableLoadComponent::reset_dcr_() {
   this->dcr_sample_count_ = 0;
-  this->dcr_delta_voltage_mv_ = std::numeric_limits<float>::quiet_NaN();
-  this->dcr_delta_current_a_ = std::numeric_limits<float>::quiet_NaN();
-  this->dcr_mohm_ = std::numeric_limits<float>::quiet_NaN();
 }
 
-// Capture a sample during upward ramping.
+// Capture a sample while current is moving in either direction.
 void ProgrammableLoadComponent::capture_dcr_sample_() {
   if (this->current_sensor_ == nullptr || this->voltage_sensor_ == nullptr)
     return;
   if (std::isnan(this->dcr_start_voltage_v_) || std::isnan(this->dcr_start_current_a_))
     return;
 
-  float i = this->current_sensor_->state;
-  float v = this->voltage_sensor_->state;
+  const float i = this->current_sensor_->state;
+  const float v = this->voltage_sensor_->state;
 
   if (std::isnan(i) || std::isnan(v))
     return;
 
-  // Only record samples where current has moved up from baseline.
-  if (i <= this->dcr_start_current_a_)
+  // Ignore tiny movements dominated by sensor noise and asynchronous updates.
+  const float di = i - this->dcr_start_current_a_;
+  if (fabsf(di) < DCR_MIN_CURRENT_DELTA_A)
     return;
 
-  DcrSample &s = this->dcr_samples_[this->dcr_sample_count_ % DCR_SAMPLE_MAX];
-  s.current_a = i;
-  s.voltage_v = v;
-  if (this->dcr_sample_count_ < DCR_SAMPLE_MAX)
-    this->dcr_sample_count_++;
+  // Avoid repeatedly storing the same INA conversion while the control loop
+  // runs faster than the sensor update interval.
+  if (this->dcr_sample_count_ > 0) {
+    const int previous = (this->dcr_sample_count_ - 1) % DCR_SAMPLE_MAX;
+    const DcrSample &last = this->dcr_samples_[previous];
+    if (fabsf(i - last.current_a) < DCR_DUPLICATE_CURRENT_EPSILON_A &&
+        fabsf(v - last.voltage_v) < DCR_DUPLICATE_VOLTAGE_EPSILON_V) {
+      return;
+    }
+  }
+
+  DcrSample &sample = this->dcr_samples_[this->dcr_sample_count_ % DCR_SAMPLE_MAX];
+  sample.current_a = i;
+  sample.voltage_v = v;
+
+  // Keep this as a monotonically increasing write sequence. Capping it at the
+  // buffer size caused every later sample to overwrite slot zero.
+  this->dcr_sample_count_++;
 }
 
-// Compute DCR from the sample buffer using least-squares fit.
+// Compute DCR from signed current/voltage deltas using a least-squares fit
+// constrained through the captured baseline.
 void ProgrammableLoadComponent::compute_dcr_() {
-  if (this->dcr_sample_count_ < 2)
+  const int sample_count = this->dcr_sample_count_ < DCR_SAMPLE_MAX
+                               ? this->dcr_sample_count_
+                               : DCR_SAMPLE_MAX;
+  if (sample_count < 2)
     return;
 
-  // Accumulate sums over all samples.
-  float sum_di = 0.0f;
-  float sum_dv = 0.0f;
   float sum_di2 = 0.0f;
   float sum_di_dv = 0.0f;
-  int n = 0;
+  int valid_count = 0;
 
-  for (int j = 0; j < this->dcr_sample_count_; j++) {
+  for (int j = 0; j < sample_count; j++) {
     const float di = this->dcr_samples_[j].current_a - this->dcr_start_current_a_;
     const float dv = this->dcr_start_voltage_v_ - this->dcr_samples_[j].voltage_v;
-    if (di < 0.0f || dv < 0.0f)
-      continue;  // skip invalid samples
-    n++;
-    sum_di += di;
-    sum_dv += dv;
+
+    if (fabsf(di) < DCR_MIN_CURRENT_DELTA_A)
+      continue;
+
+    // A resistive source has matching delta signs: increasing current lowers
+    // voltage, while decreasing current raises it.
+    if (di * dv <= 0.0f)
+      continue;
+
+    valid_count++;
     sum_di2 += di * di;
     sum_di_dv += di * dv;
   }
 
-  if (n < 2)
+  if (valid_count < 2 || sum_di2 <= 0.0f)
     return;
 
-  // Least-squares: R = (n*sum(di*dv) - sum_di*sum_dv) / (n*sum_di2 - sum_di*sum_di)
-  const float denom = n * sum_di2 - sum_di * sum_di;
-  if (denom <= 0.0f)
-    return;
-
-  const float r_ohm = (n * sum_di_dv - sum_di * sum_dv) / denom;
-  if (r_ohm < 0.0f)
+  const float r_ohm = sum_di_dv / sum_di2;
+  if (!std::isfinite(r_ohm) || r_ohm <= 0.0f)
     return;
 
   this->dcr_mohm_ = r_ohm * 1000.0f;
 
-  // Also publish the last sample's deltas.
-  int last = (this->dcr_sample_count_ - 1) % DCR_SAMPLE_MAX;
-  const DcrSample &ls = this->dcr_samples_[last];
-  this->dcr_delta_current_a_ = ls.current_a - this->dcr_start_current_a_;
-  this->dcr_delta_voltage_mv_ = (this->dcr_start_voltage_v_ - ls.voltage_v) * 1000.0f;
+  const int last_index = (this->dcr_sample_count_ - 1) % DCR_SAMPLE_MAX;
+  const DcrSample &last = this->dcr_samples_[last_index];
+  this->dcr_delta_current_a_ = last.current_a - this->dcr_start_current_a_;
+  this->dcr_delta_voltage_mv_ = (this->dcr_start_voltage_v_ - last.voltage_v) * 1000.0f;
 }
 
 float ProgrammableLoadComponent::get_max_temp_() const {
@@ -485,8 +501,9 @@ void ProgrammableLoadComponent::control_loop_() {
   next_cmd = this->clamp_command_(next_cmd);
   this->current_command_a_ = next_cmd;
 
-  // Capture DCR sample during upward ramping.
-  if (this->ramp_state_ == RampState::RAMPING_UP) {
+  // Capture DCR samples while the measured current is moving in either direction.
+  if (this->ramp_state_ == RampState::RAMPING_UP ||
+      this->ramp_state_ == RampState::RAMPING_DOWN) {
     this->capture_dcr_sample_();
   }
 
