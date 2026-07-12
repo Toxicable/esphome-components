@@ -5,7 +5,7 @@ Component-scoped rules for `components/bq76952`.
 ## Architecture
 
 - `bq76952_config.h` defines complete desired device state. It has no `std::optional`, `has_*`, legacy aliases, or preserve-by-omission semantics.
-- `bq76952_protocol.cpp` owns register/subcommand/data-memory transport, transfer-buffer validation, checksums, optional I2C CRC, and CONFIG_UPDATE entry/exit.
+- `bq76952_protocol.cpp` owns direct-register access, active/desired I2C CRC framing, subcommand transfer-buffer framing, checksums, data-memory read/write verification, and CONFIG_UPDATE transitions.
 - `bq76952_service.cpp` owns configuration synchronization, connection recovery, measurements, protections, FET policy, runtime actions, and the ancillary SoC instance.
 - `bq76952_soc.cpp` isolates SoC estimation/persistence logic but remains owned by `BQ76952Service`.
 - `bq76952.cpp` is the ESPHome facade. Keep protocol, product policy and SoC logic out of it.
