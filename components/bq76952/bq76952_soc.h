@@ -5,12 +5,18 @@
 
 #include "esphome/core/preferences.h"
 
+#include "bq76952_config.h"
+
 namespace esphome {
 namespace bq76952 {
 
 struct BQ76952SocSample {
   float current_a{0.0f};
-  float passed_charge_ah{0.0f};
+
+  // Integrated charge reported by DASTATUS6. This is a signed coulomb-counter
+  // position in amp-hours, not energy and not a user-facing lifetime total.
+  float coulomb_counter_ah{0.0f};
+
   int16_t minimum_cell_voltage_mv{0};
   int16_t maximum_cell_voltage_mv{0};
   int16_t average_cell_voltage_mv{0};
@@ -20,14 +26,12 @@ struct BQ76952SocSample {
   uint16_t full_cell_voltage_mv{0};
 };
 
-// Host-derived state of charge. This service is independent of BQ76952
-// transport and configuration reconciliation; it consumes normalized samples
-// and owns only SoC estimation and persistence.
+// Ancillary SoC logic owned by BQ76952Service. It is separated only to keep
+// estimation and persistence out of the core protocol/reconciliation code.
 class BQ76952Soc {
  public:
-  void setup(uint8_t device_address);
+  void setup(BQ76952CellChemistry chemistry);
   float update(const BQ76952SocSample &sample);
-  void reset();
 
  private:
   struct CurvePoint {
@@ -36,10 +40,10 @@ class BQ76952Soc {
   };
 
   struct PersistedState {
-    float logical_ah{std::numeric_limits<float>::quiet_NaN()};
-    float last_raw_passed_charge_ah{std::numeric_limits<float>::quiet_NaN()};
-    float full_ah{std::numeric_limits<float>::quiet_NaN()};
-    float empty_ah{std::numeric_limits<float>::quiet_NaN()};
+    float relative_charge_ah{std::numeric_limits<float>::quiet_NaN()};
+    float last_coulomb_counter_ah{std::numeric_limits<float>::quiet_NaN()};
+    float full_anchor_ah{std::numeric_limits<float>::quiet_NaN()};
+    float empty_anchor_ah{std::numeric_limits<float>::quiet_NaN()};
     float learned_span_ah{std::numeric_limits<float>::quiet_NaN()};
     uint8_t flags{0};
   };
@@ -52,7 +56,7 @@ class BQ76952Soc {
 
   static constexpr int16_t ENDPOINT_MARGIN_MV = 20;
   static constexpr uint32_t ENDPOINT_HOLD_MS = 30000;
-  static constexpr float MAX_REASONABLE_DELTA_AH = 100.0f;
+  static constexpr float MAX_REASONABLE_COUNTER_DELTA_AH = 100.0f;
   static constexpr uint32_t PREFERENCE_NAMESPACE = 0xB7695200u;
 
   static constexpr uint8_t HAVE_FULL = 0x01;
@@ -60,18 +64,25 @@ class BQ76952Soc {
   static constexpr uint8_t HAVE_SPAN = 0x04;
   static constexpr uint8_t SPAN_PROVISIONAL = 0x08;
 
-  static constexpr CurvePoint DEFAULT_LIION_CURVE[] = {
+  // Voltage-only fallback used until full/empty coulomb-count anchors have
+  // been learned. The configured chemistry must match this curve.
+  static constexpr CurvePoint DEFAULT_LITHIUM_ION_CURVE[] = {
       {2800, 0.0f},  {3000, 3.0f},  {3200, 8.0f},  {3300, 12.0f},
       {3500, 25.0f}, {3600, 40.0f}, {3700, 58.0f}, {3800, 75.0f},
       {3900, 86.0f}, {4000, 94.0f}, {4100, 98.0f}, {4200, 100.0f},
   };
 
-  float logical_ah_{0.0f};
-  float last_raw_passed_charge_ah_{0.0f};
-  bool have_last_raw_{false};
+  BQ76952CellChemistry chemistry_{BQ76952CellChemistry::LITHIUM_ION};
 
-  float full_ah_{0.0f};
-  float empty_ah_{0.0f};
+  // Continuous internal charge coordinate. It follows deltas from the device
+  // coulomb counter while surviving device-counter resets and wraparound.
+  float relative_charge_ah_{0.0f};
+  float last_coulomb_counter_ah_{0.0f};
+  bool have_last_counter_{false};
+
+  // Learned relative-charge positions corresponding to full and empty.
+  float full_anchor_ah_{0.0f};
+  float empty_anchor_ah_{0.0f};
   float learned_span_ah_{0.0f};
   bool have_full_{false};
   bool have_empty_{false};
@@ -79,7 +90,7 @@ class BQ76952Soc {
   bool span_provisional_{false};
 
   float boot_estimate_fraction_{0.5f};
-  float boot_logical_ah_{0.0f};
+  float boot_relative_charge_ah_{0.0f};
   uint32_t full_hold_start_ms_{0};
   uint32_t empty_hold_start_ms_{0};
   bool charge_seen_{false};
