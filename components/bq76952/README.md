@@ -30,7 +30,6 @@ bq76952:
 
   ## Core
   cell_count: 4
-  # cell_channels: [1, 2, 3, 16]
   update_interval: 20ms
   # boot_config_apply_delay: 60s
 
@@ -184,7 +183,7 @@ These settings are normal YAML config and are written into the chip's live RAM c
 These writes are not permanent across a full hardware reset or a chip that boots from different OTP defaults.
 
 Boot-applied RAM config includes:
-- `Settings:Configuration:Vcell Mode` is auto-detected from active cell channels at boot-time apply so protections match real wired VC inputs
+- `Settings:Configuration:Vcell Mode` is derived from `cell_count` using the fixed `VC1..VC(S-1), VC16` board layout
 - `sleep_charge_enabled`
 - `predischarge_enabled`
 - `autonomous_balancing_enabled`
@@ -285,9 +284,9 @@ Thermistors:
 - `ts2_temperature` shares the TS2 pin with the BQ76952 wake function, so do not use it as a thermistor if your hardware uses TS2 for wake
 
 Cell mapping:
-- `cell1_voltage` through `cell16_voltage` are mapped to the first populated differential cell-voltage commands seen at startup
-- this supports sparse physical layouts such as a 4S pack wired onto higher-numbered VC pins
-- `cell_channels` overrides voltage-based detection with an explicit ordered list of raw VC differential channels and also defines the boot-applied `Vcell Mode` protection mask; use it for known sparse layouts, such as `[1, 2, 3, 16]`
+- an `S`-cell pack is always treated as wired to raw differential channels `1..(S-1)` plus channel `16`
+- for example, a 4S pack maps logical cells 1–4 to raw channels `[1, 2, 3, 16]`
+- the same fixed layout defines both published cell voltages and the boot-applied `Vcell Mode` protection mask
 
 ## Migration
 
@@ -295,6 +294,7 @@ If you are updating from an older config:
 - `operating_mode` -> `bms_state`
 - `autonomous_fet_mode` -> `otp_autonomous_fet_mode`
 - `sleep_mode` -> `otp_sleep_mode`
+- `cell_channels` -> remove; the component now always uses `1..(S-1), 16`
 - `security_state` -> remove
 - `passed_charge` -> `energy`
 - `passed_charge_time` -> `energy_time`
