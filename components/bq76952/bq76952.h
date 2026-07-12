@@ -36,19 +36,16 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   void set_ts2_temperature_sensor(sensor::Sensor *sensor);
   void set_ts3_temperature_sensor(sensor::Sensor *sensor);
 
-  void set_bms_state_sensor(text_sensor::TextSensor *sensor);
+  void set_state_sensor(text_sensor::TextSensor *sensor);
   void set_fault_sensor(text_sensor::TextSensor *sensor);
-  void set_fet_status_flags_sensor(text_sensor::TextSensor *sensor);
 
   void set_output_enabled_switch(switch_::Switch *control);
-  void set_autonomous_switch(switch_::Switch *control);
 
   void setup() override;
   void update() override;
   void dump_config() override;
 
   bool set_output_enabled(bool enabled);
-  bool set_autonomous(bool enabled);
   bool clear_alarm_latches();
   bool program_factory_otp();
 
@@ -68,12 +65,10 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   sensor::Sensor *die_temperature_sensor_{nullptr};
   std::array<sensor::Sensor *, 3> thermistor_temperature_sensors_{};
 
-  text_sensor::TextSensor *bms_state_sensor_{nullptr};
+  text_sensor::TextSensor *state_sensor_{nullptr};
   text_sensor::TextSensor *fault_sensor_{nullptr};
-  text_sensor::TextSensor *fet_status_flags_sensor_{nullptr};
 
   switch_::Switch *output_enabled_switch_{nullptr};
-  switch_::Switch *autonomous_switch_{nullptr};
 };
 
 }  // namespace bq76952
