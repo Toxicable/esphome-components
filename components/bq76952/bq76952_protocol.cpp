@@ -271,13 +271,18 @@ bool BQ76952Protocol::write_data_memory_u16(uint16_t address, uint16_t value) {
   return this->write_data_memory(address, raw, sizeof(raw));
 }
 
-bool BQ76952Protocol::set_config_update(bool enabled) {
+bool BQ76952Protocol::set_config_update(bool enabled, bool crc_after_exit) {
   const uint16_t command = enabled ? SUBCMD_SET_CFGUPDATE : SUBCMD_EXIT_CFGUPDATE;
   if (!this->send_subcommand(command)) {
     return false;
   }
 
   delay_microseconds_safe(enabled ? 2200 : 1200);
+  if (!enabled) {
+    // Comm Type changes take effect as CONFIG_UPDATE exits. The exit command
+    // itself uses the old framing; status polling must use the new framing.
+    this->crc_enabled_ = crc_after_exit;
+  }
   const uint32_t started = millis();
   while ((millis() - started) < 500U) {
     uint16_t battery_status = 0;
