@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 
 namespace esphome {
@@ -17,8 +16,6 @@ struct BQ76952Config {
 
   // Core topology and component policy.
   uint8_t cell_count_{16};
-  std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
-  bool explicit_cell_map_{false};
   float sense_resistor_milliohm_{1.0f};
   uint32_t boot_config_apply_delay_ms_{10000};
   bool event_logging_{false};
