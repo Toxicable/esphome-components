@@ -49,7 +49,8 @@ struct BQ76952PrechargeConfig {
 
 // PDSG limits inrush into load-side capacitance before the main DSG FET turns
 // on. It terminates on timeout or once the remaining load-side voltage delta is
-// below stop_delta_mv.
+// below stop_delta_mv. Both values use 10-ms / 10-mV hardware increments and
+// have a maximum representable value of 2550.
 struct BQ76952PredischargeConfig {
   bool enabled{false};
   uint16_t timeout_ms{0};
@@ -58,25 +59,18 @@ struct BQ76952PredischargeConfig {
 
 struct BQ76952FetConfig {
   // Autonomous means the BQ76952 controls CHG/DSG from its protection state.
+  // It is startup policy, not a runtime user control.
   bool autonomous{false};
   bool sleep_charge_enabled{false};
-
-  // Current threshold used for body-diode protection/recovery decisions.
-  // The sign follows the BQ76952 register convention.
-  int16_t body_diode_threshold_ma{0};
 
   BQ76952PrechargeConfig precharge{};
   BQ76952PredischargeConfig predischarge{};
 };
 
+// Balancing is always enabled while charging. Relaxed/idle balancing is not
+// used by this product policy, so there are no mode-enable or idle-current
+// settings in the public configuration.
 struct BQ76952BalancingConfig {
-  bool charging_enabled{false};
-
-  // Allows balancing when charge current has fallen below
-  // relaxed_current_threshold_a, rather than only while actively charging.
-  bool relaxed_balancing_enabled{false};
-  float relaxed_current_threshold_a{0.0f};
-
   uint16_t minimum_cell_voltage_mv{0};
   uint16_t start_delta_mv{0};
   uint16_t stop_delta_mv{0};
@@ -85,41 +79,38 @@ struct BQ76952BalancingConfig {
   uint8_t maximum_balanced_cells{0};
 };
 
-// CUV/COV are evaluated independently against every active cell, not against
-// total pack voltage.
+// CUV/COV are always enabled and evaluated independently against every active
+// cell, not against total pack voltage.
 struct BQ76952CellVoltageProtectionConfig {
-  bool enabled{false};
   uint16_t threshold_mv{0};
   uint16_t delay_ms{0};
   uint16_t recovery_hysteresis_mv{0};
 };
 
+// Fast comparator-based current protection. Used for charge overcurrent and
+// the normal/severe discharge-overcurrent tiers.
 struct BQ76952CurrentProtectionConfig {
-  bool enabled{false};
   float threshold_a{0.0f};
   uint16_t delay_ms{0};
 };
 
-// OCD3 is the slower, long-duration discharge-overcurrent tier. Its delay is
-// measured in seconds rather than milliseconds.
-struct BQ76952LongDurationCurrentProtectionConfig {
-  bool enabled{false};
+// OCD3 is the sustained discharge-overcurrent tier. It uses the coulomb-counter
+// ADC and a delay measured in seconds rather than milliseconds.
+struct BQ76952SustainedCurrentProtectionConfig {
   float threshold_a{0.0f};
   uint8_t delay_s{0};
 };
 
 struct BQ76952ShortCircuitProtectionConfig {
-  bool enabled{false};
   uint16_t threshold_mv{0};
   uint16_t delay_us{0};
   uint8_t recovery_time_s{0};
 };
 
 // Charge and discharge temperature limits are separate because a pack can be
-// safe to discharge at temperatures where charging would be unsafe.
+// safe to discharge at temperatures where charging would be unsafe. Both sets
+// of protections are always enabled.
 struct BQ76952TemperatureProtectionConfig {
-  bool charge_enabled{false};
-  bool discharge_enabled{false};
   int8_t charge_minimum_c{0};
   int8_t charge_maximum_c{0};
   int8_t discharge_minimum_c{0};
@@ -131,9 +122,15 @@ struct BQ76952ProtectionConfig {
   BQ76952CellVoltageProtectionConfig cell_undervoltage{};
   BQ76952CellVoltageProtectionConfig cell_overvoltage{};
   BQ76952CurrentProtectionConfig charge_overcurrent{};
-  BQ76952CurrentProtectionConfig discharge_overcurrent_1{};
-  BQ76952CurrentProtectionConfig discharge_overcurrent_2{};
-  BQ76952LongDurationCurrentProtectionConfig discharge_overcurrent_3{};
+
+  // OCD1: lower threshold / longer delay for normal overloads.
+  BQ76952CurrentProtectionConfig discharge_overcurrent{};
+
+  // OCD2: higher threshold / shorter delay for severe overloads.
+  BQ76952CurrentProtectionConfig discharge_severe_overcurrent{};
+
+  // OCD3: slower sustained-overload protection measured in seconds.
+  BQ76952SustainedCurrentProtectionConfig discharge_sustained_overcurrent{};
   BQ76952ShortCircuitProtectionConfig discharge_short_circuit{};
   BQ76952TemperatureProtectionConfig temperature{};
 
@@ -143,7 +140,7 @@ struct BQ76952ProtectionConfig {
 
 // Complete desired state for one BQ76952. There are deliberately no optional
 // fields and no implicit "preserve whatever the chip already contains" mode.
-// ESPHome must construct every group explicitly, including disabled features.
+// ESPHome must construct every group explicitly.
 struct BQ76952Config {
   uint8_t cell_count{16};
   BQ76952CellChemistry cell_chemistry{BQ76952CellChemistry::LITHIUM_ION};
