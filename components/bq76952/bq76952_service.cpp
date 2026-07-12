@@ -697,8 +697,7 @@ bool BQ76952Service::read_fault_flags(uint16_t battery_status, uint8_t safety_a,
   if ((safety_a & hw::bits::protection_a::SCD) != 0) fault_flags |= BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT;
   if ((safety_c & hw::bits::protection_c::OCD3) != 0) fault_flags |= BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
   if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) fault_flags |= BQ76952_FAULT_PRECHARGE_TIMEOUT;
-  if ((safety_b & static_cast<uint8_t>(hw::bits::protection_b::UTC | hw::bits::protection_b::UTD | hw::bits::protection_b::OTC |
-                                       hw::bits::protection_b::OTD | (1U << 7) | (1U << 6) | (1U << 2))) != 0) {
+  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) {
     fault_flags |= BQ76952_FAULT_TEMPERATURE;
   }
   if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) fault_flags |= BQ76952_FAULT_PERMANENT_FAILURE;

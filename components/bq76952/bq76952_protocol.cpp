@@ -313,7 +313,8 @@ bool BQ76952Protocol::set_config_update(bool enabled) {
 
 void BQ76952Protocol::set_crc_enabled(bool enabled) {
   this->desired_crc_enabled_ = enabled;
-  this->crc_enabled_ = true;
+  // Probe without CRC first; read_bytes() learns an existing CRC-enabled image.
+  this->crc_enabled_ = false;
 }
 
 }  // namespace bq76952
