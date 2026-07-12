@@ -5,58 +5,70 @@ Component-scoped rules for `components/bq76952`.
 ## Architecture
 
 - `bq76952_config.h` defines complete desired device state. It has no `std::optional`, `has_*`, legacy aliases, or preserve-by-omission semantics.
-- `bq76952_protocol.h` owns only low-level register/subcommand/data-memory transport, transfer-buffer validation, checksums, optional I2C CRC, and CONFIG_UPDATE entry/exit.
-- `bq76952_service.h` owns configuration reconciliation, connection recovery, measurements, protections, FET policy, and runtime actions. It has no ESPHome entities.
-- `bq76952_soc.h` is a standalone SoC estimator/persistence service, not a protected state base.
-- `bq76952.h` is the ESPHome facade and owns service/SoC collaborators by composition. Keep method bodies out of the header.
+- `bq76952_protocol.h` owns register/subcommand/data-memory transport, transfer-buffer validation, checksums, optional I2C CRC, and CONFIG_UPDATE entry/exit.
+- `bq76952_service.h` owns configuration synchronization, connection recovery, measurements, protections, FET policy, runtime actions, and the ancillary SoC instance.
+- `bq76952_soc.h` isolates SoC estimation/persistence logic but remains owned by `BQ76952Service`.
+- `bq76952.h` is the ESPHome facade. Keep method bodies out of headers.
 - Do not reintroduce `BQ76952ConfigState` or another compatibility adapter. This is a hard-cut refactor.
 
 ## Fixed hardware and product policy
 
 - Supported packs are 3S–16S.
-- An `S`-cell pack maps logical cells to raw BQ channels `1..(S-1), 16`. A 4S pack is `[1, 2, 3, 16]`.
-- The same fixed mapping defines `Vcell Mode`; do not add explicit mapping or startup voltage detection.
+- An `S`-cell pack maps to raw channels `1..(S-1), 16`; 4S is `[1, 2, 3, 16]`.
+- The fixed map also defines `Vcell Mode`; do not add explicit mapping or voltage-based topology detection.
 - Sleep is always allowed and is not user-configurable.
-- Desired configuration is applied after the first successful communication probe, with no arbitrary boot delay.
-- Failed reconciliation remains pending, retries after connection recovery, and is periodically audited using read-before-write checks.
+- Configuration starts after the first successful communication probe, with no arbitrary boot delay.
+- Failed synchronization remains pending, retries after connection recovery, and is periodically audited using read-before-write checks.
 - State changes and actions use normal INFO/DEBUG/WARN logging. Do not add logging-mode options.
 
 ## Configuration contract
 
 - Every hardware/policy group is required by the ESPHome schema.
 - Every feature has an explicit enabled/disabled value.
-- Disabled features still have a complete typed config; the implementation decides the deterministic disabled register state.
-- Protection thresholds/delays/hysteresis are grouped in C++ and nested in YAML.
-- `current_gain_policy` is explicit: preserve current calibration or derive it from the configured shunt.
-- `i2c_crc_enabled` is explicit because BQ76952 variants differ.
+- Disabled features still have a complete typed config; implementation writes a deterministic disabled state.
+- `cell_chemistry` is required. Only `lithium_ion` is supported until another chemistry gets its own SoC fallback curve.
+- `current_gain_policy` explicitly selects existing calibration or derivation from the configured shunt.
 - REG0, REG1, and REG2 states are explicit. REG1/REG2 voltage codes are supplied even when disabled.
-- TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes, independent of whether an ESPHome sensor entity is published.
+- TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes.
+- `fet.autonomous` means the BQ76952 autonomously controls CHG/DSG from protection state.
 - Protection ALERT masks should be derived from enabled protections, not exposed as raw user bitmasks.
 
 ## Precharge and predischarge
 
-- Precharge and predischarge are separate features.
-- `PCHG` is the reduced-current charging path for a deeply depleted pack. Configure an explicit enabled state plus start/stop cell-voltage thresholds.
-- `PDSG` is the reduced-current discharge path for load/DC-link inrush. Configure an explicit enabled state plus timeout and stop delta.
-- The device has `FET Options[PDSG_EN]`, but no equivalent symmetric `PCHG_EN`. Do not model precharge as a fake mirror of predischarge.
+- `PCHG` is a reduced-current charging path for a deeply depleted pack. Configure enabled state plus start/stop cell-voltage thresholds.
+- `PDSG` is a reduced-current discharge path for load/DC-link inrush. Configure enabled state plus timeout and stop delta.
+- The device has `FET Options[PDSG_EN]`, but no symmetric `PCHG_EN`. Do not model them as register-identical features.
 
-## Protocol robustness
+## Balancing
 
-- Data-memory reads must use the transfer-buffer length and verify the returned checksum.
-- Subcommand responses must validate echoed command, length, and checksum before returning payload.
-- Optional I2C CRC must cover both read and write paths according to the selected device variant.
-- Configuration writes require FULLACCESS and may briefly disable FETs while in CONFIG_UPDATE.
-- REG0/REG1/REG2 live restoration after reconnect must not be skipped merely because data-memory bytes already match.
+- `charging_enabled` permits balancing while actively charging.
+- `relaxed_balancing_enabled` permits balancing when current is below `relaxed_current_threshold_a`.
+- The relaxed-current threshold defines when TI's relaxed balancing state is entered; it is not a general idle-current sensor threshold.
 
-## SoC
+## Protections
 
-- SoC consumes normalized service samples and has no direct protocol dependency.
-- Current is exposed positive for discharge and negative for charge.
-- Full/empty endpoints use configured COV/CUV thresholds, safety state, current direction, and hold time.
+- `BQ76952CellVoltageProtectionConfig` is per active cell, not total pack voltage.
+- OCD1 and OCD2 use millisecond delays.
+- `BQ76952LongDurationCurrentProtectionConfig` represents OCD3, whose delay is measured in seconds.
+- Safety Status A/B/C are raw device register banks. Decode them inside the service into one normalized fault bitset before producing a snapshot.
+
+## Configuration synchronization
+
+- Do not expose reconciliation publicly or use a boolean such as `force_live_state`.
+- Internal `AUDIT_AND_REPAIR` verifies stored settings and repairs drift.
+- Internal `RESTORE_RUNTIME_STATE` additionally reapplies runtime-only commands after reconnect/reset even when data-memory values already match.
+
+## SoC and coulomb counter
+
+- The service reads DASTATUS6 internally and feeds its signed amp-hour coulomb-counter position into `BQ76952Soc`.
+- Do not expose passed-charge accumulation or a reset-passed-charge control to users.
+- `relative_charge_ah` is an internal continuous coordinate built from counter deltas so learned SoC survives counter reset/wraparound.
+- SoC has no device-address dependency. It is an ancillary object owned and set up by the service.
+- Current is user-facing positive for discharge and negative for charge.
+- Full/empty endpoints use configured COV/CUV thresholds, protection state, current direction, and hold time.
 - Learned state persists through ESPHome preferences.
-- No nominal-capacity config is required.
 
 ## Current PR state
 
-- PR #22 defines the target interfaces and intentionally removes compatibility scaffolding before migrating the existing implementation.
-- Do not add legacy fields merely to make the old monolithic `bq76952.cpp` compile. Migrate implementation logic into protocol/service/SoC files against the target interfaces instead.
+- PR #22 defines the target interfaces and intentionally does not compile until the old monolithic implementation is migrated.
+- Do not add legacy fields merely to make `bq76952.cpp` compile. Move logic into protocol/service/SoC implementation files against the target interfaces.
