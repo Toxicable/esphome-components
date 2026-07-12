@@ -40,7 +40,7 @@ class BQ76952Service {
   explicit BQ76952Service(BQ76952Protocol &protocol);
 
   void set_config(const BQ76952Config &config);
-  const BQ76952Config &config() const { return config_; }
+  const BQ76952Config &config() const;
 
   bool poll(BQ76952Snapshot &snapshot);
   bool reconcile_configuration(bool force_live_state = false);
