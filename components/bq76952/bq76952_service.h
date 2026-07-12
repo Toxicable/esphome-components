@@ -95,7 +95,7 @@ class BQ76952Service {
 
   bool read_snapshot(BQ76952Snapshot &snapshot);
   bool read_fault_flags(uint32_t &fault_flags);
-  bool read_coulomb_counter(float &charge_ah, float &integration_time_s);
+  bool read_coulomb_counter(float &charge_ah);
   uint16_t cell_mode_mask() const;
   uint8_t raw_cell_channel(uint8_t logical_cell) const;
 
