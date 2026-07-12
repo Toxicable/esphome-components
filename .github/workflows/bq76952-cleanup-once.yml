@@ -1,0 +1,30 @@
+name: BQ76952 final cleanup
+
+on:
+  push:
+    branches:
+      - agent/implement-bq76952-services
+    paths:
+      - .github/workflows/bq76952-cleanup-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/implement-bq76952-services
+          fetch-depth: 0
+      - name: Apply cleanup
+        run: python3 .github/scripts/bq76952_cleanup_once.py
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: probe bq76952 CRC framing safely"
+          git push origin HEAD:agent/implement-bq76952-services
