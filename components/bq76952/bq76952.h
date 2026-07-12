@@ -11,14 +11,13 @@
 #include "bq76952_config.h"
 #include "bq76952_protocol.h"
 #include "bq76952_service.h"
-#include "bq76952_soc.h"
 
 namespace esphome {
 namespace bq76952 {
 
-// ESPHome-facing facade only. Device protocol, desired-state reconciliation,
-// and SoC estimation are separate collaborators rather than base-class state
-// bags. Method bodies live in implementation files, not in this header.
+// ESPHome-facing facade only. Device protocol, desired-state synchronization,
+// and ancillary SoC estimation live behind BQ76952Service. Method bodies live
+// in implementation files, not in this header.
 class BQ76952Component : public PollingComponent, public BQ76952Protocol {
  public:
   BQ76952Component();
@@ -42,25 +41,22 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   void set_fet_status_flags_sensor(text_sensor::TextSensor *sensor);
 
   void set_output_enabled_switch(switch_::Switch *control);
-  void set_autonomous_fet_switch(switch_::Switch *control);
+  void set_autonomous_switch(switch_::Switch *control);
 
   void setup() override;
   void update() override;
   void dump_config() override;
 
   bool set_output_enabled(bool enabled);
-  bool set_autonomous_fet_enabled(bool enabled);
+  bool set_autonomous(bool enabled);
   bool clear_alarm_latches();
-  bool reset_passed_charge();
   bool program_factory_otp();
 
  private:
   void publish_snapshot(const BQ76952Snapshot &snapshot);
   void publish_faults(const BQ76952Snapshot &snapshot);
-  void publish_soc(const BQ76952Snapshot &snapshot);
 
   BQ76952Service service_;
-  BQ76952Soc soc_;
 
   sensor::Sensor *bat_voltage_sensor_{nullptr};
   sensor::Sensor *pack_voltage_sensor_{nullptr};
@@ -77,7 +73,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   text_sensor::TextSensor *fet_status_flags_sensor_{nullptr};
 
   switch_::Switch *output_enabled_switch_{nullptr};
-  switch_::Switch *autonomous_fet_switch_{nullptr};
+  switch_::Switch *autonomous_switch_{nullptr};
 };
 
 }  // namespace bq76952
