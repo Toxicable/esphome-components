@@ -22,6 +22,15 @@ void BQ76952Soc::setup(BQ76952CellChemistry chemistry) {
   this->load();
 }
 
+bool BQ76952Soc::has_confirmed_capacity() const {
+  return this->have_span_ && !this->span_provisional_ && std::isfinite(this->learned_span_ah_) &&
+         this->learned_span_ah_ > 0.001F;
+}
+
+float BQ76952Soc::learned_capacity_ah() const {
+  return this->has_confirmed_capacity() ? this->learned_span_ah_ : NAN;
+}
+
 float BQ76952Soc::estimate_from_voltage(int16_t cell_voltage_mv, uint16_t empty_mv, uint16_t full_mv) const {
   const int16_t bounded =
       std::max<int16_t>(static_cast<int16_t>(empty_mv), std::min<int16_t>(static_cast<int16_t>(full_mv),

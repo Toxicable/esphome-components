@@ -5,6 +5,7 @@ Component-scoped rules for `components/bq76952`.
 ## Architecture
 
 - `bq76952_config.h` defines complete desired device state. It has no `std::optional`, `has_*`, legacy aliases, or preserve-by-omission semantics.
+- `bq76952_registers.h` groups direct commands, subcommands, data-memory addresses, bit fields, encoding constants, transport timings, and fixed product policy. Do not scatter datasheet or policy literals through implementation files.
 - `bq76952_protocol.cpp` owns direct-register access, active/desired I2C CRC framing, subcommand transfer-buffer framing, checksums, data-memory read/write verification, and CONFIG_UPDATE transitions.
 - `bq76952_service.cpp` owns configuration synchronization, connection recovery, measurements, protections, FET policy, runtime actions, and the ancillary SoC instance.
 - `bq76952_soc.cpp` isolates SoC estimation/persistence logic but remains owned by `BQ76952Service`.
@@ -85,6 +86,7 @@ Component-scoped rules for `components/bq76952`.
 - Do not expose passed-charge accumulation or a reset-passed-charge control to users.
 - `relative_charge_ah` is an internal continuous coordinate built from counter deltas so learned SoC survives counter reset/wraparound.
 - The BQ accumulator increases while charging, so calculate learned SoC as `(relative_charge - empty_anchor) / (full_anchor - empty_anchor)`.
+- Expose only confirmed full-to-empty `learned_capacity` as an Ah diagnostic; provisional one-endpoint spans remain internal.
 - SoC has no device-address dependency. It is an ancillary object owned and set up by the service.
 - Current is user-facing positive for discharge and negative for charge.
 - Full/empty endpoints use configured COV/CUV thresholds, protection state, current direction, and hold time.

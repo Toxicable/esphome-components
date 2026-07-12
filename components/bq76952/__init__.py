@@ -128,6 +128,7 @@ CONF_LD_VOLTAGE = "ld_voltage"
 CONF_LARGEST_INTERCELL_VOLTAGE = "largest_intercell_voltage"
 CONF_CURRENT = "current"
 CONF_STATE_OF_CHARGE = "state_of_charge"
+CONF_LEARNED_CAPACITY = "learned_capacity"
 CONF_DIE_TEMPERATURE = "die_temperature"
 CONF_TS1_TEMPERATURE = "ts1_temperature"
 CONF_TS2_TEMPERATURE = "ts2_temperature"
@@ -430,6 +431,12 @@ schema = {
         device_class=DEVICE_CLASS_BATTERY,
         state_class=STATE_CLASS_MEASUREMENT,
     ),
+    cv.Optional(CONF_LEARNED_CAPACITY): sensor.sensor_schema(
+        unit_of_measurement="Ah",
+        accuracy_decimals=2,
+        state_class=STATE_CLASS_MEASUREMENT,
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+    ),
     cv.Optional(CONF_DIE_TEMPERATURE): sensor.sensor_schema(
         unit_of_measurement=UNIT_CELSIUS,
         accuracy_decimals=1,
@@ -633,6 +640,7 @@ async def to_code(config):
         ),
         (CONF_CURRENT, var.set_current_sensor),
         (CONF_STATE_OF_CHARGE, var.set_state_of_charge_sensor),
+        (CONF_LEARNED_CAPACITY, var.set_learned_capacity_sensor),
         (CONF_DIE_TEMPERATURE, var.set_die_temperature_sensor),
         (CONF_TS1_TEMPERATURE, var.set_ts1_temperature_sensor),
         (CONF_TS2_TEMPERATURE, var.set_ts2_temperature_sensor),

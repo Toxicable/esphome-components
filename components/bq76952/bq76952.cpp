@@ -77,6 +77,10 @@ void BQ76952Component::set_state_of_charge_sensor(sensor::Sensor *sensor) {
   this->state_of_charge_sensor_ = sensor;
 }
 
+void BQ76952Component::set_learned_capacity_sensor(sensor::Sensor *sensor) {
+  this->learned_capacity_sensor_ = sensor;
+}
+
 void BQ76952Component::set_die_temperature_sensor(sensor::Sensor *sensor) {
   this->die_temperature_sensor_ = sensor;
 }
@@ -166,6 +170,9 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
   if (this->state_of_charge_sensor_ != nullptr) {
     this->state_of_charge_sensor_->publish_state(snapshot.state_of_charge_percent);
   }
+  if (this->learned_capacity_sensor_ != nullptr && std::isfinite(snapshot.learned_capacity_ah)) {
+    this->learned_capacity_sensor_->publish_state(snapshot.learned_capacity_ah);
+  }
   if (this->die_temperature_sensor_ != nullptr) {
     this->die_temperature_sensor_->publish_state(snapshot.die_temperature_c);
   }
@@ -232,6 +239,7 @@ void BQ76952Component::dump_config() {
   }
   LOG_SENSOR("  ", "Current", this->current_sensor_);
   LOG_SENSOR("  ", "State of Charge", this->state_of_charge_sensor_);
+  LOG_SENSOR("  ", "Learned Capacity", this->learned_capacity_sensor_);
   LOG_SENSOR("  ", "Die Temperature", this->die_temperature_sensor_);
   LOG_SENSOR("  ", "TS1 Temperature", this->thermistor_temperature_sensors_[0]);
   LOG_SENSOR("  ", "TS2 Temperature", this->thermistor_temperature_sensors_[1]);

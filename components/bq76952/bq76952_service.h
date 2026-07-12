@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 #include "bq76952_config.h"
 #include "bq76952_protocol.h"
@@ -52,6 +53,7 @@ struct BQ76952Snapshot {
   int32_t load_detect_voltage_mv{0};
   float current_a{0.0f};
   float state_of_charge_percent{0.0f};
+  float learned_capacity_ah{std::numeric_limits<float>::quiet_NaN()};
   float die_temperature_c{0.0f};
   std::array<float, 3> thermistor_temperature_c{};
 };

@@ -127,6 +127,8 @@ bq76952:
     name: "BMS Current"
   state_of_charge:
     name: "BMS State of Charge"
+  learned_capacity:
+    name: "BMS Learned Capacity"
 
   cell1_voltage:
     name: "BMS Cell 1"
@@ -187,6 +189,12 @@ The schema rejects an OCD2 setup that is not both higher-current and faster than
 The BQ76952 integrated-charge value is an internal coulomb-counter position in Ah. It is not energy in Wh and is not exposed as a lifetime counter or reset button. The service feeds counter deltas into the SoC estimator.
 
 `cell_chemistry: lithium_ion` is required because lithium-ion is currently the only implemented voltage fallback curve.
+
+## Learned capacity diagnostic
+
+`learned_capacity` reports the confirmed full-to-empty coulomb-count span in amp-hours. It remains unavailable while the estimator is unlearned or only has a provisional one-endpoint estimate. A value is published only after both a valid full and empty endpoint have been observed.
+
+The value is diagnostic rather than a configured nominal capacity: it can change as later complete cycles refresh the learned endpoints.
 
 ## OTP programming
 

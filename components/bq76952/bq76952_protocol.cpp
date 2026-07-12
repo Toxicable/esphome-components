@@ -1,5 +1,7 @@
 #include "bq76952_protocol.h"
 
+#include "bq76952_registers.h"
+
 #include <array>
 #include <cstring>
 
@@ -11,25 +13,14 @@ namespace bq76952 {
 
 namespace {
 static const char *const TAG = "bq76952.protocol";
-
-constexpr uint8_t REG_SUBCOMMAND = 0x3E;
-constexpr uint8_t REG_TRANSFER_BUFFER = 0x40;
-constexpr uint8_t REG_CHECKSUM = 0x60;
-constexpr uint8_t REG_LENGTH = 0x61;
-constexpr uint8_t REG_BATTERY_STATUS = 0x12;
-
-constexpr uint16_t SUBCMD_SET_CFGUPDATE = 0x0090;
-constexpr uint16_t SUBCMD_EXIT_CFGUPDATE = 0x0092;
-constexpr uint16_t BATTERY_STATUS_CFGUPDATE = 1U << 0;
-
-constexpr size_t MAX_TRANSFER_PAYLOAD = 32;
+namespace hw = registers;
 
 uint8_t crc8(const uint8_t *data, size_t length) {
   uint8_t crc = 0;
   for (size_t i = 0; i < length; i++) {
     crc ^= data[i];
     for (uint8_t bit = 0; bit < 8; bit++) {
-      crc = (crc & 0x80U) != 0 ? static_cast<uint8_t>((crc << 1) ^ 0x07U) : static_cast<uint8_t>(crc << 1);
+      crc = (crc & 0x80U) != 0 ? static_cast<uint8_t>((crc << 1) ^ hw::transport::CRC8_POLYNOMIAL) : static_cast<uint8_t>(crc << 1);
     }
   }
   return crc;
@@ -102,12 +93,12 @@ bool BQ76952Protocol::read_bytes_with_mode(uint8_t command, uint8_t *data, size_
     return this->read(data, length) == i2c::ERROR_OK;
   }
 
-  if (length > MAX_TRANSFER_PAYLOAD) {
+  if (length > hw::transport::MAX_TRANSFER_PAYLOAD) {
     ESP_LOGE(TAG, "CRC read length %u exceeds supported maximum", static_cast<unsigned>(length));
     return false;
   }
 
-  std::array<uint8_t, MAX_TRANSFER_PAYLOAD * 2> framed{};
+  std::array<uint8_t, hw::transport::MAX_TRANSFER_PAYLOAD * 2> framed{};
   if (this->write_read(&command, 1, framed.data(), length * 2) != i2c::ERROR_OK) {
     return false;
   }
@@ -155,12 +146,12 @@ bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data
     return i2c::I2CDevice::write_bytes(command, data, static_cast<uint8_t>(length));
   }
 
-  if (length > MAX_TRANSFER_PAYLOAD) {
+  if (length > hw::transport::MAX_TRANSFER_PAYLOAD) {
     ESP_LOGE(TAG, "CRC write length %u exceeds supported maximum", static_cast<unsigned>(length));
     return false;
   }
 
-  std::array<uint8_t, 1 + MAX_TRANSFER_PAYLOAD * 2> framed{};
+  std::array<uint8_t, 1 + hw::transport::MAX_TRANSFER_PAYLOAD * 2> framed{};
   framed[0] = command;
   const uint8_t write_address = static_cast<uint8_t>(this->address_ << 1);
   for (size_t i = 0; i < length; i++) {
@@ -176,21 +167,21 @@ bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data
 }
 
 bool BQ76952Protocol::send_subcommand(uint16_t subcommand) {
-  return this->write_u16(REG_SUBCOMMAND, subcommand);
+  return this->write_u16(hw::direct::SUBCOMMAND, subcommand);
 }
 
 bool BQ76952Protocol::wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms) {
-  delay_microseconds_safe(2500);
+  delay_microseconds_safe(hw::transport::TRANSFER_READY_DELAY_US);
   const uint32_t started = millis();
   while ((millis() - started) <= timeout_ms) {
     uint16_t echo = 0;
-    if (!this->read_u16(REG_SUBCOMMAND, echo)) {
+    if (!this->read_u16(hw::direct::SUBCOMMAND, echo)) {
       return false;
     }
     if (echo == expected_command) {
       return true;
     }
-    delay_microseconds_safe(500);
+    delay_microseconds_safe(hw::transport::TRANSFER_POLL_INTERVAL_US);
   }
   ESP_LOGW(TAG, "Timed out waiting for transfer buffer command 0x%04X", expected_command);
   return false;
@@ -203,24 +194,24 @@ bool BQ76952Protocol::verify_transfer_buffer(uint16_t command, const uint8_t *da
 
 bool BQ76952Protocol::read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length) {
   uint8_t response_length = 0;
-  if (!this->read_u8(REG_LENGTH, response_length) || response_length < 4) {
+  if (!this->read_u8(hw::direct::LENGTH, response_length) || response_length < hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES) {
     return false;
   }
 
-  const size_t payload_length = static_cast<size_t>(response_length - 4);
-  if (payload_length > MAX_TRANSFER_PAYLOAD || length > payload_length) {
+  const size_t payload_length = static_cast<size_t>(response_length - hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES);
+  if (payload_length > hw::transport::MAX_TRANSFER_PAYLOAD || length > payload_length) {
     ESP_LOGW(TAG, "Unexpected transfer payload length %u for command 0x%04X", static_cast<unsigned>(payload_length),
              expected_command);
     return false;
   }
 
-  std::array<uint8_t, MAX_TRANSFER_PAYLOAD> payload{};
-  if (payload_length > 0 && !this->read_bytes(REG_TRANSFER_BUFFER, payload.data(), payload_length)) {
+  std::array<uint8_t, hw::transport::MAX_TRANSFER_PAYLOAD> payload{};
+  if (payload_length > 0 && !this->read_bytes(hw::direct::TRANSFER_BUFFER, payload.data(), payload_length)) {
     return false;
   }
 
   uint8_t checksum = 0;
-  if (!this->read_u8(REG_CHECKSUM, checksum) ||
+  if (!this->read_u8(hw::direct::CHECKSUM, checksum) ||
       !this->verify_transfer_buffer(expected_command, payload.data(), payload_length, checksum)) {
     ESP_LOGW(TAG, "Transfer-buffer checksum failed for command 0x%04X", expected_command);
     return false;
@@ -233,24 +224,24 @@ bool BQ76952Protocol::read_transfer_buffer(uint16_t expected_command, uint8_t *d
 }
 
 bool BQ76952Protocol::read_subcommand(uint16_t subcommand, uint8_t *data, size_t length) {
-  if (!this->send_subcommand(subcommand) || !this->wait_for_transfer_buffer(subcommand, 100)) {
+  if (!this->send_subcommand(subcommand) || !this->wait_for_transfer_buffer(subcommand, hw::transport::TRANSFER_TIMEOUT_MS)) {
     return false;
   }
   return this->read_transfer_buffer(subcommand, data, length);
 }
 
 bool BQ76952Protocol::write_subcommand(uint16_t subcommand, const uint8_t *data, size_t length) {
-  if (length > MAX_TRANSFER_PAYLOAD || (length > 0 && data == nullptr)) {
+  if (length > hw::transport::MAX_TRANSFER_PAYLOAD || (length > 0 && data == nullptr)) {
     return false;
   }
   if (!this->send_subcommand(subcommand)) {
     return false;
   }
-  if (length > 0 && !this->write_bytes(REG_TRANSFER_BUFFER, data, length)) {
+  if (length > 0 && !this->write_bytes(hw::direct::TRANSFER_BUFFER, data, length)) {
     return false;
   }
-  const uint8_t footer[2] = {transfer_checksum(subcommand, data, length), static_cast<uint8_t>(length + 4)};
-  return this->write_bytes(REG_CHECKSUM, footer, sizeof(footer));
+  const uint8_t footer[2] = {transfer_checksum(subcommand, data, length), static_cast<uint8_t>(length + hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES)};
+  return this->write_bytes(hw::direct::CHECKSUM, footer, sizeof(footer));
 }
 
 bool BQ76952Protocol::read_data_memory(uint16_t address, uint8_t *data, size_t length) {
@@ -261,9 +252,9 @@ bool BQ76952Protocol::write_data_memory(uint16_t address, const uint8_t *data, s
   if (!this->write_subcommand(address, data, length)) {
     return false;
   }
-  delay_microseconds_safe(2500);
+  delay_microseconds_safe(hw::transport::TRANSFER_READY_DELAY_US);
 
-  std::array<uint8_t, MAX_TRANSFER_PAYLOAD> verify{};
+  std::array<uint8_t, hw::transport::MAX_TRANSFER_PAYLOAD> verify{};
   if (length > verify.size() || !this->read_data_memory(address, verify.data(), length)) {
     return false;
   }
@@ -293,27 +284,28 @@ bool BQ76952Protocol::write_data_memory_u16(uint16_t address, uint16_t value) {
 }
 
 bool BQ76952Protocol::set_config_update(bool enabled) {
-  const uint16_t command = enabled ? SUBCMD_SET_CFGUPDATE : SUBCMD_EXIT_CFGUPDATE;
+  const uint16_t command = enabled ? hw::subcommand::SET_CONFIG_UPDATE : hw::subcommand::EXIT_CONFIG_UPDATE;
   if (!this->send_subcommand(command)) {
     return false;
   }
 
-  delay_microseconds_safe(enabled ? 2200 : 1200);
+  delay_microseconds_safe(enabled ? hw::transport::CONFIG_UPDATE_ENTER_DELAY_US
+                                    : hw::transport::CONFIG_UPDATE_EXIT_DELAY_US);
   if (!enabled) {
     // Comm Type changes take effect as CONFIG_UPDATE exits. The exit command
     // itself uses the old framing; status polling must use the configured mode.
     this->crc_enabled_ = this->desired_crc_enabled_;
   }
   const uint32_t started = millis();
-  while ((millis() - started) < 500U) {
+  while ((millis() - started) < hw::transport::CONFIG_UPDATE_TIMEOUT_MS) {
     uint16_t battery_status = 0;
-    if (!this->read_u16(REG_BATTERY_STATUS, battery_status)) {
+    if (!this->read_u16(hw::direct::BATTERY_STATUS, battery_status)) {
       return false;
     }
-    if (((battery_status & BATTERY_STATUS_CFGUPDATE) != 0) == enabled) {
+    if (((battery_status & hw::bits::battery_status::CONFIG_UPDATE) != 0) == enabled) {
       return true;
     }
-    delay_microseconds_safe(1000);
+    delay_microseconds_safe(hw::transport::CONFIG_UPDATE_POLL_INTERVAL_US);
   }
   ESP_LOGW(TAG, "Timed out waiting for CONFIG_UPDATE=%s", enabled ? "on" : "off");
   return false;

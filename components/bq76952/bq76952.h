@@ -31,6 +31,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   void set_cell_voltage_sensor(uint8_t logical_cell, sensor::Sensor *sensor);
   void set_current_sensor(sensor::Sensor *sensor);
   void set_state_of_charge_sensor(sensor::Sensor *sensor);
+  void set_learned_capacity_sensor(sensor::Sensor *sensor);
   void set_die_temperature_sensor(sensor::Sensor *sensor);
   void set_ts1_temperature_sensor(sensor::Sensor *sensor);
   void set_ts2_temperature_sensor(sensor::Sensor *sensor);
@@ -62,6 +63,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   std::array<sensor::Sensor *, 16> cell_voltage_sensors_{};
   sensor::Sensor *current_sensor_{nullptr};
   sensor::Sensor *state_of_charge_sensor_{nullptr};
+  sensor::Sensor *learned_capacity_sensor_{nullptr};
   sensor::Sensor *die_temperature_sensor_{nullptr};
   std::array<sensor::Sensor *, 3> thermistor_temperature_sensors_{};
 

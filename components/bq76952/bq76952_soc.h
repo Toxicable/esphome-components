@@ -33,6 +33,9 @@ class BQ76952Soc {
   void setup(BQ76952CellChemistry chemistry);
   float update(const BQ76952SocSample &sample);
 
+  bool has_confirmed_capacity() const;
+  float learned_capacity_ah() const;
+
  private:
   struct CurvePoint {
     uint16_t mv;
