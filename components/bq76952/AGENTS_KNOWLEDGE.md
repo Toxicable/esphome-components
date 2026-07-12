@@ -39,6 +39,8 @@ Component-scoped rules for `components/bq76952`.
 ## Protocol robustness
 
 - Direct command reads and writes must honour optional I2C CRC on every data byte.
+- Startup probing begins without CRC, retries the alternate framing on failed reads, and remembers the framing that answers.
+- Keep the detected active framing separate from the configured target; a Comm Type change takes effect only after exiting `CONFIG_UPDATE`.
 - Subcommand/data-memory reads validate echoed command, response length and checksum before returning payload.
 - Data-memory writes verify by reading the value back.
 - Keep generic transfer-buffer mechanics in `BQ76952Protocol`; the service should not duplicate packet framing.
