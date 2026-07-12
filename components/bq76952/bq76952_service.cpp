@@ -101,18 +101,26 @@ constexpr uint16_t DM_UTD_THRESHOLD = 0x92A9;
 constexpr uint16_t DM_UTD_DELAY = 0x92AA;
 constexpr uint16_t DM_UTD_RECOVERY = 0x92AB;
 constexpr uint16_t DM_PROTECTION_RECOVERY_TIME = 0x92AF;
+constexpr uint16_t DM_PTO_CHARGE_THRESHOLD = 0x92BA;
+constexpr uint16_t DM_PTO_DELAY = 0x92BC;
+constexpr uint16_t DM_PTO_RESET = 0x92BE;
 constexpr uint16_t DM_TS1_CONFIG = 0x92FD;
 constexpr uint16_t DM_TS2_CONFIG = 0x92FE;
 constexpr uint16_t DM_TS3_CONFIG = 0x92FF;
 constexpr uint16_t DM_VCELL_MODE = 0x9304;
 constexpr uint16_t DM_FET_OPTIONS = 0x9308;
+constexpr uint16_t DM_CHG_PUMP_CONTROL = 0x9309;
 constexpr uint16_t DM_PRECHARGE_START_VOLTAGE = 0x930A;
 constexpr uint16_t DM_PRECHARGE_STOP_VOLTAGE = 0x930C;
 constexpr uint16_t DM_PREDISCHARGE_TIMEOUT = 0x930E;
 constexpr uint16_t DM_PREDISCHARGE_STOP_DELTA = 0x930F;
+constexpr uint16_t DM_DSG_CURRENT_THRESHOLD = 0x9310;
+constexpr uint16_t DM_CHG_CURRENT_THRESHOLD = 0x9312;
 constexpr uint16_t DM_BALANCING_CONFIGURATION = 0x9335;
 constexpr uint16_t DM_BALANCING_MIN_TEMP = 0x9336;
 constexpr uint16_t DM_BALANCING_MAX_TEMP = 0x9337;
+constexpr uint16_t DM_BALANCING_MAX_INTERNAL_TEMP = 0x9338;
+constexpr uint16_t DM_BALANCING_INTERVAL = 0x9339;
 constexpr uint16_t DM_BALANCING_MAX_CELLS = 0x933A;
 constexpr uint16_t DM_BALANCING_MIN_CELL_VOLTAGE = 0x933B;
 constexpr uint16_t DM_BALANCING_START_DELTA = 0x933D;
@@ -133,8 +141,15 @@ constexpr uint8_t FET_OPTIONS_HOST_FET_ENABLE = 1U << 2;
 constexpr uint8_t FET_OPTIONS_SLEEP_CHARGE = 1U << 1;
 constexpr uint8_t FET_OPTIONS_SERIES_FETS = 1U << 0;
 
+constexpr uint8_t CHG_PUMP_SOURCE_FOLLOWER_SLEEP = 1U << 2;
+constexpr uint8_t CHG_PUMP_LOW_VOLTAGE = 1U << 1;
+constexpr uint8_t CHG_PUMP_ENABLE = 1U << 0;
+
 constexpr uint8_t BALANCING_CHARGE = 1U << 0;
 constexpr uint8_t BALANCING_RELAX = 1U << 1;
+constexpr uint8_t BALANCING_SLEEP = 1U << 2;
+constexpr uint8_t BALANCING_NO_SLEEP = 1U << 3;
+constexpr uint8_t BALANCING_NO_COMMANDS = 1U << 4;
 
 constexpr uint8_t PROTECTION_A_CUV = 1U << 2;
 constexpr uint8_t PROTECTION_A_COV = 1U << 3;
@@ -154,6 +169,12 @@ constexpr uint32_t CONFIG_AUDIT_INTERVAL_MS = 60000;
 constexpr uint32_t CONFIG_RETRY_INTERVAL_MS = 1000;
 constexpr uint8_t FIXED_TEMPERATURE_DELAY_S = 2;
 constexpr int16_t FIXED_BODY_DIODE_THRESHOLD_MA = 50;
+constexpr float FIXED_BALANCING_CURRENT_THRESHOLD_A = 0.1F;
+constexpr int8_t FIXED_BALANCING_MAX_INTERNAL_TEMP_C = 70;
+constexpr uint8_t FIXED_BALANCING_INTERVAL_S = 20;
+constexpr int16_t FIXED_PTO_CHARGE_THRESHOLD_MA = 250;
+constexpr uint16_t FIXED_PTO_DELAY_S = 1800;
+constexpr uint16_t FIXED_PTO_RESET_USER_AH = 2;
 
 uint8_t clamp_u8(int value, int minimum, int maximum, const char *label) {
   const int clamped = std::max(minimum, std::min(maximum, value));
@@ -231,6 +252,7 @@ uint32_t read_u32_le(const uint8_t *data) {
   return static_cast<uint32_t>(data[0]) | (static_cast<uint32_t>(data[1]) << 8) |
          (static_cast<uint32_t>(data[2]) << 16) | (static_cast<uint32_t>(data[3]) << 24);
 }
+
 }  // namespace
 
 BQ76952Service::BQ76952Service(BQ76952Protocol &protocol) : protocol_(protocol) {}
@@ -337,8 +359,7 @@ bool BQ76952Service::write_configuration() {
 }
 
 bool BQ76952Service::synchronize_configuration(ConfigurationSyncMode mode) {
-  const char *mode_name =
-      mode == ConfigurationSyncMode::RESTORE_RUNTIME_STATE ? "restore_runtime_state" : "audit_and_repair";
+  const char *mode_name = mode == ConfigurationSyncMode::RESTORE_RUNTIME_STATE ? "restore_runtime_state" : "audit_and_repair";
   ESP_LOGD(TAG, "Configuration synchronization: %s", mode_name);
 
   bool matches = false;
@@ -449,8 +470,14 @@ bool BQ76952Service::apply_regulators(bool write, bool &matches) {
       if (reg2_voltage_change) {
         staged &= static_cast<uint8_t>(~REG12_REG2_ENABLE);
       }
-      if (staged != current_reg12 && !this->protocol_.write_data_memory_u8(DM_REG12_CONFIG, staged)) {
-        return false;
+      if (staged != current_reg12) {
+        // Disable an enabled LDO before changing its voltage code. Apply the
+        // live disable as well as the data-memory change so the regulator is
+        // never driven at the old enable state with the new voltage selection.
+        if (!this->protocol_.write_subcommand(SUBCMD_REG12_CONTROL, &staged, 1) ||
+            !this->protocol_.write_data_memory_u8(DM_REG12_CONFIG, staged)) {
+          return false;
+        }
       }
       if (!this->protocol_.write_data_memory_u8(DM_REG12_CONFIG, desired_reg12)) {
         return false;
@@ -490,7 +517,11 @@ bool BQ76952Service::apply_fet_configuration(bool write, bool &matches) {
                                                           FET_OPTIONS_FET_CONTROL_ENABLE |
                                                           FET_OPTIONS_HOST_FET_ENABLE |
                                                           FET_OPTIONS_SLEEP_CHARGE | FET_OPTIONS_SERIES_FETS);
-  if (!this->sync_u8(DM_FET_OPTIONS, desired_options, owned_options, write, matches, "FET options")) {
+  if (!this->sync_u8(DM_FET_OPTIONS, desired_options, owned_options, write, matches, "FET options") ||
+      !this->sync_u8(DM_CHG_PUMP_CONTROL, CHG_PUMP_ENABLE,
+                     static_cast<uint8_t>(CHG_PUMP_SOURCE_FOLLOWER_SLEEP | CHG_PUMP_LOW_VOLTAGE |
+                                          CHG_PUMP_ENABLE),
+                     write, matches, "charge-pump configuration")) {
     return false;
   }
 
@@ -526,13 +557,30 @@ bool BQ76952Service::apply_fet_configuration(bool write, bool &matches) {
 
 bool BQ76952Service::apply_balancing(bool write, bool &matches) {
   const auto &balance = this->config_.balancing;
-  if (!this->sync_u8(DM_BALANCING_CONFIGURATION, BALANCING_CHARGE,
-                     static_cast<uint8_t>(BALANCING_CHARGE | BALANCING_RELAX), write, matches,
+  constexpr uint8_t owned_policy = static_cast<uint8_t>(BALANCING_CHARGE | BALANCING_RELAX | BALANCING_SLEEP |
+                                                         BALANCING_NO_SLEEP | BALANCING_NO_COMMANDS);
+  constexpr uint8_t desired_policy = static_cast<uint8_t>(BALANCING_CHARGE | BALANCING_NO_COMMANDS);
+
+  const uint16_t current_threshold_user_a = clamp_u16(
+      static_cast<int>(std::lround(FIXED_BALANCING_CURRENT_THRESHOLD_A * 1000000.0F /
+                                   static_cast<float>(this->current_lsb_ua_))),
+      0, 32767, "balancing current threshold");
+
+  if (!this->sync_u8(DM_BALANCING_CONFIGURATION, desired_policy, owned_policy, write, matches,
                      "balancing policy") ||
+      !this->sync_u16(DM_DSG_CURRENT_THRESHOLD, current_threshold_user_a, 0xFFFF, write, matches,
+                      "discharge-state current threshold") ||
+      !this->sync_u16(DM_CHG_CURRENT_THRESHOLD, current_threshold_user_a, 0xFFFF, write, matches,
+                      "charge-state current threshold") ||
       !this->sync_u8(DM_BALANCING_MIN_TEMP, static_cast<uint8_t>(balance.minimum_temperature_c), 0xFF, write,
                      matches, "balancing minimum temperature") ||
       !this->sync_u8(DM_BALANCING_MAX_TEMP, static_cast<uint8_t>(balance.maximum_temperature_c), 0xFF, write,
                      matches, "balancing maximum temperature") ||
+      !this->sync_u8(DM_BALANCING_MAX_INTERNAL_TEMP,
+                     static_cast<uint8_t>(FIXED_BALANCING_MAX_INTERNAL_TEMP_C), 0xFF, write, matches,
+                     "balancing maximum internal temperature") ||
+      !this->sync_u8(DM_BALANCING_INTERVAL, FIXED_BALANCING_INTERVAL_S, 0xFF, write, matches,
+                     "balancing interval") ||
       !this->sync_u8(DM_BALANCING_MAX_CELLS, balance.maximum_balanced_cells, 0xFF, write, matches,
                      "balancing maximum cell count") ||
       !this->sync_u16(DM_BALANCING_MIN_CELL_VOLTAGE, balance.minimum_cell_voltage_mv, 0xFFFF, write, matches,
@@ -564,19 +612,17 @@ bool BQ76952Service::apply_protections(bool write, bool &matches) {
                      static_cast<uint8_t>(PROTECTION_C_OCD3 | PROTECTION_C_PTO), write, matches,
                      "enabled protections C") ||
       !this->sync_u8(DM_CHG_FET_PROTECTIONS_A,
-                     static_cast<uint8_t>(PROTECTION_A_COV | PROTECTION_A_OCC | PROTECTION_A_SCD),
-                     static_cast<uint8_t>(PROTECTION_A_COV | PROTECTION_A_OCC | PROTECTION_A_SCD), write, matches,
+                     static_cast<uint8_t>(PROTECTION_A_COV | PROTECTION_A_OCC), enabled_a, write, matches,
                      "charge FET protections A") ||
       !this->sync_u8(DM_CHG_FET_PROTECTIONS_B, static_cast<uint8_t>(PROTECTION_B_OTC | PROTECTION_B_UTC),
                      enabled_b, write, matches, "charge FET protections B") ||
       !this->sync_u8(DM_CHG_FET_PROTECTIONS_C, this->config_.fet.precharge.enabled ? PROTECTION_C_PTO : 0,
-                     PROTECTION_C_PTO, write, matches, "charge FET protections C") ||
+                     static_cast<uint8_t>(PROTECTION_C_PTO | PROTECTION_C_OCD3), write, matches,
+                     "charge FET protections C") ||
       !this->sync_u8(DM_DSG_FET_PROTECTIONS_A,
                      static_cast<uint8_t>(PROTECTION_A_CUV | PROTECTION_A_OCD1 | PROTECTION_A_OCD2 |
                                           PROTECTION_A_SCD),
-                     static_cast<uint8_t>(PROTECTION_A_CUV | PROTECTION_A_OCD1 | PROTECTION_A_OCD2 |
-                                          PROTECTION_A_SCD),
-                     write, matches, "discharge FET protections A") ||
+                     enabled_a, write, matches, "discharge FET protections A") ||
       !this->sync_u8(DM_DSG_FET_PROTECTIONS_B, static_cast<uint8_t>(PROTECTION_B_OTD | PROTECTION_B_UTD),
                      enabled_b, write, matches, "discharge FET protections B") ||
       !this->sync_u8(DM_DSG_FET_PROTECTIONS_C, PROTECTION_C_OCD3,
@@ -677,7 +723,13 @@ bool BQ76952Service::apply_protections(bool write, bool &matches) {
       !this->sync_u8(DM_UTD_DELAY, FIXED_TEMPERATURE_DELAY_S, 0xFF, write, matches,
                      "discharge undertemperature delay") ||
       !this->sync_u8(DM_UTD_RECOVERY, static_cast<uint8_t>(utd_recovery), 0xFF, write, matches,
-                     "discharge undertemperature recovery")) {
+                     "discharge undertemperature recovery") ||
+      !this->sync_u16(DM_PTO_CHARGE_THRESHOLD, static_cast<uint16_t>(FIXED_PTO_CHARGE_THRESHOLD_MA), 0xFFFF,
+                      write, matches, "precharge-timeout current threshold") ||
+      !this->sync_u16(DM_PTO_DELAY, FIXED_PTO_DELAY_S, 0xFFFF, write, matches,
+                      "precharge-timeout delay") ||
+      !this->sync_u16(DM_PTO_RESET, FIXED_PTO_RESET_USER_AH, 0xFFFF, write, matches,
+                      "precharge-timeout reset charge")) {
     return false;
   }
 
@@ -974,22 +1026,22 @@ bool BQ76952Service::program_factory_otp() {
     delay(1000);
   }
   if (ok && (!this->protocol_.wait_for_transfer_buffer(SUBCMD_OTP_WR_CHECK, 1000) ||
-             !this->protocol_.read_transfer_buffer(SUBCMD_OTP_WR_CHECK, result, sizeof(result)) ||
-             (result[0] & 0x80U) == 0)) {
+      !this->protocol_.read_transfer_buffer(SUBCMD_OTP_WR_CHECK, result, sizeof(result)) ||
+      (result[0] & 0x80U) == 0)) {
     ESP_LOGE(TAG, "OTP_WR_CHECK rejected programming");
     ok = false;
   }
 
   if (ok) {
-    std::fill(std::begin(result), std::end(result), 0);
+    std::fill_n(result, sizeof(result), 0);
     if (!this->protocol_.send_subcommand(SUBCMD_OTP_WRITE)) {
       ok = false;
     } else {
       delay(1000);
     }
     if (ok && (!this->protocol_.wait_for_transfer_buffer(SUBCMD_OTP_WRITE, 1000) ||
-               !this->protocol_.read_transfer_buffer(SUBCMD_OTP_WRITE, result, sizeof(result)) ||
-               (result[0] & 0x80U) == 0)) {
+        !this->protocol_.read_transfer_buffer(SUBCMD_OTP_WRITE, result, sizeof(result)) ||
+        (result[0] & 0x80U) == 0)) {
       ESP_LOGE(TAG, "OTP_WRITE failed");
       ok = false;
     }
