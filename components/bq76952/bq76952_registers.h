@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace esphome {
@@ -183,8 +184,13 @@ inline constexpr uint8_t SCD = 1U << 7;
 namespace protection_b {
 inline constexpr uint8_t UTC = 1U << 0;
 inline constexpr uint8_t UTD = 1U << 1;
+inline constexpr uint8_t INTERNAL_UNDERTEMPERATURE = 1U << 2;
 inline constexpr uint8_t OTC = 1U << 4;
 inline constexpr uint8_t OTD = 1U << 5;
+inline constexpr uint8_t INTERNAL_OVERTEMPERATURE = 1U << 6;
+inline constexpr uint8_t FET_OVERTEMPERATURE = 1U << 7;
+inline constexpr uint8_t ANY_TEMPERATURE = UTC | UTD | INTERNAL_UNDERTEMPERATURE | OTC | OTD |
+                                           INTERNAL_OVERTEMPERATURE | FET_OVERTEMPERATURE;
 }
 namespace protection_c {
 inline constexpr uint8_t PRECHARGE_TIMEOUT = 1U << 2;
@@ -195,23 +201,67 @@ inline constexpr uint16_t FET_ENABLE = 1U << 4;
 }
 }  // namespace bits
 
-// Datasheet-defined scaling used to convert human units into register codes.
+// Datasheet-defined scaling and valid code ranges.
 namespace encoding {
 inline constexpr float CELL_THRESHOLD_STEP_MV = 50.6F;
 inline constexpr float PROTECTION_DELAY_STEP_MS = 3.3F;
 inline constexpr int PROTECTION_DELAY_CODE_OFFSET = 2;
+inline constexpr int PROTECTION_DELAY_MIN_CODE = 1;
+inline constexpr int PROTECTION_DELAY_MAX_CODE = 2047;
 inline constexpr float CURRENT_THRESHOLD_STEP_MV = 2.0F;
+inline constexpr int CURRENT_DELAY_MIN_CODE = 1;
+inline constexpr int CURRENT_DELAY_MAX_CODE = 127;
+inline constexpr int CUV_THRESHOLD_MIN_CODE = 20;
+inline constexpr int CUV_THRESHOLD_MAX_CODE = 90;
+inline constexpr int COV_THRESHOLD_MIN_CODE = 20;
+inline constexpr int COV_THRESHOLD_MAX_CODE = 110;
+inline constexpr int VOLTAGE_HYSTERESIS_MIN_CODE = 2;
+inline constexpr int VOLTAGE_HYSTERESIS_MAX_CODE = 20;
+inline constexpr int OCC_THRESHOLD_MIN_CODE = 2;
+inline constexpr int OCC_THRESHOLD_MAX_CODE = 62;
+inline constexpr int OCD_THRESHOLD_MIN_CODE = 2;
+inline constexpr int OCD_THRESHOLD_MAX_CODE = 100;
 inline constexpr uint16_t SCD_DELAY_STEP_US = 15;
 inline constexpr uint8_t SCD_DELAY_CODE_OFFSET = 1;
+inline constexpr uint8_t SCD_DELAY_DISABLED_CODE = 1;
+inline constexpr int SCD_DELAY_MIN_ACTIVE_CODE = 2;
+inline constexpr int SCD_DELAY_MAX_CODE = 31;
 inline constexpr uint16_t TEN_UNIT_STEP = 10;
+inline constexpr uint16_t TEN_UNIT_MAX_CODE = 255;
+inline constexpr uint8_t COMM_TYPE_I2C_NO_CRC = 0x08;
+inline constexpr uint8_t COMM_TYPE_I2C_CRC = 0x12;
+inline constexpr float CC_GAIN_NUMERATOR = 7.4768F;
+inline constexpr float CAPACITY_GAIN_MULTIPLIER = 298261.6178F;
+inline constexpr float MICROAMPS_PER_AMP = 1'000'000.0F;
+inline constexpr double COULOMB_COUNTER_FRACTION_SCALE = 4'294'967'296.0;
+inline constexpr uint8_t CELL_VOLTAGE_REGISTER_STRIDE = 2;
+inline constexpr int32_t CENTIVOLTS_TO_MILLIVOLTS = 10;
+inline constexpr int32_t MILLIVOLTS_TO_MILLIVOLTS = 1;
+inline constexpr float TENTHS_KELVIN_PER_KELVIN = 10.0F;
+inline constexpr float CELSIUS_ZERO_KELVIN = 273.15F;
 inline constexpr uint16_t SCD_THRESHOLD_MV[] = {10, 20, 40, 60, 80, 100, 125, 150,
                                                 175, 200, 250, 300, 350, 400, 450, 500};
 }  // namespace encoding
+
+// Transfer-buffer framing and timing constraints.
+namespace transport {
+inline constexpr size_t MAX_TRANSFER_PAYLOAD = 32;
+inline constexpr uint8_t CRC8_POLYNOMIAL = 0x07;
+inline constexpr uint8_t TRANSFER_RESPONSE_OVERHEAD_BYTES = 4;
+inline constexpr uint32_t TRANSFER_READY_DELAY_US = 2'500;
+inline constexpr uint32_t TRANSFER_POLL_INTERVAL_US = 500;
+inline constexpr uint32_t TRANSFER_TIMEOUT_MS = 100;
+inline constexpr uint32_t CONFIG_UPDATE_ENTER_DELAY_US = 2'200;
+inline constexpr uint32_t CONFIG_UPDATE_EXIT_DELAY_US = 1'200;
+inline constexpr uint32_t CONFIG_UPDATE_TIMEOUT_MS = 500;
+inline constexpr uint32_t CONFIG_UPDATE_POLL_INTERVAL_US = 1'000;
+}  // namespace transport
 
 // Product policy deliberately fixed outside user-facing YAML.
 namespace policy {
 inline constexpr uint32_t CONFIG_AUDIT_INTERVAL_MS = 60'000;
 inline constexpr uint32_t CONFIG_RETRY_INTERVAL_MS = 1'000;
+inline constexpr uint32_t OUTPUT_REQUEST_TIMEOUT_MS = 1'500;
 inline constexpr uint8_t TEMPERATURE_PROTECTION_DELAY_S = 2;
 inline constexpr int16_t BODY_DIODE_THRESHOLD_MA = 50;
 inline constexpr float BALANCING_CURRENT_THRESHOLD_A = 0.1F;
