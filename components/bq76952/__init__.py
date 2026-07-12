@@ -37,7 +37,6 @@ BQ76952ProgramFactoryOtpButton = bq76952_ns.class_(
     "BQ76952ProgramFactoryOtpButton", button.Button)
 
 CONF_CELL_COUNT = "cell_count"
-CONF_CELL_CHANNELS = "cell_channels"
 CONF_OTP_AUTONOMOUS_FET_MODE = "otp_autonomous_fet_mode"
 CONF_OTP_SLEEP_MODE = "otp_sleep_mode"
 CONF_PREDISCHARGE_ENABLED = "predischarge_enabled"
@@ -154,14 +153,6 @@ VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
 
 def _validate_config(config):
     cell_count = config[CONF_CELL_COUNT]
-    if CONF_CELL_CHANNELS in config:
-        channels = config[CONF_CELL_CHANNELS]
-        if len(channels) != cell_count:
-            raise cv.Invalid(
-                f"cell_channels must contain exactly {cell_count} entries"
-            )
-        if len(set(channels)) != len(channels):
-            raise cv.Invalid("cell_channels entries must be unique")
 
     for index, key in enumerate(CELL_VOLTAGE_KEYS, start=1):
         if key in config and index > cell_count:
@@ -177,7 +168,6 @@ def _validate_config(config):
 schema = {
     cv.GenerateID(): cv.declare_id(BQ76952Component),
     cv.Optional(CONF_CELL_COUNT, default=16): cv.int_range(min=3, max=16),
-    cv.Optional(CONF_CELL_CHANNELS): cv.ensure_list(cv.int_range(min=1, max=16)),
     cv.Optional(CONF_OTP_AUTONOMOUS_FET_MODE, default="preserve"): cv.enum(
         AUTONOMOUS_FET_MODE_OPTIONS, lower=True
     ),
@@ -293,16 +283,8 @@ def _append_optional(args, config, key, has_field, value_field):
 
 
 def _build_cpp_config(config):
-    cell_read_map = list(range(16))
-    explicit_cell_map = CONF_CELL_CHANNELS in config
-    if explicit_cell_map:
-        for index, channel in enumerate(config[CONF_CELL_CHANNELS]):
-            cell_read_map[index] = channel - 1
-
     args = [
         ("cell_count_", config[CONF_CELL_COUNT]),
-        ("cell_read_map_", cell_read_map),
-        ("explicit_cell_map_", explicit_cell_map),
         ("sense_resistor_milliohm_", config[CONF_SENSE_RESISTOR_MILLIOHM]),
         ("boot_config_apply_delay_ms_", config[CONF_BOOT_CONFIG_APPLY_DELAY].total_milliseconds),
         ("autonomous_fet_mode_", config[CONF_OTP_AUTONOMOUS_FET_MODE]),
