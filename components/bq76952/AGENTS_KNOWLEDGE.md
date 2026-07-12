@@ -1,66 +1,62 @@
 # AGENTS_KNOWLEDGE: bq76952
 
-Component-scoped notes for `components/bq76952`.
+Component-scoped rules for `components/bq76952`.
 
-- Use `components/bq76952/bq76952.pdf` as the local source of truth unless a TI TRM is checked into this component directory.
-- The component supports `cell_count: 3..16`. Direct cell-voltage commands run from `0x14` through `0x32` in 2-byte steps.
-- An `S`-cell pack always maps logical cells to differential channels `VC1-VC0` through `VC(S-1)-VC(S-2)`, with the final logical cell on `VC16-VC15`. A 4S pack therefore uses raw channels `[1, 2, 3, 16]`.
-- The fixed `1..(S-1), 16` layout also defines `Settings:Configuration:Vcell Mode (0x9304)`. Do not reintroduce a public cell-map override or voltage-based topology detection.
-- Initial cell diagnostics log representative cell/TOS gains, Vcell offset, and the active-balancing mask. A Cell 16 deviation of at least 200 mV triggers a rate-limited command reread and `DASTATUS4` raw-ADC diagnostic.
+## Architecture
 
-## Configuration Interface
+- `bq76952_config.h` defines complete desired device state. It has no `std::optional`, `has_*`, legacy aliases, or preserve-by-omission semantics.
+- `bq76952_protocol.h` owns only low-level register/subcommand/data-memory transport, transfer-buffer validation, checksums, optional I2C CRC, and CONFIG_UPDATE entry/exit.
+- `bq76952_service.h` owns configuration reconciliation, connection recovery, measurements, protections, FET policy, and runtime actions. It has no ESPHome entities.
+- `bq76952_soc.h` is a standalone SoC estimator/persistence service, not a protected state base.
+- `bq76952.h` is the ESPHome facade and owns service/SoC collaborators by composition. Keep method bodies out of the header.
+- Do not reintroduce `BQ76952ConfigState` or another compatibility adapter. This is a hard-cut refactor.
 
-- ESPHome constructs one `BQ76952Config` aggregate and calls `set_config()` once. Do not add per-field component setters.
-- The public C++ config uses `std::optional` for “preserve the existing device value.” Related protection values are grouped into small structs rather than represented by separate value and `has_*` fields.
-- The Python schema still uses the established flat YAML names, but validates each protection as a complete group:
-  - CUV limit + delay
-  - COV limit + delay
-  - OCC limit + delay
-  - OCD1 limit + delay
-  - OCD2 limit + delay
-  - OCD3 limit + delay
-  - SCD threshold + delay + recovery time
-- Reject partial groups during schema validation. Do not silently apply half a protection configuration.
-- `reg1_voltage` implies `reg1_enabled: true` when `reg1_enabled` is omitted.
-- `reg0_enabled` remains optional because the external BREG path is board-specific.
-- A configured TS1/TS2/TS3 temperature entity also supplies that pin's thermistor pull-up selection. TS `OPT[5:0]` occupies register bits `7:2`; `PIN_FXN[1:0]` occupies bits `1:0`.
-- The temporary `BQ76952ConfigState` adapter flattens the clean public config into legacy fields consumed by `bq76952.cpp`. It is internal compatibility code, not the desired long-term interface. Remove it when the implementation is split onto the grouped config types.
+## Fixed hardware and product policy
 
-## Fixed Product Policy
+- Supported packs are 3S–16S.
+- An `S`-cell pack maps logical cells to raw BQ channels `1..(S-1), 16`. A 4S pack is `[1, 2, 3, 16]`.
+- The same fixed mapping defines `Vcell Mode`; do not add explicit mapping or startup voltage detection.
+- Sleep is always allowed and is not user-configurable.
+- Desired configuration is applied after the first successful communication probe, with no arbitrary boot delay.
+- Failed reconciliation remains pending, retries after connection recovery, and is periodically audited using read-before-write checks.
+- State changes and actions use normal INFO/DEBUG/WARN logging. Do not add logging-mode options.
 
-- Sleep is always allowed. There is no YAML sleep-mode option and no public runtime sleep control.
-- Factory OTP programming always sets `Power Config[SLEEP]`; `otp_autonomous_fet_mode` remains the only optional boot-mode policy.
-- There is no `boot_config_apply_delay`. Desired configuration is applied immediately after the first successful Control/Battery/FET probe.
-- Failed reconciliation remains pending, retries after communication recovery, and is audited every 60 seconds using read-before-write checks.
-- There is no `event_logging` or `xchg_debug_burst` setting. Meaningful state changes and actions are logged automatically at normal log levels.
-- There is no public HA `apply_configuration` button. Normal boot, recovery, retry, periodic audit, and OTP preparation converge through `apply_requested_configuration_()`.
-- Do not add configuration writes directly to polling or lifecycle branches outside the reconciliation path.
+## Configuration contract
 
-## Device Configuration Behaviour
+- Every hardware/policy group is required by the ESPHome schema.
+- Every feature has an explicit enabled/disabled value.
+- Disabled features still have a complete typed config; the implementation decides the deterministic disabled register state.
+- Protection thresholds/delays/hysteresis are grouped in C++ and nested in YAML.
+- `current_gain_policy` is explicit: preserve current calibration or derive it from the configured shunt.
+- `i2c_crc_enabled` is explicit because BQ76952 variants differ.
+- REG0, REG1, and REG2 states are explicit. REG1/REG2 voltage codes are supplied even when disabled.
+- TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes, independent of whether an ESPHome sensor entity is published.
+- Protection ALERT masks should be derived from enabled protections, not exposed as raw user bitmasks.
 
-- Data-memory access is not a generic subcommand read: after writing `0x3E/0x3F`, allow the transfer buffer to populate, read response length from `0x61`, then read data from `0x40`. After writing checksum/length to `0x60/0x61`, allow settling before verification or leaving `CONFIG_UPDATE`.
-- Configuration writes require `FULLACCESS` and may briefly turn FETs off while in `CONFIG_UPDATE`.
-- Regulator reconciliation reads before writing. Live REG0/REG1 restoration after reconnect must still run even when data-memory bytes already match.
-- After a `REG12 Config (0x9236)` change, send `REG12_CONTROL()/0x0098` with the complete byte. `REG1_EN` is bit 0 and `REG1V[2:0]` occupies bits `3:1`.
-- Minimal REG0/REG1 bring-up: enter `CONFIG_UPDATE`, write REG12, write REG0, exit, send `REG12_CONTROL()`, then measure REGIN.
-- Runtime sleep and autonomous-FET commands are verified and reapplied after the full `CONFIG_UPDATE` sequence because exiting that mode can restore data-memory policy.
-- `predischarge_enabled` writes `FET Options[PDSG_EN]`; `sleep_charge_enabled` writes `FET Options[SLEEPCHG]`; automatic balancing controls `CB_CHG` and `CB_RLX` together.
-- The BQ76952 exposes persistent `PDSG_EN` but no equivalent public `PCHG_EN`; do not invent a symmetric precharge option.
+## Precharge and predischarge
 
-## Telemetry and Controls
+- Precharge and predischarge are separate features.
+- `PCHG` is the reduced-current charging path for a deeply depleted pack. Configure an explicit enabled state plus start/stop cell-voltage thresholds.
+- `PDSG` is the reduced-current discharge path for load/DC-link inrush. Configure an explicit enabled state plus timeout and stop delta.
+- The device has `FET Options[PDSG_EN]`, but no equivalent symmetric `PCHG_EN`. Do not model precharge as a fake mirror of predischarge.
 
-- `DASTATUS6 (0x0076)` provides signed `userAh` plus a fractional term. Public `energy` / `energy_time` names retain charge accumulation in Ah rather than claiming watt-hours.
-- `RESET_PASSQ (0x0082)` is a manual button only.
-- TI reports `CC2 Current()` as more negative during discharge; publish positive-for-discharge current by negating the raw value.
-- `state_of_charge` learns full/empty coulomb-count endpoints and persists its state. It does not require `nominal_capacity_ah`.
-- Full endpoint detection uses the configured COV limit or 4200 mV fallback; empty uses CUV or 2800 mV fallback. Endpoint hold time is 30 seconds.
-- `largest_intercell_voltage` is `max(cell_n) - min(cell_n)` over the fixed active-cell map.
-- Primary Home Assistant status entities are `fault`, `bms_state`, and `fet_status_flags`; avoid duplicating them with per-bit binary sensors.
-- Output FET requests are verified asynchronously because TI evaluates turn-on at 250 ms cadence in NORMAL mode and up to 1 second in SLEEP.
-- Runtime controls and factory actions emit explicit action/result logs. State-change logs should be automatic and edge-triggered, not controlled by YAML flags.
+## Protocol robustness
 
-## Repository Conventions
+- Data-memory reads must use the transfer-buffer length and verify the returned checksum.
+- Subcommand responses must validate echoed command, length, and checksum before returning payload.
+- Optional I2C CRC must cover both read and write paths according to the selected device variant.
+- Configuration writes require FULLACCESS and may briefly disable FETs while in CONFIG_UPDATE.
+- REG0/REG1/REG2 live restoration after reconnect must not be skipped merely because data-memory bytes already match.
 
-- Keep this component's YAML schema monolithic in `__init__.py` unless the repository-wide convention changes.
-- Document `i2c_id` in examples because ESPHome requires it when a node has multiple buses.
-- Keep `program_factory_otp` clearly separated and labelled as irreversible/factory-only.
+## SoC
+
+- SoC consumes normalized service samples and has no direct protocol dependency.
+- Current is exposed positive for discharge and negative for charge.
+- Full/empty endpoints use configured COV/CUV thresholds, safety state, current direction, and hold time.
+- Learned state persists through ESPHome preferences.
+- No nominal-capacity config is required.
+
+## Current PR state
+
+- PR #22 defines the target interfaces and intentionally removes compatibility scaffolding before migrating the existing implementation.
+- Do not add legacy fields merely to make the old monolithic `bq76952.cpp` compile. Migrate implementation logic into protocol/service/SoC files against the target interfaces instead.
