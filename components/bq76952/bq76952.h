@@ -67,7 +67,7 @@ class BQ76952Component : public PollingComponent,
   bool reset_passed_charge_counter();
   bool program_factory_otp_defaults();
 
- protected:
+ private:
   friend class BQ76952ApplyConfigurationButton;
 
   // Sleep is always allowed. This remains an internal command used by boot and
