@@ -321,7 +321,7 @@ bool BQ76952Protocol::set_config_update(bool enabled) {
 
 void BQ76952Protocol::set_crc_enabled(bool enabled) {
   this->desired_crc_enabled_ = enabled;
-  this->crc_enabled_ = false;
+  this->crc_enabled_ = true;
 }
 
 }  // namespace bq76952
