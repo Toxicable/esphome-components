@@ -2,19 +2,19 @@
 
 ESPHome external component for TI `BQ76952` 3S–16S battery monitors.
 
-> This branch currently defines the target interfaces. The previous monolithic implementation has not yet been migrated, so the component is not expected to compile until the protocol/service/SoC move is complete.
+> This branch defines the target interfaces. The old monolithic implementation has not yet been migrated, so the component is not expected to compile until the protocol/service/SoC move is complete.
 
 ## Architecture
 
-- `bq76952_protocol.h`: register, subcommand, transfer-buffer, checksum, CRC, and CONFIG_UPDATE transport
+- `bq76952_protocol.h`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
 - `bq76952_config.h`: complete deterministic desired device state
-- `bq76952_service.h`: connection recovery, configuration synchronization, measurements, protections, runtime actions, and ownership of SoC
-- `bq76952_soc.h`: ancillary SoC estimation/persistence logic used by the service
+- `bq76952_service.h`: connection recovery, configuration synchronization, measurements, protections, controls, and SoC ownership
+- `bq76952_soc.h`: ancillary SoC estimation and persistence logic
 - `bq76952.h`: ESPHome entity facade only
 
 There is no compatibility `ConfigState`, state-bag inheritance, or preserve-by-omission behaviour.
 
-## Example target configuration
+## Target configuration
 
 ```yaml
 bq76952:
@@ -41,12 +41,11 @@ bq76952:
     ts3: disabled
 
   fet:
-    # The BQ76952 autonomously controls CHG/DSG from its protection state.
+    # The BQ76952 controls CHG/DSG automatically from protection state.
     autonomous: true
     sleep_charge_enabled: true
-    body_diode_threshold_ma: 0
 
-    # Reduced-current charging path for a deeply depleted cell.
+    # Reduced-current charging path for deeply depleted cells.
     precharge:
       enabled: false
       start_cell_voltage_mv: 2500
@@ -55,16 +54,11 @@ bq76952:
     # Reduced-current discharge path used to limit load/DC-link inrush.
     predischarge:
       enabled: true
-      timeout_ms: 2550
-      stop_delta_mv: 500
+      timeout_ms: 2550       # Maximum; 0 disables timeout, resolution is 10 ms.
+      stop_delta_mv: 500     # 0 disables voltage termination, resolution is 10 mV.
 
+  # Balancing is always enabled while charging. Relaxed/idle balancing is off.
   balancing:
-    charging_enabled: true
-
-    # Also balance after charge current falls below this threshold.
-    relaxed_balancing_enabled: true
-    relaxed_current_threshold_a: 0.1
-
     minimum_cell_voltage_mv: 3000
     start_delta_mv: 40
     stop_delta_mv: 20
@@ -72,50 +66,44 @@ bq76952:
     maximum_temperature_c: 45
     maximum_balanced_cells: 2
 
+  # All listed primary protections are always enabled.
   protections:
-    # CUV/COV thresholds apply independently to every active cell.
+    # CUV/COV apply independently to every active cell.
     cell_undervoltage:
-      enabled: true
       threshold_mv: 2800
       delay_ms: 200
       recovery_hysteresis_mv: 100
 
     cell_overvoltage:
-      enabled: true
       threshold_mv: 4200
       delay_ms: 200
       recovery_hysteresis_mv: 100
 
     charge_overcurrent:
-      enabled: true
       threshold_a: 20
-      delay_ms: 23
+      delay_ms: 100
 
-    discharge_overcurrent_1:
-      enabled: true
+    # OCD1: ordinary overload, lower threshold and longer delay.
+    discharge_overcurrent:
       threshold_a: 40
-      delay_ms: 23
+      delay_ms: 100
 
-    discharge_overcurrent_2:
-      enabled: true
+    # OCD2: severe overload, higher threshold and shorter delay.
+    discharge_severe_overcurrent:
       threshold_a: 60
       delay_ms: 23
 
-    # OCD3 is the slower, long-duration overcurrent tier.
-    discharge_overcurrent_3:
-      enabled: true
-      threshold_a: 100
-      delay_s: 1
+    # OCD3: sustained overload measured over seconds.
+    discharge_sustained_overcurrent:
+      threshold_a: 30
+      delay_s: 5
 
     discharge_short_circuit:
-      enabled: true
       threshold_mv: 100
       delay_us: 210
       recovery_time_s: 5
 
     temperature:
-      charge_enabled: true
-      discharge_enabled: true
       charge_minimum_c: 0
       charge_maximum_c: 45
       discharge_minimum_c: -20
@@ -124,12 +112,14 @@ bq76952:
 
     current_recovery_time_s: 3
 
-  bms_state:
+  # High-level operating mode: offline, normal, sleep, deep_sleep,
+  # config_update, or shutdown_pending.
+  state:
     name: "BMS State"
+
+  # Active protection reason(s), or none.
   fault:
     name: "BMS Fault"
-  fet_status_flags:
-    name: "BMS FET Status"
 
   pack_voltage:
     name: "BMS Pack Voltage"
@@ -147,57 +137,68 @@ bq76952:
   cell4_voltage:
     name: "BMS Cell 4"
 
-  autonomous_control:
-    name: "BMS Autonomous"
   output_enabled_control:
     name: "BMS Output Enabled"
+
   clear_alarms:
     name: "BMS Clear Alarms"
-  program_factory_otp:
-    name: "BMS Program Factory OTP"
 ```
 
-## Less-obvious terms
+## State versus fault
 
-### Relaxed balancing
+- `state` reports the device operating mode, such as `normal`, `sleep`, or `offline`.
+- `fault` reports active protection causes, such as cell undervoltage, overcurrent, overtemperature, or permanent failure.
+- Raw Safety Status A/B/C and FET status bits are internal diagnostics. They are decoded into `fault` and logged when useful rather than exposed as a third text entity.
 
-TI calls the pack **relaxed** when current has fallen below a configured threshold. `relaxed_balancing_enabled` allows balancing in that state instead of restricting balancing to active charging. `relaxed_current_threshold_a` defines the current below which the pack is considered relaxed.
+## Fixed product policy
 
-### Cell-voltage protection
+The following are intentionally not configurable:
 
-`BQ76952CellVoltageProtectionConfig` is per cell. The same CUV or COV threshold is evaluated independently against every active cell selected by `Vcell Mode`; it is not a whole-pack voltage threshold.
+- series-FET body-diode threshold: fixed to TI's 50 mA default
+- balancing while charging: always enabled
+- relaxed/idle balancing: disabled
+- configured primary protections: always enabled
+- autonomous operation: startup configuration only, not a runtime switch
+- cell map: `VC1..VC(S-1), VC16`
+- sleep permission: always enabled
 
-### Long-duration current protection
+## Overcurrent tiers
 
-`BQ76952LongDurationCurrentProtectionConfig` represents OCD3. OCD1 and OCD2 are fast millisecond-scale discharge-overcurrent protections; OCD3 is a slower tier with a delay measured in seconds.
+The device provides three discharge-overcurrent mechanisms:
 
-### Safety Status A/B/C
+- `discharge_overcurrent` maps to OCD1: lower threshold, longer delay
+- `discharge_severe_overcurrent` maps to OCD2: higher threshold, shorter delay
+- `discharge_sustained_overcurrent` maps to OCD3: seconds-scale sustained overload
 
-The BQ76952 divides raw safety bits across three registers named Safety Status A, B, and C. These are protocol details. The service decodes all three, plus battery/permanent-failure state, into one normalized `fault_flags` field before the ESPHome facade sees it.
+The schema rejects an OCD2 setup that is not both higher-current and faster than OCD1, because otherwise the second tier is redundant.
 
-### Configuration synchronization
+## Precharge and predischarge
 
-The old `reconcile_configuration(force_live_state)` interface is gone.
+- `PCHG` is a reduced-current charging path for deeply depleted cells and uses start/stop cell-voltage thresholds.
+- `PDSG` is a reduced-current discharge path for charging load-side capacitance before enabling DSG.
+- Predischarge timeout and stop delta are each stored in one byte with 10-unit resolution, so both have a maximum value of 2550.
 
-Configuration synchronization is private to the service and has two explicit internal modes:
+## SoC and coulomb counter
 
-- `AUDIT_AND_REPAIR`: compare desired data-memory settings and repair drift
-- `RESTORE_RUNTIME_STATE`: after reconnect/reset, also resend runtime-only commands even when stored data-memory bytes already match
+The BQ76952 integrated-charge value is an internal coulomb-counter position in Ah. It is not energy in Wh and is not exposed as a lifetime counter or reset button. The service feeds counter deltas into the SoC estimator.
 
-### Coulomb counter and SoC
+`cell_chemistry: lithium_ion` is required because lithium-ion is currently the only implemented voltage fallback curve.
 
-The BQ76952 `DASTATUS6` value is an integrated **charge** counter in amp-hours, not energy in watt-hours and not a useful user-facing lifetime total. The service consumes it internally as one input to SoC estimation.
+## ⚠️ DANGER: ONE-TIME OTP PROGRAMMING
 
-The SoC code keeps a `relative_charge_ah` coordinate. That is an internal continuous position built from coulomb-counter deltas so SoC learning survives device-counter resets or wraparound. It is not exposed to the user.
+> **The BQ76952 OTP can only be programmed once. This operation is irreversible. A wrong setting can permanently make the device unusable for the intended board.**
+>
+> Do not expose or press the OTP button during normal development. Verify the complete live configuration, regulator outputs, FET behaviour, protection thresholds, cell map, thermistors, and communication mode on production-representative hardware first.
 
-The voltage fallback curve is chemistry-specific. `cell_chemistry: lithium_ion` is currently required because lithium-ion is the only implemented curve; additional chemistries should add separate curves rather than silently reusing it.
+Only add the factory action to a dedicated manufacturing configuration:
 
-## Fixed assumptions
+```yaml
+bq76952:
+  # ...fully validated configuration...
 
-- an `S`-cell pack maps to `VC1..VC(S-1), VC16`
-- sleep is always allowed
-- every configuration group is required and explicitly enabled or disabled
-- configuration starts after communication is established; there is no arbitrary boot delay
-- failed configuration remains pending and is retried after communication recovery
-- logging uses normal INFO/DEBUG/WARN levels without logging-mode options
-- passed-charge reset is not a user control
+  # DANGER: irreversible, one-time device programming.
+  program_factory_otp:
+    name: "DANGER - Program BMS OTP Once"
+```
+
+The normal component configuration is applied live and does not require OTP programming.
