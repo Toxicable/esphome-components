@@ -2,6 +2,8 @@
 
 ESPHome external component for TI `BQ76952` 3S–16S battery monitors.
 
+> This branch currently defines the target interfaces. The previous monolithic implementation has not yet been migrated to them, so the component is not expected to compile until the protocol/service/SoC implementation move is completed.
+
 ## Design
 
 The component is split into four boundaries:
