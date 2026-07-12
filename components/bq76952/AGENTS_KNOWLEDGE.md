@@ -2,63 +2,65 @@
 
 Component-scoped notes for `components/bq76952`.
 
-- Use `components/bq76952/bq76952.pdf` as the local source of truth for this component unless a TI TRM PDF is later checked into this component directory.
-- This integration intentionally mirrors the existing `bq76922` feature set and command style, but extends direct cell-voltage reads through Cell 16 for `cell_count: 3..16`.
-- The direct cell-voltage commands are treated as contiguous from `0x14` through `0x32` in 2-byte steps; top-of-stack, PACK, LD, current, die temperature, TS1/TS2/TS3, alarm status, and FET status follow the same command usage pattern as the existing BQ769x2 component.
-- Cell sensor publishing always maps an `S`-cell pack to differential channels `VC1-VC0` through `VC(S-1)-VC(S-2)`, with the final logical cell read from `VC16-VC15`. For 4S this is raw channels `[1, 2, 3, 16]`.
-- The fixed `1..(S-1), 16` layout is also authoritative for the boot-applied `Vcell Mode` protection mask; there is no public cell-channel mapping override.
-- Initial cell-map diagnostics log representative per-channel/TOS gains, Vcell offset, and the active-balancing mask so a raw channel mismatch can be separated from mapping, balancing, and calibration state.
-- When Cell 16 differs from the other populated cells by at least 200 mV, the component compares the processed `Cell 16 Voltage()` command with a second direct read and the independent untrimmed Cell 16 ADC counts from `DASTATUS4`, rate-limited to once per 5 seconds.
-- Configured `ts1_temperature`/`ts2_temperature`/`ts3_temperature` entities auto-program the corresponding BQ pin into thermistor mode at boot (report-only measurement type) with an `18k` or `180k` pull-up selected from YAML; these writes require `FULLACCESS` and use `CONFIG_UPDATE`.
-- TS1/TS2/TS3 config register `OPT[5:0]` fields live in bits `7:2`; build thermistor config bytes by encoding pull-up/polynomial/measurement in `OPT`, then shifting left by 2 before OR-ing `PIN_FXN=3`.
-- `reg0_enabled`, `reg1_enabled`, and `reg1_voltage` program `REG0 Config (0x9237)` and `REG12 Config (0x9236)` at boot; if a live REG1 voltage change is requested while REG1 is already on, the component stages the write by disabling REG1 first, then applying the new voltage and enable state.
-- If `reg1_voltage` is configured and `reg1_enabled` is omitted, the Python schema treats that as an implied `reg1_enabled: true`.
-- After any live `REG12 Config (0x9236)` change, send `REG12_CONTROL()/0x0098` with the full updated byte so REG1 runtime state matches the data-memory setting, even when only the voltage bits changed.
-- `REG12 Config (0x9236)` encodes `REG1_EN` in bit `0` and `REG1V[2:0]` in bits `3:1` (not bits `3` and `2:0` respectively). YAML voltage option values and C++ masks/shifts must match that layout.
-- Matching `REG0 Config` / `REG12 Config` bytes do not prove the live regulator state is active; boot/recovery reconciliation forces the live bring-up path when enabled REG0 or REG1 state is requested, while periodic audits remain read/compare-only.
-- All desired configuration is owned by one reconciliation state machine. It probes Control/Battery/FET status before configuration, applies live boot modes on first connection, performs the full boot reconciliation after `boot_config_apply_delay`, retries failures without discarding intent, forces live regulator restoration after reconnect, and audits drift every 60 seconds without cycling an already-matching regulator.
-- Runtime sleep/FET mode commands are verified and reapplied after the full CONFIG_UPDATE reconciliation because exiting CONFIG_UPDATE can restore the data-memory mode policy.
-- Boot, reconnect, retry, manual apply, and periodic audit converge through `apply_requested_configuration_()`; do not add configuration writes directly to polling or lifecycle branches.
-- Boot-applied regulator, TS-pin, FET-option, protection, and boot-mode writes are always enabled at startup; there is no longer a public HA `apply_configuration` button.
-- Public YAML should prefer `otp_autonomous_fet_mode` and `otp_sleep_mode` for startup defaults that are intended to be burned into OTP; legacy `autonomous_fet_mode` / `sleep_mode` remain accepted as compatibility aliases.
-- `program_factory_otp` is a separate one-time factory button: it first applies the requested live config, then writes startup-default boot-mode bits (`Power Config[SLEEP]`, `Mfg Status Init[FET_EN]`) from the configured `otp_*` settings and runs `OTP_WR_CHECK()` / `OTP_WRITE()` while still in `CONFIG_UPDATE`.
-- Keep normal runtime controls under the config entity category; keep `program_factory_otp` separate as a diagnostic/factory-only action and label example names with an `OTP` prefix.
-- Regulator/current-limit paths keep user-facing apply/skip logs, but avoid extra transient debug/readback logging unless it is needed for a warning or actionable state change.
-- Data-memory access should not be treated like a generic subcommand read: after writing `0x3E/0x3F`, allow the transfer buffer to populate, read response length from `0x61`, then read back from `0x40`; after writing checksum/length to `0x60/0x61`, allow a short settle time before verification or exiting `CONFIG_UPDATE`.
-- For runtime `REG0`/`REGIN` bring-up, use the minimal sequence without a reset: enter `CONFIG_UPDATE`, write `REG12 Config`, write `REG0 Config`, exit `CONFIG_UPDATE`, send `REG12_CONTROL()` with the same `REG12` byte, then measure `REGIN`.
-- Coulomb-counter accumulation is exposed from `DASTATUS6 (0x0076)` as signed `userAh` plus a 32-bit fractional term and converted through the auto-detected `userA` scale; `RESET_PASSQ (0x0082)` is exposed as a manual button, not a boot-time automatic reset.
-- Public YAML now prefers `energy` / `energy_time` as the accumulator entity names, but the underlying quantity is still charge accumulation in Ah from `DASTATUS6`, not true watt-hours.
-- `state_of_charge` uses a learned-endpoint coulomb counting approach:
-  - No `nominal_capacity_ah` is required; the system learns the charge span between full and empty endpoints.
-  - Full endpoint: detected when max cell voltage is within 20mV of the overvoltage limit, current is near zero, for 30 continuous seconds.
-  - Empty endpoint: detected when min cell voltage is within 20mV of the undervoltage limit after discharge, for 30 continuous seconds.
-  - Between endpoints, a logical accumulator tracks coulomb-count deltas from `DASTATUS6` relative to the learned span.
-  - When no learned span exists, a voltage-curve fallback (`DEFAULT_LIION_CURVE_`) provides an initial estimate.
-  - Persisted state (`SocPersistedState`) is stored via ESPHome preferences so SoC survives reboots.
-  - The provisional span (from one full+empty cycle) is promoted to a learned span on the next full+empty cycle.
-- `largest_intercell_voltage` publishes the active-pack imbalance as `max(cell_n) - min(cell_n)` across mapped cells `1..cell_count`, in volts.
-- TI documents `CC2 Current()` as more-negative for discharge current; publish the user-facing `current` sensor as positive-for-discharge by negating the raw signed register value.
-- Keep the YAML monolithic in `__init__.py`; do not split this component into platform modules unless the repo-wide preference changes.
-- Document `i2c_id` in examples; ESPHome requires it for this component when a node defines more than one I2C bus.
-- If you need an extracted text view for ad hoc searching, generate it from `components/bq76952/bq76952.pdf`; the PDF remains canonical.
-- `predischarge_enabled` writes `Settings:FET:FET Options (0x9308)[PDSG_EN]`; `pdsg_fet_on` reads `FET Status (0x7F)[PDSG_FET]`.
-- `sleep_charge_enabled` writes `Settings:FET:FET Options (0x9308)[SLEEPCHG]`; when enabled, the chip may keep CHG allowed while `Battery Status[SLEEP]=1`.
-- `autonomous_balancing_enabled` writes `Settings:Cell Balancing Config:Balancing Configuration (0x9335)` bits `CB_CHG` and `CB_RLX` together.
-- TI exposes a persistent `PDSG_EN` bit for predischarge, but not a separate matching persistent `PCHG_EN` enable bit; precharge behavior is therefore not surfaced as a parallel boolean config.
-- `fault` is the primary user-facing fault sensor; it expands active `Safety Status A/B/C` bits into full names such as `cell_overvoltage` or `overcurrent_in_discharge_tier_2` and appends `permanent_failure` when `Battery Status[PF]=1`.
-- `bms_state` is the primary high-level state sensor; it reports `normal`, `sleep`, `deep_sleep`, `config_update`, or `shutdown_pending`.
-- `fet_status_flags` remains the aggregate low-level FET/pin diagnostic, including `DDSG_PIN` and `DCHG_PIN`, which is useful when debugging why PDSG/DSG or CHG/PCHG are being held off.
-- Per-bit binary status entities were removed to reduce duplicate entity noise; keep the Home Assistant surface centered on `fault`, `bms_state`, and `fet_status_flags`.
-- `event_logging` emits an edge-triggered INFO log whenever `FET Status`, `Alarm Status`, `Safety Status`, or `Battery Status[SS/PF]` changes, and snapshots PACK/LD/current at that moment.
-- Event logs now include gating context (`path`, `cfgupdate`, `sleep`, `sleep_en`, `deepsleep`, `fet_en`, `xchg`, `xdsg`) to help explain autonomous FET transitions.
-- Event logs now also include `sleepchg` (decoded from `Settings:FET:FET Options (0x9308)` bit1) plus raw register snapshots (`bat/fet/alarm/safety A/B/C`) so CHG/DSG flips can be tied directly to source bits.
-- Event logs now include `xchg_reason` when `Alarm Raw[XCHG]=1`, derived from CHG FET protection masks (`0x9265/0x9266/0x9267`) intersected with live `Safety Status` and `Safety Alert` bits; fallback label is `host_or_pin_or_transient`.
-- Event logs now track host FET-control subcommands (`0x0093/0x0094/0x0095/0x0096`) with timestamp and include CFETOFF/DFETOFF pin config bytes (`0x92FA/0x92FB`) plus measured pin readings (`0x6A/0x6C`) to split `xchg_raw` causes into `host_fet_subcmd_recent`, `pin_block_possible_*`, or `transient_or_unknown`.
-- `xchg_debug_burst: true` enables a 64-sample, 2 ms cadence burst capture on each `xchg_raw` edge, logging hit counts and first-active raw `Alarm Raw`/`Safety Alert`/`Safety Status` snapshot to catch transient cause bits that normal poll logging can miss.
-- When `output_enabled_control` requests are blocked, logs include expected vs actual CHG/DSG state plus `FET_EN`, decoded `alarm`/`safety` flags, and a derived `blockers=` list (`fet_en=0`, `ss=1`, `pf=1`, `xchg`, `xdsg`, `chg_off`, `dsg_off`, etc.).
-- Runtime controls/buttons (`output_enabled_control`, `autonomous_fet_control`, `clear_alarms`, `reset_passed_charge`, `program_factory_otp`) emit explicit `Action:` / `Action result:` INFO logs.
-- `ALL_FETS_ON()`/`ALL_FETS_OFF()` requests are verified asynchronously from the normal poll loop because TI evaluates FET turn-on at 250 ms cadence in NORMAL mode and up to 1 s in SLEEP; an immediate status read is stale and must not be reported as a blocker.
-- Public YAML should prefer `short_circuit_in_discharge_threshold_mv`, `short_circuit_in_discharge_delay_us`, and `short_circuit_in_discharge_recovery_time_s`; legacy `scd_*` keys remain accepted as compatibility aliases.
-- Those short-circuit-in-discharge settings program `Protections:SCD` at `0x9286/0x9287/0x9294` and ensure `Enabled Protections A[SCD]` plus `DSG FET Protections A[SCD]` remain set.
-- `cell_undervoltage_*`, `cell_overvoltage_*`, `discharge_current_limit_2_a`, `discharge_current_delay_2_ms`, `discharge_current_limit_3_a`, and `discharge_current_delay_3_s` program `CUV`, `COV`, `OCD2`, and `OCD3` using the TI TRM (`sluuby2b`) data-memory addresses.
-- Boot-applied `Settings:Configuration:Vcell Mode (0x9304)` is derived directly from `cell_count` using the fixed `1..(S-1), 16` VC layout.
+- Use `components/bq76952/bq76952.pdf` as the local source of truth unless a TI TRM is checked into this component directory.
+- The component supports `cell_count: 3..16`. Direct cell-voltage commands run from `0x14` through `0x32` in 2-byte steps.
+- An `S`-cell pack always maps logical cells to differential channels `VC1-VC0` through `VC(S-1)-VC(S-2)`, with the final logical cell on `VC16-VC15`. A 4S pack therefore uses raw channels `[1, 2, 3, 16]`.
+- The fixed `1..(S-1), 16` layout also defines `Settings:Configuration:Vcell Mode (0x9304)`. Do not reintroduce a public cell-map override or voltage-based topology detection.
+- Initial cell diagnostics log representative cell/TOS gains, Vcell offset, and the active-balancing mask. A Cell 16 deviation of at least 200 mV triggers a rate-limited command reread and `DASTATUS4` raw-ADC diagnostic.
+
+## Configuration Interface
+
+- ESPHome constructs one `BQ76952Config` aggregate and calls `set_config()` once. Do not add per-field component setters.
+- The public C++ config uses `std::optional` for “preserve the existing device value.” Related protection values are grouped into small structs rather than represented by separate value and `has_*` fields.
+- The Python schema still uses the established flat YAML names, but validates each protection as a complete group:
+  - CUV limit + delay
+  - COV limit + delay
+  - OCC limit + delay
+  - OCD1 limit + delay
+  - OCD2 limit + delay
+  - OCD3 limit + delay
+  - SCD threshold + delay + recovery time
+- Reject partial groups during schema validation. Do not silently apply half a protection configuration.
+- `reg1_voltage` implies `reg1_enabled: true` when `reg1_enabled` is omitted.
+- `reg0_enabled` remains optional because the external BREG path is board-specific.
+- A configured TS1/TS2/TS3 temperature entity also supplies that pin's thermistor pull-up selection. TS `OPT[5:0]` occupies register bits `7:2`; `PIN_FXN[1:0]` occupies bits `1:0`.
+- The temporary `BQ76952ConfigState` adapter flattens the clean public config into legacy fields consumed by `bq76952.cpp`. It is internal compatibility code, not the desired long-term interface. Remove it when the implementation is split onto the grouped config types.
+
+## Fixed Product Policy
+
+- Sleep is always allowed. There is no YAML sleep-mode option and no public runtime sleep control.
+- Factory OTP programming always sets `Power Config[SLEEP]`; `otp_autonomous_fet_mode` remains the only optional boot-mode policy.
+- There is no `boot_config_apply_delay`. Desired configuration is applied immediately after the first successful Control/Battery/FET probe.
+- Failed reconciliation remains pending, retries after communication recovery, and is audited every 60 seconds using read-before-write checks.
+- There is no `event_logging` or `xchg_debug_burst` setting. Meaningful state changes and actions are logged automatically at normal log levels.
+- There is no public HA `apply_configuration` button. Normal boot, recovery, retry, periodic audit, and OTP preparation converge through `apply_requested_configuration_()`.
+- Do not add configuration writes directly to polling or lifecycle branches outside the reconciliation path.
+
+## Device Configuration Behaviour
+
+- Data-memory access is not a generic subcommand read: after writing `0x3E/0x3F`, allow the transfer buffer to populate, read response length from `0x61`, then read data from `0x40`. After writing checksum/length to `0x60/0x61`, allow settling before verification or leaving `CONFIG_UPDATE`.
+- Configuration writes require `FULLACCESS` and may briefly turn FETs off while in `CONFIG_UPDATE`.
+- Regulator reconciliation reads before writing. Live REG0/REG1 restoration after reconnect must still run even when data-memory bytes already match.
+- After a `REG12 Config (0x9236)` change, send `REG12_CONTROL()/0x0098` with the complete byte. `REG1_EN` is bit 0 and `REG1V[2:0]` occupies bits `3:1`.
+- Minimal REG0/REG1 bring-up: enter `CONFIG_UPDATE`, write REG12, write REG0, exit, send `REG12_CONTROL()`, then measure REGIN.
+- Runtime sleep and autonomous-FET commands are verified and reapplied after the full `CONFIG_UPDATE` sequence because exiting that mode can restore data-memory policy.
+- `predischarge_enabled` writes `FET Options[PDSG_EN]`; `sleep_charge_enabled` writes `FET Options[SLEEPCHG]`; automatic balancing controls `CB_CHG` and `CB_RLX` together.
+- The BQ76952 exposes persistent `PDSG_EN` but no equivalent public `PCHG_EN`; do not invent a symmetric precharge option.
+
+## Telemetry and Controls
+
+- `DASTATUS6 (0x0076)` provides signed `userAh` plus a fractional term. Public `energy` / `energy_time` names retain charge accumulation in Ah rather than claiming watt-hours.
+- `RESET_PASSQ (0x0082)` is a manual button only.
+- TI reports `CC2 Current()` as more negative during discharge; publish positive-for-discharge current by negating the raw value.
+- `state_of_charge` learns full/empty coulomb-count endpoints and persists its state. It does not require `nominal_capacity_ah`.
+- Full endpoint detection uses the configured COV limit or 4200 mV fallback; empty uses CUV or 2800 mV fallback. Endpoint hold time is 30 seconds.
+- `largest_intercell_voltage` is `max(cell_n) - min(cell_n)` over the fixed active-cell map.
+- Primary Home Assistant status entities are `fault`, `bms_state`, and `fet_status_flags`; avoid duplicating them with per-bit binary sensors.
+- Output FET requests are verified asynchronously because TI evaluates turn-on at 250 ms cadence in NORMAL mode and up to 1 second in SLEEP.
+- Runtime controls and factory actions emit explicit action/result logs. State-change logs should be automatic and edge-triggered, not controlled by YAML flags.
+
+## Repository Conventions
+
+- Keep this component's YAML schema monolithic in `__init__.py` unless the repository-wide convention changes.
+- Document `i2c_id` in examples because ESPHome requires it when a node has multiple buses.
+- Keep `program_factory_otp` clearly separated and labelled as irreversible/factory-only.
