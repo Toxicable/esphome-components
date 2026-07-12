@@ -12,6 +12,7 @@
 #include "esphome/core/component.h"
 
 #include "bq76952_config.h"
+#include "bq76952_config_state.h"
 #include "bq76952_service.h"
 #include "bq76952_soc.h"
 
@@ -19,17 +20,15 @@ namespace esphome {
 namespace bq76952 {
 
 class BQ76952Component : public PollingComponent,
-                           public i2c::I2CDevice,
-                           protected BQ76952Config,
-                           protected BQ76952ServiceState,
-                           protected BQ76952SocState {
+                          public i2c::I2CDevice,
+                          protected BQ76952ConfigState,
+                          protected BQ76952ServiceState,
+                          protected BQ76952SocState {
  public:
   void set_config(const BQ76952Config& config) {
-    static_cast<BQ76952Config&>(*this) = config;
+    this->load_config_(config);
 
     // All supported boards wire an S-cell pack as VC1..VC(S-1), VC16.
-    // The array remains as an internal compatibility detail until the protocol
-    // implementation is moved out of bq76952.cpp.
     for (uint8_t index = 0; index < cell_read_map_.size(); ++index) {
       cell_read_map_[index] = index;
     }
@@ -64,13 +63,18 @@ class BQ76952Component : public PollingComponent,
 
   bool set_output_enabled(bool enabled);
   bool set_autonomous_fet_control(bool enabled);
-  bool set_sleep_allowed(bool allowed);
   bool clear_alarm_latches();
   bool reset_passed_charge_counter();
-  bool apply_requested_configuration();
   bool program_factory_otp_defaults();
 
  protected:
+  friend class BQ76952ApplyConfigurationButton;
+
+  // Sleep is always allowed. This remains an internal command used by boot and
+  // recovery reconciliation rather than a public control surface.
+  bool set_sleep_allowed(bool allowed);
+  bool apply_requested_configuration();
+
   bool read_byte_(uint8_t reg, uint8_t& value);
   bool read_bytes_(uint8_t reg, uint8_t* data, size_t len);
   bool write_byte_(uint8_t reg, uint8_t value);
