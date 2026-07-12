@@ -29,11 +29,6 @@ class BQ76952ResetPassedChargeButton : public button::Button, public Parented<BQ
   void press_action() override;
 };
 
-class BQ76952ApplyConfigurationButton : public button::Button, public Parented<BQ76952Component> {
- protected:
-  void press_action() override;
-};
-
 class BQ76952ProgramFactoryOtpButton : public button::Button, public Parented<BQ76952Component> {
  protected:
   void press_action() override;
