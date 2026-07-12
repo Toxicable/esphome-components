@@ -6,6 +6,7 @@ The component implements the hard-cut configuration interfaces directly. The pre
 
 ## Architecture
 
+- `bq76952_registers.h`: named direct commands, subcommands, data-memory addresses, bit fields, unit encodings, transport timing, and fixed product-policy constants
 - `bq76952_protocol.cpp`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
 - `bq76952_config.h`: complete deterministic desired device state
 - `bq76952_service.cpp`: connection recovery, configuration synchronization, measurements, protections, controls, and SoC ownership
