@@ -13,15 +13,19 @@
 
 #include "bq76952_config.h"
 #include "bq76952_service.h"
+#include "bq76952_soc.h"
 
 namespace esphome {
 namespace bq76952 {
 
 class BQ76952Component : public PollingComponent,
-                         public i2c::I2CDevice,
-                         public BQ76952Configuration,
-                         protected BQ76952ServiceState {
+                          public i2c::I2CDevice,
+                          protected BQ76952Config,
+                          protected BQ76952ServiceState,
+                          protected BQ76952SocState {
  public:
+  void set_config(const BQ76952Config& config) { static_cast<BQ76952Config&>(*this) = config; }
+
   void set_bat_voltage_sensor(sensor::Sensor* sensor) { bat_voltage_sensor_ = sensor; }
   void set_pack_voltage_sensor(sensor::Sensor* sensor) { pack_voltage_sensor_ = sensor; }
   void set_ld_voltage_sensor(sensor::Sensor* sensor) { ld_voltage_sensor_ = sensor; }
