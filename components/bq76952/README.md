@@ -2,55 +2,31 @@
 
 ESPHome external component for TI `BQ76952` 3S–16S battery monitors.
 
-> This branch currently defines the target interfaces. The previous monolithic implementation has not yet been migrated to them, so the component is not expected to compile until the protocol/service/SoC implementation move is completed.
+> This branch currently defines the target interfaces. The previous monolithic implementation has not yet been migrated, so the component is not expected to compile until the protocol/service/SoC move is complete.
 
-## Design
-
-The component is split into four boundaries:
+## Architecture
 
 - `bq76952_protocol.h`: register, subcommand, transfer-buffer, checksum, CRC, and CONFIG_UPDATE transport
 - `bq76952_config.h`: complete deterministic desired device state
-- `bq76952_service.h`: connection handling, reconciliation, measurement conversion, protections, and runtime actions
-- `bq76952_soc.h`: host-derived state-of-charge estimation and persistence
+- `bq76952_service.h`: connection recovery, configuration synchronization, measurements, protections, runtime actions, and ownership of SoC
+- `bq76952_soc.h`: ancillary SoC estimation/persistence logic used by the service
 - `bq76952.h`: ESPHome entity facade only
 
-The component uses composition for the service and SoC implementation. There is no compatibility `ConfigState` adapter and no state-bag inheritance.
+There is no compatibility `ConfigState`, state-bag inheritance, or preserve-by-omission behaviour.
 
-## Configuration philosophy
-
-This is a hard-cut interface:
-
-- all device policy groups are required
-- every feature is explicitly enabled or disabled
-- omitted values never mean “preserve whatever happens to be in the chip”
-- an `S`-cell pack always maps to `VC1..VC(S-1), VC16`
-- sleep is always allowed and is not user-configurable
-- configuration is reconciled after communication is established, with no boot delay
-- failures remain pending and are retried after communication recovery
-
-## Example
+## Example target configuration
 
 ```yaml
-external_components:
-  - source: github://Toxicable/esphome-components@agent/refactor-bq76952-layers
-    refresh: 0s
-    components: [bq76952]
-
-i2c:
-  id: i2c_bus
-  sda: GPIO21
-  scl: GPIO22
-  frequency: 400kHz
-
 bq76952:
   i2c_id: i2c_bus
   address: 0x08
   update_interval: 1s
 
   cell_count: 4
+  cell_chemistry: lithium_ion
   sense_resistor_milliohm: 1.0
   i2c_crc_enabled: false
-  current_gain_policy: preserve_existing
+  current_gain_policy: factory_calibration
 
   regulators:
     reg0_enabled: true
@@ -65,17 +41,18 @@ bq76952:
     ts3: disabled
 
   fet:
-    autonomous_enabled: true
+    # The BQ76952 autonomously controls CHG/DSG from its protection state.
+    autonomous: true
     sleep_charge_enabled: true
     body_diode_threshold_ma: 0
 
-    # PCHG: charge a deeply depleted pack through the precharge path.
+    # Reduced-current charging path for a deeply depleted cell.
     precharge:
       enabled: false
       start_cell_voltage_mv: 2500
       stop_cell_voltage_mv: 3000
 
-    # PDSG: limit inrush into a discharged load/DC link.
+    # Reduced-current discharge path used to limit load/DC-link inrush.
     predischarge:
       enabled: true
       timeout_ms: 2550
@@ -83,16 +60,20 @@ bq76952:
 
   balancing:
     charging_enabled: true
-    relaxed_enabled: true
+
+    # Also balance after charge current falls below this threshold.
+    relaxed_balancing_enabled: true
+    relaxed_current_threshold_a: 0.1
+
     minimum_cell_voltage_mv: 3000
     start_delta_mv: 40
     stop_delta_mv: 20
-    idle_current_threshold_a: 0.1
     minimum_temperature_c: 0
     maximum_temperature_c: 45
     maximum_balanced_cells: 2
 
   protections:
+    # CUV/COV thresholds apply independently to every active cell.
     cell_undervoltage:
       enabled: true
       threshold_mv: 2800
@@ -120,6 +101,7 @@ bq76952:
       threshold_a: 60
       delay_ms: 23
 
+    # OCD3 is the slower, long-duration overcurrent tier.
     discharge_overcurrent_3:
       enabled: true
       threshold_a: 100
@@ -151,10 +133,6 @@ bq76952:
 
   pack_voltage:
     name: "BMS Pack Voltage"
-  bat_voltage:
-    name: "BMS BAT Voltage"
-  ld_voltage:
-    name: "BMS Load Detect Voltage"
   current:
     name: "BMS Current"
   state_of_charge:
@@ -169,42 +147,57 @@ bq76952:
   cell4_voltage:
     name: "BMS Cell 4"
 
-  ts1_temperature:
-    name: "BMS TS1 Temperature"
-  die_temperature:
-    name: "BMS Die Temperature"
-
+  autonomous_control:
+    name: "BMS Autonomous"
   output_enabled_control:
     name: "BMS Output Enabled"
-  autonomous_fet_control:
-    name: "BMS Autonomous FET Control"
   clear_alarms:
     name: "BMS Clear Alarms"
-  reset_passed_charge:
-    name: "BMS Reset Passed Charge"
   program_factory_otp:
     name: "BMS Program Factory OTP"
 ```
 
-## Precharge versus predischarge
+## Less-obvious terms
 
-They solve different problems:
+### Relaxed balancing
 
-- **Precharge (`PCHG`)** is a reduced-current charging path for a deeply depleted battery. It is controlled using cell-voltage start and stop thresholds.
-- **Predischarge (`PDSG`)** is a reduced-current discharge path used to charge load-side capacitance before enabling the main discharge FET. It is controlled by `PDSG_EN`, a timeout, and the remaining voltage delta between the load/PACK side and top-of-stack.
+TI calls the pack **relaxed** when current has fallen below a configured threshold. `relaxed_balancing_enabled` allows balancing in that state instead of restricting balancing to active charging. `relaxed_current_threshold_a` defines the current below which the pack is considered relaxed.
 
-The BQ76952 does not provide a symmetric `PCHG_EN` bit matching `PDSG_EN`; the service translates `precharge.enabled` into deterministic precharge threshold policy instead of pretending the two features are register-identical.
+### Cell-voltage protection
 
-## Hard-cut migration
+`BQ76952CellVoltageProtectionConfig` is per cell. The same CUV or COV threshold is evaluated independently against every active cell selected by `Vcell Mode`; it is not a whole-pack voltage threshold.
 
-The previous flat and optional configuration surface is intentionally unsupported. In particular, there is no compatibility handling for:
+### Long-duration current protection
 
-- omitted protection groups
-- `cell_channels`
-- sleep mode selection
-- boot configuration delay
-- event logging or XCHG burst modes
-- `otp_*` policy overrides
-- the old individual protection keys
+`BQ76952LongDurationCurrentProtectionConfig` represents OCD3. OCD1 and OCD2 are fast millisecond-scale discharge-overcurrent protections; OCD3 is a slower tier with a delay measured in seconds.
 
-The nested schema is the target interface. Implementation code is migrated to these interfaces separately rather than preserving the previous internal member layout.
+### Safety Status A/B/C
+
+The BQ76952 divides raw safety bits across three registers named Safety Status A, B, and C. These are protocol details. The service decodes all three, plus battery/permanent-failure state, into one normalized `fault_flags` field before the ESPHome facade sees it.
+
+### Configuration synchronization
+
+The old `reconcile_configuration(force_live_state)` interface is gone.
+
+Configuration synchronization is private to the service and has two explicit internal modes:
+
+- `AUDIT_AND_REPAIR`: compare desired data-memory settings and repair drift
+- `RESTORE_RUNTIME_STATE`: after reconnect/reset, also resend runtime-only commands even when stored data-memory bytes already match
+
+### Coulomb counter and SoC
+
+The BQ76952 `DASTATUS6` value is an integrated **charge** counter in amp-hours, not energy in watt-hours and not a useful user-facing lifetime total. The service consumes it internally as one input to SoC estimation.
+
+The SoC code keeps a `relative_charge_ah` coordinate. That is an internal continuous position built from coulomb-counter deltas so SoC learning survives device-counter resets or wraparound. It is not exposed to the user.
+
+The voltage fallback curve is chemistry-specific. `cell_chemistry: lithium_ion` is currently required because lithium-ion is the only implemented curve; additional chemistries should add separate curves rather than silently reusing it.
+
+## Fixed assumptions
+
+- an `S`-cell pack maps to `VC1..VC(S-1), VC16`
+- sleep is always allowed
+- every configuration group is required and explicitly enabled or disabled
+- configuration starts after communication is established; there is no arbitrary boot delay
+- failed configuration remains pending and is retried after communication recovery
+- logging uses normal INFO/DEBUG/WARN levels without logging-mode options
+- passed-charge reset is not a user control
