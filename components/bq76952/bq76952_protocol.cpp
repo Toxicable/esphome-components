@@ -74,7 +74,25 @@ bool BQ76952Protocol::read_bytes(uint8_t command, uint8_t *data, size_t length) 
     return false;
   }
 
-  if (!this->crc_enabled_) {
+  if (this->read_bytes_with_mode(command, data, length, this->crc_enabled_)) {
+    return true;
+  }
+
+  // A reset or pre-programmed OTP image can leave Comm Type different from the
+  // configured target. Probe the alternate framing on reads, then remember the
+  // mode that actually answered. Writes never guess between framing modes.
+  const bool alternate_crc = !this->crc_enabled_;
+  if (!this->read_bytes_with_mode(command, data, length, alternate_crc)) {
+    return false;
+  }
+
+  this->crc_enabled_ = alternate_crc;
+  ESP_LOGI(TAG, "Detected BQ76952 I2C framing: CRC=%s", this->crc_enabled_ ? "on" : "off");
+  return true;
+}
+
+bool BQ76952Protocol::read_bytes_with_mode(uint8_t command, uint8_t *data, size_t length, bool crc_enabled) {
+  if (!crc_enabled) {
     if (this->write_read(&command, 1, data, length) == i2c::ERROR_OK) {
       return true;
     }
@@ -107,8 +125,6 @@ bool BQ76952Protocol::read_bytes(uint8_t command, uint8_t *data, size_t length) 
       expected_crc = crc8(&value, 1);
     }
     if (received_crc != expected_crc) {
-      ESP_LOGW(TAG, "CRC mismatch reading register 0x%02X byte %u: got=0x%02X expected=0x%02X", command,
-               static_cast<unsigned>(i), received_crc, expected_crc);
       return false;
     }
     data[i] = value;
@@ -126,11 +142,16 @@ bool BQ76952Protocol::write_u16(uint8_t command, uint16_t value) {
 }
 
 bool BQ76952Protocol::write_bytes(uint8_t command, const uint8_t *data, size_t length) {
+  return this->write_bytes_with_mode(command, data, length, this->crc_enabled_);
+}
+
+bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data, size_t length,
+                                            bool crc_enabled) {
   if (length > 0 && data == nullptr) {
     return false;
   }
 
-  if (!this->crc_enabled_) {
+  if (!crc_enabled) {
     return i2c::I2CDevice::write_bytes(command, data, static_cast<uint8_t>(length));
   }
 
@@ -271,7 +292,7 @@ bool BQ76952Protocol::write_data_memory_u16(uint16_t address, uint16_t value) {
   return this->write_data_memory(address, raw, sizeof(raw));
 }
 
-bool BQ76952Protocol::set_config_update(bool enabled, bool crc_after_exit) {
+bool BQ76952Protocol::set_config_update(bool enabled) {
   const uint16_t command = enabled ? SUBCMD_SET_CFGUPDATE : SUBCMD_EXIT_CFGUPDATE;
   if (!this->send_subcommand(command)) {
     return false;
@@ -280,8 +301,8 @@ bool BQ76952Protocol::set_config_update(bool enabled, bool crc_after_exit) {
   delay_microseconds_safe(enabled ? 2200 : 1200);
   if (!enabled) {
     // Comm Type changes take effect as CONFIG_UPDATE exits. The exit command
-    // itself uses the old framing; status polling must use the new framing.
-    this->crc_enabled_ = crc_after_exit;
+    // itself uses the old framing; status polling must use the configured mode.
+    this->crc_enabled_ = this->desired_crc_enabled_;
   }
   const uint32_t started = millis();
   while ((millis() - started) < 500U) {
@@ -299,7 +320,8 @@ bool BQ76952Protocol::set_config_update(bool enabled, bool crc_after_exit) {
 }
 
 void BQ76952Protocol::set_crc_enabled(bool enabled) {
-  this->crc_enabled_ = enabled;
+  this->desired_crc_enabled_ = enabled;
+  this->crc_enabled_ = false;
 }
 
 }  // namespace bq76952
