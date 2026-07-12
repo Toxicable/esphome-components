@@ -188,7 +188,9 @@ The BQ76952 integrated-charge value is an internal coulomb-counter position in A
 
 `cell_chemistry: lithium_ion` is required because lithium-ion is currently the only implemented voltage fallback curve.
 
-## ⚠️ DANGER: ONE-TIME OTP PROGRAMMING
+## OTP programming
+
+### ⚠️ DANGER: ONE-TIME OTP PROGRAMMING
 
 > **The BQ76952 OTP can only be programmed once. This operation is irreversible. A wrong setting can permanently make the device unusable for the intended board.**
 >
