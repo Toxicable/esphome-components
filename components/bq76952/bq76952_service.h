@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 #include "bq76952_config.h"
@@ -40,14 +41,15 @@ enum BQ76952FaultFlags : uint32_t {
 // and the device coulomb-counter value are consumed inside the service.
 struct BQ76952Snapshot {
   bool online{false};
+  bool output_enabled{false};
   BQ76952OperatingState state{BQ76952OperatingState::OFFLINE};
   uint32_t fault_flags{BQ76952_FAULT_NONE};
 
   std::array<int16_t, 16> cell_voltage_mv{};
   uint8_t cell_count{0};
-  int16_t stack_voltage_mv{0};
-  int16_t pack_voltage_mv{0};
-  int16_t load_detect_voltage_mv{0};
+  int32_t stack_voltage_mv{0};
+  int32_t pack_voltage_mv{0};
+  int32_t load_detect_voltage_mv{0};
   float current_a{0.0f};
   float state_of_charge_percent{0.0f};
   float die_temperature_c{0.0f};
@@ -73,9 +75,6 @@ class BQ76952Service {
   bool program_factory_otp();
 
  private:
-  // Normal audits verify data-memory settings and repair drift. Reconnect
-  // restoration additionally reapplies runtime-only commands even when the
-  // corresponding data-memory bytes already match.
   enum class ConfigurationSyncMode : uint8_t {
     AUDIT_AND_REPAIR = 0,
     RESTORE_RUNTIME_STATE,
@@ -84,24 +83,27 @@ class BQ76952Service {
   bool establish_connection();
   void note_communication_failure();
   bool synchronize_configuration(ConfigurationSyncMode mode);
+  bool configuration_matches(bool &matches);
+  bool write_configuration();
+  bool restore_runtime_state();
 
-  bool apply_regulators(ConfigurationSyncMode mode);
-  bool apply_thermistors();
+  bool apply_regulators(bool write, bool &matches);
+  bool apply_thermistors(bool write, bool &matches);
+  bool apply_fet_configuration(bool write, bool &matches);
+  bool apply_balancing(bool write, bool &matches);
+  bool apply_protections(bool write, bool &matches);
+  bool apply_current_calibration(bool write, bool &matches);
 
-  // Applies autonomous FET policy, sleep charging, precharge/predischarge, and
-  // the fixed 50-mA series-FET body-diode protection threshold.
-  bool apply_fet_configuration(ConfigurationSyncMode mode);
+  bool sync_data(uint16_t address, const uint8_t *desired, const uint8_t *mask, size_t length, bool write,
+                 bool &matches, const char *label);
+  bool sync_u8(uint16_t address, uint8_t desired, uint8_t mask, bool write, bool &matches, const char *label);
+  bool sync_u16(uint16_t address, uint16_t desired, uint16_t mask, bool write, bool &matches, const char *label);
 
-  // Charging balancing is always enabled. Relaxed balancing is always off.
-  bool apply_balancing();
-
-  // All configured primary protections are always enabled. Enabled-protection,
-  // FET-protection, and alarm masks are derived from this fixed policy.
-  bool apply_protections();
-  bool apply_current_calibration();
-
+  bool require_full_access();
+  bool load_unit_scaling();
   bool read_snapshot(BQ76952Snapshot &snapshot);
-  bool read_fault_flags(uint32_t &fault_flags);
+  bool read_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c,
+                        uint32_t &fault_flags);
   bool read_coulomb_counter(float &charge_ah);
   uint16_t cell_mode_mask() const;
   uint8_t raw_cell_channel(uint8_t logical_cell) const;
@@ -112,6 +114,12 @@ class BQ76952Service {
   bool config_set_{false};
   bool online_{false};
   bool configured_{false};
+  int32_t current_lsb_ua_{1000};
+  bool direct_voltage_centivolts_{true};
+  bool output_request_pending_{false};
+  bool output_request_expected_enabled_{false};
+  uint32_t output_request_started_ms_{0};
+  uint32_t next_configuration_retry_ms_{0};
   uint32_t next_configuration_audit_ms_{0};
 };
 
