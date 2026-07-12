@@ -37,7 +37,7 @@ class BQ76952Protocol : public i2c::I2CDevice {
   bool write_data_memory_u8(uint16_t address, uint8_t value);
   bool write_data_memory_u16(uint16_t address, uint16_t value);
 
-  bool set_config_update(bool enabled);
+  bool set_config_update(bool enabled, bool crc_after_exit = false);
   void set_crc_enabled(bool enabled);
 
  private:
