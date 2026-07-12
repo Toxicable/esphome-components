@@ -39,8 +39,9 @@ class BQ76952Protocol : public i2c::I2CDevice {
 
   bool set_config_update(bool enabled);
 
-  // Sets the desired device framing. Startup probing still begins without CRC
-  // so a device with either existing Comm Type can be reached safely.
+  // Sets the desired device framing. Startup probing tries CRC first because a
+  // plain read can superficially succeed against a CRC-enabled device while
+  // returning interleaved CRC bytes instead of the requested register data.
   void set_crc_enabled(bool enabled);
 
  private:
@@ -50,7 +51,7 @@ class BQ76952Protocol : public i2c::I2CDevice {
   bool read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length);
   bool verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length, uint8_t checksum) const;
 
-  bool crc_enabled_{false};
+  bool crc_enabled_{true};
   bool desired_crc_enabled_{false};
 };
 
