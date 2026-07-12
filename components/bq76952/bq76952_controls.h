@@ -14,17 +14,12 @@ class BQ76952OutputEnabledSwitch : public switch_::Switch, public Parented<BQ769
   void write_state(bool state) override;
 };
 
-class BQ76952AutonomousFetSwitch : public switch_::Switch, public Parented<BQ76952Component> {
+class BQ76952AutonomousSwitch : public switch_::Switch, public Parented<BQ76952Component> {
  protected:
   void write_state(bool state) override;
 };
 
 class BQ76952ClearAlarmsButton : public button::Button, public Parented<BQ76952Component> {
- protected:
-  void press_action() override;
-};
-
-class BQ76952ResetPassedChargeButton : public button::Button, public Parented<BQ76952Component> {
  protected:
   void press_action() override;
 };
