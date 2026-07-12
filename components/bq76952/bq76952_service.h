@@ -27,21 +27,21 @@ enum BQ76952FaultFlags : uint32_t {
   BQ76952_FAULT_CELL_UNDERVOLTAGE = 1U << 0,
   BQ76952_FAULT_CELL_OVERVOLTAGE = 1U << 1,
   BQ76952_FAULT_CHARGE_OVERCURRENT = 1U << 2,
-  BQ76952_FAULT_DISCHARGE_OVERCURRENT_1 = 1U << 3,
-  BQ76952_FAULT_DISCHARGE_OVERCURRENT_2 = 1U << 4,
-  BQ76952_FAULT_DISCHARGE_OVERCURRENT_3 = 1U << 5,
+  BQ76952_FAULT_DISCHARGE_OVERCURRENT = 1U << 3,
+  BQ76952_FAULT_DISCHARGE_SEVERE_OVERCURRENT = 1U << 4,
+  BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT = 1U << 5,
   BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT = 1U << 6,
   BQ76952_FAULT_TEMPERATURE = 1U << 7,
-  BQ76952_FAULT_PERMANENT_FAILURE = 1U << 8,
+  BQ76952_FAULT_PRECHARGE_TIMEOUT = 1U << 8,
+  BQ76952_FAULT_PERMANENT_FAILURE = 1U << 9,
 };
 
-// Internal service-to-ESPHome snapshot. Raw protocol registers and the device
-// coulomb-counter value are consumed inside the service and are not exposed.
+// Internal service-to-ESPHome snapshot. Raw protocol registers, raw FET bits,
+// and the device coulomb-counter value are consumed inside the service.
 struct BQ76952Snapshot {
   bool online{false};
   BQ76952OperatingState state{BQ76952OperatingState::OFFLINE};
   uint32_t fault_flags{BQ76952_FAULT_NONE};
-  uint8_t fet_status_flags{0};
 
   std::array<int16_t, 16> cell_voltage_mv{};
   uint8_t cell_count{0};
@@ -69,7 +69,6 @@ class BQ76952Service {
   bool poll(BQ76952Snapshot &snapshot);
 
   bool set_output_enabled(bool enabled);
-  bool set_autonomous(bool enabled);
   bool clear_alarm_latches();
   bool program_factory_otp();
 
@@ -88,8 +87,16 @@ class BQ76952Service {
 
   bool apply_regulators(ConfigurationSyncMode mode);
   bool apply_thermistors();
+
+  // Applies autonomous FET policy, sleep charging, precharge/predischarge, and
+  // the fixed 50-mA series-FET body-diode protection threshold.
   bool apply_fet_configuration(ConfigurationSyncMode mode);
+
+  // Charging balancing is always enabled. Relaxed balancing is always off.
   bool apply_balancing();
+
+  // All configured primary protections are always enabled. Enabled-protection,
+  // FET-protection, and alarm masks are derived from this fixed policy.
   bool apply_protections();
   bool apply_current_calibration();
 
