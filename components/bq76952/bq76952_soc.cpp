@@ -101,11 +101,18 @@ float BQ76952Soc::update(const BQ76952SocSample &sample) {
       (empty_voltage && this->discharge_seen_ && this->empty_hold_start_ms_ != 0 &&
        (now - this->empty_hold_start_ms_) >= ENDPOINT_HOLD_MS);
 
-  if (full_now) {
+  if (!full_now) {
+    this->full_endpoint_latched_ = false;
+  } else if (!this->full_endpoint_latched_) {
     this->mark_full();
+    this->full_endpoint_latched_ = true;
   }
-  if (empty_now) {
+
+  if (!empty_now) {
+    this->empty_endpoint_latched_ = false;
+  } else if (!this->empty_endpoint_latched_) {
     this->mark_empty();
+    this->empty_endpoint_latched_ = true;
   }
 
   float percent = 0.0F;
@@ -122,45 +129,60 @@ float BQ76952Soc::update(const BQ76952SocSample &sample) {
 }
 
 void BQ76952Soc::mark_full() {
-  if (!this->have_full_) {
-    this->have_full_ = true;
-    this->full_anchor_ah_ = this->relative_charge_ah_;
-    ESP_LOGI(TAG, "Detected full endpoint at relative_charge=%.4f Ah", this->full_anchor_ah_);
+  this->have_full_ = true;
+  this->full_anchor_ah_ = this->relative_charge_ah_;
+  ESP_LOGI(TAG, "Detected full endpoint at relative_charge=%.4f Ah", this->full_anchor_ah_);
 
-    if (!this->have_empty_ && this->boot_estimate_fraction_ >= 0.10F && this->boot_estimate_fraction_ <= 0.90F) {
-      const float span =
-          (this->full_anchor_ah_ - this->boot_relative_charge_ah_) / (1.0F - this->boot_estimate_fraction_);
-      if (span > 0.001F) {
-        this->learned_span_ah_ = span;
-        this->empty_anchor_ah_ = this->full_anchor_ah_ - span;
-        this->have_span_ = true;
-        this->span_provisional_ = true;
-      }
+  if (this->have_empty_) {
+    this->update_learned_span();
+  } else if (this->boot_estimate_fraction_ >= 0.10F && this->boot_estimate_fraction_ <= 0.90F) {
+    const float span =
+        (this->full_anchor_ah_ - this->boot_relative_charge_ah_) / (1.0F - this->boot_estimate_fraction_);
+    if (span > 0.001F) {
+      this->learned_span_ah_ = span;
+      this->empty_anchor_ah_ = this->full_anchor_ah_ - span;
+      this->have_span_ = true;
+      this->span_provisional_ = true;
     }
-    this->save(true);
   }
+
   this->full_hold_start_ms_ = 0;
+  this->save(true);
 }
 
 void BQ76952Soc::mark_empty() {
-  if (!this->have_empty_) {
-    this->have_empty_ = true;
-    this->empty_anchor_ah_ = this->relative_charge_ah_;
-    ESP_LOGI(TAG, "Detected empty endpoint at relative_charge=%.4f Ah", this->empty_anchor_ah_);
+  this->have_empty_ = true;
+  this->empty_anchor_ah_ = this->relative_charge_ah_;
+  ESP_LOGI(TAG, "Detected empty endpoint at relative_charge=%.4f Ah", this->empty_anchor_ah_);
 
-    if (!this->have_full_ && this->boot_estimate_fraction_ >= 0.10F && this->boot_estimate_fraction_ <= 0.90F) {
-      const float span =
-          (this->boot_relative_charge_ah_ - this->empty_anchor_ah_) / this->boot_estimate_fraction_;
-      if (span > 0.001F) {
-        this->learned_span_ah_ = span;
-        this->full_anchor_ah_ = this->empty_anchor_ah_ + span;
-        this->have_span_ = true;
-        this->span_provisional_ = true;
-      }
+  if (this->have_full_) {
+    this->update_learned_span();
+  } else if (this->boot_estimate_fraction_ >= 0.10F && this->boot_estimate_fraction_ <= 0.90F) {
+    const float span =
+        (this->boot_relative_charge_ah_ - this->empty_anchor_ah_) / this->boot_estimate_fraction_;
+    if (span > 0.001F) {
+      this->learned_span_ah_ = span;
+      this->full_anchor_ah_ = this->empty_anchor_ah_ + span;
+      this->have_span_ = true;
+      this->span_provisional_ = true;
     }
-    this->save(true);
   }
+
   this->empty_hold_start_ms_ = 0;
+  this->save(true);
+}
+
+void BQ76952Soc::update_learned_span() {
+  const float measured_span = this->full_anchor_ah_ - this->empty_anchor_ah_;
+  if (measured_span <= 0.001F) {
+    ESP_LOGW(TAG, "Ignoring invalid full/empty SoC span: %.4f Ah", measured_span);
+    return;
+  }
+
+  this->learned_span_ah_ = measured_span;
+  this->have_span_ = true;
+  this->span_provisional_ = false;
+  ESP_LOGI(TAG, "Updated learned capacity span: %.4f Ah", this->learned_span_ah_);
 }
 
 void BQ76952Soc::load() {
@@ -175,8 +197,11 @@ void BQ76952Soc::load() {
   }
 
   this->relative_charge_ah_ = state.relative_charge_ah;
-  this->last_coulomb_counter_ah_ = state.last_coulomb_counter_ah;
-  this->have_last_counter_ = std::isfinite(state.last_coulomb_counter_ah);
+  // The device counter may reset independently of ESPHome. Establish a fresh
+  // baseline from the first sample after every host boot instead of applying a
+  // stale persisted device-counter delta.
+  this->last_coulomb_counter_ah_ = 0.0F;
+  this->have_last_counter_ = false;
   this->full_anchor_ah_ = state.full_anchor_ah;
   this->empty_anchor_ah_ = state.empty_anchor_ah;
   this->learned_span_ah_ = state.learned_span_ah;
@@ -199,18 +224,8 @@ void BQ76952Soc::save(bool force) {
     return;
   }
 
-  if (this->have_full_ && this->have_empty_) {
-    const float measured_span = this->full_anchor_ah_ - this->empty_anchor_ah_;
-    if (measured_span > 0.001F) {
-      this->learned_span_ah_ = measured_span;
-      this->have_span_ = true;
-      this->span_provisional_ = false;
-    }
-  }
-
   PersistedState state{};
   state.relative_charge_ah = this->relative_charge_ah_;
-  state.last_coulomb_counter_ah = this->last_coulomb_counter_ah_;
   state.full_anchor_ah = this->full_anchor_ah_;
   state.empty_anchor_ah = this->empty_anchor_ah_;
   state.learned_span_ah = this->learned_span_ah_;
