@@ -2,19 +2,20 @@
 
 ESPHome external component for TI `BQ76952` 3S–16S battery monitors.
 
-> This branch defines the target interfaces. The old monolithic implementation has not yet been migrated, so the component is not expected to compile until the protocol/service/SoC move is complete.
+The component implements the hard-cut configuration interfaces directly. The previous monolithic state bag and compatibility paths have been removed.
 
 ## Architecture
 
-- `bq76952_protocol.h`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
+- `bq76952_registers.h`: named direct commands, subcommands, data-memory addresses, bit fields, unit encodings, transport timing, and fixed product-policy constants
+- `bq76952_protocol.cpp`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
 - `bq76952_config.h`: complete deterministic desired device state
-- `bq76952_service.h`: connection recovery, configuration synchronization, measurements, protections, controls, and SoC ownership
-- `bq76952_soc.h`: ancillary SoC estimation and persistence logic
-- `bq76952.h`: ESPHome entity facade only
+- `bq76952_service.cpp`: connection recovery, configuration synchronization, measurements, protections, controls, and SoC ownership
+- `bq76952_soc.cpp`: ancillary SoC estimation and persistence logic
+- `bq76952.cpp`: ESPHome entity facade only
 
 There is no compatibility `ConfigState`, state-bag inheritance, or preserve-by-omission behaviour.
 
-## Target configuration
+## Configuration
 
 ```yaml
 bq76952:
@@ -127,6 +128,8 @@ bq76952:
     name: "BMS Current"
   state_of_charge:
     name: "BMS State of Charge"
+  learned_capacity:
+    name: "BMS Learned Capacity"
 
   cell1_voltage:
     name: "BMS Cell 1"
@@ -143,6 +146,10 @@ bq76952:
   clear_alarms:
     name: "BMS Clear Alarms"
 ```
+
+## Runtime behaviour
+
+The service waits until the device answers its communication probe, then compares the complete desired configuration with data memory. It enters `CONFIG_UPDATE` only when drift is found. Failed synchronization remains pending and retries after communication recovery. Runtime-only sleep, regulator and autonomous-FET state is restored after reconnect or reset.
 
 ## State versus fault
 
@@ -184,7 +191,15 @@ The BQ76952 integrated-charge value is an internal coulomb-counter position in A
 
 `cell_chemistry: lithium_ion` is required because lithium-ion is currently the only implemented voltage fallback curve.
 
-## ⚠️ DANGER: ONE-TIME OTP PROGRAMMING
+## Learned capacity diagnostic
+
+`learned_capacity` reports the confirmed full-to-empty coulomb-count span in amp-hours. It remains unavailable while the estimator is unlearned or only has a provisional one-endpoint estimate. A value is published only after both a valid full and empty endpoint have been observed.
+
+The value is diagnostic rather than a configured nominal capacity: it can change as later complete cycles refresh the learned endpoints.
+
+## OTP programming
+
+### ⚠️ DANGER: ONE-TIME OTP PROGRAMMING
 
 > **The BQ76952 OTP can only be programmed once. This operation is irreversible. A wrong setting can permanently make the device unusable for the intended board.**
 >

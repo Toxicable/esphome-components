@@ -33,6 +33,9 @@ class BQ76952Soc {
   void setup(BQ76952CellChemistry chemistry);
   float update(const BQ76952SocSample &sample);
 
+  bool has_confirmed_capacity() const;
+  float learned_capacity_ah() const;
+
  private:
   struct CurvePoint {
     uint16_t mv;
@@ -41,7 +44,6 @@ class BQ76952Soc {
 
   struct PersistedState {
     float relative_charge_ah{std::numeric_limits<float>::quiet_NaN()};
-    float last_coulomb_counter_ah{std::numeric_limits<float>::quiet_NaN()};
     float full_anchor_ah{std::numeric_limits<float>::quiet_NaN()};
     float empty_anchor_ah{std::numeric_limits<float>::quiet_NaN()};
     float learned_span_ah{std::numeric_limits<float>::quiet_NaN()};
@@ -51,6 +53,7 @@ class BQ76952Soc {
   float estimate_from_voltage(int16_t cell_voltage_mv, uint16_t empty_mv, uint16_t full_mv) const;
   void mark_full();
   void mark_empty();
+  void update_learned_span();
   void load();
   void save(bool force);
 
@@ -93,6 +96,8 @@ class BQ76952Soc {
   float boot_relative_charge_ah_{0.0f};
   uint32_t full_hold_start_ms_{0};
   uint32_t empty_hold_start_ms_{0};
+  bool full_endpoint_latched_{false};
+  bool empty_endpoint_latched_{false};
   bool charge_seen_{false};
   bool discharge_seen_{false};
   uint32_t last_save_ms_{0};
