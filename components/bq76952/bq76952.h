@@ -19,12 +19,25 @@ namespace esphome {
 namespace bq76952 {
 
 class BQ76952Component : public PollingComponent,
-                          public i2c::I2CDevice,
-                          protected BQ76952Config,
-                          protected BQ76952ServiceState,
-                          protected BQ76952SocState {
+                           public i2c::I2CDevice,
+                           protected BQ76952Config,
+                           protected BQ76952ServiceState,
+                           protected BQ76952SocState {
  public:
-  void set_config(const BQ76952Config& config) { static_cast<BQ76952Config&>(*this) = config; }
+  void set_config(const BQ76952Config& config) {
+    static_cast<BQ76952Config&>(*this) = config;
+
+    // All supported boards wire an S-cell pack as VC1..VC(S-1), VC16.
+    // The array remains as an internal compatibility detail until the protocol
+    // implementation is moved out of bq76952.cpp.
+    for (uint8_t index = 0; index < cell_read_map_.size(); ++index) {
+      cell_read_map_[index] = index;
+    }
+    for (uint8_t index = 0; index < cell_count_; ++index) {
+      cell_read_map_[index] = index == (cell_count_ - 1) ? 15 : index;
+    }
+    explicit_cell_map_ = true;
+  }
 
   void set_bat_voltage_sensor(sensor::Sensor* sensor) { bat_voltage_sensor_ = sensor; }
   void set_pack_voltage_sensor(sensor::Sensor* sensor) { pack_voltage_sensor_ = sensor; }
@@ -128,6 +141,9 @@ class BQ76952Component : public PollingComponent,
   void save_soc_state_(bool force);
   void mark_soc_full_();
   void mark_soc_empty_();
+
+  std::array<uint8_t, 16> cell_read_map_{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+  bool explicit_cell_map_{true};
 
   sensor::Sensor* bat_voltage_sensor_{nullptr};
   sensor::Sensor* pack_voltage_sensor_{nullptr};
