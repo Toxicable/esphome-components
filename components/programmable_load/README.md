@@ -1,120 +1,131 @@
 # Programmable Load
 
-ESPHome external component for a programmable electronic load with closed-loop current control, safety monitoring, and DCR estimation.
+ESPHome interface for a programmable electronic load used as both a general-purpose bench load and a battery test instrument.
 
-Provides:
-- Current setpoint control with adaptive ramping (fast/medium/slow based on error)
-- Unconfirmed-move tracking to wait for INA response before overdriving
-- Safety interlocks: NTC presence, minimum input voltage, over-temperature
-- Battery/lead DCR estimation during upward and downward current steps
-- Temperature-proportional fan PWM control
+This version is an intentional API break. It defines the v2 configuration and C++ interfaces before the control and procedure implementations are replaced.
 
-## Configuration (optional items commented out)
+## Interface model
+
+The component is split into four layers:
+
+1. **Hardware boundary** — DAC, fan output, and measurement sensor references.
+2. **Safety supervisor** — absolute current, voltage, power, temperature, and measurement-freshness limits.
+3. **Operation host** — owns the single user-facing state and fault and ensures only one manual operation or procedure controls the load.
+4. **Procedures** — explicit tests such as DCR measurement. Procedures request current from the host and cannot bypass safety limits.
+
+The base component intentionally publishes only:
+
+- manual current setpoint;
+- load state;
+- current or last fault;
+- optional clear-fault control.
+
+Measurement entities remain owned by their sensor components, so users publish only the voltage, current, power, energy, or other values they actually need.
+
+## State
+
+The load has one state shared by manual operation and all procedures:
+
+- `idle`
+- `running`
+- `paused`
+- `complete`
+- `fault`
+
+A procedure must acquire the operation host before it can request current. Manual current and procedures therefore cannot drive the DAC concurrently.
+
+## Faults
+
+The load has one fault field rather than separate binary entities. Fault values include:
+
+- `none`
+- `current_measurement_unavailable`
+- `voltage_measurement_unavailable`
+- `required_temperature_unavailable`
+- `input_undervoltage`
+- `input_overvoltage`
+- `overcurrent`
+- `overpower`
+- `overtemperature`
+- `control_error`
+- `procedure_error`
+
+A fault always stops the active operation. `fault_policy.auto_clear` controls only whether the component returns from `fault` to `idle` after the fault condition has remained absent for `clear_delay`. With auto-clear disabled, the user must use the configured clear-fault button.
+
+## DCR test
+
+DCR is an explicit test procedure, not a calculation attached to normal current changes. The procedure:
+
+1. settles and samples at the baseline current;
+2. applies the configured pulse current;
+3. settles and samples the loaded voltage/current;
+4. returns to baseline for recovery;
+5. repeats and publishes one resistance result.
+
+Only the start button and resistance result are exposed.
+
+## Configuration
 
 ```yaml
-external_components:
-  - source: github://Toxicable/esphome-components@main
-    refresh: 0s
-    components: [ programmable_load ]
-
-## Hardware wiring (example):
-#
-# i2c:
-#   sda: GPIO20
-#   scl: GPIO10
-#   frequency: 400kHz
-#
-# output:
-#   - platform: ledc
-#     id: fan_pwm
-#     pin: GPIO8
-#     frequency: 25000 Hz
-#
-#   - platform: mcp4726
-#     id: dac_command
-#     address: 0x60
-#     vref: vref_buffered
-#     gain: 1x
-#
-# sensor:
-#   - platform: ina2xx_i2c
-#     model: INA228
-#     address: 0x40
-#     shunt_resistance: 0.001 ohm
-#     current:
-#       id: ina_current
-#     bus_voltage:
-#       id: ina_bus_voltage
-#
-#   ## Temperature sensors (TS1..TS4, any temperature source):
-#   # - platform: ...
-#   #   id: ts1_temperature
-#   # - platform: ...
-#   #   id: ts2_temperature
-
 programmable_load:
-  ## Required: DAC output that drives the load (0..1 maps to 0..max_current_a).
-  dac_output: dac_command
-  ## Required: PWM output for fan control.
-  fan_output: fan_pwm
-  ## Required: Sensor providing measured load current in amperes.
-  current_sensor: ina_current
-  ## Required: Sensor providing bus/input voltage in volts.
-  voltage_sensor: ina_bus_voltage
-  ## Required: List of temperature sensors (°C). Max is used for safety.
-  temperature_sensors:
-    - ts1_temperature
-    - ts2_temperature
-  ## Optional: Binary sensor for NTC 1 presence check (safety interlock).
-  # ntc_present_sensors:
-  #   - ts1_ntc_present
+  id: load_controller
 
-  ## --- Safety limits ---
-  # max_current_a: 40.0
-  # voltage_min_v: 1.0
-  # max_temp_c: 100.0
+  output:
+    dac: dac_command
+    dac_full_scale_current: 80.1
 
-  ## --- Control loop ---
-  # control_period_ms: 50
-  # deadband_a: 0.010
-  # max_unconfirmed_rise_a: 1.000
-  # max_unconfirmed_fall_a: 2.000
-  # ramp_fast_a_per_s: 8.0
-  # ramp_medium_a_per_s: 4.0
+  measurements:
+    current: load_current
+    voltage: load_voltage
+    sample_timeout: 250ms
+    temperatures:
+      - sensor: heatsink_temperature
+        required: true
 
-  ## --- Fan ---
-  # fan_start_temp_c: 35.0
-  # fan_full_temp_c: 65.0
+  limits:
+    maximum_current: 40
+    minimum_voltage: 1
+    maximum_voltage: 75
+    maximum_power: 500
+    maximum_temperature: 100
 
-  ## --- Generated entities ---
-  # setpoint:
-  #   name: "Load Current Setpoint"
-  # dcr:
-  #   name: "Battery Ramp DCR"
-  # voltage_drop:
-  #   name: "Battery Ramp Voltage Drop"
-  # current_delta:
-  #   name: "Battery Ramp Current Delta"
-  # ramp_state:
-  #   name: "Load Ramp State"
-  # fault_ntc_missing:
-  #   name: "Load Fault NTC Missing"
-  # fault_no_voltage:
-  #   name: "Load Fault No Voltage"
-  # fault_over_temp:
-  #   name: "Load Fault Over Temperature"
+  control:
+    period: 50ms
+    deadband: 0.001
+    rise_rate: 2
+    fall_rate: 4
+
+  cooling:
+    fan_output: fan_pwm
+    fan_start_temperature: 35
+    fan_full_temperature: 70
+
+  fault_policy:
+    auto_clear: false
+    clear_delay: 2s
+
+  manual_current:
+    name: "Load Current Setpoint"
+
+  state:
+    name: "Load State"
+
+  fault:
+    name: "Load Fault"
+
+  clear_fault:
+    name: "Clear Load Fault"
+
+  dcr_test:
+    pulse_current: 5
+    settle_time: 100ms
+    sample_time: 500ms
+    recovery_time: 1s
+    repeats: 3
+
+    start:
+      name: "Run Battery DCR Test"
+
+    resistance:
+      name: "Battery DCR"
 ```
-
-## Notes
-
-- The control loop runs at `control_period_ms` (default 50 ms) via an internal interval.
-- Ramp rates are tiered: fast (>5 A error), medium (>2 A), then fixed steps that decrease as the target is approached.
-- Unconfirmed-move tracking limits each ramp step to prevent overshoot when the INA sensor has not yet responded.
-- DCR estimation captures the V/I baseline when a new non-zero setpoint is applied and accepts signed samples from either upward or downward current movement.
-- Samples with less than 0.25 A movement from the baseline are ignored, repeated sensor conversions are de-duplicated, and the newest 64 distinct samples are retained.
-- The last valid DCR remains published while a new step is accumulating enough valid samples, rather than temporarily becoming unknown.
-- Fan PWM ramps linearly between `fan_start_temp_c` and `fan_full_temp_c`.
-
-- `fan_full_temp_c` must be greater than `fan_start_temp_c`.
-- Only NTC 1 (the first temperature sensor) is required for the safety interlock. If `ntc_present_sensors` is omitted, the first temperature sensor must have a valid reading or the load faults off as `fault_ntc_missing`.
-- All generated entities are optional; omit any that are not needed.
