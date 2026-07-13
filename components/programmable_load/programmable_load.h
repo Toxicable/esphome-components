@@ -9,8 +9,9 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 
-#include "load_procedure.h"
+#include "calibration.h"
 #include "load_types.h"
+#include "procedure.h"
 
 namespace esphome {
 namespace programmable_load {
@@ -26,15 +27,16 @@ class ProgrammableLoadComponent : public Component {
   void loop() override;
   void dump_config() override;
 
-  // Hardware boundary.
+  // Hardware boundary. maximum_voltage is an absolute property of the board,
+  // not a user operating preference, and is always enforced by the core.
   void set_dac_output(output::FloatOutput *output) { this->dac_output_ = output; }
-  void set_dac_full_scale_current(float current_a) {
-    this->dac_full_scale_current_a_ = current_a;
+  void set_hardware_maximum_voltage(float voltage_v) {
+    this->hardware_limits_.maximum_voltage_v = voltage_v;
   }
   void set_fan_output(output::FloatOutput *output) { this->fan_output_ = output; }
 
-  // Measurement inputs. The component owns no measurement entities and only
-  // consumes the values required to control and protect the load.
+  // Measurement inputs. Raw sensor values are calibrated before they are
+  // exposed to procedures or checked against operating limits.
   void set_current_sensor(sensor::Sensor *sensor) { this->current_sensor_ = sensor; }
   void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
   void add_temperature_sensor(sensor::Sensor *sensor, bool required) {
@@ -44,7 +46,26 @@ class ProgrammableLoadComponent : public Component {
     this->sample_timeout_ms_ = timeout_ms;
   }
 
-  // Absolute operating limits.
+  // Calibration boundary. Configured coefficients are defaults; a future
+  // guided calibration procedure can replace and persist the same structure.
+  void set_current_calibration(float scale, float offset_a) {
+    this->calibration_.current = {scale, offset_a};
+  }
+  void set_voltage_calibration(float scale, float offset_v) {
+    this->calibration_.voltage = {scale, offset_v};
+  }
+  void set_output_calibration(float zero_level, float full_scale_current_a) {
+    this->calibration_.output = {zero_level, full_scale_current_a};
+  }
+  void set_restore_calibration(bool restore) {
+    this->restore_calibration_ = restore;
+  }
+  bool apply_calibration(const Calibration &calibration, bool persist);
+  bool reset_calibration(bool persist);
+  const Calibration &calibration() const { return this->calibration_; }
+
+  // Configurable operating limits. maximum_voltage must not exceed the hard
+  // hardware maximum, and runtime checks still enforce both independently.
   void set_maximum_current(float current_a) {
     this->limits_.maximum_current_a = current_a;
   }
@@ -79,9 +100,9 @@ class ProgrammableLoadComponent : public Component {
     this->fan_full_temperature_c_ = full_c;
   }
 
-  // Fault policy. A fault always stops the active operation. Auto-clear only
-  // controls whether the FAULT state returns to IDLE after the fault condition
-  // has remained absent for the configured delay.
+  // Fault policy. A fault always stops the current owner. Auto-clear only
+  // changes FAULT -> IDLE after the condition has remained absent; it never
+  // resumes the interrupted manual operation or procedure.
   void set_fault_auto_clear(bool auto_clear) {
     this->fault_policy_.auto_clear = auto_clear;
   }
@@ -100,36 +121,40 @@ class ProgrammableLoadComponent : public Component {
     this->fault_sensor_ = sensor;
   }
 
-  // Manual operation.
-  bool set_manual_current(float current_a);
+  // Operation API. Manual operation and procedures share one exclusive owner
+  // slot. A non-zero manual request or procedure start is rejected unless the
+  // core is IDLE. Completion and user stop return directly to IDLE.
+  bool start_manual(float current_a);
+  bool update_manual(float current_a);
+  bool start_procedure(Procedure *procedure);
   void stop();
-  bool pause();
-  bool resume();
 
   // Fault API.
   bool clear_fault();
-  LoadFault fault() const { return this->fault_; }
-  LoadState state() const { return this->state_; }
+  Fault fault() const { return this->fault_; }
+  State state() const { return this->state_; }
 
-  // Procedure API. Exactly one procedure or manual operation may own the load.
-  void add_procedure(LoadProcedure *procedure);
-  bool start_procedure(LoadProcedure *procedure);
-  bool request_procedure_current(LoadProcedure *procedure, float current_a);
-  void finish_procedure(LoadProcedure *procedure);
-  void fail_procedure(LoadProcedure *procedure, LoadFault fault);
-
-  const LoadMeasurement &measurement() const { return this->measurement_; }
-  const LoadLimits &limits() const { return this->limits_; }
+  const Measurement &measurement() const { return this->measurement_; }
+  const HardwareLimits &hardware_limits() const { return this->hardware_limits_; }
+  const Limits &limits() const { return this->limits_; }
 
  protected:
+  enum class Owner : uint8_t {
+    NONE = 0,
+    MANUAL,
+    PROCEDURE,
+  };
+
   void update_measurement_();
   void update_faults_();
   void update_operation_();
   void update_control_();
   void update_fan_();
 
-  void set_state_(LoadState state);
-  void trip_fault_(LoadFault fault);
+  void apply_procedure_result_(const ProcedureResult &result);
+  void release_owner_(StopReason reason);
+  void set_state_(State state);
+  void trip_fault_(Fault fault);
   void publish_status_();
   float effective_current_limit_() const;
 
@@ -143,21 +168,22 @@ class ProgrammableLoadComponent : public Component {
   text_sensor::TextSensor *state_sensor_{nullptr};
   text_sensor::TextSensor *fault_sensor_{nullptr};
 
-  std::vector<LoadProcedure *> procedures_;
-  LoadProcedure *active_procedure_{nullptr};
+  Procedure *active_procedure_{nullptr};
+  Owner owner_{Owner::NONE};
 
-  LoadMeasurement measurement_{};
-  LoadLimits limits_{};
-  LoadFaultPolicy fault_policy_{};
+  Measurement measurement_{};
+  HardwareLimits hardware_limits_{};
+  Limits limits_{};
+  FaultPolicy fault_policy_{};
+  Calibration calibration_{};
 
-  LoadState state_{LoadState::IDLE};
-  LoadFault fault_{LoadFault::NONE};
+  State state_{State::IDLE};
+  Fault fault_{Fault::NONE};
 
-  float manual_current_a_{0.0f};
   float requested_current_a_{0.0f};
   float commanded_current_a_{0.0f};
-  float dac_full_scale_current_a_{0.0f};
 
+  bool restore_calibration_{true};
   uint32_t sample_timeout_ms_{250};
   uint32_t control_period_ms_{50};
   uint32_t fault_clear_candidate_since_ms_{0};
@@ -169,7 +195,7 @@ class ProgrammableLoadComponent : public Component {
   float fan_full_temperature_c_{70.0f};
 };
 
-class ProgrammableLoadManualCurrentNumber : public number::Number {
+class ManualCurrentNumber : public number::Number {
  public:
   void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
 
@@ -178,7 +204,7 @@ class ProgrammableLoadManualCurrentNumber : public number::Number {
   ProgrammableLoadComponent *parent_{nullptr};
 };
 
-class ProgrammableLoadClearFaultButton : public button::Button {
+class ClearFaultButton : public button::Button {
  public:
   void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
 
@@ -190,4 +216,4 @@ class ProgrammableLoadClearFaultButton : public button::Button {
 }  // namespace programmable_load
 }  // namespace esphome
 
-#include "procedures/dcr_test.h"
+#include "dcr_test.h"
