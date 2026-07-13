@@ -16,22 +16,20 @@ programmable_load_ns = cg.esphome_ns.namespace("programmable_load")
 ProgrammableLoadComponent = programmable_load_ns.class_(
     "ProgrammableLoadComponent", cg.Component
 )
-ProgrammableLoadManualCurrentNumber = programmable_load_ns.class_(
-    "ProgrammableLoadManualCurrentNumber", number.Number
+ManualCurrentNumber = programmable_load_ns.class_(
+    "ManualCurrentNumber", number.Number
 )
-ProgrammableLoadClearFaultButton = programmable_load_ns.class_(
-    "ProgrammableLoadClearFaultButton", button.Button
+ClearFaultButton = programmable_load_ns.class_(
+    "ClearFaultButton", button.Button
 )
-ProgrammableLoadDcrTest = programmable_load_ns.class_(
-    "ProgrammableLoadDcrTest"
-)
-ProgrammableLoadDcrStartButton = programmable_load_ns.class_(
-    "ProgrammableLoadDcrStartButton", button.Button
+DcrTest = programmable_load_ns.class_("DcrTest")
+DcrStartButton = programmable_load_ns.class_(
+    "DcrStartButton", button.Button
 )
 
-CONF_OUTPUT = "output"
+CONF_HARDWARE = "hardware"
 CONF_DAC = "dac"
-CONF_DAC_FULL_SCALE_CURRENT = "dac_full_scale_current"
+CONF_HARDWARE_MAXIMUM_VOLTAGE = "maximum_voltage"
 
 CONF_MEASUREMENTS = "measurements"
 CONF_CURRENT = "current"
@@ -40,6 +38,14 @@ CONF_TEMPERATURES = "temperatures"
 CONF_SENSOR = "sensor"
 CONF_REQUIRED = "required"
 CONF_SAMPLE_TIMEOUT = "sample_timeout"
+
+CONF_CALIBRATION = "calibration"
+CONF_RESTORE = "restore"
+CONF_SCALE = "scale"
+CONF_OFFSET = "offset"
+CONF_OUTPUT = "output"
+CONF_ZERO_LEVEL = "zero_level"
+CONF_FULL_SCALE_CURRENT = "full_scale_current"
 
 CONF_LIMITS = "limits"
 CONF_MAXIMUM_CURRENT = "maximum_current"
@@ -68,7 +74,8 @@ CONF_STATE = "state"
 CONF_FAULT = "fault"
 CONF_CLEAR_FAULT = "clear_fault"
 
-CONF_DCR_TEST = "dcr_test"
+CONF_PROCEDURES = "procedures"
+CONF_DCR = "dcr"
 CONF_BASELINE_CURRENT = "baseline_current"
 CONF_PULSE_CURRENT = "pulse_current"
 CONF_SETTLE_TIME = "settle_time"
@@ -86,10 +93,24 @@ def _positive(value):
     return value
 
 
+def _positive_scale(value):
+    value = cv.float_(value)
+    if value <= 0:
+        raise cv.Invalid("calibration scale must be greater than zero")
+    return value
+
+
 def _non_negative(value):
     value = cv.float_(value)
     if value < 0:
         raise cv.Invalid("value must not be negative")
+    return value
+
+
+def _normalized_level(value):
+    value = cv.float_(value)
+    if value < 0 or value >= 1:
+        raise cv.Invalid("zero_level must be in the range 0 <= value < 1")
     return value
 
 
@@ -100,10 +121,10 @@ TEMPERATURE_INPUT_SCHEMA = cv.Schema(
     }
 )
 
-OUTPUT_SCHEMA = cv.Schema(
+HARDWARE_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_DAC): cv.use_id(output.FloatOutput),
-        cv.Required(CONF_DAC_FULL_SCALE_CURRENT): _positive,
+        cv.Required(CONF_HARDWARE_MAXIMUM_VOLTAGE): _positive,
     }
 )
 
@@ -116,6 +137,29 @@ MEASUREMENTS_SCHEMA = cv.Schema(
         ),
         cv.Optional(CONF_SAMPLE_TIMEOUT, default="250ms"):
             cv.positive_time_period_milliseconds,
+    }
+)
+
+LINEAR_CALIBRATION_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_SCALE, default=1.0): _positive_scale,
+        cv.Optional(CONF_OFFSET, default=0.0): cv.float_,
+    }
+)
+
+OUTPUT_CALIBRATION_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_ZERO_LEVEL, default=0.0): _normalized_level,
+        cv.Required(CONF_FULL_SCALE_CURRENT): _positive,
+    }
+)
+
+CALIBRATION_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_RESTORE, default=True): cv.boolean,
+        cv.Optional(CONF_CURRENT, default={}): LINEAR_CALIBRATION_SCHEMA,
+        cv.Optional(CONF_VOLTAGE, default={}): LINEAR_CALIBRATION_SCHEMA,
+        cv.Required(CONF_OUTPUT): OUTPUT_CALIBRATION_SCHEMA,
     }
 )
 
@@ -183,9 +227,9 @@ FAULT_POLICY_SCHEMA = cv.Schema(
     }
 )
 
-DCR_TEST_SCHEMA = cv.Schema(
+DCR_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(): cv.declare_id(ProgrammableLoadDcrTest),
+        cv.GenerateID(): cv.declare_id(DcrTest),
         cv.Optional(CONF_BASELINE_CURRENT, default=0.0): _non_negative,
         cv.Required(CONF_PULSE_CURRENT): _positive,
         cv.Optional(CONF_SETTLE_TIME, default="100ms"):
@@ -195,9 +239,7 @@ DCR_TEST_SCHEMA = cv.Schema(
         cv.Optional(CONF_RECOVERY_TIME, default="1s"):
             cv.positive_time_period_milliseconds,
         cv.Optional(CONF_REPEATS, default=3): cv.int_range(min=1, max=32),
-        cv.Required(CONF_START): button.button_schema(
-            ProgrammableLoadDcrStartButton
-        ),
+        cv.Required(CONF_START): button.button_schema(DcrStartButton),
         cv.Required(CONF_RESISTANCE): sensor.sensor_schema(
             unit_of_measurement="mΩ",
             accuracy_decimals=1,
@@ -205,43 +247,96 @@ DCR_TEST_SCHEMA = cv.Schema(
     }
 )
 
-CONFIG_SCHEMA = cv.Schema(
+PROCEDURES_SCHEMA = cv.Schema(
     {
-        cv.GenerateID(): cv.declare_id(ProgrammableLoadComponent),
-        cv.Required(CONF_OUTPUT): OUTPUT_SCHEMA,
-        cv.Required(CONF_MEASUREMENTS): MEASUREMENTS_SCHEMA,
-        cv.Required(CONF_LIMITS): LIMITS_SCHEMA,
-        cv.Optional(CONF_CONTROL, default={}): CONTROL_SCHEMA,
-        cv.Required(CONF_COOLING): COOLING_SCHEMA,
-        cv.Optional(CONF_FAULT_POLICY, default={}): FAULT_POLICY_SCHEMA,
-        cv.Required(CONF_MANUAL_CURRENT): number.number_schema(
-            ProgrammableLoadManualCurrentNumber,
-            unit_of_measurement=UNIT_AMPERE,
-            device_class=DEVICE_CLASS_CURRENT,
-        ),
-        cv.Required(CONF_STATE): text_sensor.text_sensor_schema(),
-        cv.Required(CONF_FAULT): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-        ),
-        cv.Optional(CONF_CLEAR_FAULT): button.button_schema(
-            ProgrammableLoadClearFaultButton,
-            entity_category=ENTITY_CATEGORY_CONFIG,
-        ),
-        cv.Optional(CONF_DCR_TEST): DCR_TEST_SCHEMA,
+        cv.Optional(CONF_DCR): DCR_SCHEMA,
     }
-).extend(cv.COMPONENT_SCHEMA)
+)
+
+
+def _validate_config(config):
+    hardware_maximum_voltage = config[CONF_HARDWARE][
+        CONF_HARDWARE_MAXIMUM_VOLTAGE
+    ]
+    operating_maximum_voltage = config[CONF_LIMITS][CONF_MAXIMUM_VOLTAGE]
+    if operating_maximum_voltage > hardware_maximum_voltage:
+        raise cv.Invalid(
+            "limits.maximum_voltage must not exceed "
+            "hardware.maximum_voltage"
+        )
+
+    maximum_current = config[CONF_LIMITS][CONF_MAXIMUM_CURRENT]
+    output_full_scale = config[CONF_CALIBRATION][CONF_OUTPUT][
+        CONF_FULL_SCALE_CURRENT
+    ]
+    if maximum_current > output_full_scale:
+        raise cv.Invalid(
+            "limits.maximum_current must not exceed "
+            "calibration.output.full_scale_current"
+        )
+
+    dcr = config[CONF_PROCEDURES].get(CONF_DCR)
+    if dcr is not None:
+        if dcr[CONF_BASELINE_CURRENT] > maximum_current:
+            raise cv.Invalid(
+                "procedures.dcr.baseline_current must not exceed "
+                "limits.maximum_current"
+            )
+        if dcr[CONF_PULSE_CURRENT] > maximum_current:
+            raise cv.Invalid(
+                "procedures.dcr.pulse_current must not exceed "
+                "limits.maximum_current"
+            )
+        if dcr[CONF_PULSE_CURRENT] == dcr[CONF_BASELINE_CURRENT]:
+            raise cv.Invalid(
+                "procedures.dcr.pulse_current must differ from "
+                "baseline_current"
+            )
+
+    return config
+
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(ProgrammableLoadComponent),
+            cv.Required(CONF_HARDWARE): HARDWARE_SCHEMA,
+            cv.Required(CONF_MEASUREMENTS): MEASUREMENTS_SCHEMA,
+            cv.Required(CONF_CALIBRATION): CALIBRATION_SCHEMA,
+            cv.Required(CONF_LIMITS): LIMITS_SCHEMA,
+            cv.Optional(CONF_CONTROL, default={}): CONTROL_SCHEMA,
+            cv.Required(CONF_COOLING): COOLING_SCHEMA,
+            cv.Optional(CONF_FAULT_POLICY, default={}): FAULT_POLICY_SCHEMA,
+            cv.Required(CONF_MANUAL_CURRENT): number.number_schema(
+                ManualCurrentNumber,
+                unit_of_measurement=UNIT_AMPERE,
+                device_class=DEVICE_CLASS_CURRENT,
+            ),
+            cv.Required(CONF_STATE): text_sensor.text_sensor_schema(),
+            cv.Required(CONF_FAULT): text_sensor.text_sensor_schema(
+                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+            ),
+            cv.Optional(CONF_CLEAR_FAULT): button.button_schema(
+                ClearFaultButton,
+                entity_category=ENTITY_CATEGORY_CONFIG,
+            ),
+            cv.Optional(CONF_PROCEDURES, default={}): PROCEDURES_SCHEMA,
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
+    _validate_config,
+)
 
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
-    output_config = config[CONF_OUTPUT]
-    dac = await cg.get_variable(output_config[CONF_DAC])
+    hardware = config[CONF_HARDWARE]
+    dac = await cg.get_variable(hardware[CONF_DAC])
     cg.add(var.set_dac_output(dac))
     cg.add(
-        var.set_dac_full_scale_current(
-            output_config[CONF_DAC_FULL_SCALE_CURRENT]
+        var.set_hardware_maximum_voltage(
+            hardware[CONF_HARDWARE_MAXIMUM_VOLTAGE]
         )
     )
 
@@ -250,9 +345,11 @@ async def to_code(config):
     voltage = await cg.get_variable(measurements[CONF_VOLTAGE])
     cg.add(var.set_current_sensor(current))
     cg.add(var.set_voltage_sensor(voltage))
-    cg.add(var.set_sample_timeout_ms(
-        measurements[CONF_SAMPLE_TIMEOUT].total_milliseconds
-    ))
+    cg.add(
+        var.set_sample_timeout_ms(
+            measurements[CONF_SAMPLE_TIMEOUT].total_milliseconds
+        )
+    )
     for temperature_config in measurements[CONF_TEMPERATURES]:
         temperature = await cg.get_variable(temperature_config[CONF_SENSOR])
         cg.add(
@@ -261,6 +358,30 @@ async def to_code(config):
                 temperature_config[CONF_REQUIRED],
             )
         )
+
+    calibration = config[CONF_CALIBRATION]
+    current_calibration = calibration[CONF_CURRENT]
+    voltage_calibration = calibration[CONF_VOLTAGE]
+    output_calibration = calibration[CONF_OUTPUT]
+    cg.add(
+        var.set_current_calibration(
+            current_calibration[CONF_SCALE],
+            current_calibration[CONF_OFFSET],
+        )
+    )
+    cg.add(
+        var.set_voltage_calibration(
+            voltage_calibration[CONF_SCALE],
+            voltage_calibration[CONF_OFFSET],
+        )
+    )
+    cg.add(
+        var.set_output_calibration(
+            output_calibration[CONF_ZERO_LEVEL],
+            output_calibration[CONF_FULL_SCALE_CURRENT],
+        )
+    )
+    cg.add(var.set_restore_calibration(calibration[CONF_RESTORE]))
 
     limits = config[CONF_LIMITS]
     cg.add(var.set_maximum_current(limits[CONF_MAXIMUM_CURRENT]))
@@ -311,10 +432,9 @@ async def to_code(config):
         clear_fault = await button.new_button(config[CONF_CLEAR_FAULT])
         cg.add(clear_fault.set_parent(var))
 
-    if CONF_DCR_TEST in config:
-        dcr_config = config[CONF_DCR_TEST]
+    dcr_config = config[CONF_PROCEDURES].get(CONF_DCR)
+    if dcr_config is not None:
         dcr = cg.new_Pvariable(dcr_config[CONF_ID])
-        cg.add(dcr.set_parent(var))
         cg.add(dcr.set_baseline_current(dcr_config[CONF_BASELINE_CURRENT]))
         cg.add(dcr.set_pulse_current(dcr_config[CONF_PULSE_CURRENT]))
         cg.add(
@@ -327,8 +447,8 @@ async def to_code(config):
         cg.add(dcr.set_repeats(dcr_config[CONF_REPEATS]))
 
         start = await button.new_button(dcr_config[CONF_START])
-        cg.add(start.set_parent(dcr))
+        cg.add(start.set_host(var))
+        cg.add(start.set_procedure(dcr))
 
         resistance = await sensor.new_sensor(dcr_config[CONF_RESISTANCE])
         cg.add(dcr.set_resistance_sensor(resistance))
-        cg.add(var.add_procedure(dcr))
