@@ -1,170 +1,219 @@
 #pragma once
 
-#include <limits>
 #include <vector>
 
-#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/button/button.h"
 #include "esphome/components/number/number.h"
 #include "esphome/components/output/float_output.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 
+#include "calibration.h"
+#include "load_types.h"
+#include "procedure.h"
+
 namespace esphome {
 namespace programmable_load {
 
-enum class RampState : int8_t {
-  OFF = 0,
-  RAMPING_UP = 1,
-  RAMPING_DOWN = 2,
-  HOLDING = 3,
-};
-
-// Circular buffer of DCR samples taken during ramping.
-static const int DCR_SAMPLE_MAX = 64;
-
-struct DcrSample {
-  float current_a;
-  float voltage_v;
+struct TemperatureInput {
+  sensor::Sensor *sensor{nullptr};
+  bool required{false};
 };
 
 class ProgrammableLoadComponent : public Component {
  public:
   void setup() override;
+  void loop() override;
   void dump_config() override;
 
-  // --- External references (hardware wiring) ---
-  void set_dac_output(output::FloatOutput *out) { dac_output_ = out; }
-  void set_fan_output(output::FloatOutput *out) { fan_output_ = out; }
-  void set_current_sensor(sensor::Sensor *s) { current_sensor_ = s; }
-  void set_voltage_sensor(sensor::Sensor *s) { voltage_sensor_ = s; }
-  void add_temperature_sensor(sensor::Sensor *s) { temperature_sensors_.push_back(s); }
-  void add_ntc_present_sensor(binary_sensor::BinarySensor *s) { ntc_present_sensors_.push_back(s); }
+  // Hardware boundary. maximum_voltage is an absolute property of the board,
+  // not a user operating preference, and is always enforced by the core.
+  void set_dac_output(output::FloatOutput *output) { this->dac_output_ = output; }
+  void set_hardware_maximum_voltage(float voltage_v) {
+    this->hardware_limits_.maximum_voltage_v = voltage_v;
+  }
+  void set_fan_output(output::FloatOutput *output) { this->fan_output_ = output; }
 
-  // --- Tunables ---
-  void set_max_current_a(float v) { max_current_a_ = v; }
-  void set_voltage_min_v(float v) { voltage_min_v_ = v; }
-  void set_max_temp_c(float v) { max_temp_c_ = v; }
-  void set_control_period_ms(uint32_t ms) { control_period_ms_ = ms; }
-  void set_deadband_a(float v) { deadband_a_ = v; }
-  void set_max_unconfirmed_rise_a(float v) { max_unconfirmed_rise_a_ = v; }
-  void set_max_unconfirmed_fall_a(float v) { max_unconfirmed_fall_a_ = v; }
-  void set_ramp_fast_a_per_s(float v) { ramp_fast_a_per_s_ = v; }
-  void set_ramp_medium_a_per_s(float v) { ramp_medium_a_per_s_ = v; }
-  void set_fan_start_temp_c(float v) { fan_start_temp_c_ = v; }
-  void set_fan_full_temp_c(float v) { fan_full_temp_c_ = v; }
+  // Measurement inputs. Raw sensor values are calibrated before they are
+  // exposed to procedures or checked against operating limits.
+  void set_current_sensor(sensor::Sensor *sensor) { this->current_sensor_ = sensor; }
+  void set_voltage_sensor(sensor::Sensor *sensor) { this->voltage_sensor_ = sensor; }
+  void add_temperature_sensor(sensor::Sensor *sensor, bool required) {
+    this->temperature_inputs_.push_back({sensor, required});
+  }
+  void set_sample_timeout_ms(uint32_t timeout_ms) {
+    this->sample_timeout_ms_ = timeout_ms;
+  }
 
-  // --- Control API ---
-  void set_target(float amps);
-  void force_off();
-  float get_target() const { return current_target_a_; }
-  float get_command() const { return current_command_a_; }
-  RampState get_ramp_state() const { return ramp_state_; }
+  // Calibration boundary. Configured coefficients are defaults; a future
+  // guided calibration procedure can replace and persist the same structure.
+  void set_current_calibration(float scale, float offset_a) {
+    this->calibration_.current = {scale, offset_a};
+  }
+  void set_voltage_calibration(float scale, float offset_v) {
+    this->calibration_.voltage = {scale, offset_v};
+  }
+  void set_output_calibration(float zero_level, float full_scale_current_a) {
+    this->calibration_.output = {zero_level, full_scale_current_a};
+  }
+  void set_restore_calibration(bool restore) {
+    this->restore_calibration_ = restore;
+  }
+  bool apply_calibration(const Calibration &calibration, bool persist);
+  bool reset_calibration(bool persist);
+  const Calibration &calibration() const { return this->calibration_; }
 
-  // --- Generated entity setters ---
-  void set_setpoint_number(number::Number *n) { setpoint_number_ = n; }
-  void set_dcr_sensor(sensor::Sensor *s) { dcr_sensor_ = s; }
-  void set_voltage_drop_sensor(sensor::Sensor *s) { voltage_drop_sensor_ = s; }
-  void set_current_delta_sensor(sensor::Sensor *s) { current_delta_sensor_ = s; }
-  void set_ramp_state_sensor(text_sensor::TextSensor *s) { ramp_state_sensor_ = s; }
-  void set_fault_ntc_missing_sensor(binary_sensor::BinarySensor *s) { fault_ntc_missing_sensor_ = s; }
-  void set_fault_no_voltage_sensor(binary_sensor::BinarySensor *s) { fault_no_voltage_sensor_ = s; }
-  void set_fault_over_temp_sensor(binary_sensor::BinarySensor *s) { fault_over_temp_sensor_ = s; }
+  // Configurable operating limits. maximum_voltage must not exceed the hard
+  // hardware maximum, and runtime checks still enforce both independently.
+  void set_maximum_current(float current_a) {
+    this->limits_.maximum_current_a = current_a;
+  }
+  void set_minimum_voltage(float voltage_v) {
+    this->limits_.minimum_voltage_v = voltage_v;
+  }
+  void set_maximum_voltage(float voltage_v) {
+    this->limits_.maximum_voltage_v = voltage_v;
+  }
+  void set_maximum_power(float power_w) {
+    this->limits_.maximum_power_w = power_w;
+  }
+  void set_maximum_temperature(float temperature_c) {
+    this->limits_.maximum_temperature_c = temperature_c;
+  }
+
+  // Control policy.
+  void set_control_period_ms(uint32_t period_ms) {
+    this->control_period_ms_ = period_ms;
+  }
+  void set_deadband(float current_a) { this->deadband_a_ = current_a; }
+  void set_rise_rate(float current_a_per_s) {
+    this->rise_rate_a_per_s_ = current_a_per_s;
+  }
+  void set_fall_rate(float current_a_per_s) {
+    this->fall_rate_a_per_s_ = current_a_per_s;
+  }
+
+  // Cooling policy.
+  void set_fan_temperature_range(float start_c, float full_c) {
+    this->fan_start_temperature_c_ = start_c;
+    this->fan_full_temperature_c_ = full_c;
+  }
+
+  // Fault policy. A fault always stops the current owner. Auto-clear only
+  // changes FAULT -> IDLE after the condition has remained absent; it never
+  // resumes the interrupted manual operation or procedure.
+  void set_fault_auto_clear(bool auto_clear) {
+    this->fault_policy_.auto_clear = auto_clear;
+  }
+  void set_fault_clear_delay_ms(uint32_t delay_ms) {
+    this->fault_policy_.clear_delay_ms = delay_ms;
+  }
+
+  // User-facing entities kept intentionally small.
+  void set_manual_current_number(number::Number *number) {
+    this->manual_current_number_ = number;
+  }
+  void set_state_sensor(text_sensor::TextSensor *sensor) {
+    this->state_sensor_ = sensor;
+  }
+  void set_fault_sensor(text_sensor::TextSensor *sensor) {
+    this->fault_sensor_ = sensor;
+  }
+
+  // Operation API. Manual operation and procedures share one exclusive owner
+  // slot. A non-zero manual request or procedure start is rejected unless the
+  // core is IDLE. Completion and user stop return directly to IDLE.
+  bool start_manual(float current_a);
+  bool update_manual(float current_a);
+  bool start_procedure(Procedure *procedure);
+  void stop();
+
+  // Fault API.
+  bool clear_fault();
+  Fault fault() const { return this->fault_; }
+  State state() const { return this->state_; }
+
+  const Measurement &measurement() const { return this->measurement_; }
+  const HardwareLimits &hardware_limits() const { return this->hardware_limits_; }
+  const Limits &limits() const { return this->limits_; }
 
  protected:
-  // --- Core loop (runs at control_period_ms) ---
-  void control_loop_();
+  enum class Owner : uint8_t {
+    NONE = 0,
+    MANUAL,
+    PROCEDURE,
+  };
 
-  // --- Slow update (runs at 500ms) ---
-  void slow_update_();
-
-  // --- Safety ---
-  bool check_safety_();
-  void clear_faults_();
-
-  // --- DCR tracking ---
-  void capture_dcr_sample_();
-  void compute_dcr_();
-  void reset_dcr_();
-
-  // --- Fan ---
+  void update_measurement_();
+  void update_faults_();
+  void update_operation_();
+  void update_control_();
   void update_fan_();
 
-  // --- State publishing ---
-  void publish_state_();
+  void apply_procedure_result_(const ProcedureResult &result);
+  void release_owner_(StopReason reason);
+  void set_state_(State state);
+  void trip_fault_(Fault fault);
+  void publish_status_();
+  float effective_current_limit_() const;
 
-  // --- Helpers ---
-  float clamp_command_(float cmd) const;
-  float get_max_temp_() const;
-  const char *ramp_state_to_string_(RampState state) const;
-
-  // --- State ---
-  float current_target_a_{0.0f};
-  float current_command_a_{0.0f};
-  float unconfirmed_rise_a_{0.0f};
-  float unconfirmed_fall_a_{0.0f};
-
-  // DCR: baseline captured when setpoint is set, samples taken during ramp.
-  float dcr_start_voltage_v_{std::numeric_limits<float>::quiet_NaN()};
-  float dcr_start_current_a_{std::numeric_limits<float>::quiet_NaN()};
-  DcrSample dcr_samples_[DCR_SAMPLE_MAX];
-  int dcr_sample_count_{0};
-
-  // Published DCR values.
-  float dcr_delta_voltage_mv_{std::numeric_limits<float>::quiet_NaN()};
-  float dcr_delta_current_a_{std::numeric_limits<float>::quiet_NaN()};
-  float dcr_mohm_{std::numeric_limits<float>::quiet_NaN()};
-
-  bool fault_ntc_missing_{false};
-  bool fault_no_voltage_{false};
-  bool fault_over_temp_{false};
-  RampState ramp_state_{RampState::OFF};
-
-  // --- Tunable config ---
-  float max_current_a_{40.0f};
-  float voltage_min_v_{1.0f};
-  float max_temp_c_{100.0f};
-  uint32_t control_period_ms_{50};
-  float deadband_a_{0.010f};
-  float max_unconfirmed_rise_a_{1.000f};
-  float max_unconfirmed_fall_a_{2.000f};
-  float ramp_fast_a_per_s_{8.0f};
-  float ramp_medium_a_per_s_{4.0f};
-  float fan_start_temp_c_{35.0f};
-  float fan_full_temp_c_{65.0f};
-
-  // --- External references ---
   output::FloatOutput *dac_output_{nullptr};
   output::FloatOutput *fan_output_{nullptr};
   sensor::Sensor *current_sensor_{nullptr};
   sensor::Sensor *voltage_sensor_{nullptr};
-  std::vector<sensor::Sensor *> temperature_sensors_;
-  std::vector<binary_sensor::BinarySensor *> ntc_present_sensors_;
+  std::vector<TemperatureInput> temperature_inputs_;
 
-  // --- Generated entity pointers ---
-  number::Number *setpoint_number_{nullptr};
-  sensor::Sensor *dcr_sensor_{nullptr};
-  sensor::Sensor *voltage_drop_sensor_{nullptr};
-  sensor::Sensor *current_delta_sensor_{nullptr};
-  text_sensor::TextSensor *ramp_state_sensor_{nullptr};
-  binary_sensor::BinarySensor *fault_ntc_missing_sensor_{nullptr};
-  binary_sensor::BinarySensor *fault_no_voltage_sensor_{nullptr};
-  binary_sensor::BinarySensor *fault_over_temp_sensor_{nullptr};
+  number::Number *manual_current_number_{nullptr};
+  text_sensor::TextSensor *state_sensor_{nullptr};
+  text_sensor::TextSensor *fault_sensor_{nullptr};
 
-  // --- Logging ---
-  uint32_t log_divider_{0};
+  Procedure *active_procedure_{nullptr};
+  Owner owner_{Owner::NONE};
+
+  Measurement measurement_{};
+  HardwareLimits hardware_limits_{};
+  Limits limits_{};
+  FaultPolicy fault_policy_{};
+  Calibration calibration_{};
+
+  State state_{State::IDLE};
+  Fault fault_{Fault::NONE};
+
+  float requested_current_a_{0.0f};
+  float commanded_current_a_{0.0f};
+
+  bool restore_calibration_{true};
+  uint32_t sample_timeout_ms_{250};
+  uint32_t control_period_ms_{50};
+  uint32_t fault_clear_candidate_since_ms_{0};
+
+  float deadband_a_{0.01f};
+  float rise_rate_a_per_s_{2.0f};
+  float fall_rate_a_per_s_{4.0f};
+  float fan_start_temperature_c_{35.0f};
+  float fan_full_temperature_c_{70.0f};
 };
 
-
-class ProgrammableLoadSetpointNumber : public number::Number {
+class ManualCurrentNumber : public number::Number {
  public:
-  void set_parent(ProgrammableLoadComponent* parent) {
-    parent_ = parent;
-  }
+  void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
 
  protected:
   void control(float value) override;
-  ProgrammableLoadComponent* parent_{nullptr};
+  ProgrammableLoadComponent *parent_{nullptr};
 };
+
+class ClearFaultButton : public button::Button {
+ public:
+  void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  ProgrammableLoadComponent *parent_{nullptr};
+};
+
 }  // namespace programmable_load
 }  // namespace esphome
+
+#include "dcr_test.h"
