@@ -12,7 +12,7 @@ namespace programmable_load {
 
 namespace {
 static const char *const TAG = "programmable_load.dcr";
-static constexpr float MINIMUM_CURRENT_DELTA_A = 0.05f;
+static constexpr float MINIMUM_CURRENT_DELTA_A = 0.001f;
 }
 
 ProcedureResult DcrTest::start(const Measurement &measurement) {
@@ -36,7 +36,8 @@ ProcedureResult DcrTest::start(const Measurement &measurement) {
   this->begin_phase_(DcrPhase::BASELINE_SETTLE);
 
   ESP_LOGI(TAG, "Starting DCR test: baseline=%.3f A pulse=%.3f A repeats=%u",
-           this->baseline_current_a_, this->pulse_current_a_, this->repeats_);
+           this->baseline_current_a_, this->pulse_current_a_,
+           static_cast<unsigned>(this->repeats_));
   return this->running_(this->baseline_current_a_);
 }
 
@@ -109,7 +110,7 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
           this->resistance_sensor_->publish_state(resistance_mohm);
         }
         ESP_LOGI(TAG, "DCR test complete: %.3f mΩ from %u repeats",
-                 resistance_mohm, this->valid_repeats_);
+                 resistance_mohm, static_cast<unsigned>(this->valid_repeats_));
         return {ProcedureStatus::COMPLETE, 0.0f, Fault::NONE};
       }
 
