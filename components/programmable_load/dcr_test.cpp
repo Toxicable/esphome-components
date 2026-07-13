@@ -13,14 +13,14 @@ namespace programmable_load {
 namespace {
 static const char *const DCR_TAG = "programmable_load.dcr";
 static constexpr float MINIMUM_CURRENT_DELTA_A = 0.001f;
-}
+}  // namespace
 
-ProcedureResult DcrTest::start(const Measurement &measurement) {
+ProcedureResult DcrTest::start(const ProcedureContext &context) {
+  const Measurement &measurement = context.load;
   if (!measurement.current_valid || !measurement.voltage_valid ||
       !std::isfinite(this->baseline_current_a_) ||
       !std::isfinite(this->pulse_current_a_) ||
-      this->baseline_current_a_ < 0.0f ||
-      this->pulse_current_a_ < 0.0f ||
+      this->baseline_current_a_ < 0.0f || this->pulse_current_a_ < 0.0f ||
       std::fabs(this->pulse_current_a_ - this->baseline_current_a_) <
           MINIMUM_CURRENT_DELTA_A ||
       this->repeats_ == 0) {
@@ -35,13 +35,14 @@ ProcedureResult DcrTest::start(const Measurement &measurement) {
   this->reset_pulse_samples_();
   this->begin_phase_(DcrPhase::BASELINE_SETTLE);
 
-  ESP_LOGI(DCR_TAG, "Starting DCR test: baseline=%.3f A pulse=%.3f A repeats=%u",
-           this->baseline_current_a_, this->pulse_current_a_,
-           static_cast<unsigned>(this->repeats_));
+  ESP_LOGI(DCR_TAG,
+           "Starting DCR test: baseline=%.3f A pulse=%.3f A repeats=%u",
+           this->baseline_current_a_, this->pulse_current_a_, this->repeats_);
   return this->running_(this->baseline_current_a_);
 }
 
-ProcedureResult DcrTest::update(const Measurement &measurement) {
+ProcedureResult DcrTest::update(const ProcedureContext &context) {
+  const Measurement &measurement = context.load;
   if (!measurement.current_valid || !measurement.voltage_valid) {
     return this->failed_();
   }
@@ -66,7 +67,6 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
         this->reset_pulse_samples_();
         this->last_sample_sequence_ = measurement.sequence;
         this->begin_phase_(DcrPhase::PULSE_SETTLE);
-        return this->running_(this->pulse_current_a_);
       }
       return this->running_(this->baseline_current_a_);
 
@@ -86,7 +86,6 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
         }
         this->completed_repeats_++;
         this->begin_phase_(DcrPhase::RECOVERY);
-        return this->running_(this->baseline_current_a_);
       }
       return this->running_(this->pulse_current_a_);
 
@@ -110,8 +109,9 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
           this->resistance_sensor_->publish_state(resistance_mohm);
         }
         ESP_LOGI(DCR_TAG, "DCR test complete: %.3f mΩ from %u repeats",
-                 resistance_mohm, static_cast<unsigned>(this->valid_repeats_));
-        return {ProcedureStatus::COMPLETE, 0.0f, Fault::NONE};
+                 resistance_mohm, this->valid_repeats_);
+        return {ProcedureStatus::COMPLETE, 0.0f, Fault::NONE,
+                ChargerCommand::DISABLE};
       }
 
       this->reset_baseline_samples_();
@@ -208,11 +208,13 @@ bool DcrTest::finish_repeat_() {
 }
 
 ProcedureResult DcrTest::running_(float requested_current_a) const {
-  return {ProcedureStatus::RUNNING, requested_current_a, Fault::NONE};
+  return {ProcedureStatus::RUNNING, requested_current_a, Fault::NONE,
+          ChargerCommand::DISABLE};
 }
 
 ProcedureResult DcrTest::failed_() const {
-  return {ProcedureStatus::FAILED, 0.0f, Fault::PROCEDURE_ERROR};
+  return {ProcedureStatus::FAILED, 0.0f, Fault::PROCEDURE_ERROR,
+          ChargerCommand::DISABLE};
 }
 
 void DcrStartButton::press_action() {

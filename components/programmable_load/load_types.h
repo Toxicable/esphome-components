@@ -24,6 +24,10 @@ enum class Fault : uint8_t {
   OVERCURRENT,
   OVERPOWER,
   OVERTEMPERATURE,
+  CHARGER_UNAVAILABLE,
+  CHARGER_FAULT,
+  CHARGER_CONTROL_ERROR,
+  CHARGE_TIMEOUT,
   CONTROL_ERROR,
   PROCEDURE_ERROR,
 };
@@ -40,6 +44,22 @@ enum class ProcedureStatus : uint8_t {
   FAILED,
 };
 
+enum class ChargerCommand : uint8_t {
+  DISABLE = 0,
+  ENABLE,
+};
+
+enum class ChargerState : uint8_t {
+  UNKNOWN = 0,
+  NOT_CHARGING,
+  TRICKLE,
+  PRECHARGE,
+  FAST_CC,
+  TAPER_CV,
+  TOPOFF,
+  TERMINATION_DONE,
+};
+
 struct Measurement {
   // Incremented whenever either electrical measurement publishes a new sample.
   // Procedures can use this to avoid counting the same conversion repeatedly.
@@ -52,6 +72,25 @@ struct Measurement {
   bool current_valid{false};
   bool voltage_valid{false};
   bool temperature_valid{false};
+};
+
+struct ChargerMeasurement {
+  // Incremented from the Charger_14/BQ25756 battery-current entity. This keeps
+  // energy integration tied to charger ADC frames rather than load-loop ticks.
+  uint32_t sequence{0};
+  uint32_t timestamp_ms{0};
+  float current_a{0.0f};
+  float voltage_v{0.0f};
+  ChargerState state{ChargerState::UNKNOWN};
+  bool enabled{false};
+  bool power_good{false};
+  bool fault_active{false};
+  bool valid{false};
+};
+
+struct ProcedureContext {
+  Measurement load{};
+  ChargerMeasurement charger{};
 };
 
 struct HardwareLimits {
@@ -77,10 +116,12 @@ struct ProcedureResult {
   ProcedureStatus status{ProcedureStatus::RUNNING};
   float requested_current_a{0.0f};
   Fault fault{Fault::NONE};
+  ChargerCommand charger_command{ChargerCommand::DISABLE};
 };
 
 const char *state_to_string(State state);
 const char *fault_to_string(Fault fault);
+const char *charger_state_to_string(ChargerState state);
 
 }  // namespace programmable_load
 }  // namespace esphome
