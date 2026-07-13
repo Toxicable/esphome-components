@@ -36,6 +36,11 @@ class ProgrammableLoadDcrTest : public LoadProcedure {
     this->resistance_sensor_ = sensor;
   }
 
+  // Called by the user-facing start button. The procedure still has to acquire
+  // the parent operation host, so it cannot start while manual control or
+  // another procedure owns the load.
+  bool request_start();
+
   bool start(const LoadMeasurement &measurement) override;
   void update(const LoadMeasurement &measurement) override;
   void stop(LoadStopReason reason) override;
