@@ -1,8 +1,8 @@
 # Programmable Load
 
-ESPHome interface for a programmable electronic load used as both a general-purpose bench load and a battery test instrument.
+ESPHome component for a programmable electronic load used as both a general-purpose bench load and a battery test instrument.
 
-This branch intentionally breaks the existing API. It defines the configuration and C++ boundaries before the old control implementation is replaced.
+This version intentionally breaks the old API and replaces the previous monolithic ramp controller and background DCR estimator.
 
 ## Architecture
 
@@ -55,11 +55,13 @@ The component publishes one fault field rather than separate binary entities. Fa
 - `control_error`;
 - `procedure_error`.
 
-A fault always stops and releases the current owner. `fault_policy.auto_clear` only controls whether `fault` returns to `idle` after the condition remains absent for `clear_delay`; it never resumes the interrupted operation.
+A fault always stops and releases the current owner. `fault_policy.auto_clear` only controls whether `fault` returns to `idle` after the original condition remains absent for `clear_delay`; it never resumes the interrupted operation.
 
 ## Hardware and operating voltage limits
 
-`hardware.maximum_voltage` is the absolute voltage rating of the hardware design and is always checked at runtime. `limits.maximum_voltage` is the normal operating limit and must be less than or equal to the hardware limit. The example uses the programmable-load board's 75 V absolute design limit.
+`hardware.maximum_voltage` can describe a board-specific limit below 75 V, but the core has an independent 75 V absolute ceiling that configuration cannot raise. The hardware ceiling is checked even while the load is idle because the input circuitry remains electrically connected.
+
+`limits.maximum_voltage` is the normal operating limit and must be less than or equal to the configured hardware limit. While running, the core checks both limits independently and reports either `input_overvoltage` or `hardware_overvoltage`.
 
 ## Calibration
 
@@ -68,9 +70,21 @@ Calibration is a core layer, not procedure-specific logic:
 - current scale and offset are applied to the raw current sensor;
 - voltage scale and offset are applied to the raw voltage sensor;
 - DAC zero level and full-scale current map requested current to the output;
-- configured values are defaults and the C++ interface allows a future guided calibration procedure to apply, persist or reset the same `Calibration` structure.
+- configured values are retained as reset defaults;
+- a valid persisted `Calibration` structure can replace those defaults at startup;
+- applying and persisting a new calibration is atomic and is rejected while the load is running.
 
-This interface does not publish calibration internals as normal user entities.
+The component does not publish calibration internals as normal user entities. A later guided calibration procedure can submit a complete calibration to the same core API without accessing the DAC directly.
+
+## Control
+
+The current controller rate-limits the DAC-equivalent current command using the configured rise and fall rates. The measured-current error determines the direction and magnitude of each step, while the command remains bounded by:
+
+- configured maximum current;
+- calibrated DAC full-scale current;
+- the instantaneous `maximum_power / voltage` limit.
+
+Stale current or voltage samples fault the active operation. Required temperature sensors must be present and finite before an operation can start and throughout the run.
 
 ## DCR test
 
@@ -80,9 +94,9 @@ DCR is an explicit procedure rather than a background calculation attached to no
 2. applies an absolute pulse current;
 3. settles and samples loaded voltage/current;
 4. returns to baseline for recovery;
-5. repeats and publishes one resistance result.
+5. repeats and publishes the mean resistance result.
 
-Only the start button and resistance result are exposed. Starting DCR while manual control or another procedure is running is rejected by the core.
+Only distinct electrical measurement frames are accumulated, so a fast control loop cannot count the same INA conversion repeatedly. Only the start button and resistance result are exposed. Starting DCR while manual control or another procedure is running is rejected by the core.
 
 ## Configuration
 
