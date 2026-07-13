@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "esphome/components/button/button.h"
 #include "esphome/components/sensor/sensor.h"
 
@@ -26,8 +28,11 @@ class DcrTest : public Procedure {
   void set_baseline_current(float current_a) {
     this->baseline_current_a_ = current_a;
   }
-  void set_pulse_current(float current_a) { this->pulse_current_a_ = current_a; }
-  void set_timing(uint32_t settle_ms, uint32_t sample_ms, uint32_t recovery_ms) {
+  void set_pulse_current(float current_a) {
+    this->pulse_current_a_ = current_a;
+  }
+  void set_timing(uint32_t settle_ms, uint32_t sample_ms,
+                  uint32_t recovery_ms) {
     this->settle_time_ms_ = settle_ms;
     this->sample_time_ms_ = sample_ms;
     this->recovery_time_ms_ = recovery_ms;
@@ -43,8 +48,13 @@ class DcrTest : public Procedure {
 
  protected:
   void begin_phase_(DcrPhase phase);
-  void accumulate_sample_(const Measurement &measurement);
+  void reset_baseline_samples_();
+  void reset_pulse_samples_();
+  void accumulate_baseline_(const Measurement &measurement);
+  void accumulate_pulse_(const Measurement &measurement);
   bool finish_repeat_();
+  ProcedureResult running_(float requested_current_a) const;
+  ProcedureResult failed_() const;
 
   sensor::Sensor *resistance_sensor_{nullptr};
 
@@ -56,14 +66,17 @@ class DcrTest : public Procedure {
   uint32_t sample_time_ms_{500};
   uint32_t recovery_time_ms_{1000};
   uint32_t phase_started_ms_{0};
+  uint32_t last_sample_sequence_{0};
 
   uint8_t repeats_{3};
   uint8_t completed_repeats_{0};
+  uint8_t valid_repeats_{0};
 
   double baseline_voltage_sum_{0.0};
   double baseline_current_sum_{0.0};
   double pulse_voltage_sum_{0.0};
   double pulse_current_sum_{0.0};
+  double resistance_sum_ohm_{0.0};
   uint32_t baseline_sample_count_{0};
   uint32_t pulse_sample_count_{0};
 };
