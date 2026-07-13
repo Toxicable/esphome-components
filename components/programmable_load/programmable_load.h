@@ -178,6 +178,8 @@ class ProgrammableLoadComponent : public Component {
   uint32_t current_updated_ms_{0};
   uint32_t voltage_updated_ms_{0};
   uint32_t measurement_sequence_{0};
+  bool current_seen_{false};
+  bool voltage_seen_{false};
   uint32_t last_control_ms_{0};
   uint32_t last_fan_update_ms_{0};
 
