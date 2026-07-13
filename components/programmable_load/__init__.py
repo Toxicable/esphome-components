@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, number, output, sensor, text_sensor
+from esphome.components import button, number, output, sensor, switch as switch_, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
@@ -9,7 +9,7 @@ from esphome.const import (
     UNIT_AMPERE,
 )
 
-AUTO_LOAD = ["button", "number", "sensor", "text_sensor"]
+AUTO_LOAD = ["button", "number", "sensor", "switch", "text_sensor"]
 
 programmable_load_ns = cg.esphome_ns.namespace("programmable_load")
 
@@ -25,6 +25,10 @@ ClearFaultButton = programmable_load_ns.class_(
 DcrTest = programmable_load_ns.class_("DcrTest")
 DcrStartButton = programmable_load_ns.class_(
     "DcrStartButton", button.Button
+)
+BatteryCycle = programmable_load_ns.class_("BatteryCycle")
+BatteryCycleStartButton = programmable_load_ns.class_(
+    "BatteryCycleStartButton", button.Button
 )
 
 CONF_HARDWARE = "hardware"
@@ -84,6 +88,30 @@ CONF_RECOVERY_TIME = "recovery_time"
 CONF_REPEATS = "repeats"
 CONF_START = "start"
 CONF_RESISTANCE = "resistance"
+
+CONF_BATTERY_CYCLE = "battery_cycle"
+CONF_CHARGER14 = "charger14"
+CONF_CHARGE_ENABLE = "charge_enable"
+CONF_IBAT_CURRENT = "ibat_current"
+CONF_VBAT_VOLTAGE = "vbat_voltage"
+CONF_CHARGE_STATUS = "charge_status"
+CONF_STATUS_FLAGS = "status_flags"
+CONF_CONTROL_TIMEOUT = "control_timeout"
+CONF_DISCHARGE_CURRENT = "discharge_current"
+CONF_DISCHARGE_CUTOFF_VOLTAGE = "discharge_cutoff_voltage"
+CONF_DISCHARGE_CUTOFF_HYSTERESIS = "discharge_cutoff_hysteresis"
+CONF_DISCHARGE_CUTOFF_HOLD_TIME = "discharge_cutoff_hold_time"
+CONF_REST_TIME = "rest_time"
+CONF_CHARGE_START_TIMEOUT = "charge_start_timeout"
+CONF_CHARGE_STALL_TIMEOUT = "charge_stall_timeout"
+CONF_CHARGE_TIMEOUT = "charge_timeout"
+CONF_TERMINATION_HOLD_TIME = "termination_hold_time"
+CONF_PHASE = "phase"
+CONF_RESULT = "result"
+CONF_DISCHARGED_CAPACITY = "discharged_capacity"
+CONF_DISCHARGED_ENERGY = "discharged_energy"
+CONF_CHARGED_CAPACITY = "charged_capacity"
+CONF_CHARGED_ENERGY = "charged_energy"
 
 
 def _positive(value):
@@ -247,9 +275,68 @@ DCR_SCHEMA = cv.Schema(
     }
 )
 
+CHARGER14_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_CHARGE_ENABLE): cv.use_id(switch_.Switch),
+        cv.Required(CONF_IBAT_CURRENT): cv.use_id(sensor.Sensor),
+        cv.Required(CONF_VBAT_VOLTAGE): cv.use_id(sensor.Sensor),
+        cv.Required(CONF_CHARGE_STATUS): cv.use_id(text_sensor.TextSensor),
+        cv.Required(CONF_STATUS_FLAGS): cv.use_id(text_sensor.TextSensor),
+        cv.Optional(CONF_SAMPLE_TIMEOUT, default="3s"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_CONTROL_TIMEOUT, default="5s"):
+            cv.positive_time_period_milliseconds,
+    }
+)
+
+BATTERY_CYCLE_SCHEMA = cv.Schema(
+    {
+        cv.GenerateID(): cv.declare_id(BatteryCycle),
+        cv.Required(CONF_CHARGER14): CHARGER14_SCHEMA,
+        cv.Required(CONF_DISCHARGE_CURRENT): _positive,
+        cv.Required(CONF_DISCHARGE_CUTOFF_VOLTAGE): _positive,
+        cv.Optional(CONF_DISCHARGE_CUTOFF_HYSTERESIS, default=0.1):
+            _non_negative,
+        cv.Optional(CONF_DISCHARGE_CUTOFF_HOLD_TIME, default="2s"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_REST_TIME, default="5s"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_CHARGE_START_TIMEOUT, default="30s"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_CHARGE_STALL_TIMEOUT, default="30s"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_CHARGE_TIMEOUT, default="24h"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_TERMINATION_HOLD_TIME, default="2s"):
+            cv.positive_time_period_milliseconds,
+        cv.Required(CONF_START): button.button_schema(BatteryCycleStartButton),
+        cv.Optional(CONF_PHASE): text_sensor.text_sensor_schema(
+            entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+        ),
+        cv.Optional(CONF_RESULT): text_sensor.text_sensor_schema(),
+        cv.Optional(CONF_DISCHARGED_CAPACITY): sensor.sensor_schema(
+            unit_of_measurement="Ah",
+            accuracy_decimals=3,
+        ),
+        cv.Optional(CONF_DISCHARGED_ENERGY): sensor.sensor_schema(
+            unit_of_measurement="Wh",
+            accuracy_decimals=3,
+        ),
+        cv.Optional(CONF_CHARGED_CAPACITY): sensor.sensor_schema(
+            unit_of_measurement="Ah",
+            accuracy_decimals=3,
+        ),
+        cv.Optional(CONF_CHARGED_ENERGY): sensor.sensor_schema(
+            unit_of_measurement="Wh",
+            accuracy_decimals=3,
+        ),
+    }
+)
+
 PROCEDURES_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_DCR): DCR_SCHEMA,
+        cv.Optional(CONF_BATTERY_CYCLE): BATTERY_CYCLE_SCHEMA,
     }
 )
 
@@ -275,7 +362,8 @@ def _validate_config(config):
             "calibration.output.full_scale_current"
         )
 
-    dcr = config[CONF_PROCEDURES].get(CONF_DCR)
+    procedures = config[CONF_PROCEDURES]
+    dcr = procedures.get(CONF_DCR)
     if dcr is not None:
         if dcr[CONF_BASELINE_CURRENT] > maximum_current:
             raise cv.Invalid(
@@ -291,6 +379,28 @@ def _validate_config(config):
             raise cv.Invalid(
                 "procedures.dcr.pulse_current must differ from "
                 "baseline_current"
+            )
+
+    cycle = procedures.get(CONF_BATTERY_CYCLE)
+    if cycle is not None:
+        if cycle[CONF_DISCHARGE_CURRENT] > maximum_current:
+            raise cv.Invalid(
+                "procedures.battery_cycle.discharge_current must not exceed "
+                "limits.maximum_current"
+            )
+        cutoff = cycle[CONF_DISCHARGE_CUTOFF_VOLTAGE]
+        minimum = config[CONF_LIMITS][CONF_MINIMUM_VOLTAGE]
+        maximum = config[CONF_LIMITS][CONF_MAXIMUM_VOLTAGE]
+        if cutoff <= minimum:
+            raise cv.Invalid(
+                "procedures.battery_cycle.discharge_cutoff_voltage must be "
+                "greater than limits.minimum_voltage so the cycle can stop "
+                "normally before the load undervoltage fault"
+            )
+        if cutoff >= maximum:
+            raise cv.Invalid(
+                "procedures.battery_cycle.discharge_cutoff_voltage must be "
+                "less than limits.maximum_voltage"
             )
 
     return config
@@ -432,7 +542,9 @@ async def to_code(config):
         clear_fault = await button.new_button(config[CONF_CLEAR_FAULT])
         cg.add(clear_fault.set_parent(var))
 
-    dcr_config = config[CONF_PROCEDURES].get(CONF_DCR)
+    procedures = config[CONF_PROCEDURES]
+
+    dcr_config = procedures.get(CONF_DCR)
     if dcr_config is not None:
         dcr = cg.new_Pvariable(dcr_config[CONF_ID])
         cg.add(dcr.set_baseline_current(dcr_config[CONF_BASELINE_CURRENT]))
@@ -452,3 +564,93 @@ async def to_code(config):
 
         resistance = await sensor.new_sensor(dcr_config[CONF_RESISTANCE])
         cg.add(dcr.set_resistance_sensor(resistance))
+
+    cycle_config = procedures.get(CONF_BATTERY_CYCLE)
+    if cycle_config is not None:
+        charger = cycle_config[CONF_CHARGER14]
+        charge_enable = await cg.get_variable(charger[CONF_CHARGE_ENABLE])
+        ibat_current = await cg.get_variable(charger[CONF_IBAT_CURRENT])
+        vbat_voltage = await cg.get_variable(charger[CONF_VBAT_VOLTAGE])
+        charge_status = await cg.get_variable(charger[CONF_CHARGE_STATUS])
+        status_flags = await cg.get_variable(charger[CONF_STATUS_FLAGS])
+        cg.add(var.set_charger_enable_switch(charge_enable))
+        cg.add(var.set_charger_current_sensor(ibat_current))
+        cg.add(var.set_charger_voltage_sensor(vbat_voltage))
+        cg.add(var.set_charger_status_sensor(charge_status))
+        cg.add(var.set_charger_flags_sensor(status_flags))
+        cg.add(
+            var.set_charger_sample_timeout_ms(
+                charger[CONF_SAMPLE_TIMEOUT].total_milliseconds
+            )
+        )
+        cg.add(
+            var.set_charger_control_timeout_ms(
+                charger[CONF_CONTROL_TIMEOUT].total_milliseconds
+            )
+        )
+
+        cycle = cg.new_Pvariable(cycle_config[CONF_ID])
+        cg.add(cycle.set_discharge_current(cycle_config[CONF_DISCHARGE_CURRENT]))
+        cg.add(
+            cycle.set_discharge_cutoff_voltage(
+                cycle_config[CONF_DISCHARGE_CUTOFF_VOLTAGE]
+            )
+        )
+        cg.add(
+            cycle.set_discharge_cutoff_hysteresis(
+                cycle_config[CONF_DISCHARGE_CUTOFF_HYSTERESIS]
+            )
+        )
+        cg.add(
+            cycle.set_discharge_cutoff_hold_time_ms(
+                cycle_config[CONF_DISCHARGE_CUTOFF_HOLD_TIME].total_milliseconds
+            )
+        )
+        cg.add(
+            cycle.set_rest_time_ms(
+                cycle_config[CONF_REST_TIME].total_milliseconds
+            )
+        )
+        cg.add(
+            cycle.set_charge_start_timeout_ms(
+                cycle_config[CONF_CHARGE_START_TIMEOUT].total_milliseconds
+            )
+        )
+        cg.add(
+            cycle.set_charge_stall_timeout_ms(
+                cycle_config[CONF_CHARGE_STALL_TIMEOUT].total_milliseconds
+            )
+        )
+        cg.add(
+            cycle.set_charge_timeout_ms(
+                cycle_config[CONF_CHARGE_TIMEOUT].total_milliseconds
+            )
+        )
+        cg.add(
+            cycle.set_termination_hold_time_ms(
+                cycle_config[CONF_TERMINATION_HOLD_TIME].total_milliseconds
+            )
+        )
+
+        cycle_start = await button.new_button(cycle_config[CONF_START])
+        cg.add(cycle_start.set_host(var))
+        cg.add(cycle_start.set_procedure(cycle))
+
+        if CONF_PHASE in cycle_config:
+            phase = await text_sensor.new_text_sensor(cycle_config[CONF_PHASE])
+            cg.add(cycle.set_phase_sensor(phase))
+        if CONF_RESULT in cycle_config:
+            result = await text_sensor.new_text_sensor(cycle_config[CONF_RESULT])
+            cg.add(cycle.set_result_sensor(result))
+        if CONF_DISCHARGED_CAPACITY in cycle_config:
+            value = await sensor.new_sensor(cycle_config[CONF_DISCHARGED_CAPACITY])
+            cg.add(cycle.set_discharged_capacity_sensor(value))
+        if CONF_DISCHARGED_ENERGY in cycle_config:
+            value = await sensor.new_sensor(cycle_config[CONF_DISCHARGED_ENERGY])
+            cg.add(cycle.set_discharged_energy_sensor(value))
+        if CONF_CHARGED_CAPACITY in cycle_config:
+            value = await sensor.new_sensor(cycle_config[CONF_CHARGED_CAPACITY])
+            cg.add(cycle.set_charged_capacity_sensor(value))
+        if CONF_CHARGED_ENERGY in cycle_config:
+            value = await sensor.new_sensor(cycle_config[CONF_CHARGED_ENERGY])
+            cg.add(cycle.set_charged_energy_sensor(value))
