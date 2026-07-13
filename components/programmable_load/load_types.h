@@ -5,21 +5,20 @@
 namespace esphome {
 namespace programmable_load {
 
-enum class LoadState : uint8_t {
+enum class State : uint8_t {
   IDLE = 0,
   RUNNING,
-  PAUSED,
-  COMPLETE,
   FAULT,
 };
 
-enum class LoadFault : uint8_t {
+enum class Fault : uint8_t {
   NONE = 0,
   CURRENT_MEASUREMENT_UNAVAILABLE,
   VOLTAGE_MEASUREMENT_UNAVAILABLE,
   REQUIRED_TEMPERATURE_UNAVAILABLE,
   INPUT_UNDERVOLTAGE,
   INPUT_OVERVOLTAGE,
+  HARDWARE_OVERVOLTAGE,
   OVERCURRENT,
   OVERPOWER,
   OVERTEMPERATURE,
@@ -27,14 +26,19 @@ enum class LoadFault : uint8_t {
   PROCEDURE_ERROR,
 };
 
-enum class LoadStopReason : uint8_t {
+enum class StopReason : uint8_t {
   USER_REQUEST = 0,
   COMPLETED,
   FAULTED,
-  REPLACED,
 };
 
-struct LoadMeasurement {
+enum class ProcedureStatus : uint8_t {
+  RUNNING = 0,
+  COMPLETE,
+  FAILED,
+};
+
+struct Measurement {
   uint32_t sequence{0};
   uint32_t timestamp_ms{0};
   float current_a{0.0f};
@@ -46,7 +50,13 @@ struct LoadMeasurement {
   bool temperature_valid{false};
 };
 
-struct LoadLimits {
+struct HardwareLimits {
+  // Absolute electrical limit of the hardware design. This is checked even
+  // when the configured operating limit is absent, invalid, or higher.
+  float maximum_voltage_v{0.0f};
+};
+
+struct Limits {
   float maximum_current_a{0.0f};
   float minimum_voltage_v{0.0f};
   float maximum_voltage_v{0.0f};
@@ -54,13 +64,19 @@ struct LoadLimits {
   float maximum_temperature_c{0.0f};
 };
 
-struct LoadFaultPolicy {
+struct FaultPolicy {
   bool auto_clear{false};
   uint32_t clear_delay_ms{2000};
 };
 
-const char *load_state_to_string(LoadState state);
-const char *load_fault_to_string(LoadFault fault);
+struct ProcedureResult {
+  ProcedureStatus status{ProcedureStatus::RUNNING};
+  float requested_current_a{0.0f};
+  Fault fault{Fault::NONE};
+};
+
+const char *state_to_string(State state);
+const char *fault_to_string(Fault fault);
 
 }  // namespace programmable_load
 }  // namespace esphome
