@@ -774,3 +774,8 @@ void ClearFaultButton::press_action() {
 
 }  // namespace programmable_load
 }  // namespace esphome
+
+// ESPHome compiles only the component-named translation unit for an external
+// component. Keep DCR procedure definitions in this translation unit so its
+// virtual methods are linked whenever the optional DCR procedure is configured.
+#include "dcr_test.cpp"

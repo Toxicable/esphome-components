@@ -11,7 +11,7 @@ namespace esphome {
 namespace programmable_load {
 
 namespace {
-static const char *const TAG = "programmable_load.dcr";
+static const char *const DCR_TAG = "programmable_load.dcr";
 static constexpr float MINIMUM_CURRENT_DELTA_A = 0.001f;
 }
 
@@ -35,7 +35,7 @@ ProcedureResult DcrTest::start(const Measurement &measurement) {
   this->reset_pulse_samples_();
   this->begin_phase_(DcrPhase::BASELINE_SETTLE);
 
-  ESP_LOGI(TAG, "Starting DCR test: baseline=%.3f A pulse=%.3f A repeats=%u",
+  ESP_LOGI(DCR_TAG, "Starting DCR test: baseline=%.3f A pulse=%.3f A repeats=%u",
            this->baseline_current_a_, this->pulse_current_a_,
            static_cast<unsigned>(this->repeats_));
   return this->running_(this->baseline_current_a_);
@@ -109,7 +109,7 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
         if (this->resistance_sensor_ != nullptr) {
           this->resistance_sensor_->publish_state(resistance_mohm);
         }
-        ESP_LOGI(TAG, "DCR test complete: %.3f mΩ from %u repeats",
+        ESP_LOGI(DCR_TAG, "DCR test complete: %.3f mΩ from %u repeats",
                  resistance_mohm, static_cast<unsigned>(this->valid_repeats_));
         return {ProcedureStatus::COMPLETE, 0.0f, Fault::NONE};
       }
@@ -127,7 +127,7 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
 
 void DcrTest::stop(StopReason reason) {
   if (reason != StopReason::COMPLETED) {
-    ESP_LOGW(TAG, "DCR test stopped before completion");
+    ESP_LOGW(DCR_TAG, "DCR test stopped before completion");
   }
   this->phase_ = DcrPhase::IDLE;
   this->reset_baseline_samples_();
