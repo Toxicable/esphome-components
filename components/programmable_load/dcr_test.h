@@ -42,8 +42,8 @@ class DcrTest : public Procedure {
     this->resistance_sensor_ = sensor;
   }
 
-  ProcedureResult start(const Measurement &measurement) override;
-  ProcedureResult update(const Measurement &measurement) override;
+  ProcedureResult start(const ProcedureContext &context) override;
+  ProcedureResult update(const ProcedureContext &context) override;
   void stop(StopReason reason) override;
 
  protected:
