@@ -5,6 +5,8 @@
 namespace esphome {
 namespace programmable_load {
 
+static constexpr float ABSOLUTE_MAXIMUM_VOLTAGE_V = 75.0f;
+
 enum class State : uint8_t {
   IDLE = 0,
   RUNNING,
@@ -39,6 +41,8 @@ enum class ProcedureStatus : uint8_t {
 };
 
 struct Measurement {
+  // Incremented whenever either electrical measurement publishes a new sample.
+  // Procedures can use this to avoid counting the same conversion repeatedly.
   uint32_t sequence{0};
   uint32_t timestamp_ms{0};
   float current_a{0.0f};
@@ -51,9 +55,9 @@ struct Measurement {
 };
 
 struct HardwareLimits {
-  // Absolute electrical limit of the hardware design. This is checked even
-  // when the configured operating limit is absent, invalid, or higher.
-  float maximum_voltage_v{0.0f};
+  // Board-specific limit, additionally capped by
+  // ABSOLUTE_MAXIMUM_VOLTAGE_V inside the core.
+  float maximum_voltage_v{ABSOLUTE_MAXIMUM_VOLTAGE_V};
 };
 
 struct Limits {

@@ -1,554 +1,775 @@
 #include "programmable_load.h"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
 namespace programmable_load {
 
+namespace {
 static const char *const TAG = "programmable_load";
-static constexpr float DCR_MIN_CURRENT_DELTA_A = 0.25f;
-static constexpr float DCR_DUPLICATE_CURRENT_EPSILON_A = 0.01f;
-static constexpr float DCR_DUPLICATE_VOLTAGE_EPSILON_V = 0.001f;
+
+bool finite_positive(float value) {
+  return std::isfinite(value) && value > 0.0f;
+}
+
+float clampf(float value, float minimum, float maximum) {
+  return std::max(minimum, std::min(maximum, value));
+}
+}  // namespace
+
+const char *state_to_string(State state) {
+  switch (state) {
+    case State::IDLE:
+      return "idle";
+    case State::RUNNING:
+      return "running";
+    case State::FAULT:
+      return "fault";
+    default:
+      return "unknown";
+  }
+}
+
+const char *fault_to_string(Fault fault) {
+  switch (fault) {
+    case Fault::NONE:
+      return "none";
+    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
+      return "current_measurement_unavailable";
+    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
+      return "voltage_measurement_unavailable";
+    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
+      return "required_temperature_unavailable";
+    case Fault::INPUT_UNDERVOLTAGE:
+      return "input_undervoltage";
+    case Fault::INPUT_OVERVOLTAGE:
+      return "input_overvoltage";
+    case Fault::HARDWARE_OVERVOLTAGE:
+      return "hardware_overvoltage";
+    case Fault::OVERCURRENT:
+      return "overcurrent";
+    case Fault::OVERPOWER:
+      return "overpower";
+    case Fault::OVERTEMPERATURE:
+      return "overtemperature";
+    case Fault::CONTROL_ERROR:
+      return "control_error";
+    case Fault::PROCEDURE_ERROR:
+      return "procedure_error";
+    default:
+      return "unknown";
+  }
+}
 
 void ProgrammableLoadComponent::setup() {
-  ESP_LOGCONFIG(TAG, "ProgrammableLoadComponent: control_period=%u ms", this->control_period_ms_);
-
-  // Clamp control period to reasonable bounds.
   if (this->control_period_ms_ < 10) {
+    ESP_LOGW(TAG, "Control period clamped to 10 ms");
     this->control_period_ms_ = 10;
-    ESP_LOGW(TAG, "control_period_ms clamped to 10ms (minimum)");
-  }
-  if (this->control_period_ms_ > 1000) {
+  } else if (this->control_period_ms_ > 1000) {
+    ESP_LOGW(TAG, "Control period clamped to 1000 ms");
     this->control_period_ms_ = 1000;
-    ESP_LOGW(TAG, "control_period_ms clamped to 1000ms (maximum)");
   }
 
-  // Ensure DAC starts at zero.
-  if (this->dac_output_ != nullptr) {
-    this->dac_output_->set_level(0.0f);
+  if (!finite_positive(this->hardware_limits_.maximum_voltage_v) ||
+      this->hardware_limits_.maximum_voltage_v > ABSOLUTE_MAXIMUM_VOLTAGE_V) {
+    ESP_LOGW(TAG, "Hardware voltage limit clamped to absolute %.1f V ceiling",
+             ABSOLUTE_MAXIMUM_VOLTAGE_V);
+    this->hardware_limits_.maximum_voltage_v = ABSOLUTE_MAXIMUM_VOLTAGE_V;
   }
 
-  // Fan starts off.
+  this->configured_calibration_.version = CALIBRATION_VERSION;
+  this->calibration_.version = CALIBRATION_VERSION;
+
+  if (global_preferences != nullptr) {
+    this->calibration_preference_ =
+        global_preferences->make_preference<Calibration>(CALIBRATION_PREFERENCE_KEY);
+    this->calibration_preference_valid_ = true;
+
+    if (this->restore_calibration_) {
+      Calibration persisted{};
+      if (this->calibration_preference_.load(&persisted)) {
+        if (this->calibration_valid_(persisted)) {
+          this->calibration_ = persisted;
+          ESP_LOGI(TAG, "Restored programmable-load calibration");
+        } else {
+          ESP_LOGW(TAG, "Ignoring invalid persisted calibration");
+        }
+      }
+    }
+  }
+
+  const uint32_t now = millis();
+  if (this->current_sensor_ != nullptr) {
+    this->current_sensor_->add_on_state_callback([this](float) {
+      this->current_updated_ms_ = millis();
+      this->current_seen_ = true;
+      this->measurement_sequence_++;
+    });
+    if (this->current_sensor_->has_state()) {
+      this->current_updated_ms_ = now;
+      this->current_seen_ = true;
+    }
+  }
+  if (this->voltage_sensor_ != nullptr) {
+    this->voltage_sensor_->add_on_state_callback([this](float) {
+      this->voltage_updated_ms_ = millis();
+      this->voltage_seen_ = true;
+      this->measurement_sequence_++;
+    });
+    if (this->voltage_sensor_->has_state()) {
+      this->voltage_updated_ms_ = now;
+      this->voltage_seen_ = true;
+    }
+  }
+
+  this->force_output_off_();
   if (this->fan_output_ != nullptr) {
     this->fan_output_->set_level(0.0f);
   }
 
-  // Register the tight control loop.
-  this->set_interval("pl_control", this->control_period_ms_,
-                     [this]() { this->control_loop_(); });
+  this->update_measurement_();
+  this->publish_status_();
+  if (this->manual_current_number_ != nullptr) {
+    this->manual_current_number_->publish_state(0.0f);
+  }
 
-  // Register the slow update (fan, publishing).
-  this->set_interval("pl_slow", 500,
-                     [this]() { this->slow_update_(); });
+  this->last_control_ms_ = now;
+  this->last_fan_update_ms_ = now;
+
+  ESP_LOGCONFIG(TAG, "Programmable load initialized");
 }
 
 void ProgrammableLoadComponent::dump_config() {
-  ESP_LOGCONFIG(TAG, "ProgrammableLoad:");
-  ESP_LOGCONFIG(TAG, "  Max current: %.1f A", this->max_current_a_);
-  ESP_LOGCONFIG(TAG, "  Voltage min: %.2f V", this->voltage_min_v_);
-  ESP_LOGCONFIG(TAG, "  Max temp: %.1f °C", this->max_temp_c_);
+  ESP_LOGCONFIG(TAG, "Programmable Load:");
+  ESP_LOGCONFIG(TAG, "  State: %s", state_to_string(this->state_));
+  ESP_LOGCONFIG(TAG, "  Fault: %s", fault_to_string(this->fault_));
+  ESP_LOGCONFIG(TAG, "  Hardware maximum voltage: %.2f V",
+                this->hardware_limits_.maximum_voltage_v);
+  ESP_LOGCONFIG(TAG, "  Absolute maximum voltage: %.2f V",
+                ABSOLUTE_MAXIMUM_VOLTAGE_V);
+  ESP_LOGCONFIG(TAG, "  Operating voltage: %.2f to %.2f V",
+                this->limits_.minimum_voltage_v, this->limits_.maximum_voltage_v);
+  ESP_LOGCONFIG(TAG, "  Maximum current: %.3f A",
+                this->limits_.maximum_current_a);
+  ESP_LOGCONFIG(TAG, "  Maximum power: %.1f W", this->limits_.maximum_power_w);
+  ESP_LOGCONFIG(TAG, "  Maximum temperature: %.1f °C",
+                this->limits_.maximum_temperature_c);
+  ESP_LOGCONFIG(TAG, "  DAC zero level: %.6f",
+                this->calibration_.output.zero_level);
+  ESP_LOGCONFIG(TAG, "  DAC full-scale current: %.3f A",
+                this->calibration_.output.full_scale_current_a);
   ESP_LOGCONFIG(TAG, "  Control period: %u ms", this->control_period_ms_);
-  ESP_LOGCONFIG(TAG, "  Deadband: %.3f A", this->deadband_a_);
-  ESP_LOGCONFIG(TAG, "  Max unconfirmed rise: %.3f A, fall: %.3f A",
-                this->max_unconfirmed_rise_a_, this->max_unconfirmed_fall_a_);
-  ESP_LOGCONFIG(TAG, "  Ramp fast: %.1f A/s, medium: %.1f A/s", this->ramp_fast_a_per_s_, this->ramp_medium_a_per_s_);
-  ESP_LOGCONFIG(TAG, "  Fan start: %.1f °C, full: %.1f °C", this->fan_start_temp_c_, this->fan_full_temp_c_);
+  ESP_LOGCONFIG(TAG, "  Current deadband: %.4f A", this->deadband_a_);
+  ESP_LOGCONFIG(TAG, "  Rise/fall rates: %.3f / %.3f A/s",
+                this->rise_rate_a_per_s_, this->fall_rate_a_per_s_);
+  ESP_LOGCONFIG(TAG, "  Fault auto-clear: %s",
+                this->fault_policy_.auto_clear ? "enabled" : "disabled");
 
   if (this->dac_output_ == nullptr) {
-    ESP_LOGW(TAG, "  WARNING: No DAC output configured!");
+    ESP_LOGE(TAG, "  DAC output is not configured");
   }
   if (this->current_sensor_ == nullptr) {
-    ESP_LOGW(TAG, "  WARNING: No current sensor configured!");
+    ESP_LOGE(TAG, "  Current sensor is not configured");
   }
   if (this->voltage_sensor_ == nullptr) {
-    ESP_LOGW(TAG, "  WARNING: No voltage sensor configured!");
-  }
-  if (this->temperature_sensors_.empty()) {
-    ESP_LOGW(TAG, "  WARNING: No temperature sensors configured!");
-  }
-  if (this->ntc_present_sensors_.empty()) {
-    ESP_LOGW(TAG, "  WARNING: No NTC present sensor configured; using first temperature sensor state as fallback");
+    ESP_LOGE(TAG, "  Voltage sensor is not configured");
   }
 }
 
-void ProgrammableLoadComponent::set_target(float amps) {
-  float target = amps;
-  if (target < 0.0f) target = 0.0f;
-  if (target > this->max_current_a_) target = this->max_current_a_;
-
-  if (target <= 0.0f) {
-    this->force_off();
+void ProgrammableLoadComponent::loop() {
+  const uint32_t now = millis();
+  if ((uint32_t) (now - this->last_control_ms_) < this->control_period_ms_) {
     return;
   }
+  this->last_control_ms_ = now;
 
-  this->current_target_a_ = target;
+  this->update_measurement_();
+  this->update_faults_();
 
-  // Reset ramping state.
-  this->unconfirmed_rise_a_ = 0.0f;
-  this->unconfirmed_fall_a_ = 0.0f;
-
-  // Capture DCR baseline (start voltage/current at setpoint time).
-  bool current_ok = this->current_sensor_ != nullptr
-                    && this->current_sensor_->has_state()
-                    && !std::isnan(this->current_sensor_->state);
-  bool voltage_ok = this->voltage_sensor_ != nullptr
-                    && this->voltage_sensor_->has_state()
-                    && !std::isnan(this->voltage_sensor_->state);
-
-  // Clear the sample window but retain the last valid published result until
-  // this step produces a replacement.
-  this->reset_dcr_();
-
-  if (current_ok && voltage_ok) {
-    this->dcr_start_current_a_ = this->current_sensor_->state;
-    this->dcr_start_voltage_v_ = this->voltage_sensor_->state;
+  if (this->state_ == State::RUNNING) {
+    this->update_operation_();
+    if (this->state_ == State::RUNNING) {
+      this->update_faults_();
+    }
+    if (this->state_ == State::RUNNING) {
+      this->update_control_();
+    }
   } else {
-    this->dcr_start_current_a_ = std::numeric_limits<float>::quiet_NaN();
-    this->dcr_start_voltage_v_ = std::numeric_limits<float>::quiet_NaN();
+    this->force_output_off_();
   }
 
-  // Clear faults.
-  this->clear_faults_();
-
-  ESP_LOGI(TAG, "SETPOINT %.3fA", target);
-
-  if (this->setpoint_number_ != nullptr) {
-    this->setpoint_number_->publish_state(target);
+  if ((uint32_t) (now - this->last_fan_update_ms_) >= 500) {
+    this->last_fan_update_ms_ = now;
+    this->update_fan_();
   }
-
-  this->ramp_state_ = RampState::HOLDING;
 }
 
-void ProgrammableLoadComponent::force_off() {
-  // Stop targeting.
-  this->current_target_a_ = 0.0f;
-  this->current_command_a_ = 0.0f;
-  this->unconfirmed_rise_a_ = 0.0f;
-  this->unconfirmed_fall_a_ = 0.0f;
-
-  // Reset DCR tracking, retaining the most recent valid result.
-  this->dcr_start_voltage_v_ = std::numeric_limits<float>::quiet_NaN();
-  this->dcr_start_current_a_ = std::numeric_limits<float>::quiet_NaN();
-  this->reset_dcr_();
-
-  // DAC to zero.
-  if (this->dac_output_ != nullptr) {
-    this->dac_output_->set_level(0.0f);
-  }
-
-  // Update setpoint display.
-  if (this->setpoint_number_ != nullptr) {
-    this->setpoint_number_->publish_state(0.0f);
-  }
-
-  this->ramp_state_ = RampState::OFF;
-  ESP_LOGI(TAG, "LOAD OFF: DAC=0, command=0");
-}
-
-bool ProgrammableLoadComponent::check_safety_() {
-  // Check INA current available.
-  bool ina_ok = this->current_sensor_ != nullptr
-                && this->current_sensor_->has_state()
-                && !std::isnan(this->current_sensor_->state);
-
-  if (!ina_ok) {
-    ESP_LOGW(TAG, "FAULT: INA current unavailable; forcing load off");
-    this->force_off();
+bool ProgrammableLoadComponent::start_manual(float current_a) {
+  if (this->state_ != State::IDLE || this->owner_ != Owner::NONE ||
+      !std::isfinite(current_a) || current_a <= 0.0f) {
     return false;
   }
 
-  // Check NTC 1 present (only the first NTC is required).
-  bool ntc1_present = true;
-  if (!this->ntc_present_sensors_.empty()) {
-    binary_sensor::BinarySensor *bs = this->ntc_present_sensors_[0];
-    if (bs != nullptr && !bs->state) {
-      ntc1_present = false;
-    }
-  } else if (!this->temperature_sensors_.empty()) {
-    // No explicit NTC-present signals; check first temperature sensor.
-    sensor::Sensor *s = this->temperature_sensors_[0];
-    if (s == nullptr || !s->has_state() || std::isnan(s->state)) {
-      ntc1_present = false;
-    }
-  }
-
-  if (!ntc1_present) {
-    this->fault_ntc_missing_ = true;
-    ESP_LOGW(TAG, "FAULT: NTC missing; forcing load off");
-    this->force_off();
+  this->update_measurement_();
+  const Fault fault = this->detect_running_fault_();
+  if (fault != Fault::NONE) {
+    this->trip_fault_(fault);
     return false;
   }
 
-  // Check input voltage present.
-  bool vbus_ok = this->voltage_sensor_ != nullptr
-                 && this->voltage_sensor_->has_state()
-                 && !std::isnan(this->voltage_sensor_->state)
-                 && this->voltage_sensor_->state > this->voltage_min_v_;
+  this->owner_ = Owner::MANUAL;
+  this->requested_current_a_ =
+      clampf(current_a, 0.0f, this->limits_.maximum_current_a);
+  this->commanded_current_a_ = 0.0f;
+  this->set_state_(State::RUNNING);
 
-  if (!vbus_ok) {
-    this->fault_no_voltage_ = true;
-    ESP_LOGW(TAG, "FAULT: input voltage missing; forcing load off");
-    this->force_off();
-    return false;
+  if (this->manual_current_number_ != nullptr) {
+    this->manual_current_number_->publish_state(this->requested_current_a_);
   }
-
-  // Check temperature.
-  float max_temp = this->get_max_temp_();
-  bool temp_ok = std::isnan(max_temp) || max_temp < this->max_temp_c_;
-
-  if (!temp_ok) {
-    this->fault_over_temp_ = true;
-    ESP_LOGW(TAG, "FAULT: over temperature (%.1f°C >= %.1f°C); forcing load off", max_temp, this->max_temp_c_);
-    this->force_off();
-    return false;
-  }
-
-  // All checks passed — clear faults.
-  this->clear_faults_();
   return true;
 }
 
-void ProgrammableLoadComponent::clear_faults_() {
-  this->fault_ntc_missing_ = false;
-  this->fault_no_voltage_ = false;
-  this->fault_over_temp_ = false;
+bool ProgrammableLoadComponent::update_manual(float current_a) {
+  if (this->state_ != State::RUNNING || this->owner_ != Owner::MANUAL ||
+      !std::isfinite(current_a)) {
+    return false;
+  }
+
+  if (current_a <= 0.0f) {
+    this->stop();
+    return true;
+  }
+
+  this->requested_current_a_ =
+      clampf(current_a, 0.0f, this->limits_.maximum_current_a);
+  if (this->manual_current_number_ != nullptr) {
+    this->manual_current_number_->publish_state(this->requested_current_a_);
+  }
+  return true;
 }
 
-void ProgrammableLoadComponent::reset_dcr_() {
-  this->dcr_sample_count_ = 0;
+bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
+  if (procedure == nullptr || this->state_ != State::IDLE ||
+      this->owner_ != Owner::NONE) {
+    return false;
+  }
+
+  this->update_measurement_();
+  const Fault fault = this->detect_running_fault_();
+  if (fault != Fault::NONE) {
+    this->trip_fault_(fault);
+    return false;
+  }
+
+  const ProcedureResult result = procedure->start(this->measurement_);
+  if (result.status == ProcedureStatus::FAILED) {
+    this->trip_fault_(result.fault == Fault::NONE ? Fault::PROCEDURE_ERROR
+                                                  : result.fault);
+    return false;
+  }
+  if (result.status == ProcedureStatus::COMPLETE) {
+    procedure->stop(StopReason::COMPLETED);
+    return true;
+  }
+
+  this->owner_ = Owner::PROCEDURE;
+  this->active_procedure_ = procedure;
+  this->commanded_current_a_ = 0.0f;
+  this->set_state_(State::RUNNING);
+  this->apply_procedure_result_(result);
+  return this->state_ == State::RUNNING;
 }
 
-// Capture a sample while current is moving in either direction.
-void ProgrammableLoadComponent::capture_dcr_sample_() {
-  if (this->current_sensor_ == nullptr || this->voltage_sensor_ == nullptr)
-    return;
-  if (std::isnan(this->dcr_start_voltage_v_) || std::isnan(this->dcr_start_current_a_))
-    return;
+void ProgrammableLoadComponent::stop() {
+  if (this->state_ == State::RUNNING) {
+    this->release_owner_(StopReason::USER_REQUEST);
+  } else {
+    this->force_output_off_();
+  }
+}
 
-  const float i = this->current_sensor_->state;
-  const float v = this->voltage_sensor_->state;
+bool ProgrammableLoadComponent::clear_fault() {
+  if (this->state_ != State::FAULT) {
+    return this->fault_ == Fault::NONE;
+  }
 
-  if (std::isnan(i) || std::isnan(v))
-    return;
+  this->update_measurement_();
+  if (this->fault_condition_active_(this->fault_)) {
+    return false;
+  }
 
-  // Ignore tiny movements dominated by sensor noise and asynchronous updates.
-  const float di = i - this->dcr_start_current_a_;
-  if (fabsf(di) < DCR_MIN_CURRENT_DELTA_A)
-    return;
+  this->fault_ = Fault::NONE;
+  this->fault_clear_candidate_since_ms_ = 0;
+  this->set_state_(State::IDLE);
+  this->publish_status_();
+  return true;
+}
 
-  // Avoid repeatedly storing the same INA conversion while the control loop
-  // runs faster than the sensor update interval.
-  if (this->dcr_sample_count_ > 0) {
-    const int previous = (this->dcr_sample_count_ - 1) % DCR_SAMPLE_MAX;
-    const DcrSample &last = this->dcr_samples_[previous];
-    if (fabsf(i - last.current_a) < DCR_DUPLICATE_CURRENT_EPSILON_A &&
-        fabsf(v - last.voltage_v) < DCR_DUPLICATE_VOLTAGE_EPSILON_V) {
-      return;
+void ProgrammableLoadComponent::update_measurement_() {
+  const uint32_t now = millis();
+  this->measurement_.timestamp_ms = now;
+  this->measurement_.sequence = this->measurement_sequence_;
+
+  this->measurement_.current_valid =
+      this->current_sensor_ != nullptr && this->current_sensor_->has_state() &&
+      std::isfinite(this->current_sensor_->state) &&
+      this->current_seen_ &&
+      (uint32_t) (now - this->current_updated_ms_) <= this->sample_timeout_ms_;
+  if (this->measurement_.current_valid) {
+    this->measurement_.current_a =
+        this->calibration_.current.apply(this->current_sensor_->state);
+    this->measurement_.current_valid =
+        std::isfinite(this->measurement_.current_a);
+  } else {
+    this->measurement_.current_a = 0.0f;
+  }
+
+  this->measurement_.voltage_valid =
+      this->voltage_sensor_ != nullptr && this->voltage_sensor_->has_state() &&
+      std::isfinite(this->voltage_sensor_->state) &&
+      this->voltage_seen_ &&
+      (uint32_t) (now - this->voltage_updated_ms_) <= this->sample_timeout_ms_;
+  if (this->measurement_.voltage_valid) {
+    this->measurement_.voltage_v =
+        this->calibration_.voltage.apply(this->voltage_sensor_->state);
+    this->measurement_.voltage_valid =
+        std::isfinite(this->measurement_.voltage_v);
+  } else {
+    this->measurement_.voltage_v = 0.0f;
+  }
+
+  float maximum_temperature = std::numeric_limits<float>::quiet_NaN();
+  for (const TemperatureInput &input : this->temperature_inputs_) {
+    if (input.sensor == nullptr || !input.sensor->has_state() ||
+        !std::isfinite(input.sensor->state)) {
+      continue;
+    }
+    if (!std::isfinite(maximum_temperature) ||
+        input.sensor->state > maximum_temperature) {
+      maximum_temperature = input.sensor->state;
     }
   }
+  this->measurement_.maximum_temperature_c = maximum_temperature;
+  this->measurement_.temperature_valid =
+      !this->required_temperature_unavailable_();
 
-  DcrSample &sample = this->dcr_samples_[this->dcr_sample_count_ % DCR_SAMPLE_MAX];
-  sample.current_a = i;
-  sample.voltage_v = v;
-
-  // Keep this as a monotonically increasing write sequence. Capping it at the
-  // buffer size caused every later sample to overwrite slot zero.
-  this->dcr_sample_count_++;
+  if (this->measurement_.current_valid &&
+      this->measurement_.voltage_valid) {
+    this->measurement_.power_w =
+        this->measurement_.current_a * this->measurement_.voltage_v;
+  } else {
+    this->measurement_.power_w = 0.0f;
+  }
 }
 
-// Compute DCR from signed current/voltage deltas using a least-squares fit
-// constrained through the captured baseline.
-void ProgrammableLoadComponent::compute_dcr_() {
-  const int sample_count = this->dcr_sample_count_ < DCR_SAMPLE_MAX
-                               ? this->dcr_sample_count_
-                               : DCR_SAMPLE_MAX;
-  if (sample_count < 2)
+void ProgrammableLoadComponent::update_faults_() {
+  if (this->state_ == State::RUNNING) {
+    const Fault fault = this->detect_running_fault_();
+    if (fault != Fault::NONE) {
+      this->trip_fault_(fault);
+    }
     return;
-
-  float sum_di2 = 0.0f;
-  float sum_di_dv = 0.0f;
-  int valid_count = 0;
-
-  for (int j = 0; j < sample_count; j++) {
-    const float di = this->dcr_samples_[j].current_a - this->dcr_start_current_a_;
-    const float dv = this->dcr_start_voltage_v_ - this->dcr_samples_[j].voltage_v;
-
-    if (fabsf(di) < DCR_MIN_CURRENT_DELTA_A)
-      continue;
-
-    // A resistive source has matching delta signs: increasing current lowers
-    // voltage, while decreasing current raises it.
-    if (di * dv <= 0.0f)
-      continue;
-
-    valid_count++;
-    sum_di2 += di * di;
-    sum_di_dv += di * dv;
   }
 
-  if (valid_count < 2 || sum_di2 <= 0.0f)
+  if (this->state_ == State::IDLE) {
+    // The board remains electrically connected while the load is idle, so the
+    // absolute hardware ceiling is reported even when no operation owns the DAC.
+    if (this->measurement_.voltage_valid &&
+        this->measurement_.voltage_v >
+            this->hardware_limits_.maximum_voltage_v) {
+      this->trip_fault_(Fault::HARDWARE_OVERVOLTAGE);
+    }
     return;
+  }
 
-  const float r_ohm = sum_di_dv / sum_di2;
-  if (!std::isfinite(r_ohm) || r_ohm <= 0.0f)
+  if (this->state_ != State::FAULT || !this->fault_policy_.auto_clear) {
     return;
+  }
 
-  this->dcr_mohm_ = r_ohm * 1000.0f;
+  if (this->fault_condition_active_(this->fault_)) {
+    this->fault_clear_candidate_since_ms_ = 0;
+    return;
+  }
 
-  const int last_index = (this->dcr_sample_count_ - 1) % DCR_SAMPLE_MAX;
-  const DcrSample &last = this->dcr_samples_[last_index];
-  this->dcr_delta_current_a_ = last.current_a - this->dcr_start_current_a_;
-  this->dcr_delta_voltage_mv_ = (this->dcr_start_voltage_v_ - last.voltage_v) * 1000.0f;
+  const uint32_t now = millis();
+  if (this->fault_clear_candidate_since_ms_ == 0) {
+    this->fault_clear_candidate_since_ms_ = now == 0 ? 1 : now;
+    return;
+  }
+
+  if ((uint32_t) (now - this->fault_clear_candidate_since_ms_) >=
+      this->fault_policy_.clear_delay_ms) {
+    this->clear_fault();
+  }
 }
 
-float ProgrammableLoadComponent::get_max_temp_() const {
-  float max_t = std::numeric_limits<float>::quiet_NaN();
-
-  for (sensor::Sensor *s : this->temperature_sensors_) {
-    if (s == nullptr)
-      continue;
-    float t = s->state;
-    if (std::isnan(t))
-      continue;
-    if (std::isnan(max_t) || t > max_t)
-      max_t = t;
+void ProgrammableLoadComponent::update_operation_() {
+  if (this->owner_ != Owner::PROCEDURE) {
+    return;
+  }
+  if (this->active_procedure_ == nullptr) {
+    this->trip_fault_(Fault::PROCEDURE_ERROR);
+    return;
   }
 
-  return max_t;
+  this->apply_procedure_result_(
+      this->active_procedure_->update(this->measurement_));
+}
+
+void ProgrammableLoadComponent::update_control_() {
+  const float current_limit = this->effective_current_limit_();
+  if (!std::isfinite(current_limit) || current_limit < 0.0f ||
+      !this->measurement_.current_valid) {
+    this->trip_fault_(Fault::CONTROL_ERROR);
+    return;
+  }
+
+  const float target =
+      clampf(this->requested_current_a_, 0.0f, current_limit);
+  const float measured = this->measurement_.current_a;
+  const float error = target - measured;
+  const float period_s =
+      static_cast<float>(this->control_period_ms_) / 1000.0f;
+
+  float next_command = this->commanded_current_a_;
+  if (!std::isfinite(next_command)) {
+    this->trip_fault_(Fault::CONTROL_ERROR);
+    return;
+  }
+
+  if (error > this->deadband_a_) {
+    next_command +=
+        std::min(error, this->rise_rate_a_per_s_ * period_s);
+  } else if (error < -this->deadband_a_) {
+    next_command -=
+        std::min(-error, this->fall_rate_a_per_s_ * period_s);
+  }
+
+  next_command = clampf(next_command, 0.0f, current_limit);
+  this->commanded_current_a_ = next_command;
+  this->drive_output_(next_command);
 }
 
 void ProgrammableLoadComponent::update_fan_() {
-  if (this->fan_output_ == nullptr)
-    return;
-
-  float t = this->get_max_temp_();
-
-  if (std::isnan(t)) {
-    this->fan_output_->set_level(0.0f);
+  if (this->fan_output_ == nullptr) {
     return;
   }
-  if (t <= this->fan_start_temp_c_) {
-    this->fan_output_->set_level(0.0f);
+
+  const float temperature = this->measurement_.maximum_temperature_c;
+  if (!std::isfinite(temperature)) {
+    // Unknown temperature while active or faulted is treated conservatively.
+    this->fan_output_->set_level(
+        this->state_ == State::IDLE ? 0.0f : 1.0f);
     return;
   }
-  if (t >= this->fan_full_temp_c_) {
+
+  if (temperature <= this->fan_start_temperature_c_) {
+    this->fan_output_->set_level(0.0f);
+  } else if (temperature >= this->fan_full_temperature_c_) {
     this->fan_output_->set_level(1.0f);
-    return;
-  }
-
-  float level = (t - this->fan_start_temp_c_) / (this->fan_full_temp_c_ - this->fan_start_temp_c_);
-  this->fan_output_->set_level(level);
-}
-
-float ProgrammableLoadComponent::clamp_command_(float cmd) const {
-  if (cmd < 0.0f) cmd = 0.0f;
-  if (cmd > this->max_current_a_) cmd = this->max_current_a_;
-  return cmd;
-}
-
-const char *ProgrammableLoadComponent::ramp_state_to_string_(RampState state) const {
-  switch (state) {
-    case RampState::OFF: return "OFF";
-    case RampState::RAMPING_UP: return "RAMPING_UP";
-    case RampState::RAMPING_DOWN: return "RAMPING_DOWN";
-    case RampState::HOLDING: return "HOLDING";
-    default: return "UNKNOWN";
-  }
-}
-
-void ProgrammableLoadComponent::publish_state_() {
-  // Publish DCR.
-  if (this->dcr_sensor_ != nullptr) {
-    this->dcr_sensor_->publish_state(this->dcr_mohm_);
-  }
-
-  // Publish voltage drop.
-  if (this->voltage_drop_sensor_ != nullptr) {
-    this->voltage_drop_sensor_->publish_state(this->dcr_delta_voltage_mv_);
-  }
-
-  // Publish current delta.
-  if (this->current_delta_sensor_ != nullptr) {
-    this->current_delta_sensor_->publish_state(this->dcr_delta_current_a_);
-  }
-
-  if (this->ramp_state_sensor_ != nullptr) {
-    this->ramp_state_sensor_->publish_state(this->ramp_state_to_string_(this->ramp_state_));
-  }
-
-  // Publish fault states.
-  if (this->fault_ntc_missing_sensor_ != nullptr) {
-    this->fault_ntc_missing_sensor_->publish_state(this->fault_ntc_missing_);
-  }
-  if (this->fault_no_voltage_sensor_ != nullptr) {
-    this->fault_no_voltage_sensor_->publish_state(this->fault_no_voltage_);
-  }
-  if (this->fault_over_temp_sensor_ != nullptr) {
-    this->fault_over_temp_sensor_->publish_state(this->fault_over_temp_);
-  }
-}
-
-void ProgrammableLoadComponent::control_loop_() {
-  // If target is zero, we're off.
-  if (this->current_target_a_ <= 0.0f) {
-    return;
-  }
-
-  // Safety gate.
-  if (!this->check_safety_()) {
-    return;
-  }
-
-  const float target = this->current_target_a_;
-  const float i = this->current_sensor_->state;
-  const float vbus = this->voltage_sensor_->state;
-  
-  // Compute unconfirmed gap: how much command exceeds (rise) or falls below (fall) measured current.
-  this->unconfirmed_rise_a_ = this->current_command_a_ > i ? this->current_command_a_ - i : 0.0f;
-  this->unconfirmed_fall_a_ = i > this->current_command_a_ ? i - this->current_command_a_ : 0.0f;
-
-  const float err = target - i;
-  const float abs_err = fabsf(err);
-
-  const float control_period_s = (float) this->control_period_ms_ / 1000.0f;
-
-  // Clamp current command.
-  float cmd = this->current_command_a_;
-  if (std::isnan(cmd) || cmd < 0.0f) cmd = 0.0f;
-  if (cmd > this->max_current_a_) cmd = this->max_current_a_;
-
-  float next_cmd = cmd;
-
-  if (err > this->deadband_a_) {
-    // --- RAMPING UP ---
-    this->unconfirmed_fall_a_ = 0.0f;
-    this->ramp_state_ = RampState::RAMPING_UP;
-
-    const float max_rise = this->max_unconfirmed_rise_a_;
-    float rise_remaining = max_rise - this->unconfirmed_rise_a_;
-    if (rise_remaining < 0.0f) rise_remaining = 0.0f;
-
-    if (rise_remaining <= 0.0005f) {
-      // Unconfirmed rise cap hit — hold.
-      next_cmd = cmd;
-      this->ramp_state_ = RampState::HOLDING;
-    } else {
-      float inc = 0.002f;
-
-      if (err > 5.0f) {
-        inc = this->ramp_fast_a_per_s_ * control_period_s;
-      } else if (err > 2.0f) {
-        inc = this->ramp_medium_a_per_s_ * control_period_s;
-      } else if (err > 0.75f) {
-        inc = 0.050f;
-      } else if (err > 0.25f) {
-        inc = 0.020f;
-      } else if (err > 0.060f) {
-        inc = 0.010f;
-      } else {
-        inc = 0.003f;
-      }
-
-      if (inc > rise_remaining) inc = rise_remaining;
-      next_cmd = cmd + inc;
-    }
-
-  } else if (err < -this->deadband_a_) {
-    // --- RAMPING DOWN ---
-    this->unconfirmed_rise_a_ = 0.0f;
-    this->ramp_state_ = RampState::RAMPING_DOWN;
-
-    const float max_fall = this->max_unconfirmed_fall_a_;
-    float fall_remaining = max_fall - this->unconfirmed_fall_a_;
-    if (fall_remaining < 0.0f) fall_remaining = 0.0f;
-
-    if (fall_remaining <= 0.0005f) {
-      next_cmd = cmd;
-      this->ramp_state_ = RampState::HOLDING;
-    } else {
-      float dec = 0.002f;
-
-      if (abs_err > 5.0f) {
-        dec = 0.500f;
-      } else if (abs_err > 2.0f) {
-        dec = 0.250f;
-      } else if (abs_err > 0.75f) {
-        dec = 0.100f;
-      } else if (abs_err > 0.25f) {
-        dec = 0.040f;
-      } else if (abs_err > 0.08f) {
-        dec = 0.015f;
-      } else if (abs_err > 0.025f) {
-        dec = 0.005f;
-      } else {
-        dec = 0.002f;
-      }
-
-      if (dec > fall_remaining) dec = fall_remaining;
-      next_cmd = cmd - dec;
-    }
-
   } else {
-    // --- WITHIN DEADBAND ---
-    this->unconfirmed_rise_a_ = 0.0f;
-    this->unconfirmed_fall_a_ = 0.0f;
-    next_cmd = cmd;
-    this->ramp_state_ = RampState::HOLDING;
-  }
-
-  next_cmd = this->clamp_command_(next_cmd);
-  this->current_command_a_ = next_cmd;
-
-  // Capture DCR samples while the measured current is moving in either direction.
-  if (this->ramp_state_ == RampState::RAMPING_UP ||
-      this->ramp_state_ == RampState::RAMPING_DOWN) {
-    this->capture_dcr_sample_();
-  }
-
-  // Compute DCR from accumulated samples (runs every loop but only updates when we have data).
-  this->compute_dcr_();
-
-  // Drive DAC (normalized 0..1).
-  if (this->dac_output_ != nullptr) {
-    this->dac_output_->set_level(next_cmd / this->max_current_a_);
-  }
-
-  // Conditional logging.
-  this->log_divider_++;
-  const bool log_now =
-    this->log_divider_ >= 4
-    || err < -this->deadband_a_
-    || fabsf(next_cmd - cmd) >= 0.020f;
-
-  if (log_now) {
-    this->log_divider_ = 0;
-    ESP_LOGI(TAG,
-             "CTRL target=%.3fA ina=%.3fA err=%.3fA db=%.3fA rise=%.3f fall=%.3f cmd %.3f->%.3f vbus=%.2fV",
-             target, i, err, this->deadband_a_,
-             this->unconfirmed_rise_a_, this->unconfirmed_fall_a_,
-             cmd, next_cmd, vbus);
+    const float level =
+        (temperature - this->fan_start_temperature_c_) /
+        (this->fan_full_temperature_c_ -
+         this->fan_start_temperature_c_);
+    this->fan_output_->set_level(clampf(level, 0.0f, 1.0f));
   }
 }
 
-void ProgrammableLoadComponent::slow_update_() {
-  // Safety checks even when not actively ramping, as long as the output is on.
-  if (this->current_command_a_ > 0.01f && !this->check_safety_()) {
+Fault ProgrammableLoadComponent::detect_running_fault_() const {
+  if (!this->measurement_.current_valid) {
+    return Fault::CURRENT_MEASUREMENT_UNAVAILABLE;
+  }
+  if (!this->measurement_.voltage_valid) {
+    return Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE;
+  }
+  if (this->required_temperature_unavailable_()) {
+    return Fault::REQUIRED_TEMPERATURE_UNAVAILABLE;
+  }
+  if (this->measurement_.voltage_v >
+      this->hardware_limits_.maximum_voltage_v) {
+    return Fault::HARDWARE_OVERVOLTAGE;
+  }
+  if (this->measurement_.voltage_v < this->limits_.minimum_voltage_v) {
+    return Fault::INPUT_UNDERVOLTAGE;
+  }
+  if (this->measurement_.voltage_v > this->limits_.maximum_voltage_v) {
+    return Fault::INPUT_OVERVOLTAGE;
+  }
+  if (std::fabs(this->measurement_.current_a) >
+      this->limits_.maximum_current_a + this->deadband_a_) {
+    return Fault::OVERCURRENT;
+  }
+  if (std::fabs(this->measurement_.power_w) >
+      this->limits_.maximum_power_w) {
+    return Fault::OVERPOWER;
+  }
+  if (std::isfinite(this->measurement_.maximum_temperature_c) &&
+      this->measurement_.maximum_temperature_c >
+          this->limits_.maximum_temperature_c) {
+    return Fault::OVERTEMPERATURE;
+  }
+  return Fault::NONE;
+}
+
+bool ProgrammableLoadComponent::fault_condition_active_(Fault fault) const {
+  switch (fault) {
+    case Fault::NONE:
+      return false;
+    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
+      return !this->measurement_.current_valid;
+    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
+      return !this->measurement_.voltage_valid;
+    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
+      return this->required_temperature_unavailable_();
+    case Fault::INPUT_UNDERVOLTAGE:
+      return !this->measurement_.voltage_valid ||
+             this->measurement_.voltage_v < this->limits_.minimum_voltage_v;
+    case Fault::INPUT_OVERVOLTAGE:
+      return !this->measurement_.voltage_valid ||
+             this->measurement_.voltage_v > this->limits_.maximum_voltage_v;
+    case Fault::HARDWARE_OVERVOLTAGE:
+      return !this->measurement_.voltage_valid ||
+             this->measurement_.voltage_v >
+                 this->hardware_limits_.maximum_voltage_v;
+    case Fault::OVERCURRENT:
+      return !this->measurement_.current_valid ||
+             std::fabs(this->measurement_.current_a) >
+                 this->limits_.maximum_current_a + this->deadband_a_;
+    case Fault::OVERPOWER:
+      return !this->measurement_.current_valid ||
+             !this->measurement_.voltage_valid ||
+             std::fabs(this->measurement_.power_w) >
+                 this->limits_.maximum_power_w;
+    case Fault::OVERTEMPERATURE:
+      return this->required_temperature_unavailable_() ||
+             (std::isfinite(this->measurement_.maximum_temperature_c) &&
+              this->measurement_.maximum_temperature_c >
+                  this->limits_.maximum_temperature_c);
+    case Fault::CONTROL_ERROR:
+    case Fault::PROCEDURE_ERROR:
+      return false;
+    default:
+      return true;
+  }
+}
+
+bool ProgrammableLoadComponent::required_temperature_unavailable_() const {
+  for (const TemperatureInput &input : this->temperature_inputs_) {
+    if (!input.required) {
+      continue;
+    }
+    if (input.sensor == nullptr || !input.sensor->has_state() ||
+        !std::isfinite(input.sensor->state)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void ProgrammableLoadComponent::apply_procedure_result_(
+    const ProcedureResult &result) {
+  if (result.status == ProcedureStatus::FAILED) {
+    this->trip_fault_(result.fault == Fault::NONE ? Fault::PROCEDURE_ERROR
+                                                  : result.fault);
+    return;
+  }
+  if (result.status == ProcedureStatus::COMPLETE) {
+    this->release_owner_(StopReason::COMPLETED);
+    return;
+  }
+  if (!std::isfinite(result.requested_current_a) ||
+      result.requested_current_a < 0.0f) {
+    this->trip_fault_(Fault::PROCEDURE_ERROR);
     return;
   }
 
-  // Fan control.
-  this->update_fan_();
-
-  // Publish derived sensors.
-  this->publish_state_();
+  this->requested_current_a_ = result.requested_current_a;
 }
 
-void ProgrammableLoadSetpointNumber::control(float value) {
-  if (this->parent_ == nullptr)
+void ProgrammableLoadComponent::release_owner_(StopReason reason) {
+  Procedure *procedure = this->active_procedure_;
+  this->active_procedure_ = nullptr;
+  this->owner_ = Owner::NONE;
+  this->requested_current_a_ = 0.0f;
+  this->commanded_current_a_ = 0.0f;
+  this->force_output_off_();
+
+  if (procedure != nullptr) {
+    procedure->stop(reason);
+  }
+
+  if (this->manual_current_number_ != nullptr) {
+    this->manual_current_number_->publish_state(0.0f);
+  }
+
+  if (this->state_ != State::FAULT) {
+    this->set_state_(State::IDLE);
+  }
+}
+
+void ProgrammableLoadComponent::set_state_(State state) {
+  if (this->state_ == state) {
     return;
-  this->parent_->set_target(value);
+  }
+  this->state_ = state;
+  this->publish_status_();
+}
+
+void ProgrammableLoadComponent::trip_fault_(Fault fault) {
+  if (fault == Fault::NONE) {
+    return;
+  }
+
+  Procedure *procedure = this->active_procedure_;
+  this->active_procedure_ = nullptr;
+  this->owner_ = Owner::NONE;
+  this->requested_current_a_ = 0.0f;
+  this->commanded_current_a_ = 0.0f;
+  this->force_output_off_();
+
+  if (procedure != nullptr) {
+    procedure->stop(StopReason::FAULTED);
+  }
+  if (this->manual_current_number_ != nullptr) {
+    this->manual_current_number_->publish_state(0.0f);
+  }
+
+  this->fault_ = fault;
+  this->state_ = State::FAULT;
+  this->fault_clear_candidate_since_ms_ = 0;
+  this->publish_status_();
+  ESP_LOGE(TAG, "Load fault: %s", fault_to_string(fault));
+}
+
+void ProgrammableLoadComponent::publish_status_() {
+  if (this->state_sensor_ != nullptr) {
+    this->state_sensor_->publish_state(state_to_string(this->state_));
+  }
+  if (this->fault_sensor_ != nullptr) {
+    this->fault_sensor_->publish_state(fault_to_string(this->fault_));
+  }
+}
+
+float ProgrammableLoadComponent::effective_current_limit_() const {
+  if (!this->measurement_.voltage_valid ||
+      this->measurement_.voltage_v <= 0.0f) {
+    return 0.0f;
+  }
+
+  float limit = std::min(this->limits_.maximum_current_a,
+                         this->calibration_.output.full_scale_current_a);
+  if (this->limits_.maximum_power_w > 0.0f) {
+    limit = std::min(
+        limit,
+        this->limits_.maximum_power_w /
+            std::fabs(this->measurement_.voltage_v));
+  }
+  return std::max(0.0f, limit);
+}
+
+void ProgrammableLoadComponent::drive_output_(float current_a) {
+  if (this->dac_output_ == nullptr ||
+      !this->calibration_valid_(this->calibration_)) {
+    if (this->dac_output_ != nullptr) {
+      this->dac_output_->set_level(0.0f);
+    }
+    return;
+  }
+
+  const float zero = this->calibration_.output.zero_level;
+  const float normalized_current =
+      clampf(current_a / this->calibration_.output.full_scale_current_a,
+             0.0f, 1.0f);
+  const float level = zero + normalized_current * (1.0f - zero);
+  this->dac_output_->set_level(clampf(level, 0.0f, 1.0f));
+}
+
+void ProgrammableLoadComponent::force_output_off_() {
+  if (this->dac_output_ == nullptr) {
+    return;
+  }
+  const float zero = this->calibration_valid_(this->calibration_)
+                         ? this->calibration_.output.zero_level
+                         : 0.0f;
+  this->dac_output_->set_level(clampf(zero, 0.0f, 1.0f));
+}
+
+bool ProgrammableLoadComponent::calibration_valid_(
+    const Calibration &calibration) const {
+  return calibration.version == CALIBRATION_VERSION &&
+         finite_positive(calibration.current.scale) &&
+         std::isfinite(calibration.current.offset) &&
+         finite_positive(calibration.voltage.scale) &&
+         std::isfinite(calibration.voltage.offset) &&
+         std::isfinite(calibration.output.zero_level) &&
+         calibration.output.zero_level >= 0.0f &&
+         calibration.output.zero_level < 1.0f &&
+         finite_positive(calibration.output.full_scale_current_a);
+}
+
+bool ProgrammableLoadComponent::save_calibration_() {
+  if (!this->calibration_preference_valid_) {
+    return false;
+  }
+  return this->calibration_preference_.save(&this->calibration_);
+}
+
+bool ProgrammableLoadComponent::apply_calibration(
+    const Calibration &calibration, bool persist) {
+  if (this->state_ != State::IDLE ||
+      !this->calibration_valid_(calibration)) {
+    return false;
+  }
+
+  const Calibration previous = this->calibration_;
+  this->calibration_ = calibration;
+  this->force_output_off_();
+
+  if (persist && !this->save_calibration_()) {
+    this->calibration_ = previous;
+    this->force_output_off_();
+    return false;
+  }
+  return true;
+}
+
+bool ProgrammableLoadComponent::reset_calibration(bool persist) {
+  return this->apply_calibration(this->configured_calibration_, persist);
+}
+
+void ManualCurrentNumber::control(float value) {
+  if (this->parent_ == nullptr || !std::isfinite(value)) {
+    return;
+  }
+
+  if (value <= 0.0f) {
+    this->parent_->stop();
+    this->publish_state(0.0f);
+    return;
+  }
+
+  bool accepted = false;
+  if (this->parent_->state() == State::IDLE) {
+    accepted = this->parent_->start_manual(value);
+  } else if (this->parent_->state() == State::RUNNING) {
+    accepted = this->parent_->update_manual(value);
+  }
+
+  if (!accepted) {
+    this->publish_state(0.0f);
+  }
+}
+
+void ClearFaultButton::press_action() {
+  if (this->parent_ != nullptr) {
+    this->parent_->clear_fault();
+  }
 }
 
 }  // namespace programmable_load
