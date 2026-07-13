@@ -2,67 +2,87 @@
 
 ESPHome interface for a programmable electronic load used as both a general-purpose bench load and a battery test instrument.
 
-This version is an intentional API break. It defines the v2 configuration and C++ interfaces before the control and procedure implementations are replaced.
+This branch intentionally breaks the existing API. It defines the configuration and C++ boundaries before the old control implementation is replaced.
 
-## Interface model
+## Architecture
 
-The component is split into four layers:
+The core owns all hardware and safety-critical behaviour:
 
-1. **Hardware boundary** — DAC, fan output, and measurement sensor references.
-2. **Safety supervisor** — absolute current, voltage, power, temperature, and measurement-freshness limits.
-3. **Operation host** — owns the single user-facing state and fault and ensures only one manual operation or procedure controls the load.
-4. **Procedures** — explicit tests such as DCR measurement. Procedures request current from the host and cannot bypass safety limits.
+1. read raw measurements;
+2. apply measurement calibration;
+3. enforce the absolute hardware voltage limit;
+4. enforce configured current, voltage, power and temperature limits;
+5. run either manual control or one procedure;
+6. clamp the requested current and drive the DAC using output calibration;
+7. publish one state and one fault.
 
-The base component intentionally publishes only:
+Control direction is **core to procedure**. Procedures do not hold a parent pointer, call core functions, access the DAC, or bypass limits. The core supplies calibrated measurements and consumes a `ProcedureResult` containing only status, requested current and an optional fault.
 
-- manual current setpoint;
-- load state;
-- current or last fault;
-- optional clear-fault control.
+## Exclusive ownership
 
-Measurement entities remain owned by their sensor components, so users publish only the voltage, current, power, energy, or other values they actually need.
+The core has one internal owner slot:
+
+- none;
+- manual control;
+- one procedure.
+
+A non-zero manual start or procedure start is rejected unless the load is idle. Procedures therefore lock out manual control and every other procedure. User stop, manual current returning to zero, or procedure completion releases ownership and returns directly to `idle`.
 
 ## State
 
-The load has one state shared by manual operation and all procedures:
+The user-facing state is deliberately limited to:
 
-- `idle`
-- `running`
-- `paused`
-- `complete`
-- `fault`
+- `idle`;
+- `running`;
+- `fault`.
 
-A procedure must acquire the operation host before it can request current. Manual current and procedures therefore cannot drive the DAC concurrently.
+Procedure completion is a result, not a persistent device state. There is no pause state or pause/resume API.
 
 ## Faults
 
-The load has one fault field rather than separate binary entities. Fault values include:
+The component publishes one fault field rather than separate binary entities. Fault values include:
 
-- `none`
-- `current_measurement_unavailable`
-- `voltage_measurement_unavailable`
-- `required_temperature_unavailable`
-- `input_undervoltage`
-- `input_overvoltage`
-- `overcurrent`
-- `overpower`
-- `overtemperature`
-- `control_error`
-- `procedure_error`
+- `none`;
+- `current_measurement_unavailable`;
+- `voltage_measurement_unavailable`;
+- `required_temperature_unavailable`;
+- `input_undervoltage`;
+- `input_overvoltage`;
+- `hardware_overvoltage`;
+- `overcurrent`;
+- `overpower`;
+- `overtemperature`;
+- `control_error`;
+- `procedure_error`.
 
-A fault always stops the active operation. `fault_policy.auto_clear` controls only whether the component returns from `fault` to `idle` after the fault condition has remained absent for `clear_delay`. With auto-clear disabled, the user must use the configured clear-fault button.
+A fault always stops and releases the current owner. `fault_policy.auto_clear` only controls whether `fault` returns to `idle` after the condition remains absent for `clear_delay`; it never resumes the interrupted operation.
+
+## Hardware and operating voltage limits
+
+`hardware.maximum_voltage` is the absolute voltage rating of the hardware design and is always checked at runtime. `limits.maximum_voltage` is the normal operating limit and must be less than or equal to the hardware limit. The example uses the programmable-load board's 75 V absolute design limit.
+
+## Calibration
+
+Calibration is a core layer, not procedure-specific logic:
+
+- current scale and offset are applied to the raw current sensor;
+- voltage scale and offset are applied to the raw voltage sensor;
+- DAC zero level and full-scale current map requested current to the output;
+- configured values are defaults and the C++ interface allows a future guided calibration procedure to apply, persist or reset the same `Calibration` structure.
+
+This interface does not publish calibration internals as normal user entities.
 
 ## DCR test
 
-DCR is an explicit test procedure, not a calculation attached to normal current changes. The procedure:
+DCR is an explicit procedure rather than a background calculation attached to normal current changes. It:
 
-1. settles and samples at the baseline current;
-2. applies the configured pulse current;
-3. settles and samples the loaded voltage/current;
+1. settles and samples at an absolute baseline current;
+2. applies an absolute pulse current;
+3. settles and samples loaded voltage/current;
 4. returns to baseline for recovery;
 5. repeats and publishes one resistance result.
 
-Only the start button and resistance result are exposed.
+Only the start button and resistance result are exposed. Starting DCR while manual control or another procedure is running is rejected by the core.
 
 ## Configuration
 
@@ -70,9 +90,9 @@ Only the start button and resistance result are exposed.
 programmable_load:
   id: load_controller
 
-  output:
+  hardware:
     dac: dac_command
-    dac_full_scale_current: 80.1
+    maximum_voltage: 75
 
   measurements:
     current: load_current
@@ -81,6 +101,18 @@ programmable_load:
     temperatures:
       - sensor: heatsink_temperature
         required: true
+
+  calibration:
+    restore: true
+    current:
+      scale: 1.0
+      offset: 0.0
+    voltage:
+      scale: 1.0
+      offset: 0.0
+    output:
+      zero_level: 0.0
+      full_scale_current: 80.1
 
   limits:
     maximum_current: 40
@@ -116,16 +148,18 @@ programmable_load:
   clear_fault:
     name: "Clear Load Fault"
 
-  dcr_test:
-    pulse_current: 5
-    settle_time: 100ms
-    sample_time: 500ms
-    recovery_time: 1s
-    repeats: 3
+  procedures:
+    dcr:
+      baseline_current: 0
+      pulse_current: 5
+      settle_time: 100ms
+      sample_time: 500ms
+      recovery_time: 1s
+      repeats: 3
 
-    start:
-      name: "Run Battery DCR Test"
+      start:
+        name: "Run Battery DCR Test"
 
-    resistance:
-      name: "Battery DCR"
+      resistance:
+        name: "Battery DCR"
 ```
