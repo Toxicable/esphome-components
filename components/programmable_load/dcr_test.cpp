@@ -65,6 +65,7 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
         this->reset_pulse_samples_();
         this->last_sample_sequence_ = measurement.sequence;
         this->begin_phase_(DcrPhase::PULSE_SETTLE);
+        return this->running_(this->pulse_current_a_);
       }
       return this->running_(this->baseline_current_a_);
 
@@ -84,6 +85,7 @@ ProcedureResult DcrTest::update(const Measurement &measurement) {
         }
         this->completed_repeats_++;
         this->begin_phase_(DcrPhase::RECOVERY);
+        return this->running_(this->baseline_current_a_);
       }
       return this->running_(this->pulse_current_a_);
 
