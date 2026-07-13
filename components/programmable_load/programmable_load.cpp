@@ -107,19 +107,23 @@ void ProgrammableLoadComponent::setup() {
   if (this->current_sensor_ != nullptr) {
     this->current_sensor_->add_on_state_callback([this](float) {
       this->current_updated_ms_ = millis();
+      this->current_seen_ = true;
       this->measurement_sequence_++;
     });
     if (this->current_sensor_->has_state()) {
       this->current_updated_ms_ = now;
+      this->current_seen_ = true;
     }
   }
   if (this->voltage_sensor_ != nullptr) {
     this->voltage_sensor_->add_on_state_callback([this](float) {
       this->voltage_updated_ms_ = millis();
+      this->voltage_seen_ = true;
       this->measurement_sequence_++;
     });
     if (this->voltage_sensor_->has_state()) {
       this->voltage_updated_ms_ = now;
+      this->voltage_seen_ = true;
     }
   }
 
@@ -314,7 +318,7 @@ void ProgrammableLoadComponent::update_measurement_() {
   this->measurement_.current_valid =
       this->current_sensor_ != nullptr && this->current_sensor_->has_state() &&
       std::isfinite(this->current_sensor_->state) &&
-      this->current_updated_ms_ != 0 &&
+      this->current_seen_ &&
       (uint32_t) (now - this->current_updated_ms_) <= this->sample_timeout_ms_;
   if (this->measurement_.current_valid) {
     this->measurement_.current_a =
@@ -328,7 +332,7 @@ void ProgrammableLoadComponent::update_measurement_() {
   this->measurement_.voltage_valid =
       this->voltage_sensor_ != nullptr && this->voltage_sensor_->has_state() &&
       std::isfinite(this->voltage_sensor_->state) &&
-      this->voltage_updated_ms_ != 0 &&
+      this->voltage_seen_ &&
       (uint32_t) (now - this->voltage_updated_ms_) <= this->sample_timeout_ms_;
   if (this->measurement_.voltage_valid) {
     this->measurement_.voltage_v =
