@@ -9,14 +9,21 @@
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
+#include "esphome/components/number/number.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
+#include "esphome/core/preferences.h"
 
 namespace esphome {
 namespace bq25756 {
+
+struct FeedbackCalibration {
+  uint16_t version{1};
+  float feedback_to_battery_ratio{1.0f};
+};
 
 class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public ::bq25756_core::RegisterBus {
  public:
@@ -57,6 +64,9 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
     fb_to_pack_voltage_scale_ = fb_to_pack_voltage_scale;
     has_fb_to_pack_voltage_scale_ = true;
   }
+  void set_battery_target_voltage(float voltage_v) { battery_target_voltage_v_ = voltage_v; }
+  void set_restore_calibration(bool restore) { restore_calibration_ = restore; }
+  void set_calibration_voltage_number(number::Number *number) { calibration_voltage_number_ = number; }
 
   void set_iac_current_sensor(sensor::Sensor *sensor) {
     iac_current_sensor_ = sensor;
@@ -123,6 +133,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool set_reverse_mode(bool enabled);
   bool set_watchdog_code(uint8_t code);
   bool reset_watchdog();
+  bool calibrate_feedback(float measured_battery_voltage_v);
+  bool calibrate_from_configured_voltage();
   void log_charge_enable_precheck_(bool requested_on);
 
   void setup() override;
@@ -141,6 +153,9 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool apply_configured_limits_();
   bool apply_configured_pin_overrides_();
   bool ensure_adc_enabled_();
+  bool apply_battery_target_();
+  bool load_calibration_();
+  bool save_calibration_();
   void maybe_log_event_(
     uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault, float iac_ma, float ibat_ma, float vac_mv, float vbat_mv
   );
@@ -168,6 +183,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   switch_::Switch *hiz_mode_switch_{nullptr};
   switch_::Switch *reverse_mode_switch_{nullptr};
   select::Select *watchdog_select_{nullptr};
+  number::Number *calibration_voltage_number_{nullptr};
 
   bool initialized_{false};
   uint32_t next_init_retry_ms_{0};
@@ -188,6 +204,10 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   uint16_t input_voltage_dpm_limit_mv_{4200};
   bool has_fb_to_pack_voltage_scale_{false};
   float fb_to_pack_voltage_scale_{1.0f};
+  float battery_target_voltage_v_{0.0f};
+  bool restore_calibration_{true};
+  decltype(global_preferences->make_preference<FeedbackCalibration>(0)) calibration_preference_{};
+  bool calibration_preference_valid_{false};
   bool has_last_event_status_{false};
   uint8_t last_status1_{0};
   uint8_t last_status2_{0};
@@ -223,6 +243,16 @@ class BQ25756WatchdogResetButton : public button::Button, public Parented<BQ2575
 class BQ25756DumpRegistersButton : public button::Button, public Parented<BQ25756Component> {
  protected:
   void press_action() override;
+};
+
+class BQ25756CalibrateFeedbackButton : public button::Button, public Parented<BQ25756Component> {
+ protected:
+  void press_action() override;
+};
+
+class BQ25756CalibrationVoltageNumber : public number::Number, public Parented<BQ25756Component> {
+ protected:
+  void control(float value) override { this->publish_state(value); }
 };
 
 }  // namespace bq25756

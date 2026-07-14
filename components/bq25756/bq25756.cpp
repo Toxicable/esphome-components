@@ -1,6 +1,7 @@
 #include "bq25756.h"
 
 #include <array>
+#include <cmath>
 #include <cstdio>
 
 #include "esphome/core/hal.h"
@@ -11,6 +12,7 @@ namespace bq25756 {
 
 namespace {
 static const char *const TAG = "bq25756";
+static constexpr uint32_t CALIBRATION_PREFERENCE_KEY = 0xB2575601;
 }  // namespace
 
 BQ25756Component::BQ25756Component() : service_(this) {}
@@ -39,6 +41,7 @@ bool BQ25756Component::reset_watchdog() {
 void BQ25756Component::setup() {
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
+  this->load_calibration_();
 
   if (!this->initialize_()) {
     ESP_LOGW(TAG, "BQ25756 init not ready at startup; will retry");
@@ -48,6 +51,58 @@ void BQ25756Component::setup() {
   }
 
   this->status_clear_warning();
+}
+
+bool BQ25756Component::load_calibration_() {
+  if (global_preferences == nullptr) return false;
+  this->calibration_preference_ = global_preferences->make_preference<FeedbackCalibration>(CALIBRATION_PREFERENCE_KEY);
+  this->calibration_preference_valid_ = true;
+  if (!this->restore_calibration_) return true;
+  FeedbackCalibration calibration{};
+  if (!this->calibration_preference_.load(&calibration) || calibration.version != 1 ||
+      !std::isfinite(calibration.feedback_to_battery_ratio) || calibration.feedback_to_battery_ratio <= 0.0f) return false;
+  this->fb_to_pack_voltage_scale_ = calibration.feedback_to_battery_ratio;
+  this->has_fb_to_pack_voltage_scale_ = true;
+  ESP_LOGI(TAG, "Restored battery feedback calibration");
+  return true;
+}
+
+bool BQ25756Component::save_calibration_() {
+  const FeedbackCalibration calibration{1, this->fb_to_pack_voltage_scale_};
+  return this->calibration_preference_valid_ && this->calibration_preference_.save(&calibration);
+}
+
+bool BQ25756Component::apply_battery_target_() {
+  if (!std::isfinite(this->battery_target_voltage_v_) || this->battery_target_voltage_v_ <= 0.0f ||
+      !std::isfinite(this->fb_to_pack_voltage_scale_) || this->fb_to_pack_voltage_scale_ <= 0.0f) return false;
+  const int target_mv = static_cast<int>(std::lround(this->battery_target_voltage_v_ * 1000.0f / this->fb_to_pack_voltage_scale_ / 2.0f)) * 2;
+  if (target_mv < 1504 || target_mv > 1566) return false;
+  this->charge_voltage_limit_mv_ = static_cast<uint16_t>(target_mv);
+  this->has_charge_voltage_limit_mv_ = true;
+  return this->service_.write_u16_le(::bq25756_core::REG00_CHARGE_VOLTAGE_LIMIT,
+                                     ::bq25756_core::encode_charge_voltage_limit_mv(this->charge_voltage_limit_mv_));
+}
+
+bool BQ25756Component::calibrate_feedback(float measured_battery_voltage_v) {
+  if (!std::isfinite(measured_battery_voltage_v) || measured_battery_voltage_v <= 0.0f) return false;
+  ::bq25756_core::Measurements measurements{};
+  if (!this->service_.read_measurements(measurements, true) || measurements.vfb_mv <= 0.0f) return false;
+  const float ratio = measured_battery_voltage_v * 1000.0f / measurements.vfb_mv;
+  if (!std::isfinite(ratio) || ratio <= 0.0f) return false;
+  const float previous_ratio = this->fb_to_pack_voltage_scale_;
+  this->fb_to_pack_voltage_scale_ = ratio;
+  this->has_fb_to_pack_voltage_scale_ = true;
+  if (!this->apply_battery_target_() || !this->save_calibration_()) {
+    this->fb_to_pack_voltage_scale_ = previous_ratio;
+    return false;
+  }
+  ESP_LOGI(TAG, "Calibrated battery feedback ratio to %.6f", ratio);
+  return true;
+}
+
+bool BQ25756Component::calibrate_from_configured_voltage() {
+  return this->calibration_voltage_number_ != nullptr &&
+         this->calibrate_feedback(this->calibration_voltage_number_->state);
 }
 
 bool BQ25756Component::initialize_() {
@@ -84,6 +139,10 @@ bool BQ25756Component::initialize_() {
   }
   if (!this->apply_configured_limits_()) {
     ESP_LOGW(TAG, "Failed to apply configured charge/input limits");
+    return false;
+  }
+  if (!this->apply_battery_target_()) {
+    ESP_LOGW(TAG, "Failed to apply battery-profile charge voltage target");
     return false;
   }
   if (!this->apply_configured_pin_overrides_()) {
@@ -185,8 +244,7 @@ void BQ25756Component::update() {
     this->vfb_voltage_sensor_->publish_state(measurements.vfb_mv);
   }
 
-  if (this->vfb_reg_target_sensor_ != nullptr || this->vbat_ov_rising_fb_sensor_ != nullptr ||
-      this->vbat_ov_falling_fb_sensor_ != nullptr || this->vbat_ov_rising_pack_sensor_ != nullptr ||
+  if (this->vfb_reg_target_sensor_ != nullptr || this->vbat_ov_rising_pack_sensor_ != nullptr ||
       this->vbat_ov_falling_pack_sensor_ != nullptr) {
     ::bq25756_core::Reg16Value vfb_reg{};
     if (!this->service_.read_u16_le(::bq25756_core::REG00_CHARGE_VOLTAGE_LIMIT, vfb_reg)) {
@@ -195,18 +253,13 @@ void BQ25756Component::update() {
       const float vfb_reg_mv = ::bq25756_core::vfb_reg_target_mv(vfb_reg.raw_le);
       const float vbat_ov_rising_fb_mv = vfb_reg_mv * ::bq25756_core::VBAT_OV_RISING_MULTIPLIER;
       const float vbat_ov_falling_fb_mv = vfb_reg_mv * ::bq25756_core::VBAT_OV_FALLING_MULTIPLIER;
-      if (this->vfb_reg_target_sensor_ != nullptr) {
-        this->vfb_reg_target_sensor_->publish_state(vfb_reg_mv);
-      }
-      if (this->vbat_ov_rising_fb_sensor_ != nullptr) {
-        this->vbat_ov_rising_fb_sensor_->publish_state(vbat_ov_rising_fb_mv);
-      }
-      if (this->vbat_ov_falling_fb_sensor_ != nullptr) {
-        this->vbat_ov_falling_fb_sensor_->publish_state(vbat_ov_falling_fb_mv);
-      }
       if (this->has_fb_to_pack_voltage_scale_) {
+        const float target_pack_mv = vfb_reg_mv * this->fb_to_pack_voltage_scale_;
         const float rising_pack_mv = vbat_ov_rising_fb_mv * this->fb_to_pack_voltage_scale_;
         const float falling_pack_mv = vbat_ov_falling_fb_mv * this->fb_to_pack_voltage_scale_;
+        if (this->vfb_reg_target_sensor_ != nullptr) {
+          this->vfb_reg_target_sensor_->publish_state(target_pack_mv);
+        }
         if (this->vbat_ov_rising_pack_sensor_ != nullptr) {
           this->vbat_ov_rising_pack_sensor_->publish_state(rising_pack_mv);
         }
@@ -228,23 +281,21 @@ void BQ25756Component::dump_config() {
   LOG_UPDATE_INTERVAL(this);
   ESP_LOGCONFIG(TAG, "  disable_watchdog: %s", this->disable_watchdog_ ? "true" : "false");
   ESP_LOGCONFIG(TAG, "  event_logging: %s", this->event_logging_ ? "true" : "false");
-  ESP_LOGCONFIG(TAG, "  disable_ce_pin: %s", this->disable_ce_pin_ ? "true" : "false");
-  ESP_LOGCONFIG(TAG, "  disable_ilim_hiz_pin: %s", this->disable_ilim_hiz_pin_ ? "true" : "false");
-  ESP_LOGCONFIG(TAG, "  disable_ichg_pin: %s", this->disable_ichg_pin_ ? "true" : "false");
+  ESP_LOGCONFIG(TAG, "  charging.control: %s", this->disable_ce_pin_ ? "i2c" : "pins");
   if (this->has_charge_voltage_limit_mv_) {
-    ESP_LOGCONFIG(TAG, "  charge_voltage_limit_mv: %u", this->charge_voltage_limit_mv_);
+    ESP_LOGCONFIG(TAG, "  charging battery feedback target: %u mV", this->charge_voltage_limit_mv_);
   }
   if (this->has_charge_current_limit_ma_) {
-    ESP_LOGCONFIG(TAG, "  charge_current_limit_ma: %u", this->charge_current_limit_ma_);
+    ESP_LOGCONFIG(TAG, "  charging.battery_current_limit: %u mA", this->charge_current_limit_ma_);
   }
   if (this->has_input_current_dpm_limit_ma_) {
-    ESP_LOGCONFIG(TAG, "  input_current_dpm_limit_ma: %u", this->input_current_dpm_limit_ma_);
+    ESP_LOGCONFIG(TAG, "  charging.input_current_limit: %u mA", this->input_current_dpm_limit_ma_);
   }
   if (this->has_input_voltage_dpm_limit_mv_) {
-    ESP_LOGCONFIG(TAG, "  input_voltage_dpm_limit_mv: %u", this->input_voltage_dpm_limit_mv_);
+    ESP_LOGCONFIG(TAG, "  charging.input_voltage_dpm_threshold: %u mV", this->input_voltage_dpm_limit_mv_);
   }
   if (this->has_fb_to_pack_voltage_scale_) {
-    ESP_LOGCONFIG(TAG, "  fb_to_pack_voltage_scale: %.6f", this->fb_to_pack_voltage_scale_);
+    ESP_LOGCONFIG(TAG, "  charging.battery_voltage.feedback_to_battery_ratio: %.6f", this->fb_to_pack_voltage_scale_);
   }
   LOG_SENSOR("  ", "IAC Current", this->iac_current_sensor_);
   LOG_SENSOR("  ", "IBAT Current", this->ibat_current_sensor_);
@@ -252,11 +303,9 @@ void BQ25756Component::dump_config() {
   LOG_SENSOR("  ", "VBAT Voltage", this->vbat_voltage_sensor_);
   LOG_SENSOR("  ", "TS Percent", this->ts_percent_sensor_);
   LOG_SENSOR("  ", "VFB Voltage", this->vfb_voltage_sensor_);
-  LOG_SENSOR("  ", "VFB REG Target", this->vfb_reg_target_sensor_);
-  LOG_SENSOR("  ", "VBAT OV Rising (FB)", this->vbat_ov_rising_fb_sensor_);
-  LOG_SENSOR("  ", "VBAT OV Falling (FB)", this->vbat_ov_falling_fb_sensor_);
-  LOG_SENSOR("  ", "VBAT OV Rising (Pack)", this->vbat_ov_rising_pack_sensor_);
-  LOG_SENSOR("  ", "VBAT OV Falling (Pack)", this->vbat_ov_falling_pack_sensor_);
+  LOG_SENSOR("  ", "Charge Voltage Target", this->vfb_reg_target_sensor_);
+  LOG_SENSOR("  ", "Battery Overvoltage Rising", this->vbat_ov_rising_pack_sensor_);
+  LOG_SENSOR("  ", "Battery Overvoltage Falling", this->vbat_ov_falling_pack_sensor_);
   LOG_TEXT_SENSOR("  ", "Charge Status", this->charge_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "TS Status", this->ts_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "MPPT Status", this->mppt_status_text_sensor_);
@@ -581,6 +630,12 @@ void BQ25756DumpRegistersButton::press_action() {
     return;
   }
   ESP_LOGW(TAG, "Failed register dump request");
+}
+
+void BQ25756CalibrateFeedbackButton::press_action() {
+  if (this->parent_ != nullptr && !this->parent_->calibrate_from_configured_voltage()) {
+    ESP_LOGW(TAG, "Battery feedback calibration failed");
+  }
 }
 
 }  // namespace bq25756

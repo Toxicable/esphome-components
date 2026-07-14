@@ -11,17 +11,10 @@ Component-scoped notes for `components/bq25756`.
 - Per-fault/per-flag binary status entities were removed to reduce duplicate entity noise; use `status_flags` for fault summary.
 - Implemented controls: `charge_enable`, `hiz_mode`, `reverse_mode`, `watchdog`, `watchdog_reset`, `dump_registers`.
 - Control entities now emit explicit `Action:` / `Action result:` INFO logs so HA clicks can be correlated with subsequent status/fault transitions.
-- Optional init-time configuration now supports:
-  - `charge_voltage_limit_mv` -> `REG0x00.VFB_REG`
-  - `charge_current_limit_ma` -> `REG0x02.ICHG_REG`
-  - `input_current_dpm_limit_ma` -> `REG0x06.IAC_DPM`
-  - `input_voltage_dpm_limit_mv` -> `REG0x08.VAC_DPM`
-  - `disable_ce_pin` -> `REG0x17.DIS_CE_PIN`
-  - `disable_ilim_hiz_pin` -> clear `REG0x18.EN_ILIM_HIZ_PIN`
-  - `disable_ichg_pin` -> clear `REG0x18.EN_ICHG_PIN`
-- Diagnostics now include live `VFB_REG` / `VBAT_OV` threshold sensors:
-  - `vfb_reg_target`, `vbat_ov_rising_fb`, `vbat_ov_falling_fb`
-  - optional pack-domain mapping with `fb_to_pack_voltage_scale` plus `vbat_ov_rising_pack` / `vbat_ov_falling_pack`
+- Required `battery.cell_count` and `battery.cell_chemistry` define the pack maximum/minimum voltage; supported chemistries are `lithium_ion` and `lifepo4`.
+- `charging.control: i2c` makes I2C the sole source of charge-enable and current-limit control, disabling CE, ILIM/HIZ, and ICHG pin functions together.
+- `calibration` is an explicit persisted DMM workflow: while charging is disabled, enter the measured pack voltage and press `calibrate_feedback`. The component derives the feedback ratio from the live VFB ADC reading and rewrites `REG0x00.VFB_REG` for the chemistry-derived maximum pack voltage.
+- Diagnostics publish pack-domain `charge_voltage_target`, `battery_overvoltage_rising`, and `battery_overvoltage_falling`; raw feedback-domain thresholds are intentionally not user-facing.
 - `vfb_voltage` should stay disabled unless explicitly configured; the datasheet recommends disabling that ADC channel during charging when it is not needed.
 - `ILIM_HIZ` remains hardware-active unless the board or firmware explicitly disables that pin function; if the pin is left floating or pulled above its HIZ threshold, the charger enters HIZ even when `REG0x17.EN_HIZ` is 0.
 - `CE` is still a hardware gate for charging unless `DIS_CE_PIN` is set; a floating/high CE pin can block charging while the I2C `EN_CHG` bit still reads enabled.

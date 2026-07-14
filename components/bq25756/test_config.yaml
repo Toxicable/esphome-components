@@ -46,53 +46,58 @@ bq25756:
   update_interval: 1s
   disable_watchdog: true
   event_logging: true
-  disable_ce_pin: true
-  disable_ilim_hiz_pin: true
-  disable_ichg_pin: true
-  charge_voltage_limit_mv: 1536
-  charge_current_limit_ma: 5000
-  input_current_dpm_limit_ma: 3000
-  input_voltage_dpm_limit_mv: 12000
-  fb_to_pack_voltage_scale: 10.94
-  iac_current:
-    name: "Charger Input Current"
-  vac_voltage:
-    name: "Charger Input Voltage"
-  ibat_current:
-    name: "Charger Output Current"
-  vbat_voltage:
-    name: "Charger Output Voltage"
-  ts_percent:
-    name: "Charger TS Percent"
-  vfb_voltage:
-    name: "Charger VFB Voltage"
-  vfb_reg_target:
-    name: "Charger VFB REG Target"
-  vbat_ov_rising_fb:
-    name: "Charger VBAT OV Rising FB"
-  vbat_ov_falling_fb:
-    name: "Charger VBAT OV Falling FB"
-  vbat_ov_rising_pack:
-    name: "Charger VBAT OV Rising Pack"
-  vbat_ov_falling_pack:
-    name: "Charger VBAT OV Falling Pack"
-  charge_status:
-    name: "Charge Status"
-  ts_status:
-    name: "Charger TS Status"
-  mppt_status:
-    name: "Charger MPPT Status"
-  status_flags:
-    name: "Charger Status Flags"
-  charge_enable:
-    name: "Charger Charge Enable"
-  hiz_mode:
-    name: "Charger HIZ Mode"
-  reverse_mode:
-    name: "Charger Reverse Mode"
-  watchdog:
-    name: "Charger Watchdog"
-  watchdog_reset:
-    name: "Charger Watchdog Reset"
-  dump_registers:
-    name: "Charger Dump Registers"
+  battery:
+    cell_count: 4
+    cell_chemistry: lithium_ion
+  charging:
+    battery_current_limit: 5A
+    input_current_limit: 3A
+    input_voltage_dpm_threshold: 12V
+    control: i2c
+  calibration:
+    measured_battery_voltage:
+      name: "Measured Battery Voltage"
+    calibrate_feedback:
+      name: "Calibrate Charger Feedback"
+  measurements:
+    input_current:
+      name: "Charger Input Current"
+    input_voltage:
+      name: "Charger Input Voltage"
+    battery_current:
+      name: "Charger Output Current"
+    battery_voltage:
+      name: "Charger Output Voltage"
+    temperature_percent:
+      name: "Charger TS Percent"
+  diagnostics:
+    feedback_voltage:
+      name: "Charger Feedback Voltage"
+    charge_voltage_target:
+      name: "Charger Charge Voltage Target"
+    battery_overvoltage_rising:
+      name: "Charger Battery Overvoltage Rising"
+    battery_overvoltage_falling:
+      name: "Charger Battery Overvoltage Falling"
+  status:
+    charging:
+      name: "Charge Status"
+    temperature:
+      name: "Charger TS Status"
+    mppt:
+      name: "Charger MPPT Status"
+    faults:
+      name: "Charger Status Flags"
+  controls:
+    charge_enable:
+      name: "Charger Charge Enable"
+    input_suspend:
+      name: "Charger Input Suspend"
+    reverse_mode:
+      name: "Charger Reverse Mode"
+    watchdog:
+      name: "Charger Watchdog"
+    reset_watchdog:
+      name: "Charger Watchdog Reset"
+    dump_registers:
+      name: "Charger Dump Registers"

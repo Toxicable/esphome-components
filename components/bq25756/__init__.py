@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, i2c, select, sensor, switch as switch_, text_sensor
+from esphome.components import button, i2c, number, select, sensor, switch as switch_, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
@@ -33,7 +33,7 @@ from esphome.const import (
 #   disable_watchdog: true
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "select", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["button", "number", "select", "sensor", "switch", "text_sensor"]
 
 bq25756_ns = cg.esphome_ns.namespace("bq25756")
 BQ25756Component = bq25756_ns.class_("BQ25756Component", cg.PollingComponent, i2c.I2CDevice)
@@ -43,38 +43,49 @@ BQ25756ReverseModeSwitch = bq25756_ns.class_("BQ25756ReverseModeSwitch", switch_
 BQ25756WatchdogSelect = bq25756_ns.class_("BQ25756WatchdogSelect", select.Select)
 BQ25756WatchdogResetButton = bq25756_ns.class_("BQ25756WatchdogResetButton", button.Button)
 BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
+BQ25756CalibrateFeedbackButton = bq25756_ns.class_("BQ25756CalibrateFeedbackButton", button.Button)
+BQ25756CalibrationVoltageNumber = bq25756_ns.class_("BQ25756CalibrationVoltageNumber", number.Number)
 
 CONF_DISABLE_WATCHDOG = "disable_watchdog"
 CONF_EVENT_LOGGING = "event_logging"
-CONF_DISABLE_CE_PIN = "disable_ce_pin"
-CONF_DISABLE_ILIM_HIZ_PIN = "disable_ilim_hiz_pin"
-CONF_DISABLE_ICHG_PIN = "disable_ichg_pin"
-CONF_CHARGE_VOLTAGE_LIMIT_MV = "charge_voltage_limit_mv"
-CONF_CHARGE_CURRENT_LIMIT_MA = "charge_current_limit_ma"
-CONF_INPUT_CURRENT_DPM_LIMIT_MA = "input_current_dpm_limit_ma"
-CONF_INPUT_VOLTAGE_DPM_LIMIT_MV = "input_voltage_dpm_limit_mv"
-CONF_FB_TO_PACK_VOLTAGE_SCALE = "fb_to_pack_voltage_scale"
-CONF_IAC_CURRENT = "iac_current"
-CONF_IBAT_CURRENT = "ibat_current"
-CONF_VAC_VOLTAGE = "vac_voltage"
-CONF_VBAT_VOLTAGE = "vbat_voltage"
-CONF_TS_PERCENT = "ts_percent"
-CONF_VFB_VOLTAGE = "vfb_voltage"
-CONF_VFB_REG_TARGET = "vfb_reg_target"
-CONF_VBAT_OV_RISING_FB = "vbat_ov_rising_fb"
-CONF_VBAT_OV_FALLING_FB = "vbat_ov_falling_fb"
-CONF_VBAT_OV_RISING_PACK = "vbat_ov_rising_pack"
-CONF_VBAT_OV_FALLING_PACK = "vbat_ov_falling_pack"
-CONF_CHARGE_STATUS = "charge_status"
-CONF_TS_STATUS = "ts_status"
-CONF_MPPT_STATUS = "mppt_status"
-CONF_STATUS_FLAGS = "status_flags"
+CONF_BATTERY = "battery"
+CONF_CELL_COUNT = "cell_count"
+CONF_CELL_CHEMISTRY = "cell_chemistry"
+CONF_CHARGING = "charging"
+CONF_BATTERY_CURRENT_LIMIT = "battery_current_limit"
+CONF_INPUT_CURRENT_LIMIT = "input_current_limit"
+CONF_INPUT_VOLTAGE_DPM_THRESHOLD = "input_voltage_dpm_threshold"
+CONF_CONTROL = "control"
+CONF_CHARGE_VOLTAGE_LIMIT_MV = "_charge_voltage_limit_mv"
+CONF_FEEDBACK_TO_BATTERY_RATIO = "_feedback_to_battery_ratio"
+CONF_MINIMUM_BATTERY_VOLTAGE = "_minimum_battery_voltage"
+CONF_MEASUREMENTS = "measurements"
+CONF_INPUT_CURRENT = "input_current"
+CONF_BATTERY_CURRENT = "battery_current"
+CONF_INPUT_VOLTAGE = "input_voltage"
+CONF_BATTERY_VOLTAGE = "battery_voltage"
+CONF_TEMPERATURE_PERCENT = "temperature_percent"
+CONF_DIAGNOSTICS = "diagnostics"
+CONF_FEEDBACK_VOLTAGE = "feedback_voltage"
+CONF_CHARGE_VOLTAGE_TARGET = "charge_voltage_target"
+CONF_BATTERY_OVERVOLTAGE_RISING = "battery_overvoltage_rising"
+CONF_BATTERY_OVERVOLTAGE_FALLING = "battery_overvoltage_falling"
+CONF_STATUS = "status"
+CONF_CHARGING_STATUS = "charging"
+CONF_TEMPERATURE_STATUS = "temperature"
+CONF_MPPT_STATUS = "mppt"
+CONF_FAULTS = "faults"
+CONF_CONTROLS = "controls"
 CONF_CHARGE_ENABLE = "charge_enable"
-CONF_HIZ_MODE = "hiz_mode"
+CONF_INPUT_SUSPEND = "input_suspend"
 CONF_REVERSE_MODE = "reverse_mode"
 CONF_WATCHDOG = "watchdog"
-CONF_WATCHDOG_RESET = "watchdog_reset"
+CONF_RESET_WATCHDOG = "reset_watchdog"
 CONF_DUMP_REGISTERS = "dump_registers"
+CONF_CALIBRATION = "calibration"
+CONF_RESTORE = "restore"
+CONF_MEASURED_BATTERY_VOLTAGE = "measured_battery_voltage"
+CONF_CALIBRATE_FEEDBACK = "calibrate_feedback"
 
 WATCHDOG_OPTIONS = [
     "disable",
@@ -83,124 +94,90 @@ WATCHDOG_OPTIONS = [
     "160s",
 ]
 
+CELL_CHEMISTRY_PROFILES = {
+    "lithium_ion": {"maximum_cell_voltage": 4.2, "minimum_cell_voltage": 3.0},
+    "lifepo4": {"maximum_cell_voltage": 3.65, "minimum_cell_voltage": 2.5},
+}
+
+
+def validate_battery(config):
+    profile = CELL_CHEMISTRY_PROFILES[config[CONF_CELL_CHEMISTRY]]
+    maximum_battery_voltage = config[CONF_CELL_COUNT] * profile["maximum_cell_voltage"]
+    config[CONF_CHARGE_VOLTAGE_LIMIT_MV] = 1534
+    config[CONF_FEEDBACK_TO_BATTERY_RATIO] = maximum_battery_voltage / 1.534
+    config[CONF_MINIMUM_BATTERY_VOLTAGE] = config[CONF_CELL_COUNT] * profile["minimum_cell_voltage"]
+    return config
+
+
+BATTERY_SCHEMA = cv.All(cv.Schema(
+    {
+        cv.Required(CONF_CELL_COUNT): cv.int_range(min=1, max=16),
+        cv.Required(CONF_CELL_CHEMISTRY): cv.one_of(*CELL_CHEMISTRY_PROFILES, lower=True),
+    }
+), validate_battery)
+
+CHARGING_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_BATTERY_CURRENT_LIMIT): cv.All(cv.current, cv.Range(min=0.4, max=20.0)),
+        cv.Optional(CONF_INPUT_CURRENT_LIMIT): cv.All(cv.current, cv.Range(min=0.4, max=20.0)),
+        cv.Optional(CONF_INPUT_VOLTAGE_DPM_THRESHOLD): cv.All(cv.voltage, cv.Range(min=4.2, max=65.0)),
+        cv.Optional(CONF_CONTROL, default="pins"): cv.one_of("i2c", "pins", lower=True),
+    }
+)
+
+MEASUREMENTS_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_INPUT_CURRENT): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIAMP, accuracy_decimals=1, device_class=DEVICE_CLASS_CURRENT, state_class=STATE_CLASS_MEASUREMENT),
+        cv.Optional(CONF_BATTERY_CURRENT): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIAMP, accuracy_decimals=0, device_class=DEVICE_CLASS_CURRENT, state_class=STATE_CLASS_MEASUREMENT),
+        cv.Optional(CONF_INPUT_VOLTAGE): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT),
+        cv.Optional(CONF_BATTERY_VOLTAGE): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT),
+        cv.Optional(CONF_TEMPERATURE_PERCENT): sensor.sensor_schema(unit_of_measurement=UNIT_PERCENT, accuracy_decimals=3, state_class=STATE_CLASS_MEASUREMENT),
+    }
+)
+
+DIAGNOSTICS_SCHEMA = cv.Schema(
+    {
+        cv.Optional(CONF_FEEDBACK_VOLTAGE): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+        cv.Optional(CONF_CHARGE_VOLTAGE_TARGET): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+        cv.Optional(CONF_BATTERY_OVERVOLTAGE_RISING): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=1, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+        cv.Optional(CONF_BATTERY_OVERVOLTAGE_FALLING): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=1, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+    }
+)
+
 CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(BQ25756Component),
             cv.Optional(CONF_DISABLE_WATCHDOG, default=True): cv.boolean,
             cv.Optional(CONF_EVENT_LOGGING, default=True): cv.boolean,
-            cv.Optional(CONF_DISABLE_CE_PIN, default=False): cv.boolean,
-            cv.Optional(CONF_DISABLE_ILIM_HIZ_PIN, default=False): cv.boolean,
-            cv.Optional(CONF_DISABLE_ICHG_PIN, default=False): cv.boolean,
-            cv.Optional(CONF_CHARGE_VOLTAGE_LIMIT_MV): cv.int_range(min=1504, max=1566),
-            cv.Optional(CONF_CHARGE_CURRENT_LIMIT_MA): cv.int_range(min=400, max=20000),
-            cv.Optional(CONF_INPUT_CURRENT_DPM_LIMIT_MA): cv.int_range(min=400, max=20000),
-            cv.Optional(CONF_INPUT_VOLTAGE_DPM_LIMIT_MV): cv.int_range(min=4200, max=65000),
-            cv.Optional(CONF_FB_TO_PACK_VOLTAGE_SCALE): cv.float_range(min=0.000001),
-            cv.Optional(CONF_IAC_CURRENT): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIAMP,
-                accuracy_decimals=1,
-                device_class=DEVICE_CLASS_CURRENT,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_IBAT_CURRENT): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIAMP,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_CURRENT,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VAC_VOLTAGE): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VBAT_VOLTAGE): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_TS_PERCENT): sensor.sensor_schema(
-                unit_of_measurement=UNIT_PERCENT,
-                accuracy_decimals=3,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VFB_VOLTAGE): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-            ),
-            cv.Optional(CONF_VFB_REG_TARGET): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=0,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_VBAT_OV_RISING_FB): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=1,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_VBAT_OV_FALLING_FB): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=1,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_VBAT_OV_RISING_PACK): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=1,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_VBAT_OV_FALLING_PACK): sensor.sensor_schema(
-                unit_of_measurement=UNIT_MILLIVOLT,
-                accuracy_decimals=1,
-                device_class=DEVICE_CLASS_VOLTAGE,
-                state_class=STATE_CLASS_MEASUREMENT,
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
-            ),
-            cv.Optional(CONF_CHARGE_STATUS): text_sensor.text_sensor_schema(),
-            cv.Optional(CONF_TS_STATUS): text_sensor.text_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_MPPT_STATUS): text_sensor.text_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_STATUS_FLAGS): text_sensor.text_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(
-                BQ25756ChargeEnableSwitch,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
-            cv.Optional(CONF_HIZ_MODE): switch_.switch_schema(
-                BQ25756HizModeSwitch,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
-            cv.Optional(CONF_REVERSE_MODE): switch_.switch_schema(
-                BQ25756ReverseModeSwitch,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
-            cv.Optional(CONF_WATCHDOG): select.select_schema(
-                BQ25756WatchdogSelect,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
-            cv.Optional(CONF_WATCHDOG_RESET): button.button_schema(
-                BQ25756WatchdogResetButton,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
-            cv.Optional(CONF_DUMP_REGISTERS): button.button_schema(
-                BQ25756DumpRegistersButton,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
+            cv.Required(CONF_BATTERY): BATTERY_SCHEMA,
+            cv.Required(CONF_CHARGING): CHARGING_SCHEMA,
+            cv.Optional(CONF_CALIBRATION): cv.Schema({
+                cv.Optional(CONF_RESTORE, default=True): cv.boolean,
+                cv.Required(CONF_MEASURED_BATTERY_VOLTAGE): number.number_schema(BQ25756CalibrationVoltageNumber,
+                    unit_of_measurement="V", device_class=DEVICE_CLASS_VOLTAGE,
+                    entity_category=ENTITY_CATEGORY_CONFIG,
+                ),
+                cv.Required(CONF_CALIBRATE_FEEDBACK): button.button_schema(
+                    BQ25756CalibrateFeedbackButton, entity_category=ENTITY_CATEGORY_CONFIG,
+                ),
+            }),
+            cv.Optional(CONF_MEASUREMENTS, default={}): MEASUREMENTS_SCHEMA,
+            cv.Optional(CONF_DIAGNOSTICS, default={}): DIAGNOSTICS_SCHEMA,
+            cv.Optional(CONF_STATUS, default={}): cv.Schema({
+                cv.Optional(CONF_CHARGING_STATUS): text_sensor.text_sensor_schema(),
+                cv.Optional(CONF_TEMPERATURE_STATUS): text_sensor.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+                cv.Optional(CONF_MPPT_STATUS): text_sensor.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+                cv.Optional(CONF_FAULTS): text_sensor.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+            }),
+            cv.Optional(CONF_CONTROLS, default={}): cv.Schema({
+                cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(BQ25756ChargeEnableSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
+                cv.Optional(CONF_INPUT_SUSPEND): switch_.switch_schema(BQ25756HizModeSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
+                cv.Optional(CONF_REVERSE_MODE): switch_.switch_schema(BQ25756ReverseModeSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
+                cv.Optional(CONF_WATCHDOG): select.select_schema(BQ25756WatchdogSelect, entity_category=ENTITY_CATEGORY_CONFIG),
+                cv.Optional(CONF_RESET_WATCHDOG): button.button_schema(BQ25756WatchdogResetButton, entity_category=ENTITY_CATEGORY_CONFIG),
+                cv.Optional(CONF_DUMP_REGISTERS): button.button_schema(BQ25756DumpRegistersButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+            }),
         }
     )
     .extend(cv.polling_component_schema("1s"))
@@ -215,92 +192,105 @@ async def to_code(config):
 
     cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
     cg.add(var.set_event_logging(config[CONF_EVENT_LOGGING]))
-    cg.add(var.set_disable_ce_pin(config[CONF_DISABLE_CE_PIN]))
-    cg.add(var.set_disable_ilim_hiz_pin(config[CONF_DISABLE_ILIM_HIZ_PIN]))
-    cg.add(var.set_disable_ichg_pin(config[CONF_DISABLE_ICHG_PIN]))
-    if CONF_CHARGE_VOLTAGE_LIMIT_MV in config:
-        cg.add(var.set_charge_voltage_limit_mv(config[CONF_CHARGE_VOLTAGE_LIMIT_MV]))
-    if CONF_CHARGE_CURRENT_LIMIT_MA in config:
-        cg.add(var.set_charge_current_limit_ma(config[CONF_CHARGE_CURRENT_LIMIT_MA]))
-    if CONF_INPUT_CURRENT_DPM_LIMIT_MA in config:
-        cg.add(var.set_input_current_dpm_limit_ma(config[CONF_INPUT_CURRENT_DPM_LIMIT_MA]))
-    if CONF_INPUT_VOLTAGE_DPM_LIMIT_MV in config:
-        cg.add(var.set_input_voltage_dpm_limit_mv(config[CONF_INPUT_VOLTAGE_DPM_LIMIT_MV]))
-    if CONF_FB_TO_PACK_VOLTAGE_SCALE in config:
-        cg.add(var.set_fb_to_pack_voltage_scale(config[CONF_FB_TO_PACK_VOLTAGE_SCALE]))
+    charging = config[CONF_CHARGING]
+    i2c_control = charging[CONF_CONTROL] == "i2c"
+    cg.add(var.set_disable_ce_pin(i2c_control))
+    cg.add(var.set_disable_ilim_hiz_pin(i2c_control))
+    cg.add(var.set_disable_ichg_pin(i2c_control))
+    battery = config[CONF_BATTERY]
+    cg.add(var.set_charge_voltage_limit_mv(battery[CONF_CHARGE_VOLTAGE_LIMIT_MV]))
+    cg.add(var.set_fb_to_pack_voltage_scale(battery[CONF_FEEDBACK_TO_BATTERY_RATIO]))
+    cg.add(var.set_battery_target_voltage(
+        battery[CONF_CELL_COUNT] * CELL_CHEMISTRY_PROFILES[battery[CONF_CELL_CHEMISTRY]]["maximum_cell_voltage"]
+    ))
+    if CONF_BATTERY_CURRENT_LIMIT in charging:
+        cg.add(var.set_charge_current_limit_ma(round(charging[CONF_BATTERY_CURRENT_LIMIT] * 1000)))
+    if CONF_INPUT_CURRENT_LIMIT in charging:
+        cg.add(var.set_input_current_dpm_limit_ma(round(charging[CONF_INPUT_CURRENT_LIMIT] * 1000)))
+    if CONF_INPUT_VOLTAGE_DPM_THRESHOLD in charging:
+        cg.add(var.set_input_voltage_dpm_limit_mv(round(charging[CONF_INPUT_VOLTAGE_DPM_THRESHOLD] * 1000)))
 
-    if CONF_IAC_CURRENT in config:
-        sens = await sensor.new_sensor(config[CONF_IAC_CURRENT])
+    measurements = config[CONF_MEASUREMENTS]
+    if CONF_INPUT_CURRENT in measurements:
+        sens = await sensor.new_sensor(measurements[CONF_INPUT_CURRENT])
         cg.add(var.set_iac_current_sensor(sens))
-    if CONF_IBAT_CURRENT in config:
-        sens = await sensor.new_sensor(config[CONF_IBAT_CURRENT])
+    if CONF_BATTERY_CURRENT in measurements:
+        sens = await sensor.new_sensor(measurements[CONF_BATTERY_CURRENT])
         cg.add(var.set_ibat_current_sensor(sens))
-    if CONF_VAC_VOLTAGE in config:
-        sens = await sensor.new_sensor(config[CONF_VAC_VOLTAGE])
+    if CONF_INPUT_VOLTAGE in measurements:
+        sens = await sensor.new_sensor(measurements[CONF_INPUT_VOLTAGE])
         cg.add(var.set_vac_voltage_sensor(sens))
-    if CONF_VBAT_VOLTAGE in config:
-        sens = await sensor.new_sensor(config[CONF_VBAT_VOLTAGE])
+    if CONF_BATTERY_VOLTAGE in measurements:
+        sens = await sensor.new_sensor(measurements[CONF_BATTERY_VOLTAGE])
         cg.add(var.set_vbat_voltage_sensor(sens))
-    if CONF_TS_PERCENT in config:
-        sens = await sensor.new_sensor(config[CONF_TS_PERCENT])
+    if CONF_TEMPERATURE_PERCENT in measurements:
+        sens = await sensor.new_sensor(measurements[CONF_TEMPERATURE_PERCENT])
         cg.add(var.set_ts_percent_sensor(sens))
-    if CONF_VFB_VOLTAGE in config:
-        sens = await sensor.new_sensor(config[CONF_VFB_VOLTAGE])
+    diagnostics = config[CONF_DIAGNOSTICS]
+    if CONF_FEEDBACK_VOLTAGE in diagnostics:
+        sens = await sensor.new_sensor(diagnostics[CONF_FEEDBACK_VOLTAGE])
         cg.add(var.set_vfb_voltage_sensor(sens))
-    if CONF_VFB_REG_TARGET in config:
-        sens = await sensor.new_sensor(config[CONF_VFB_REG_TARGET])
+    if CONF_CHARGE_VOLTAGE_TARGET in diagnostics:
+        sens = await sensor.new_sensor(diagnostics[CONF_CHARGE_VOLTAGE_TARGET])
         cg.add(var.set_vfb_reg_target_sensor(sens))
-    if CONF_VBAT_OV_RISING_FB in config:
-        sens = await sensor.new_sensor(config[CONF_VBAT_OV_RISING_FB])
-        cg.add(var.set_vbat_ov_rising_fb_sensor(sens))
-    if CONF_VBAT_OV_FALLING_FB in config:
-        sens = await sensor.new_sensor(config[CONF_VBAT_OV_FALLING_FB])
-        cg.add(var.set_vbat_ov_falling_fb_sensor(sens))
-    if CONF_VBAT_OV_RISING_PACK in config:
-        sens = await sensor.new_sensor(config[CONF_VBAT_OV_RISING_PACK])
+    if CONF_BATTERY_OVERVOLTAGE_RISING in diagnostics:
+        sens = await sensor.new_sensor(diagnostics[CONF_BATTERY_OVERVOLTAGE_RISING])
         cg.add(var.set_vbat_ov_rising_pack_sensor(sens))
-    if CONF_VBAT_OV_FALLING_PACK in config:
-        sens = await sensor.new_sensor(config[CONF_VBAT_OV_FALLING_PACK])
+    if CONF_BATTERY_OVERVOLTAGE_FALLING in diagnostics:
+        sens = await sensor.new_sensor(diagnostics[CONF_BATTERY_OVERVOLTAGE_FALLING])
         cg.add(var.set_vbat_ov_falling_pack_sensor(sens))
 
-    if CONF_CHARGE_STATUS in config:
-        ts = await text_sensor.new_text_sensor(config[CONF_CHARGE_STATUS])
+    status = config[CONF_STATUS]
+    if CONF_CHARGING_STATUS in status:
+        ts = await text_sensor.new_text_sensor(status[CONF_CHARGING_STATUS])
         cg.add(var.set_charge_status_text_sensor(ts))
-    if CONF_TS_STATUS in config:
-        ts = await text_sensor.new_text_sensor(config[CONF_TS_STATUS])
+    if CONF_TEMPERATURE_STATUS in status:
+        ts = await text_sensor.new_text_sensor(status[CONF_TEMPERATURE_STATUS])
         cg.add(var.set_ts_status_text_sensor(ts))
-    if CONF_MPPT_STATUS in config:
-        ts = await text_sensor.new_text_sensor(config[CONF_MPPT_STATUS])
+    if CONF_MPPT_STATUS in status:
+        ts = await text_sensor.new_text_sensor(status[CONF_MPPT_STATUS])
         cg.add(var.set_mppt_status_text_sensor(ts))
-    if CONF_STATUS_FLAGS in config:
-        ts = await text_sensor.new_text_sensor(config[CONF_STATUS_FLAGS])
+    if CONF_FAULTS in status:
+        ts = await text_sensor.new_text_sensor(status[CONF_FAULTS])
         cg.add(var.set_status_flags_text_sensor(ts))
 
-    if CONF_CHARGE_ENABLE in config:
-        sw = await switch_.new_switch(config[CONF_CHARGE_ENABLE])
+    controls = config[CONF_CONTROLS]
+    if CONF_CHARGE_ENABLE in controls:
+        sw = await switch_.new_switch(controls[CONF_CHARGE_ENABLE])
         await cg.register_parented(sw, var)
         cg.add(var.set_charge_enable_switch(sw))
-    if CONF_HIZ_MODE in config:
-        sw = await switch_.new_switch(config[CONF_HIZ_MODE])
+    if CONF_INPUT_SUSPEND in controls:
+        sw = await switch_.new_switch(controls[CONF_INPUT_SUSPEND])
         await cg.register_parented(sw, var)
         cg.add(var.set_hiz_mode_switch(sw))
-    if CONF_REVERSE_MODE in config:
-        sw = await switch_.new_switch(config[CONF_REVERSE_MODE])
+    if CONF_REVERSE_MODE in controls:
+        sw = await switch_.new_switch(controls[CONF_REVERSE_MODE])
         await cg.register_parented(sw, var)
         cg.add(var.set_reverse_mode_switch(sw))
 
-    if CONF_WATCHDOG in config:
+    if CONF_WATCHDOG in controls:
         watchdog_select = await select.new_select(
-            config[CONF_WATCHDOG],
+            controls[CONF_WATCHDOG],
             options=WATCHDOG_OPTIONS,
         )
         await cg.register_parented(watchdog_select, var)
         cg.add(var.set_watchdog_select(watchdog_select))
 
-    if CONF_WATCHDOG_RESET in config:
-        watchdog_reset_button = await button.new_button(config[CONF_WATCHDOG_RESET])
+    if CONF_RESET_WATCHDOG in controls:
+        watchdog_reset_button = await button.new_button(controls[CONF_RESET_WATCHDOG])
         await cg.register_parented(watchdog_reset_button, var)
 
-    if CONF_DUMP_REGISTERS in config:
-        dump_registers_button = await button.new_button(config[CONF_DUMP_REGISTERS])
+    if CONF_DUMP_REGISTERS in controls:
+        dump_registers_button = await button.new_button(controls[CONF_DUMP_REGISTERS])
         await cg.register_parented(dump_registers_button, var)
+
+    if CONF_CALIBRATION in config:
+        calibration = config[CONF_CALIBRATION]
+        cg.add(var.set_restore_calibration(calibration[CONF_RESTORE]))
+        voltage_number = await number.new_number(
+            calibration[CONF_MEASURED_BATTERY_VOLTAGE], min_value=0.0, max_value=100.0, step=0.001
+        )
+        await cg.register_parented(voltage_number, var)
+        cg.add(var.set_calibration_voltage_number(voltage_number))
+        calibrate_button = await button.new_button(calibration[CONF_CALIBRATE_FEEDBACK])
+        await cg.register_parented(calibrate_button, var)
