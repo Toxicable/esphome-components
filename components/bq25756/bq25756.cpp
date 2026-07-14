@@ -85,6 +85,11 @@ bool BQ25756Component::apply_battery_target_() {
 
 bool BQ25756Component::calibrate_feedback(float measured_battery_voltage_v) {
   if (!std::isfinite(measured_battery_voltage_v) || measured_battery_voltage_v <= 0.0f) return false;
+  ::bq25756_core::ControlStates controls{};
+  if (!this->service_.read_control_states(controls) || controls.charge_enabled) {
+    ESP_LOGW(TAG, "Disable charging before calibrating battery feedback");
+    return false;
+  }
   ::bq25756_core::Measurements measurements{};
   if (!this->service_.read_measurements(measurements, true) || measurements.vfb_mv <= 0.0f) return false;
   const float ratio = measured_battery_voltage_v * 1000.0f / measurements.vfb_mv;
