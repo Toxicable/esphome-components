@@ -44,16 +44,12 @@ bq25756:
   i2c_id: i2c_ext
   address: 0x6B
   update_interval: 1s
-  disable_watchdog: true
-  event_logging: true
   battery:
     cell_count: 4
     cell_chemistry: lithium_ion
   charging:
     battery_current_limit: 5A
     input_current_limit: 3A
-    input_voltage_dpm_threshold: 12V
-    control: i2c
   calibration:
     measured_battery_voltage:
       name: "Measured Battery Voltage"
@@ -73,12 +69,6 @@ bq25756:
   diagnostics:
     feedback_voltage:
       name: "Charger Feedback Voltage"
-    charge_voltage_target:
-      name: "Charger Charge Voltage Target"
-    battery_overvoltage_rising:
-      name: "Charger Battery Overvoltage Rising"
-    battery_overvoltage_falling:
-      name: "Charger Battery Overvoltage Falling"
   status:
     charging:
       name: "Charge Status"
@@ -91,13 +81,5 @@ bq25756:
   controls:
     charge_enable:
       name: "Charger Charge Enable"
-    input_suspend:
-      name: "Charger Input Suspend"
-    reverse_mode:
-      name: "Charger Reverse Mode"
-    watchdog:
-      name: "Charger Watchdog"
-    reset_watchdog:
-      name: "Charger Watchdog Reset"
     dump_registers:
       name: "Charger Dump Registers"

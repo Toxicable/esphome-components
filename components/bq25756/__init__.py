@@ -1,6 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, i2c, number, select, sensor, switch as switch_, text_sensor
+from esphome.components import button, i2c, number, sensor, switch as switch_, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
@@ -33,29 +33,22 @@ from esphome.const import (
 #   disable_watchdog: true
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "number", "select", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["button", "number", "sensor", "switch", "text_sensor"]
 
 bq25756_ns = cg.esphome_ns.namespace("bq25756")
 BQ25756Component = bq25756_ns.class_("BQ25756Component", cg.PollingComponent, i2c.I2CDevice)
 BQ25756ChargeEnableSwitch = bq25756_ns.class_("BQ25756ChargeEnableSwitch", switch_.Switch)
 BQ25756HizModeSwitch = bq25756_ns.class_("BQ25756HizModeSwitch", switch_.Switch)
-BQ25756ReverseModeSwitch = bq25756_ns.class_("BQ25756ReverseModeSwitch", switch_.Switch)
-BQ25756WatchdogSelect = bq25756_ns.class_("BQ25756WatchdogSelect", select.Select)
-BQ25756WatchdogResetButton = bq25756_ns.class_("BQ25756WatchdogResetButton", button.Button)
 BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
 BQ25756CalibrateFeedbackButton = bq25756_ns.class_("BQ25756CalibrateFeedbackButton", button.Button)
 BQ25756CalibrationVoltageNumber = bq25756_ns.class_("BQ25756CalibrationVoltageNumber", number.Number)
 
-CONF_DISABLE_WATCHDOG = "disable_watchdog"
-CONF_EVENT_LOGGING = "event_logging"
 CONF_BATTERY = "battery"
 CONF_CELL_COUNT = "cell_count"
 CONF_CELL_CHEMISTRY = "cell_chemistry"
 CONF_CHARGING = "charging"
 CONF_BATTERY_CURRENT_LIMIT = "battery_current_limit"
 CONF_INPUT_CURRENT_LIMIT = "input_current_limit"
-CONF_INPUT_VOLTAGE_DPM_THRESHOLD = "input_voltage_dpm_threshold"
-CONF_CONTROL = "control"
 CONF_CHARGE_VOLTAGE_LIMIT_MV = "_charge_voltage_limit_mv"
 CONF_FEEDBACK_TO_BATTERY_RATIO = "_feedback_to_battery_ratio"
 CONF_MINIMUM_BATTERY_VOLTAGE = "_minimum_battery_voltage"
@@ -67,9 +60,6 @@ CONF_BATTERY_VOLTAGE = "battery_voltage"
 CONF_TEMPERATURE_PERCENT = "temperature_percent"
 CONF_DIAGNOSTICS = "diagnostics"
 CONF_FEEDBACK_VOLTAGE = "feedback_voltage"
-CONF_CHARGE_VOLTAGE_TARGET = "charge_voltage_target"
-CONF_BATTERY_OVERVOLTAGE_RISING = "battery_overvoltage_rising"
-CONF_BATTERY_OVERVOLTAGE_FALLING = "battery_overvoltage_falling"
 CONF_STATUS = "status"
 CONF_CHARGING_STATUS = "charging"
 CONF_TEMPERATURE_STATUS = "temperature"
@@ -77,22 +67,11 @@ CONF_MPPT_STATUS = "mppt"
 CONF_FAULTS = "faults"
 CONF_CONTROLS = "controls"
 CONF_CHARGE_ENABLE = "charge_enable"
-CONF_INPUT_SUSPEND = "input_suspend"
-CONF_REVERSE_MODE = "reverse_mode"
-CONF_WATCHDOG = "watchdog"
-CONF_RESET_WATCHDOG = "reset_watchdog"
 CONF_DUMP_REGISTERS = "dump_registers"
 CONF_CALIBRATION = "calibration"
 CONF_RESTORE = "restore"
 CONF_MEASURED_BATTERY_VOLTAGE = "measured_battery_voltage"
 CONF_CALIBRATE_FEEDBACK = "calibrate_feedback"
-
-WATCHDOG_OPTIONS = [
-    "disable",
-    "40s",
-    "80s",
-    "160s",
-]
 
 CELL_CHEMISTRY_PROFILES = {
     "lithium_ion": {"maximum_cell_voltage": 4.2, "minimum_cell_voltage": 3.0},
@@ -120,8 +99,6 @@ CHARGING_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_BATTERY_CURRENT_LIMIT): cv.All(cv.current, cv.Range(min=0.4, max=20.0)),
         cv.Optional(CONF_INPUT_CURRENT_LIMIT): cv.All(cv.current, cv.Range(min=0.4, max=20.0)),
-        cv.Optional(CONF_INPUT_VOLTAGE_DPM_THRESHOLD): cv.All(cv.voltage, cv.Range(min=4.2, max=65.0)),
-        cv.Optional(CONF_CONTROL, default="pins"): cv.one_of("i2c", "pins", lower=True),
     }
 )
 
@@ -138,9 +115,6 @@ MEASUREMENTS_SCHEMA = cv.Schema(
 DIAGNOSTICS_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_FEEDBACK_VOLTAGE): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
-        cv.Optional(CONF_CHARGE_VOLTAGE_TARGET): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
-        cv.Optional(CONF_BATTERY_OVERVOLTAGE_RISING): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=1, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
-        cv.Optional(CONF_BATTERY_OVERVOLTAGE_FALLING): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=1, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
     }
 )
 
@@ -148,8 +122,6 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(BQ25756Component),
-            cv.Optional(CONF_DISABLE_WATCHDOG, default=True): cv.boolean,
-            cv.Optional(CONF_EVENT_LOGGING, default=True): cv.boolean,
             cv.Required(CONF_BATTERY): BATTERY_SCHEMA,
             cv.Required(CONF_CHARGING): CHARGING_SCHEMA,
             cv.Optional(CONF_CALIBRATION): cv.Schema({
@@ -172,10 +144,6 @@ CONFIG_SCHEMA = (
             }),
             cv.Optional(CONF_CONTROLS, default={}): cv.Schema({
                 cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(BQ25756ChargeEnableSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
-                cv.Optional(CONF_INPUT_SUSPEND): switch_.switch_schema(BQ25756HizModeSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
-                cv.Optional(CONF_REVERSE_MODE): switch_.switch_schema(BQ25756ReverseModeSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
-                cv.Optional(CONF_WATCHDOG): select.select_schema(BQ25756WatchdogSelect, entity_category=ENTITY_CATEGORY_CONFIG),
-                cv.Optional(CONF_RESET_WATCHDOG): button.button_schema(BQ25756WatchdogResetButton, entity_category=ENTITY_CATEGORY_CONFIG),
                 cv.Optional(CONF_DUMP_REGISTERS): button.button_schema(BQ25756DumpRegistersButton, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
             }),
         }
@@ -190,13 +158,10 @@ async def to_code(config):
     await cg.register_component(var, config)
     await i2c.register_i2c_device(var, config)
 
-    cg.add(var.set_disable_watchdog(config[CONF_DISABLE_WATCHDOG]))
-    cg.add(var.set_event_logging(config[CONF_EVENT_LOGGING]))
     charging = config[CONF_CHARGING]
-    i2c_control = charging[CONF_CONTROL] == "i2c"
-    cg.add(var.set_disable_ce_pin(i2c_control))
-    cg.add(var.set_disable_ilim_hiz_pin(i2c_control))
-    cg.add(var.set_disable_ichg_pin(i2c_control))
+    cg.add(var.set_disable_ce_pin(True))
+    cg.add(var.set_disable_ilim_hiz_pin(True))
+    cg.add(var.set_disable_ichg_pin(True))
     battery = config[CONF_BATTERY]
     cg.add(var.set_charge_voltage_limit_mv(battery[CONF_CHARGE_VOLTAGE_LIMIT_MV]))
     cg.add(var.set_fb_to_pack_voltage_scale(battery[CONF_FEEDBACK_TO_BATTERY_RATIO]))
@@ -207,8 +172,6 @@ async def to_code(config):
         cg.add(var.set_charge_current_limit_ma(round(charging[CONF_BATTERY_CURRENT_LIMIT] * 1000)))
     if CONF_INPUT_CURRENT_LIMIT in charging:
         cg.add(var.set_input_current_dpm_limit_ma(round(charging[CONF_INPUT_CURRENT_LIMIT] * 1000)))
-    if CONF_INPUT_VOLTAGE_DPM_THRESHOLD in charging:
-        cg.add(var.set_input_voltage_dpm_limit_mv(round(charging[CONF_INPUT_VOLTAGE_DPM_THRESHOLD] * 1000)))
 
     measurements = config[CONF_MEASUREMENTS]
     if CONF_INPUT_CURRENT in measurements:
@@ -230,15 +193,6 @@ async def to_code(config):
     if CONF_FEEDBACK_VOLTAGE in diagnostics:
         sens = await sensor.new_sensor(diagnostics[CONF_FEEDBACK_VOLTAGE])
         cg.add(var.set_vfb_voltage_sensor(sens))
-    if CONF_CHARGE_VOLTAGE_TARGET in diagnostics:
-        sens = await sensor.new_sensor(diagnostics[CONF_CHARGE_VOLTAGE_TARGET])
-        cg.add(var.set_vfb_reg_target_sensor(sens))
-    if CONF_BATTERY_OVERVOLTAGE_RISING in diagnostics:
-        sens = await sensor.new_sensor(diagnostics[CONF_BATTERY_OVERVOLTAGE_RISING])
-        cg.add(var.set_vbat_ov_rising_pack_sensor(sens))
-    if CONF_BATTERY_OVERVOLTAGE_FALLING in diagnostics:
-        sens = await sensor.new_sensor(diagnostics[CONF_BATTERY_OVERVOLTAGE_FALLING])
-        cg.add(var.set_vbat_ov_falling_pack_sensor(sens))
 
     status = config[CONF_STATUS]
     if CONF_CHARGING_STATUS in status:
@@ -259,27 +213,6 @@ async def to_code(config):
         sw = await switch_.new_switch(controls[CONF_CHARGE_ENABLE])
         await cg.register_parented(sw, var)
         cg.add(var.set_charge_enable_switch(sw))
-    if CONF_INPUT_SUSPEND in controls:
-        sw = await switch_.new_switch(controls[CONF_INPUT_SUSPEND])
-        await cg.register_parented(sw, var)
-        cg.add(var.set_hiz_mode_switch(sw))
-    if CONF_REVERSE_MODE in controls:
-        sw = await switch_.new_switch(controls[CONF_REVERSE_MODE])
-        await cg.register_parented(sw, var)
-        cg.add(var.set_reverse_mode_switch(sw))
-
-    if CONF_WATCHDOG in controls:
-        watchdog_select = await select.new_select(
-            controls[CONF_WATCHDOG],
-            options=WATCHDOG_OPTIONS,
-        )
-        await cg.register_parented(watchdog_select, var)
-        cg.add(var.set_watchdog_select(watchdog_select))
-
-    if CONF_RESET_WATCHDOG in controls:
-        watchdog_reset_button = await button.new_button(controls[CONF_RESET_WATCHDOG])
-        await cg.register_parented(watchdog_reset_button, var)
-
     if CONF_DUMP_REGISTERS in controls:
         dump_registers_button = await button.new_button(controls[CONF_DUMP_REGISTERS])
         await cg.register_parented(dump_registers_button, var)

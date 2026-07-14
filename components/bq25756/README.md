@@ -20,8 +20,6 @@ bq25756:
   charging:
     battery_current_limit: 500mA
     input_current_limit: 430mA
-    input_voltage_dpm_threshold: 4.5V
-    control: i2c
 
   calibration:
     ## With charging disabled, enter the DMM reading and press this button.
@@ -40,14 +38,6 @@ bq25756:
     battery_voltage:
       name: "Charger Battery Voltage"
 
-  diagnostics:
-    charge_voltage_target:
-      name: "Charger Charge Voltage Target"
-    battery_overvoltage_rising:
-      name: "Charger Battery Overvoltage Rising"
-    battery_overvoltage_falling:
-      name: "Charger Battery Overvoltage Falling"
-
   status:
     charging:
       name: "Charger Status"
@@ -57,8 +47,6 @@ bq25756:
   controls:
     charge_enable:
       name: "Charger Charge Enable"
-    input_suspend:
-      name: "Charger Input Suspend"
 ```
 
 `cell_chemistry` supports `lithium_ion` (4.20 V / 3.00 V per cell) and
@@ -76,6 +64,6 @@ The result is persisted. The component samples the BQ25756 feedback ADC,
 derives the board divider ratio, then programs the profile's maximum pack
 voltage. Repeat after changing the feedback-divider hardware.
 
-`charging.control: i2c` deliberately ignores the CE, ILIM/HIZ, and ICHG pins
-so I2C owns charge enable and both current limits. Set `pins` only when those
-external pin functions are intentionally designed and populated.
+The component disables the charger watchdog internally, so it does not need
+periodic host resets. I2C always owns charge enable and both current limits;
+the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
