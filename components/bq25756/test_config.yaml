@@ -51,10 +51,10 @@ bq25756:
     battery_current_limit: 5A
     input_current_limit: 3A
   calibration:
-    measured_battery_voltage:
-      name: "Measured Battery Voltage"
-    calibrate_feedback:
-      name: "Calibrate Charger Feedback"
+    dmm_voltage:
+      name: "DMM Voltage"
+    calibrate:
+      name: "Calibrate"
   measurements:
     input_current:
       name: "Charger Input Current"

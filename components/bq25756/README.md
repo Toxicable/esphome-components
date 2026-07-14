@@ -23,10 +23,10 @@ bq25756:
 
   calibration:
     ## With charging disabled, enter the DMM reading and press this button.
-    measured_battery_voltage:
-      name: "Measured Battery Voltage"
-    calibrate_feedback:
-      name: "Calibrate Charger Feedback"
+    dmm_voltage:
+      name: "DMM Voltage"
+    calibrate:
+      name: "Calibrate"
 
   measurements:
     input_current:
@@ -57,8 +57,8 @@ minimum are derived from this profile.
 
 1. Disable charging and allow the pack voltage to settle.
 2. Measure the pack directly with a DMM.
-3. Enter that value in **Measured Battery Voltage**.
-4. Press **Calibrate Charger Feedback**.
+3. Enter that value in **DMM Voltage**.
+4. Press **Calibrate**.
 
 The result is persisted. The component samples the BQ25756 feedback ADC,
 derives the board divider ratio, then programs the profile's maximum pack
