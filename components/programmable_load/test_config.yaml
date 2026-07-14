@@ -70,28 +70,32 @@ bq25756:
   address: 0x6B
   update_interval: 1s
   disable_watchdog: true
-  disable_ce_pin: true
-  disable_ilim_hiz_pin: true
-  disable_ichg_pin: true
-  charge_voltage_limit_mv: 1536
-  charge_current_limit_ma: 5000
-  input_current_dpm_limit_ma: 3000
-  input_voltage_dpm_limit_mv: 12000
-  ibat_current:
-    id: charger14_ibat
-    internal: true
-  vbat_voltage:
-    id: charger14_vbat
-    internal: true
-  charge_status:
-    id: charger14_charge_status
-    internal: true
-  status_flags:
-    id: charger14_status_flags
-    internal: true
-  charge_enable:
-    id: charger14_charge_enable
-    internal: true
+  battery:
+    cell_count: 4
+    cell_chemistry: lithium_ion
+  charging:
+    battery_current_limit: 5A
+    input_current_limit: 3A
+    input_voltage_dpm_threshold: 12V
+    control: i2c
+  measurements:
+    battery_current:
+      id: charger14_ibat
+      internal: true
+    battery_voltage:
+      id: charger14_vbat
+      internal: true
+  status:
+    charging:
+      id: charger14_charge_status
+      internal: true
+    faults:
+      id: charger14_status_flags
+      internal: true
+  controls:
+    charge_enable:
+      id: charger14_charge_enable
+      internal: true
 
 programmable_load:
   id: load_controller
