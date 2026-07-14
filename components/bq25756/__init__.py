@@ -70,7 +70,7 @@ CONF_CHARGE_ENABLE = "charge_enable"
 CONF_DUMP_REGISTERS = "dump_registers"
 CONF_CALIBRATION = "calibration"
 CONF_RESTORE = "restore"
-CONF_DMM_VOLTAGE = "dmm_voltage"
+CONF_MEASURED_VOLTAGE = "measured_voltage"
 CONF_CALIBRATE = "calibrate"
 
 CELL_CHEMISTRY_PROFILES = {
@@ -126,7 +126,7 @@ CONFIG_SCHEMA = (
             cv.Required(CONF_CHARGING): CHARGING_SCHEMA,
             cv.Optional(CONF_CALIBRATION): cv.Schema({
                 cv.Optional(CONF_RESTORE, default=True): cv.boolean,
-                cv.Required(CONF_DMM_VOLTAGE): number.number_schema(BQ25756CalibrationVoltageNumber,
+                cv.Required(CONF_MEASURED_VOLTAGE): number.number_schema(BQ25756CalibrationVoltageNumber,
                     unit_of_measurement="V", device_class=DEVICE_CLASS_VOLTAGE,
                     entity_category=ENTITY_CATEGORY_CONFIG,
                 ),
@@ -221,7 +221,7 @@ async def to_code(config):
         calibration = config[CONF_CALIBRATION]
         cg.add(var.set_restore_calibration(calibration[CONF_RESTORE]))
         voltage_number = await number.new_number(
-            calibration[CONF_DMM_VOLTAGE], min_value=0.0, max_value=100.0, step=0.001
+            calibration[CONF_MEASURED_VOLTAGE], min_value=0.0, max_value=100.0, step=0.001
         )
         await cg.register_parented(voltage_number, var)
         cg.add(var.set_calibration_voltage_number(voltage_number))

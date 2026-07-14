@@ -13,7 +13,7 @@ Component-scoped notes for `components/bq25756`.
 - Control entities now emit explicit `Action:` / `Action result:` INFO logs so HA clicks can be correlated with subsequent status/fault transitions.
 - Required `battery.cell_count` and `battery.cell_chemistry` define the pack maximum/minimum voltage; supported chemistries are `lithium_ion` and `lifepo4`.
 - `charging.control: i2c` makes I2C the sole source of charge-enable and current-limit control, disabling CE, ILIM/HIZ, and ICHG pin functions together.
-- `calibration` is an explicit persisted DMM workflow: while charging is disabled, enter the measured pack voltage in `dmm_voltage` and press `calibrate`. The component derives the feedback ratio from the live VFB ADC reading and rewrites `REG0x00.VFB_REG` for the chemistry-derived maximum pack voltage.
+- `calibration` is an explicit persisted DMM workflow: while charging is disabled, enter the measured pack voltage in `measured_voltage` and press `calibrate`. The component derives the feedback ratio from the live VFB ADC reading and rewrites `REG0x00.VFB_REG` for the chemistry-derived maximum pack voltage.
 - Diagnostics publish pack-domain `charge_voltage_target`, `battery_overvoltage_rising`, and `battery_overvoltage_falling`; raw feedback-domain thresholds are intentionally not user-facing.
 - `vfb_voltage` should stay disabled unless explicitly configured; the datasheet recommends disabling that ADC channel during charging when it is not needed.
 - `ILIM_HIZ` remains hardware-active unless the board or firmware explicitly disables that pin function; if the pin is left floating or pulled above its HIZ threshold, the charger enters HIZ even when `REG0x17.EN_HIZ` is 0.

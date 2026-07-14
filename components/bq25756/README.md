@@ -23,8 +23,8 @@ bq25756:
 
   calibration:
     ## With charging disabled, enter the DMM reading and press this button.
-    dmm_voltage:
-      name: "DMM Voltage"
+    measured_voltage:
+      name: "Measured Voltage"
     calibrate:
       name: "Calibrate"
 
@@ -57,7 +57,7 @@ minimum are derived from this profile.
 
 1. Disable charging and allow the pack voltage to settle.
 2. Measure the pack directly with a DMM.
-3. Enter that value in **DMM Voltage**.
+3. Enter that value in **Measured Voltage**.
 4. Press **Calibrate**.
 
 The result is persisted. The component samples the BQ25756 feedback ADC,
