@@ -1,0 +1,359 @@
+ BQ76952_FAULT_CHARGE_OVERCURRENT) != 0)
+-    append_fault(faults, "charge_overcurrent");
+-  if ((flags & BQ76952_FAULT_DISCHARGE_OVERCURRENT) != 0)
+-    append_fault(faults, "discharge_overcurrent");
+-  if ((flags & BQ76952_FAULT_DISCHARGE_SEVERE_OVERCURRENT) != 0)
+-    append_fault(faults, "discharge_severe_overcurrent");
+-  if ((flags & BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT) != 0)
+-    append_fault(faults, "discharge_sustained_overcurrent");
+-  if ((flags & BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT) != 0)
+-    append_fault(faults, "discharge_short_circuit");
+-  if ((flags & BQ76952_FAULT_TEMPERATURE) != 0)
+-    append_fault(faults, "temperature");
+-  if ((flags & BQ76952_FAULT_PRECHARGE_TIMEOUT) != 0)
+-    append_fault(faults, "precharge_timeout");
+-  if ((flags & BQ76952_FAULT_PERMANENT_FAILURE) != 0)
+-    append_fault(faults, "permanent_failure");
+-
+-  this->fault_sensor_->publish_state(faults.empty() ? "none" : faults);
+ }
+ 
+ void BQ76952Component::dump_config() {
+@@ -254,8 +234,10 @@ void BQ76952Component::dump_config() {
+   LOG_SENSOR("  ", "TS1 Temperature", this->thermistor_temperature_sensors_[0]);
+   LOG_SENSOR("  ", "TS2 Temperature", this->thermistor_temperature_sensors_[1]);
+   LOG_SENSOR("  ", "TS3 Temperature", this->thermistor_temperature_sensors_[2]);
++  LOG_TEXT_SENSOR("  ", "Lifecycle", this->lifecycle_sensor_);
+   LOG_TEXT_SENSOR("  ", "State", this->state_sensor_);
+   LOG_TEXT_SENSOR("  ", "Fault", this->fault_sensor_);
++  LOG_TEXT_SENSOR("  ", "Fault Flags", this->fault_flags_sensor_);
+   LOG_TEXT_SENSOR("  ", "Capacity Calibration Status", this->capacity_calibration_status_sensor_);
+   LOG_SWITCH("  ", "Output Enabled", this->output_enabled_switch_);
+ }
+diff --git a/components/bq76952/bq76952.h b/components/bq76952/bq76952.h
+index b144765..acc0d08 100644
+--- a/components/bq76952/bq76952.h
++++ b/components/bq76952/bq76952.h
+@@ -9,16 +9,16 @@
+ #include "esphome/core/component.h"
+ 
+ #include "bq76952_config.h"
+-#include "bq76952_protocol.h"
++#include "bq76952_i2c_transport.h"
+ #include "bq76952_service.h"
+ 
+ namespace esphome {
+ namespace bq76952 {
+ 
+-// ESPHome-facing facade only. Device protocol, desired-state synchronization,
++// ESPHome-facing facade only. Device transport, desired-state synchronization,
+ // and ancillary SoC estimation live behind BQ76952Service. Method bodies live
+ // in implementation files, not in this header.
+-class BQ76952Component : public PollingComponent, public BQ76952Protocol {
++class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
+  public:
+   BQ76952Component();
+ 
+@@ -37,8 +37,10 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
+   void set_ts2_temperature_sensor(sensor::Sensor *sensor);
+   void set_ts3_temperature_sensor(sensor::Sensor *sensor);
+ 
++  void set_lifecycle_sensor(text_sensor::TextSensor *sensor);
+   void set_state_sensor(text_sensor::TextSensor *sensor);
+   void set_fault_sensor(text_sensor::TextSensor *sensor);
++  void set_fault_flags_sensor(text_sensor::TextSensor *sensor);
+   void set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor);
+ 
+   void set_output_enabled_switch(switch_::Switch *control);
+@@ -52,8 +54,9 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
+   bool program_factory_otp();
+ 
+  private:
+-  void publish_snapshot(const BQ76952Snapshot &snapshot);
+-  void publish_faults(const BQ76952Snapshot &snapshot);
++  void publish_lifecycle(component_common::LifecycleState lifecycle);
++  void publish_snapshot(const ::bq76952_core::Snapshot &snapshot);
++  void publish_faults(const ::bq76952_core::Snapshot &snapshot);
+ 
+   BQ76952Service service_;
+ 
+@@ -68,8 +71,10 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
+   sensor::Sensor *die_temperature_sensor_{nullptr};
+   std::array<sensor::Sensor *, 3> thermistor_temperature_sensors_{};
+ 
++  text_sensor::TextSensor *lifecycle_sensor_{nullptr};
+   text_sensor::TextSensor *state_sensor_{nullptr};
+   text_sensor::TextSensor *fault_sensor_{nullptr};
++  text_sensor::TextSensor *fault_flags_sensor_{nullptr};
+   text_sensor::TextSensor *capacity_calibration_status_sensor_{nullptr};
+ 
+   switch_::Switch *output_enabled_switch_{nullptr};
+diff --git a/components/bq76952/bq76952_protocol.cpp b/components/bq76952/bq76952_i2c_transport.cpp
+similarity index 81%
+rename from components/bq76952/bq76952_protocol.cpp
+rename to components/bq76952/bq76952_i2c_transport.cpp
+index 3e6323f..90bcee2 100644
+--- a/components/bq76952/bq76952_protocol.cpp
++++ b/components/bq76952/bq76952_i2c_transport.cpp
+@@ -1,4 +1,4 @@
+-#include "bq76952_protocol.h"
++#include "bq76952_i2c_transport.h"
+ 
+ #include "bq76952_registers.h"
+ 
+@@ -12,8 +12,8 @@ namespace esphome {
+ namespace bq76952 {
+ 
+ namespace {
+-static const char *const TAG = "bq76952.protocol";
+-namespace hw = registers;
++static const char *const TAG = "bq76952.transport";
++namespace hw = ::bq76952_core::registers;
+ 
+ uint8_t crc8(const uint8_t *data, size_t length) {
+   uint8_t crc = 0;
+@@ -35,11 +35,11 @@ uint8_t transfer_checksum(uint16_t command, const uint8_t *data, size_t length)
+ }
+ }  // namespace
+ 
+-bool BQ76952Protocol::read_u8(uint8_t command, uint8_t &value) {
++bool BQ76952I2CTransport::read_u8(uint8_t command, uint8_t &value) {
+   return this->read_bytes(command, &value, 1);
+ }
+ 
+-bool BQ76952Protocol::read_i16(uint8_t command, int16_t &value) {
++bool BQ76952I2CTransport::read_i16(uint8_t command, int16_t &value) {
+   uint16_t raw = 0;
+   if (!this->read_u16(command, raw)) {
+     return false;
+@@ -48,7 +48,7 @@ bool BQ76952Protocol::read_i16(uint8_t command, int16_t &value) {
+   return true;
+ }
+ 
+-bool BQ76952Protocol::read_u16(uint8_t command, uint16_t &value) {
++bool BQ76952I2CTransport::read_u16(uint8_t command, uint16_t &value) {
+   uint8_t raw[2]{};
+   if (!this->read_bytes(command, raw, sizeof(raw))) {
+     return false;
+@@ -57,7 +57,7 @@ bool BQ76952Protocol::read_u16(uint8_t command, uint16_t &value) {
+   return true;
+ }
+ 
+-bool BQ76952Protocol::read_bytes(uint8_t command, uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::read_bytes(uint8_t command, uint8_t *data, size_t length) {
+   if (length == 0) {
+     return true;
+   }
+@@ -82,7 +82,7 @@ bool BQ76952Protocol::read_bytes(uint8_t command, uint8_t *data, size_t length)
+   return true;
+ }
+ 
+-bool BQ76952Protocol::read_bytes_with_mode(uint8_t command, uint8_t *data, size_t length, bool crc_enabled) {
++bool BQ76952I2CTransport::read_bytes_with_mode(uint8_t command, uint8_t *data, size_t length, bool crc_enabled) {
+   if (!crc_enabled) {
+     if (this->write_read(&command, 1, data, length) == i2c::ERROR_OK) {
+       return true;
+@@ -123,20 +123,20 @@ bool BQ76952Protocol::read_bytes_with_mode(uint8_t command, uint8_t *data, size_
+   return true;
+ }
+ 
+-bool BQ76952Protocol::write_u8(uint8_t command, uint8_t value) {
++bool BQ76952I2CTransport::write_u8(uint8_t command, uint8_t value) {
+   return this->write_bytes(command, &value, 1);
+ }
+ 
+-bool BQ76952Protocol::write_u16(uint8_t command, uint16_t value) {
++bool BQ76952I2CTransport::write_u16(uint8_t command, uint16_t value) {
+   const uint8_t raw[2] = {static_cast<uint8_t>(value & 0xFFU), static_cast<uint8_t>((value >> 8) & 0xFFU)};
+   return this->write_bytes(command, raw, sizeof(raw));
+ }
+ 
+-bool BQ76952Protocol::write_bytes(uint8_t command, const uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::write_bytes(uint8_t command, const uint8_t *data, size_t length) {
+   return this->write_bytes_with_mode(command, data, length, this->crc_enabled_);
+ }
+ 
+-bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data, size_t length,
++bool BQ76952I2CTransport::write_bytes_with_mode(uint8_t command, const uint8_t *data, size_t length,
+                                             bool crc_enabled) {
+   if (length > 0 && data == nullptr) {
+     return false;
+@@ -166,11 +166,11 @@ bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data
+   return this->write(framed.data(), 1 + length * 2) == i2c::ERROR_OK;
+ }
+ 
+-bool BQ76952Protocol::send_subcommand(uint16_t subcommand) {
++bool BQ76952I2CTransport::send_subcommand(uint16_t subcommand) {
+   return this->write_u16(hw::direct::SUBCOMMAND, subcommand);
+ }
+ 
+-bool BQ76952Protocol::wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms) {
++bool BQ76952I2CTransport::wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms) {
+   delay_microseconds_safe(hw::transport::TRANSFER_READY_DELAY_US);
+   const uint32_t started = millis();
+   while ((millis() - started) <= timeout_ms) {
+@@ -187,12 +187,12 @@ bool BQ76952Protocol::wait_for_transfer_buffer(uint16_t expected_command, uint32
+   return false;
+ }
+ 
+-bool BQ76952Protocol::verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length,
++bool BQ76952I2CTransport::verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length,
+                                              uint8_t checksum) const {
+   return transfer_checksum(command, data, length) == checksum;
+ }
+ 
+-bool BQ76952Protocol::read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length) {
+   uint8_t response_length = 0;
+   if (!this->read_u8(hw::direct::LENGTH, response_length) || response_length < hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES) {
+     return false;
+@@ -223,14 +223,14 @@ bool BQ76952Protocol::read_transfer_buffer(uint16_t expected_command, uint8_t *d
+   return true;
+ }
+ 
+-bool BQ76952Protocol::read_subcommand(uint16_t subcommand, uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::read_subcommand(uint16_t subcommand, uint8_t *data, size_t length) {
+   if (!this->send_subcommand(subcommand) || !this->wait_for_transfer_buffer(subcommand, hw::transport::TRANSFER_TIMEOUT_MS)) {
+     return false;
+   }
+   return this->read_transfer_buffer(subcommand, data, length);
+ }
+ 
+-bool BQ76952Protocol::write_subcommand(uint16_t subcommand, const uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::write_subcommand(uint16_t subcommand, const uint8_t *data, size_t length) {
+   if (length > hw::transport::MAX_TRANSFER_PAYLOAD || (length > 0 && data == nullptr)) {
+     return false;
+   }
+@@ -244,11 +244,11 @@ bool BQ76952Protocol::write_subcommand(uint16_t subcommand, const uint8_t *data,
+   return this->write_bytes(hw::direct::CHECKSUM, footer, sizeof(footer));
+ }
+ 
+-bool BQ76952Protocol::read_data_memory(uint16_t address, uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::read_data_memory(uint16_t address, uint8_t *data, size_t length) {
+   return this->read_subcommand(address, data, length);
+ }
+ 
+-bool BQ76952Protocol::write_data_memory(uint16_t address, const uint8_t *data, size_t length) {
++bool BQ76952I2CTransport::write_data_memory(uint16_t address, const uint8_t *data, size_t length) {
+   if (!this->write_subcommand(address, data, length)) {
+     return false;
+   }
+@@ -261,11 +261,11 @@ bool BQ76952Protocol::write_data_memory(uint16_t address, const uint8_t *data, s
+   return std::memcmp(verify.data(), data, length) == 0;
+ }
+ 
+-bool BQ76952Protocol::read_data_memory_u8(uint16_t address, uint8_t &value) {
++bool BQ76952I2CTransport::read_data_memory_u8(uint16_t address, uint8_t &value) {
+   return this->read_data_memory(address, &value, 1);
+ }
+ 
+-bool BQ76952Protocol::read_data_memory_u16(uint16_t address, uint16_t &value) {
++bool BQ76952I2CTransport::read_data_memory_u16(uint16_t address, uint16_t &value) {
+   uint8_t raw[2]{};
+   if (!this->read_data_memory(address, raw, sizeof(raw))) {
+     return false;
+@@ -274,16 +274,16 @@ bool BQ76952Protocol::read_data_memory_u16(uint16_t address, uint16_t &value) {
+   return true;
+ }
+ 
+-bool BQ76952Protocol::write_data_memory_u8(uint16_t address, uint8_t value) {
++bool BQ76952I2CTransport::write_data_memory_u8(uint16_t address, uint8_t value) {
+   return this->write_data_memory(address, &value, 1);
+ }
+ 
+-bool BQ76952Protocol::write_data_memory_u16(uint16_t address, uint16_t value) {
++bool BQ76952I2CTransport::write_data_memory_u16(uint16_t address, uint16_t value) {
+   const uint8_t raw[2] = {static_cast<uint8_t>(value & 0xFFU), static_cast<uint8_t>((value >> 8) & 0xFFU)};
+   return this->write_data_memory(address, raw, sizeof(raw));
+ }
+ 
+-bool BQ76952Protocol::set_config_update(bool enabled) {
++bool BQ76952I2CTransport::set_config_update(bool enabled) {
+   const uint16_t command = enabled ? hw::subcommand::SET_CONFIG_UPDATE : hw::subcommand::EXIT_CONFIG_UPDATE;
+   if (!this->send_subcommand(command)) {
+     return false;
+@@ -311,7 +311,7 @@ bool BQ76952Protocol::set_config_update(bool enabled) {
+   return false;
+ }
+ 
+-void BQ76952Protocol::set_crc_enabled(bool enabled) {
++void BQ76952I2CTransport::set_crc_enabled(bool enabled) {
+   this->desired_crc_enabled_ = enabled;
+   // Probe without CRC first; read_bytes() learns an existing CRC-enabled image.
+   this->crc_enabled_ = false;
+diff --git a/components/bq76952/bq76952_protocol.h b/components/bq76952/bq76952_i2c_transport.h
+similarity index 97%
+rename from components/bq76952/bq76952_protocol.h
+rename to components/bq76952/bq76952_i2c_transport.h
+index 7934463..2805b6d 100644
+--- a/components/bq76952/bq76952_protocol.h
++++ b/components/bq76952/bq76952_i2c_transport.h
+@@ -13,7 +13,7 @@ class BQ76952Service;
+ // Low-level BQ76952 transport only. This class owns register framing,
+ // subcommand transfer-buffer handling, checksums, optional I2C CRC, and
+ // CONFIG_UPDATE entry/exit. It contains no ESPHome entities or product policy.
+-class BQ76952Protocol : public i2c::I2CDevice {
++class BQ76952I2CTransport : public i2c::I2CDevice {
+   friend class BQ76952Service;
+ 
+  protected:
+diff --git a/components/bq76952/bq76952_registers.h b/components/bq76952/bq76952_registers.h
+index b4e26c5..acc92fc 100644
+--- a/components/bq76952/bq76952_registers.h
++++ b/components/bq76952/bq76952_registers.h
+@@ -3,8 +3,7 @@
+ #include <cstddef>
+ #include <cstdint>
+ 
+-namespace esphome {
+-namespace bq76952 {
++namespace bq76952_core {
+ namespace registers {
+ 
+ // Direct-command register addresses from the BQ76952 command table.
+@@ -273,5 +272,4 @@ inline constexpr uint16_t PRECHARGE_TIMEOUT_RESET_USER_AH = 2;
+ }  // namespace policy
+ 
+ }  // namespace registers
+-}  // namespace bq76952
+-}  // namespace esphome
++}  // namespace bq76952_core
+diff --git a/components/bq76952/bq76952_service.cpp b/components/bq76952/bq76952_service.cpp
+index b4312fa..fb6fa5a 100644
+--- a/components/bq76952/bq76952_service.cpp
++++ b/components/bq76952/bq76952_service.cpp
+@@ -16,7 +16,7 @@ namespace bq76952 {
+ 
+ namespace {
+ static const char *const TAG = "bq76952.service";
+-namespace hw = registers;
++namespace hw = ::bq76952_core::registers;
+ 
+ uint8_t clamp_u8(int value, int minimum, int maximum, const char *label) {
+   const int clamped = std::max(minimum, std::min(maximum, value));
+@@ -105,12 +105,12 @@ uint32_t read_u32_le(const uint8_t *data) {
+ 
+ }  // namespace
+ 
+-BQ76952Service::BQ76952Service(BQ76952Protocol &protocol) : protocol_(protocol) {}
++BQ76952Service::BQ76952Service(BQ76952I2CTransport &transport) : transport_(transport) {}
+ 
+ void BQ76952Service::set_config(const BQ76952Config &config) {
+   this->config_ = config;
+   this->config_set_ = true;
+-  this->protocol_.set_crc_enabled(config.i2c_crc_enabled);
++  this->transport_.set_crc_enabled(config.i2c_crc_enabled);
+ }
+ 
+ const BQ76952Config &BQ76952Service::config() const {
+@@ -123,9 +123,11 @@ const char *BQ76952Service::capacity_calibration_status() const {
+ 
+ void BQ76952Service::setup() {
+   if (!this->config_set_) {
++    this->lifecycle_ = component_common::LifecycleState::FAILED;
+     ESP_LOGE(TAG, "No BQ76952 configuration was supplied");
+     return;
+   }
++  this->lifecycle_ = component_common::LifecycleState::CONFIGURING;
+   this->soc_.setup(this->config_.cell_chemistry);
+   this->next
