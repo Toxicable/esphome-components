@@ -1,0 +1,136 @@
++bool charger_fault_active(const Status &status) {
++  return (status.status1 & REG21_WATCHDOG_STAT_MASK) != 0 ||
++         (status.status3 & REG23_REVERSE_STAT_MASK) != 0 ||
++         (status.status3 & REG23_CV_TIMER_STAT_MASK) != 0 ||
++         (status.fault & REG24_ACTIVE_FAULT_MASK) != 0;
++}
++
++::component_common::ChargerSnapshot make_charger_snapshot(
++    const Status &status, const Measurements &measurements,
++    const ControlStates &controls, uint32_t sequence, uint32_t timestamp_ms) {
++  ::component_common::ChargerSnapshot snapshot{};
++  snapshot.sequence = sequence;
++  snapshot.timestamp_ms = timestamp_ms;
++  snapshot.current_a = measurements.ibat_ma / 1000.0f;
++  snapshot.voltage_v = measurements.vbat_mv / 1000.0f;
++  snapshot.state = decode_charger_state(status.status1);
++  snapshot.status_flags = static_cast<uint32_t>(status.status1) |
++                          (static_cast<uint32_t>(status.status2) << 8) |
++                          (static_cast<uint32_t>(status.status3) << 16);
++  snapshot.fault_flags = status.fault;
++  snapshot.enabled = controls.charge_enabled;
++  snapshot.power_good =
++      (status.status2 & REG22_POWER_GOOD_STAT_MASK) != 0;
++  snapshot.fault_active = charger_fault_active(status);
++  snapshot.valid = std::isfinite(snapshot.current_a) &&
++                   std::isfinite(snapshot.voltage_v);
++  return snapshot;
++}
++
+ const char *charge_status_to_string(uint8_t charge_status) {
+   switch (charge_status) {
+     case 0:
+diff --git a/components/bq25756/bq25756_protocol.h b/components/bq25756/bq25756_protocol.h
+index f4330a3..b0fc25b 100644
+--- a/components/bq25756/bq25756_protocol.h
++++ b/components/bq25756/bq25756_protocol.h
+@@ -3,6 +3,7 @@
+ #include <cstdint>
+ 
+ #include "../component_common/bit_field.h"
++#include "../component_common/charger.h"
+ 
+ namespace bq25756_core {
+ 
+@@ -38,6 +39,28 @@ static constexpr uint8_t REG18_EN_ILIM_HIZ_PIN_MASK = 0x40;
+ static constexpr uint8_t REG19_EN_PFM_MASK = 0x20;
+ static constexpr uint8_t REG19_EN_REV_MASK = 0x01;
+ 
++static constexpr uint8_t REG21_IAC_DPM_STAT_MASK = 0x40;
++static constexpr uint8_t REG21_VAC_DPM_STAT_MASK = 0x20;
++static constexpr uint8_t REG21_WATCHDOG_STAT_MASK = 0x08;
++static constexpr uint8_t REG21_CHARGE_STAT_MASK = 0x07;
++static constexpr uint8_t REG22_POWER_GOOD_STAT_MASK = 0x80;
++static constexpr uint8_t REG22_TS_STAT_MASK = 0x70;
++static constexpr uint8_t REG22_MPPT_STAT_MASK = 0x03;
++static constexpr uint8_t REG23_CV_TIMER_STAT_MASK = 0x08;
++static constexpr uint8_t REG23_REVERSE_STAT_MASK = 0x04;
++static constexpr uint8_t REG24_VAC_UV_FAULT_MASK = 0x80;
++static constexpr uint8_t REG24_VAC_OV_FAULT_MASK = 0x40;
++static constexpr uint8_t REG24_IBAT_OCP_FAULT_MASK = 0x20;
++static constexpr uint8_t REG24_VBAT_OV_FAULT_MASK = 0x10;
++static constexpr uint8_t REG24_THERMAL_SHUTDOWN_FAULT_MASK = 0x08;
++static constexpr uint8_t REG24_CHARGE_TIMER_FAULT_MASK = 0x04;
++static constexpr uint8_t REG24_DRIVER_SUPPLY_FAULT_MASK = 0x02;
++static constexpr uint8_t REG24_ACTIVE_FAULT_MASK =
++    REG24_VAC_UV_FAULT_MASK | REG24_VAC_OV_FAULT_MASK |
++    REG24_IBAT_OCP_FAULT_MASK | REG24_VBAT_OV_FAULT_MASK |
++    REG24_THERMAL_SHUTDOWN_FAULT_MASK |
++    REG24_CHARGE_TIMER_FAULT_MASK | REG24_DRIVER_SUPPLY_FAULT_MASK;
++
+ static constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;
+ static constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
+ static constexpr uint8_t REG2B_ADC_SAMPLE_MASK = 0x30;
+@@ -130,6 +153,11 @@ struct ChargePrecheckSnapshot {
+ const char *charge_status_to_string(uint8_t charge_status);
+ const char *ts_status_to_string(uint8_t ts_status);
+ const char *mppt_status_to_string(uint8_t mppt_status);
++::component_common::ChargerState decode_charger_state(uint8_t status1);
++bool charger_fault_active(const Status &status);
++::component_common::ChargerSnapshot make_charger_snapshot(
++    const Status &status, const Measurements &measurements,
++    const ControlStates &controls, uint32_t sequence, uint32_t timestamp_ms);
+ Measurements decode_measurements(const Reg16Value &iac, const Reg16Value &ibat, const Reg16Value &vac,
+                                  const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb);
+ float vfb_reg_target_mv(uint16_t reg00_raw);
+diff --git a/components/component_common/AGENTS_KNOWLEDGE.md b/components/component_common/AGENTS_KNOWLEDGE.md
+index 931e0cd..f233ea3 100644
+--- a/components/component_common/AGENTS_KNOWLEDGE.md
++++ b/components/component_common/AGENTS_KNOWLEDGE.md
+@@ -5,3 +5,4 @@
+ - Keep the package header-only unless a shared implementation genuinely needs a `.cpp`; ESPHome source discovery only collects files directly in the package directory.
+ - Helpers must remain C++17, host-independent, allocation-free, and free of ESPHome headers, logging, entities, chip policy, and register addresses.
+ - Host-independent consumers use sibling-relative includes so the same core builds from the repository and from ESPHome's generated source tree.
++- `charger.h` is the generic machine-to-machine charger boundary. Keep transport, chip faults, entity types, and product policy in the implementing component.
+diff --git a/components/component_common/CONTEXT_INDEX.md b/components/component_common/CONTEXT_INDEX.md
+index 7f73215..bd99a4a 100644
+--- a/components/component_common/CONTEXT_INDEX.md
++++ b/components/component_common/CONTEXT_INDEX.md
+@@ -12,5 +12,6 @@
+ 
+ - `bit_field.h`: generic contiguous field and masked-bit operations.
+ - `byte_order.h`: unsigned fixed-width endian load/store.
++- `charger.h`: typed charger capabilities, snapshots, states, and enable command.
+ - `README.md`: ESPHome loading, allowlist, and include-path contract.
+ - `tests/component_common_test.cpp`: host-side helper behaviour and compile-time checks.
+diff --git a/components/component_common/README.md b/components/component_common/README.md
+index 03832ce..d76dd37 100644
+--- a/components/component_common/README.md
++++ b/components/component_common/README.md
+@@ -29,5 +29,6 @@ That form resolves both in this source tree and after ESPHome copies the loaded
+ 
+ - `bit_field.h`: contiguous register-field encode/decode/replace and masked updates.
+ - `byte_order.h`: fixed-width unsigned little-endian and big-endian load/store.
++- `charger.h`: typed charger capabilities, snapshots, and control boundary for component composition.
+ 
+ Keep this package small and policy-free. Chip addresses, reset values, scaling, faults, and configuration defaults remain in the owning component or chip family.
+diff --git a/components/programmable_load/AGENTS_KNOWLEDGE.md b/components/programmable_load/AGENTS_KNOWLEDGE.md
+index 065e468..132bcb2 100644
+--- a/components/programmable_load/AGENTS_KNOWLEDGE.md
++++ b/components/programmable_load/AGENTS_KNOWLEDGE.md
+@@ -1,11 +1,12 @@
+ # AGENTS_KNOWLEDGE: programmable_load
+ 
+-- The component owns measurement calibration, safety limits, DAC control, cooling, manual control, Charger_14 charge-enable control, and exclusive procedure ownership. Procedures return load-current and charger-enable requests only; they do not access hardware or the core directly.
++- The component owns measurement calibration, safety limits, DAC control, cooling, manual control, typed charger control, and exclusive procedure ownership. Procedures return load-current and charger-enable requests only; they do not access hardware or the core directly.
+ - The public state is `idle`, `running`, or `fault`; faults stop and release the active owner. The optional clear-fault button only clears a fault after its condition has gone away.
+ - The core has a non-configurable 75 V absolute input ceiling. `hardware.maximum_voltage` must be board-specific and `limits.maximum_voltage` cannot exceed it.
+ - Required temperature entries must remain valid for a run; optional temperature entries participate in fan control when valid. Fan PWM uses the hottest valid temperature.
+ - DCR is an explicit exclusive procedure. It uses only distinct measurement frames and publishes the mean resistance after its configured repeats.
+-- The battery-cycle procedure discharges through the load, rests, then charges through Charger_14 external ESPHome control until BQ25756 reports `termination_done`. The BQ25756 component remains responsible for charge/input limit configuration.
+-- Charger_14 integration consumes BQ25756 `charge_enable`, `ibat_current` (mA), `vbat_voltage` (mV), `charge_status`, and `status_flags` entities. Battery-cycle ownership enables charging only in its charge phase; manual charging is permitted while the load is idle. The core never permits load current while charging is commanded or observed.
++- The battery-cycle procedure discharges through the load, rests, then charges through a `component_common::ChargerInterface` until the charger reports `termination_done`.
++- The charger component supplies a typed capability snapshot and charge-enable command directly in C++. Home Assistant entities are optional observers and must never be used as the machine-to-machine interface.
++- Battery-cycle ownership enables charging only in its charge phase. The core never permits load current while charging is commanded or observed.
+ - The Charger_14 onboard STM32 mode has no host command protocol and is not controlled by this procedure.
+ - ESPHome copies and compiles every `.cpp` file in an external component directory. Keep `programmable_load.cpp`, `dcr_test.cpp`, and `battery_cycle.cpp` as separate translation units; never include one `.cpp` file from another.
