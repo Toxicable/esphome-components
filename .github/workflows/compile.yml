@@ -34,6 +34,8 @@ jobs:
             config: components/bq25756/test_config.yaml
           - name: bq25756-invalid-cell-count
             config: components/bq25756/test_invalid_cell_count.yaml
+          - name: bq76952
+            config: components/bq76952/test_config.yaml
           - name: drv8243
             config: components/drv8243/test_config.yaml
           - name: esc-higher
