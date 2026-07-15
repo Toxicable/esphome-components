@@ -1,0 +1,256 @@
+diff --git a/.github/workflows/compile.yml b/.github/workflows/compile.yml
+index a257e6d..b655297 100644
+--- a/.github/workflows/compile.yml
++++ b/.github/workflows/compile.yml
+@@ -34,6 +34,8 @@ jobs:
+             config: components/bq25756/test_config.yaml
+           - name: bq25756-invalid-cell-count
+             config: components/bq25756/test_invalid_cell_count.yaml
++          - name: bq76952
++            config: components/bq76952/test_config.yaml
+           - name: drv8243
+             config: components/drv8243/test_config.yaml
+           - name: esc-higher
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index 6b98ae5..33b1555 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -325,14 +325,16 @@ or charger-specific states such as charging, complete, or suspended.
+ 
+ ### Fault snapshot
+ 
++`component_common/status.h` provides the policy-free lifecycle enum and generic `FaultSnapshot<PrimaryFault, Flags>` structure. Components keep their own operating-state enum, fault enum, priority, raw status, and decoder.
++
+ Stateful components should expose a typed snapshot containing enough information for policy and diagnostics:
+ 
+ ```cpp
+-struct FaultSnapshot {
+-  PrimaryFault primary;
+-  uint32_t active_flags;
+-  uint32_t latched_flags;
+-  uint32_t raw_status;
++struct DeviceSnapshot {
++  component_common::LifecycleState lifecycle;
++  DeviceOperatingState state;
++  component_common::FaultSnapshot<DeviceFault> faults;
++  uint32_t raw_status;  // optional diagnostic data
+ };
+ ```
+ 
+diff --git a/COMPONENTS.md b/COMPONENTS.md
+index a5d199c..b6fe9b1 100644
+--- a/COMPONENTS.md
++++ b/COMPONENTS.md
+@@ -20,11 +20,11 @@ Status describes maintenance intent only. It does not imply that an active compo
+ | Component | Status | Known use or reason retained | Direction |
+ | --- | --- | --- | --- |
+ | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
+-| `bq25798` | legacy | Pool-cleaner configuration | Keep until the consumer is migrated to the selected charger implementation. |
+-| `bq76922` | experimental | No deployed configuration found; device support remains potentially useful | Promote only with a real board/configuration and compile coverage, otherwise retire. |
+-| `bq76952` | active | Boat/BMS configurations | Primary modern BMS implementation. Preserve the complete desired-state configuration model. |
++| `bq25798` | legacy | Pool-cleaner configuration | Freeze feature development; migrate the consumer to `bq25756`, then remove this monolithic driver. |
++| `bq76922` | experimental | No deployed configuration or compile fixture found | Require an owner, real board YAML, and tests before promotion; otherwise retire instead of maintaining parallel BQ769x2 implementations. |
++| `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed lifecycle/fault snapshots, and the explicit manufacturing boundary. |
+ | `bq769x0` | candidate-removal | No current consumer found | Confirm external use before removal. |
+-| `component_common` | internal | Header-only endian and register-field helpers; first used by `bq25756` | Keep small, host-independent, and policy-free. Add helpers only after a real second use or a demonstrated error-prone pattern. |
++| `component_common` | internal | Header-only register, charger, lifecycle, and fault-snapshot contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
+ | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
+ | `esc_higher` | active | ESC Higher board and boat configuration | Maintain as the board-facing ESC integration. |
+ | `fdc1004` | candidate-removal | No current consumer found | Confirm external use before removal. |
+diff --git a/check_host.bash b/check_host.bash
+index bea87aa..e3784f4 100644
+--- a/check_host.bash
++++ b/check_host.bash
+@@ -4,7 +4,7 @@ set -euo pipefail
+ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ cd "$repo_root"
+ 
+-python3 tools/check_core_purity.py components/component_common components/bq25756
++python3 tools/check_core_purity.py components/component_common components/bq25756 components/bq76952/bq76952_registers.h components/bq76952/bq76952_status.h components/bq76952/bq76952_status.cpp
+ 
+ if [[ -n "${CXX:-}" ]]; then
+   cxx="$CXX"
+@@ -43,4 +43,10 @@ common_flags=(
+   -o "$build_dir/bq25756_service_test"
+ "$build_dir/bq25756_service_test"
+ 
++"$cxx" "${common_flags[@]}" \
++  tests/bq76952_status_test.cpp \
++  components/bq76952/bq76952_status.cpp \
++  -o "$build_dir/bq76952_status_test"
++"$build_dir/bq76952_status_test"
++
+ echo "host tests: passed ($cxx)"
+diff --git a/components/bq25798/AGENTS_KNOWLEDGE.md b/components/bq25798/AGENTS_KNOWLEDGE.md
+index 3bd79d9..71c6d20 100644
+--- a/components/bq25798/AGENTS_KNOWLEDGE.md
++++ b/components/bq25798/AGENTS_KNOWLEDGE.md
+@@ -2,6 +2,9 @@
+ 
+ Component-scoped notes for `components/bq25798`.
+ 
++- Lifecycle classification is `legacy`: retained for the pool-cleaner consumer only. New charger development belongs in `bq25756`.
++- Do not add a second typed charger capability here unless migration proves BQ25798 hardware must remain a supported product path.
++
+ - Top-level polling component defaults: address `0x6B`, `update_interval: 1s`, `disable_watchdog: true`.
+ - Can publish ADC sensors: `ibus_current`, `ibat_current`, `vbus_voltage`, `vbat_voltage`, `vsys_voltage`, `ts_percent`, `die_temperature`.
+ - Can publish text status sensors: `charge_status`, `vbus_status`, `status_flags`.
+diff --git a/components/bq25798/README.md b/components/bq25798/README.md
+index 66c926f..2ab83ff 100644
+--- a/components/bq25798/README.md
++++ b/components/bq25798/README.md
+@@ -1,5 +1,7 @@
+ # BQ25798
+ 
++> **Lifecycle status: legacy.** This driver remains because the pool-cleaner configuration still uses it. New charger work should use `bq25756`, which has typed configuration, status snapshots, tests, and the shared charger capability. Do not expand this component beyond migration-critical fixes.
++
+ Datasheet: https://www.ti.com/lit/ds/symlink/bq25798.pdf
+ 
+ ## What it does
+diff --git a/components/bq76922/AGENTS_KNOWLEDGE.md b/components/bq76922/AGENTS_KNOWLEDGE.md
+index 9d9d6af..6deff9c 100644
+--- a/components/bq76922/AGENTS_KNOWLEDGE.md
++++ b/components/bq76922/AGENTS_KNOWLEDGE.md
+@@ -2,6 +2,10 @@
+ 
+ Component-scoped notes for `components/bq76922`.
+ 
++- Lifecycle classification is `experimental`: no deployed consumer or compile fixture is known.
++- Do not copy BQ76952 architecture changes into this monolith speculatively. Promotion requires a real board, committed YAML, and a deliberate decision whether to share a BQ769x2 family core.
++- Without an owner and real hardware use, the next lifecycle step is retirement rather than indefinite parity work.
++
+ - Use `components/bq76922/sluucg7.pdf` (TRM) as the command source of truth; the datasheet alone does not include full command/subcommand behavior.
+ - Direct commands used by this component come from TRM Table 12-1 and use little-endian values (`I2`/`U2`):
+   - `0x12` Battery Status, `0x14..0x1D` cell voltages, `0x34/0x36/0x38` stack/PACK/LD, `0x3A` CC2 current, `0x62` Alarm Status, `0x68` internal temperature, `0x70` TS1 temperature, `0x7F` FET Status.
+diff --git a/components/bq76922/README.md b/components/bq76922/README.md
+index 461eb08..48dec49 100644
+--- a/components/bq76922/README.md
++++ b/components/bq76922/README.md
+@@ -1,5 +1,7 @@
+ # BQ76922 Battery Monitor BMS
+ 
++> **Lifecycle status: experimental.** No deployed configuration or compile fixture has been identified. Keep this driver for hardware evaluation only; promotion requires a committed board/configuration and tests. If no owner or real hardware use emerges, retire it rather than maintaining a second BQ769x2 architecture.
++
+ ESPHome external component for TI BQ76922 (3S to 5S packs over I2C).
+ 
+ It provides:
+diff --git a/components/bq76952/AGENTS_KNOWLEDGE.md b/components/bq76952/AGENTS_KNOWLEDGE.md
+index ed86a7b..413afde 100644
+--- a/components/bq76952/AGENTS_KNOWLEDGE.md
++++ b/components/bq76952/AGENTS_KNOWLEDGE.md
+@@ -6,10 +6,11 @@ Component-scoped rules for `components/bq76952`.
+ 
+ - `bq76952_config.h` defines complete desired device state. It has no `std::optional`, `has_*`, legacy aliases, or preserve-by-omission semantics.
+ - `bq76952_registers.h` groups direct commands, subcommands, data-memory addresses, bit fields, encoding constants, transport timings, and fixed product policy. Do not scatter datasheet or policy literals through implementation files.
+-- `bq76952_protocol.cpp` owns direct-register access, active/desired I2C CRC framing, subcommand transfer-buffer framing, checksums, data-memory read/write verification, and CONFIG_UPDATE transitions.
++- `bq76952_i2c_transport.cpp` owns direct-register access, active/desired I2C CRC framing, subcommand transfer-buffer framing, checksums, data-memory read/write verification, and CONFIG_UPDATE transitions.
+ - `bq76952_service.cpp` owns configuration synchronization, connection recovery, measurements, protections, FET policy, runtime actions, and the ancillary SoC instance.
+ - `bq76952_soc.cpp` isolates SoC estimation/persistence logic but remains owned by `BQ76952Service`.
+-- `bq76952.cpp` is the ESPHome facade. Keep protocol, product policy and SoC logic out of it.
++- `bq76952.cpp` is the ESPHome facade. Keep transport, product policy and SoC logic out of it.
++- `__init__.py` remains the public ESPHome entry point; private `_schema.py`, `_types.py`, and `_codegen.py` modules do not create extra YAML components.
+ - Do not reintroduce `BQ76952ConfigState`, another compatibility adapter, or monolithic state-bag inheritance.
+ 
+ ## Fixed hardware and product policy
+@@ -37,14 +38,14 @@ Component-scoped rules for `components/bq76952`.
+ - TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes.
+ - Protection masks are derived from fixed policy, not exposed as raw user bitmasks.
+ 
+-## Protocol robustness
++## Transport robustness
+ 
+ - Direct command reads and writes must honour optional I2C CRC on every data byte.
+ - Startup probing begins without CRC, retries the alternate framing on failed reads, and remembers the framing that answers.
+ - Keep the detected active framing separate from the configured target; a Comm Type change takes effect only after exiting `CONFIG_UPDATE`.
+ - Subcommand/data-memory reads validate echoed command, response length and checksum before returning payload.
+ - Data-memory writes verify by reading the value back.
+-- Keep generic transfer-buffer mechanics in `BQ76952Protocol`; the service should not duplicate packet framing.
++- Keep generic transfer-buffer mechanics in `BQ76952I2CTransport`; the service should not duplicate packet framing.
+ - Configuration writes occur only in `CONFIG_UPDATE`; read-only audits must not cycle FETs or regulators.
+ 
+ ## Precharge and predischarge
+@@ -72,9 +73,11 @@ Component-scoped rules for `components/bq76952`.
+ 
+ ## User-facing status
+ 
+-- Expose `state` for operating mode: offline, normal, sleep, deep_sleep, config_update, or shutdown_pending.
+-- Expose `fault` for active normalized protection causes.
+-- Do not expose raw FET status or Safety Status A/B/C as another user-facing text entity; log them for diagnostics.
++- `lifecycle` is diagnostic availability/configuration state: disconnected, configuring, ready, or failed.
++- `state` is operating mode only: unknown, normal, sleep, deep_sleep, config_update, or shutdown_pending.
++- `fault` is the highest-priority actionable active cause; `fault_flags` is the optional aggregate diagnostic list.
++- Communication loss changes lifecycle and warning status; publish hardware fault entities as `unknown`, never as a synthetic communication fault or a known `none`.
++- Do not expose raw FET status or Safety Status A/B/C directly; decode them into typed status first.
+ 
+ ## Configuration synchronization
+ 
+@@ -98,12 +101,12 @@ Component-scoped rules for `components/bq76952`.
+ ## OTP safety
+ 
+ - BQ76952 OTP is one-time and irreversible.
+-- Keep `program_factory_otp` out of normal development configurations.
++- Keep `program_factory_otp` out of normal development configurations and nested under the explicit `manufacturing` section.
+ - Documentation must show a prominent warning and recommend exposing the action only in a dedicated manufacturing image after complete live validation.
+ - The implementation must run the device OTP pre-check and abort unless it explicitly permits programming.
+ 
+ ## Implementation status
+ 
+-- The target interfaces are implemented in separate protocol, service, SoC and ESPHome facade source files.
++- The target interfaces are implemented in separate I2C transport, status, service, SoC and ESPHome facade source files.
+ - The old monolithic implementation and compatibility code have been removed.
+ - Extend the appropriate layer rather than putting new register transport, policy or SoC state back into `bq76952.cpp`.
+diff --git a/components/bq76952/CONTEXT_INDEX.md b/components/bq76952/CONTEXT_INDEX.md
+index 6542c7b..be25c31 100644
+--- a/components/bq76952/CONTEXT_INDEX.md
++++ b/components/bq76952/CONTEXT_INDEX.md
+@@ -3,18 +3,26 @@
+ Read order for `components/bq76952`:
+ 
+ 1. `AGENTS_KNOWLEDGE.md`
+-2. `__init__.py`
+-3. `bq76952_soc.h` / `bq76952_soc.cpp`
+-4. `bq76952_service.h` / `bq76952_service.cpp`
+-5. `bq76952.h` / `bq76952.cpp`
+-6. `README.md`
++2. `__init__.py`, then `_schema.py`, `_types.py`, `_codegen.py`
++3. `bq76952_registers.h` and `bq76952_status.h` / `.cpp`
++4. `bq76952_i2c_transport.h` / `.cpp`
++5. `bq76952_soc.h` / `.cpp`
++6. `bq76952_service.h` / `.cpp`
++7. `bq76952.h` / `.cpp`
++8. `README.md`
+ 
+ Edit map:
+ 
+-- `__init__.py`: ESPHome schema, entity wiring, YAML surface.
+-- `bq76952_soc.*`: SoC learning, persisted endpoints, capacity-calibration status.
+-- `bq76952_service.*`: device service, measurements, and SoC ownership.
+-- `bq76952.h` / `bq76952.cpp`: ESPHome entity facade and entity publication.
++- `__init__.py`: public ESPHome loader metadata and re-exported schema/codegen entry points.
++- `_schema.py`: YAML keys, schemas, entity exposure, and cross-field validation.
++- `_types.py`: ESPHome code-generation declarations for C++ structs/classes.
++- `_codegen.py`: typed config construction and entity/component wiring.
++- `bq76952_registers.h`: host-independent chip register map and encodings.
++- `bq76952_status.*`: host-independent lifecycle/operating/fault snapshot decoding and formatting.
++- `bq76952_i2c_transport.*`: ESPHome I2C transactions and BQ transfer framing.
++- `bq76952_soc.*`: SoC learning, persisted endpoints, and capacity-calibration status.
++- `bq76952_service.*`: desired-state synchronization, measurements, controls, and SoC ownership.
++- `bq76952.h` / `.cpp`: ESPHome lifecycle and entity publication.
+ - `README.md`: user-facing config and behavioral notes.
+ 
+ External references:
+diff --git a/components/bq76952/README.md b/components/bq76952/README.md
+index f3f503b..ff48d2a 100644
+--- a/components/bq76952/README.md
++++ b/components/bq76952/README.md
+@@ -4,14 +4,17 @@ ESPHome external component for TI `BQ76952` 3S–16S battery monitors.
+ 
+ The component implements the hard-cut configuration interfaces directly. The previous monolithic state bag and compatibility paths have been removed.
+ 
++Because the status contract uses `component_common`, explicit external-component allowlists must include both `component_common` and `bq76952`.
++
+ ## Architecture
+ 
+ - `bq76952_registers.h`: named direct commands, subcommands, data-memory addresses, bit fields, unit encodings, transport timing, and fixed product-policy constants
+-- `bq76952_protocol.cpp`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
++- `bq76952_i2c_transport.cpp`: register, subcommand, data-memory, checksum
