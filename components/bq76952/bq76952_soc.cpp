@@ -23,8 +23,7 @@ void BQ76952Soc::setup(BQ76952CellChemistry chemistry) {
 }
 
 bool BQ76952Soc::has_confirmed_capacity() const {
-  return this->have_span_ && !this->span_provisional_ && std::isfinite(this->learned_span_ah_) &&
-         this->learned_span_ah_ > 0.001F;
+  return this->have_span_ && std::isfinite(this->learned_span_ah_) && this->learned_span_ah_ > 0.001F;
 }
 
 float BQ76952Soc::learned_capacity_ah() const {
@@ -40,9 +39,6 @@ const char *BQ76952Soc::capacity_calibration_status() const {
   }
   if (this->have_empty_ && !this->have_full_) {
     return "empty detected - charge to full";
-  }
-  if (this->span_provisional_) {
-    return "estimated - needs full cycle";
   }
   return "unlearned";
 }
@@ -72,13 +68,7 @@ float BQ76952Soc::estimate_from_voltage(int16_t cell_voltage_mv, uint16_t empty_
 }
 
 float BQ76952Soc::update(const BQ76952SocSample &sample) {
-  if (!this->have_last_counter_) {
-    this->boot_estimate_fraction_ =
-        this->estimate_from_voltage(sample.average_cell_voltage_mv, sample.empty_cell_voltage_mv,
-                                    sample.full_cell_voltage_mv) /
-        100.0F;
-    this->boot_relative_charge_ah_ = this->relative_charge_ah_;
-  } else {
+  if (this->have_last_counter_) {
     const float delta_ah = sample.coulomb_counter_ah - this->last_coulomb_counter_ah_;
     if (std::isfinite(delta_ah) && std::fabs(delta_ah) < MAX_REASONABLE_COUNTER_DELTA_AH) {
       this->relative_charge_ah_ += delta_ah;
@@ -141,7 +131,7 @@ float BQ76952Soc::update(const BQ76952SocSample &sample) {
   }
 
   float percent = 0.0F;
-  if (this->have_span_ && this->learned_span_ah_ > 0.001F) {
+  if (this->has_confirmed_capacity()) {
     percent = 100.0F * (this->relative_charge_ah_ - this->empty_anchor_ah_) / this->learned_span_ah_;
   } else {
     percent = this->estimate_from_voltage(sample.average_cell_voltage_mv, sample.empty_cell_voltage_mv,
@@ -160,15 +150,6 @@ void BQ76952Soc::mark_full() {
 
   if (this->have_empty_) {
     this->update_learned_span();
-  } else if (this->boot_estimate_fraction_ >= 0.10F && this->boot_estimate_fraction_ <= 0.90F) {
-    const float span =
-        (this->full_anchor_ah_ - this->boot_relative_charge_ah_) / (1.0F - this->boot_estimate_fraction_);
-    if (span > 0.001F) {
-      this->learned_span_ah_ = span;
-      this->empty_anchor_ah_ = this->full_anchor_ah_ - span;
-      this->have_span_ = true;
-      this->span_provisional_ = true;
-    }
   }
 
   this->full_hold_start_ms_ = 0;
@@ -182,15 +163,6 @@ void BQ76952Soc::mark_empty() {
 
   if (this->have_full_) {
     this->update_learned_span();
-  } else if (this->boot_estimate_fraction_ >= 0.10F && this->boot_estimate_fraction_ <= 0.90F) {
-    const float span =
-        (this->boot_relative_charge_ah_ - this->empty_anchor_ah_) / this->boot_estimate_fraction_;
-    if (span > 0.001F) {
-      this->learned_span_ah_ = span;
-      this->full_anchor_ah_ = this->empty_anchor_ah_ + span;
-      this->have_span_ = true;
-      this->span_provisional_ = true;
-    }
   }
 
   this->empty_hold_start_ms_ = 0;
@@ -206,7 +178,6 @@ void BQ76952Soc::update_learned_span() {
 
   this->learned_span_ah_ = measured_span;
   this->have_span_ = true;
-  this->span_provisional_ = false;
   ESP_LOGI(TAG, "Updated learned capacity span: %.4f Ah", this->learned_span_ah_);
 }
 
@@ -234,7 +205,6 @@ void BQ76952Soc::load() {
   this->have_empty_ = (state.flags & HAVE_EMPTY) != 0;
   this->have_span_ = (state.flags & HAVE_SPAN) != 0 && std::isfinite(state.learned_span_ah) &&
                      state.learned_span_ah > 0.001F;
-  this->span_provisional_ = (state.flags & SPAN_PROVISIONAL) != 0;
   ESP_LOGI(TAG, "Loaded SoC state: relative_charge=%.4f Ah span=%.4f Ah", this->relative_charge_ah_,
            this->learned_span_ah_);
 }
@@ -257,7 +227,6 @@ void BQ76952Soc::save(bool force) {
   if (this->have_full_) state.flags |= HAVE_FULL;
   if (this->have_empty_) state.flags |= HAVE_EMPTY;
   if (this->have_span_) state.flags |= HAVE_SPAN;
-  if (this->span_provisional_) state.flags |= SPAN_PROVISIONAL;
 
   if (!this->preference_.save(&state)) {
     ESP_LOGW(TAG, "Failed saving SoC state");

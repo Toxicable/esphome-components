@@ -61,15 +61,15 @@ class BQ76952Soc {
   static constexpr int16_t ENDPOINT_MARGIN_MV = 20;
   static constexpr uint32_t ENDPOINT_HOLD_MS = 30000;
   static constexpr float MAX_REASONABLE_COUNTER_DELTA_AH = 100.0f;
-  static constexpr uint32_t PREFERENCE_NAMESPACE = 0xB7695200u;
+  // Bumped when one-endpoint capacity extrapolation was removed so persisted
+  // provisional spans cannot be mistaken for measured calibration.
+  static constexpr uint32_t PREFERENCE_NAMESPACE = 0xB7695201u;
 
   static constexpr uint8_t HAVE_FULL = 0x01;
   static constexpr uint8_t HAVE_EMPTY = 0x02;
   static constexpr uint8_t HAVE_SPAN = 0x04;
-  static constexpr uint8_t SPAN_PROVISIONAL = 0x08;
-
-  // Voltage-only fallback used until full/empty coulomb-count anchors have
-  // been learned. The configured chemistry must match this curve.
+  // Voltage-only fallback used until both full and empty coulomb-count anchors
+  // have been measured. The configured chemistry must match this curve.
   static constexpr CurvePoint DEFAULT_LITHIUM_ION_CURVE[] = {
       {2800, 0.0f},  {3000, 3.0f},  {3200, 8.0f},  {3300, 12.0f},
       {3500, 25.0f}, {3600, 40.0f}, {3700, 58.0f}, {3800, 75.0f},
@@ -91,10 +91,6 @@ class BQ76952Soc {
   bool have_full_{false};
   bool have_empty_{false};
   bool have_span_{false};
-  bool span_provisional_{false};
-
-  float boot_estimate_fraction_{0.5f};
-  float boot_relative_charge_ah_{0.0f};
   uint32_t full_hold_start_ms_{0};
   uint32_t empty_hold_start_ms_{0};
   bool full_endpoint_latched_{false};

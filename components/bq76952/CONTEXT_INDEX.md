@@ -12,7 +12,7 @@ Read order for `components/bq76952`:
 Edit map:
 
 - `__init__.py`: ESPHome schema, entity wiring, YAML surface.
-- `bq76952_soc.*`: SoC learning, persisted endpoints, capacity-calibration status.
+- `bq76952_soc.*`: SoC learning, persisted endpoints, capacity-calibration status. SoC must retain voltage fallback until both measured endpoints establish a coulomb-count span.
 - `bq76952_service.*`: device service, measurements, and SoC ownership.
 - `bq76952.h` / `bq76952.cpp`: ESPHome entity facade and entity publication.
 - `README.md`: user-facing config and behavioral notes.

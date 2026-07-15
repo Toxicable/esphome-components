@@ -89,7 +89,7 @@ Component-scoped rules for `components/bq76952`.
 - Do not expose passed-charge accumulation or a reset-passed-charge control to users.
 - `relative_charge_ah` is an internal continuous coordinate built from counter deltas so learned SoC survives counter reset/wraparound.
 - The BQ accumulator increases while charging, so calculate learned SoC as `(relative_charge - empty_anchor) / (full_anchor - empty_anchor)`.
-- Expose confirmed full-to-empty `learned_capacity` as an Ah diagnostic. `capacity_calibration_status` reports `unlearned`, a detected full/empty endpoint with the required next direction, a one-endpoint estimate, or `calibrated` without exposing the provisional Ah value.
+- Expose confirmed full-to-empty `learned_capacity` as an Ah diagnostic. `capacity_calibration_status` reports `unlearned`, a detected full/empty endpoint with the required next direction, or `calibrated`. SoC must use the voltage curve until both endpoints have been measured; do not extrapolate a capacity span from a single endpoint.
 - SoC has no device-address dependency. It is an ancillary object owned and set up by the service.
 - Current is user-facing positive for discharge and negative for charge.
 - Full/empty endpoints use configured COV/CUV thresholds, protection state, current direction, and hold time.

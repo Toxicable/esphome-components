@@ -200,15 +200,14 @@ The BQ76952 integrated-charge value is an internal coulomb-counter position in A
 
 ## Learned capacity diagnostic
 
-`learned_capacity` reports the confirmed full-to-empty coulomb-count span in amp-hours. It remains unavailable while the estimator is unlearned or only has a provisional one-endpoint estimate. A value is published only after both a valid full and empty endpoint have been observed.
+`learned_capacity` reports the confirmed full-to-empty coulomb-count span in amp-hours. It remains unavailable until both a valid full and empty endpoint have been observed.
 
 The value is diagnostic rather than a configured nominal capacity: it can change as later complete cycles refresh the learned endpoints.
 
 `capacity_calibration_status` explains the current learning stage:
 
 - `unlearned`: no full or empty endpoint has been observed; SoC uses the voltage fallback.
-- `full detected - discharge to empty` or `empty detected - charge to full`: one measured endpoint is stored and the opposite endpoint is needed.
-- `estimated - needs full cycle`: a temporary span was inferred from one endpoint and the boot-time voltage estimate.
+- `full detected - discharge to empty` or `empty detected - charge to full`: one measured endpoint is stored; SoC continues to use the voltage fallback until the opposite endpoint is measured.
 - `calibrated`: both endpoints were measured and `learned_capacity` is confirmed.
 
 The `soc` endpoints control capacity learning only; they do not change CUV/COV safety protection. A full or empty endpoint normally requires the corresponding voltage condition to persist while the required charge/discharge direction has been observed.
