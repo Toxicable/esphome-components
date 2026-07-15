@@ -1,0 +1,28 @@
+name: Phase 4 source snapshot
+
+on:
+  pull_request:
+
+jobs:
+  snapshot:
+    if: github.head_ref == 'agent/phase4-source-snapshot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload BQ source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-bq-source
+          path: |
+            ARCHITECTURE.md
+            COMPONENTS.md
+            check_host.bash
+            components/component_common
+            components/bq76952
+            components/bq76922
+            components/bq25798
+            tests
+            tools
+          if-no-files-found: error
