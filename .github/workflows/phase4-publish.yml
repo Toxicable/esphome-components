@@ -23,15 +23,31 @@ jobs:
           path: target
           fetch-depth: 0
 
+      - name: Reconstruct BQ consistency patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat payload/.phase4/plain.0{0..8} > phase4.patch
+          sha256sum phase4.patch > phase4-patch.sha256
+          wc -c phase4.patch
+          cat phase4-patch.sha256
+
+      - name: Upload reconstructed patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-reconstructed-patch
+          path: |
+            phase4.patch
+            phase4-patch.sha256
+
       - name: Apply BQ consistency patch
         shell: bash
         run: |
           set -euo pipefail
-          cat payload/.phase4/plain.0{0..8} > /tmp/phase4.patch
-          printf '%s  %s\n' '2232d0862ccf991784ebf537a95e592477b37db93d3027ddd258c7a597476fd2' /tmp/phase4.patch | sha256sum --check
+          printf '%s  %s\n' '2232d0862ccf991784ebf537a95e592477b37db93d3027ddd258c7a597476fd2' phase4.patch | sha256sum --check
           cd target
-          git apply --check /tmp/phase4.patch
-          git apply --index /tmp/phase4.patch
+          git apply --check ../phase4.patch
+          git apply --index ../phase4.patch
           git diff --cached --check
 
       - name: Check Python modules
