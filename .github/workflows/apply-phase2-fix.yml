@@ -1,0 +1,47 @@
+name: Apply Phase 2 source fix
+
+on:
+  push:
+    branches:
+      - agent/phase2-fix-runner
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/shared-utilities-tests
+          fetch-depth: 0
+
+      - name: Restore separate battery-cycle source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp components/programmable_load/battery_cycle_impl.h \
+             components/programmable_load/battery_cycle.cpp
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("components/programmable_load/programmable_load.cpp")
+          text = path.read_text()
+          suffix = '''\n// Keep the battery-cycle implementation here because ESPHome does not add it\n// as a separate source file for this external component.\n#include "battery_cycle.cpp"\n'''
+          if not text.endswith(suffix):
+              raise SystemExit("expected battery-cycle include suffix was not found")
+          path.write_text(text[:-len(suffix)] + "\n")
+          PY
+          rm components/programmable_load/battery_cycle_impl.h
+
+      - name: Commit source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/programmable_load
+          git commit -m "Compile battery cycle as separate source"
+          git push origin HEAD:agent/shared-utilities-tests
