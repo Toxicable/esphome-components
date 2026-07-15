@@ -35,6 +35,7 @@ class BQ76952Soc {
 
   bool has_confirmed_capacity() const;
   float learned_capacity_ah() const;
+  const char *capacity_calibration_status() const;
 
  private:
   struct CurvePoint {

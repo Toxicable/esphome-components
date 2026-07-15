@@ -22,26 +22,18 @@ bool BQ25756Component::set_charge_enabled(bool enabled) {
   return this->service_.set_charge_enabled(enabled);
 }
 
-bool BQ25756Component::set_hiz_mode(bool enabled) {
-  return this->service_.set_hiz_mode(enabled);
-}
-
-bool BQ25756Component::set_reverse_mode(bool enabled) {
-  return this->service_.set_reverse_mode(enabled);
-}
-
 bool BQ25756Component::set_watchdog_code(uint8_t code) {
   return this->service_.set_watchdog_code(code);
-}
-
-bool BQ25756Component::reset_watchdog() {
-  return this->service_.reset_watchdog();
 }
 
 void BQ25756Component::setup() {
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
   this->load_calibration_();
+  this->publish_calibration_status_(
+      !this->restore_calibration_ ? "configured"
+                                  : (this->calibration_restored_ ? "restored"
+                                                                  : "not_calibrated"));
 
   if (!this->initialize_()) {
     ESP_LOGW(TAG, "BQ25756 init not ready at startup; will retry");
@@ -54,6 +46,7 @@ void BQ25756Component::setup() {
 }
 
 bool BQ25756Component::load_calibration_() {
+  this->calibration_restored_ = false;
   if (global_preferences == nullptr) return false;
   this->calibration_preference_ = global_preferences->make_preference<FeedbackCalibration>(CALIBRATION_PREFERENCE_KEY);
   this->calibration_preference_valid_ = true;
@@ -63,6 +56,7 @@ bool BQ25756Component::load_calibration_() {
       !std::isfinite(calibration.feedback_to_battery_ratio) || calibration.feedback_to_battery_ratio <= 0.0f) return false;
   this->fb_to_pack_voltage_scale_ = calibration.feedback_to_battery_ratio;
   this->has_fb_to_pack_voltage_scale_ = true;
+  this->calibration_restored_ = true;
   ESP_LOGI(TAG, "Restored battery feedback calibration");
   return true;
 }
@@ -72,36 +66,82 @@ bool BQ25756Component::save_calibration_() {
   return this->calibration_preference_valid_ && this->calibration_preference_.save(&calibration);
 }
 
+void BQ25756Component::publish_calibration_status_(const char *status) {
+  if (this->calibration_status_text_sensor_ != nullptr) {
+    this->calibration_status_text_sensor_->publish_state(status);
+  }
+}
+
 bool BQ25756Component::apply_battery_target_() {
   if (!std::isfinite(this->battery_target_voltage_v_) || this->battery_target_voltage_v_ <= 0.0f ||
-      !std::isfinite(this->fb_to_pack_voltage_scale_) || this->fb_to_pack_voltage_scale_ <= 0.0f) return false;
+      !std::isfinite(this->fb_to_pack_voltage_scale_) || this->fb_to_pack_voltage_scale_ <= 0.0f) {
+    ESP_LOGW(TAG, "Cannot set battery target: target=%.3f V, feedback ratio=%.6f", this->battery_target_voltage_v_,
+             this->fb_to_pack_voltage_scale_);
+    return false;
+  }
   const int target_mv = static_cast<int>(std::lround(this->battery_target_voltage_v_ * 1000.0f / this->fb_to_pack_voltage_scale_ / 2.0f)) * 2;
-  if (target_mv < 1504 || target_mv > 1566) return false;
+  if (target_mv < 1504 || target_mv > 1566) {
+    ESP_LOGW(TAG, "Battery target %.3f V requires VFB target %d mV; valid range is 1504 to 1566 mV",
+             this->battery_target_voltage_v_, target_mv);
+    return false;
+  }
   this->charge_voltage_limit_mv_ = static_cast<uint16_t>(target_mv);
   this->has_charge_voltage_limit_mv_ = true;
-  return this->service_.write_u16_le(::bq25756_core::REG00_CHARGE_VOLTAGE_LIMIT,
-                                     ::bq25756_core::encode_charge_voltage_limit_mv(this->charge_voltage_limit_mv_));
+  if (!this->service_.write_u16_le(::bq25756_core::REG00_CHARGE_VOLTAGE_LIMIT,
+                                   ::bq25756_core::encode_charge_voltage_limit_mv(this->charge_voltage_limit_mv_))) {
+    ESP_LOGW(TAG, "Failed to write VFB target %d mV", target_mv);
+    return false;
+  }
+  return true;
 }
 
 bool BQ25756Component::calibrate_feedback(float measured_battery_voltage_v) {
-  if (!std::isfinite(measured_battery_voltage_v) || measured_battery_voltage_v <= 0.0f) return false;
+  if (!std::isfinite(measured_battery_voltage_v) || measured_battery_voltage_v <= 0.0f) {
+    ESP_LOGW(TAG, "Calibration needs a positive measured battery voltage (got %.3f V)", measured_battery_voltage_v);
+    this->publish_calibration_status_("failed");
+    return false;
+  }
   ::bq25756_core::ControlStates controls{};
   if (!this->service_.read_control_states(controls) || controls.charge_enabled) {
     ESP_LOGW(TAG, "Disable charging before calibrating battery feedback");
+    this->publish_calibration_status_("failed");
     return false;
   }
   ::bq25756_core::Measurements measurements{};
-  if (!this->service_.read_measurements(measurements, true) || measurements.vfb_mv <= 0.0f) return false;
+  if (!this->service_.read_measurements(measurements, true)) {
+    ESP_LOGW(TAG, "Failed to read VFB during battery feedback calibration");
+    this->publish_calibration_status_("failed");
+    return false;
+  }
+  if (!std::isfinite(measurements.vfb_mv) || measurements.vfb_mv <= 0.0f) {
+    ESP_LOGW(TAG, "Calibration VFB reading is invalid: %.1f mV", measurements.vfb_mv);
+    this->publish_calibration_status_("failed");
+    return false;
+  }
   const float ratio = measured_battery_voltage_v * 1000.0f / measurements.vfb_mv;
-  if (!std::isfinite(ratio) || ratio <= 0.0f) return false;
+  if (!std::isfinite(ratio) || ratio <= 0.0f) {
+    ESP_LOGW(TAG, "Calibration ratio is invalid: measured=%.3f V, VFB=%.1f mV", measured_battery_voltage_v,
+             measurements.vfb_mv);
+    this->publish_calibration_status_("failed");
+    return false;
+  }
   const float previous_ratio = this->fb_to_pack_voltage_scale_;
   this->fb_to_pack_voltage_scale_ = ratio;
   this->has_fb_to_pack_voltage_scale_ = true;
-  if (!this->apply_battery_target_() || !this->save_calibration_()) {
+  if (!this->apply_battery_target_()) {
     this->fb_to_pack_voltage_scale_ = previous_ratio;
+    this->publish_calibration_status_("failed");
+    return false;
+  }
+  if (!this->save_calibration_()) {
+    ESP_LOGW(TAG, "Failed to save battery feedback calibration");
+    this->fb_to_pack_voltage_scale_ = previous_ratio;
+    this->publish_calibration_status_("failed");
     return false;
   }
   ESP_LOGI(TAG, "Calibrated battery feedback ratio to %.6f", ratio);
+  this->calibration_restored_ = true;
+  this->publish_calibration_status_("calibrated");
   return true;
 }
 
@@ -154,6 +194,10 @@ bool BQ25756Component::initialize_() {
     ESP_LOGW(TAG, "Failed to apply configured pin control overrides");
     return false;
   }
+  if (!this->set_charge_enabled(false)) {
+    ESP_LOGW(TAG, "Failed to disable charging during initialization");
+    return false;
+  }
 
   this->publish_control_states_();
   this->initialized_ = true;
@@ -181,10 +225,8 @@ void BQ25756Component::update() {
     return;
   }
 
-  const bool need_vfb = this->vfb_voltage_sensor_ != nullptr;
-
   ::bq25756_core::Measurements measurements;
-  if (!this->service_.read_measurements(measurements, need_vfb)) {
+  if (!this->service_.read_measurements(measurements, false)) {
     ESP_LOGW(TAG, "Failed reading one or more ADC registers");
     this->status_set_warning();
     return;
@@ -220,15 +262,8 @@ void BQ25756Component::update() {
     measurements.ts_percent,
     measurements.ts.raw_le,
     measurements.ts.lsb,
-    measurements.ts.msb,
-    need_vfb ? "" : ", VFB=disabled"
+    measurements.ts.msb
   );
-  if (need_vfb) {
-    ESP_LOGD(
-      TAG, "VFB=%.0f mV (0x%04X [%02X %02X])", measurements.vfb_mv, measurements.vfb.raw_le,
-      measurements.vfb.lsb, measurements.vfb.msb
-    );
-  }
 
   if (this->iac_current_sensor_ != nullptr) {
     this->iac_current_sensor_->publish_state(measurements.iac_ma);
@@ -244,9 +279,6 @@ void BQ25756Component::update() {
   }
   if (this->ts_percent_sensor_ != nullptr) {
     this->ts_percent_sensor_->publish_state(measurements.ts_percent);
-  }
-  if (this->vfb_voltage_sensor_ != nullptr) {
-    this->vfb_voltage_sensor_->publish_state(measurements.vfb_mv);
   }
 
   if (this->vfb_reg_target_sensor_ != nullptr || this->vbat_ov_rising_pack_sensor_ != nullptr ||
@@ -307,7 +339,6 @@ void BQ25756Component::dump_config() {
   LOG_SENSOR("  ", "VAC Voltage", this->vac_voltage_sensor_);
   LOG_SENSOR("  ", "VBAT Voltage", this->vbat_voltage_sensor_);
   LOG_SENSOR("  ", "TS Percent", this->ts_percent_sensor_);
-  LOG_SENSOR("  ", "VFB Voltage", this->vfb_voltage_sensor_);
   LOG_SENSOR("  ", "Charge Voltage Target", this->vfb_reg_target_sensor_);
   LOG_SENSOR("  ", "Battery Overvoltage Rising", this->vbat_ov_rising_pack_sensor_);
   LOG_SENSOR("  ", "Battery Overvoltage Falling", this->vbat_ov_falling_pack_sensor_);
@@ -316,9 +347,6 @@ void BQ25756Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "MPPT Status", this->mppt_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Status Flags", this->status_flags_text_sensor_);
   LOG_SWITCH("  ", "Charge Enable", this->charge_enable_switch_);
-  LOG_SWITCH("  ", "HIZ Mode", this->hiz_mode_switch_);
-  LOG_SWITCH("  ", "Reverse Mode", this->reverse_mode_switch_);
-  LOG_SELECT("  ", "Watchdog", this->watchdog_select_);
   if (this->is_failed()) {
     ESP_LOGE(TAG, "Communication failed");
   }
@@ -446,8 +474,7 @@ void BQ25756Component::publish_status_texts_(const ::bq25756_core::Status &statu
 }
 
 void BQ25756Component::publish_control_states_() {
-  if (this->charge_enable_switch_ == nullptr && this->hiz_mode_switch_ == nullptr &&
-      this->reverse_mode_switch_ == nullptr && this->watchdog_select_ == nullptr) {
+  if (this->charge_enable_switch_ == nullptr) {
     return;
   }
 
@@ -460,15 +487,6 @@ void BQ25756Component::publish_control_states_() {
   if (this->charge_enable_switch_ != nullptr) {
     this->charge_enable_switch_->publish_state(states.charge_enabled);
   }
-  if (this->hiz_mode_switch_ != nullptr) {
-    this->hiz_mode_switch_->publish_state(states.hiz_mode);
-  }
-  if (this->reverse_mode_switch_ != nullptr) {
-    this->reverse_mode_switch_->publish_state(states.reverse_mode);
-  }
-  if (this->watchdog_select_ != nullptr) {
-    this->watchdog_select_->publish_state(static_cast<size_t>(states.watchdog_code));
-  }
 }
 
 bool BQ25756Component::ensure_adc_enabled_() {
@@ -476,12 +494,14 @@ bool BQ25756Component::ensure_adc_enabled_() {
   uint8_t reg2b_new = 0;
   uint8_t reg2c = 0;
   uint8_t reg2c_new = 0;
-  if (!this->service_.ensure_adc_enabled(this->vfb_voltage_sensor_ != nullptr, reg2b, reg2b_new, reg2c, reg2c_new)) {
+  // Feedback calibration always needs this ADC channel, even when its optional
+  // diagnostic sensor is not exposed to Home Assistant.
+  if (!this->service_.ensure_adc_enabled(true, reg2b, reg2b_new, reg2c, reg2c_new)) {
     ESP_LOGW(TAG, "ADC configuration write failed");
     return false;
   }
 
-  ESP_LOGD(TAG, "ADC config REG2B: 0x%02X -> 0x%02X, REG2C: 0x%02X -> 0x%02X", reg2b, reg2b_new, reg2c, reg2c_new);
+  ESP_LOGI(TAG, "ADC config REG2B: 0x%02X -> 0x%02X, REG2C: 0x%02X -> 0x%02X", reg2b, reg2b_new, reg2c, reg2c_new);
   return true;
 }
 
@@ -585,48 +605,6 @@ void BQ25756ChargeEnableSwitch::write_state(bool state) {
     return;
   }
   ESP_LOGW(TAG, "Failed to set charge_enable to %s", state ? "on" : "off");
-}
-
-void BQ25756HizModeSwitch::write_state(bool state) {
-  ESP_LOGI(TAG, "Action: hiz_mode -> %s", state ? "on" : "off");
-  if (this->parent_ != nullptr && this->parent_->set_hiz_mode(state)) {
-    this->publish_state(state);
-    ESP_LOGI(TAG, "Action result: hiz_mode=%s", state ? "on" : "off");
-    return;
-  }
-  ESP_LOGW(TAG, "Failed to set hiz_mode to %s", state ? "on" : "off");
-}
-
-void BQ25756ReverseModeSwitch::write_state(bool state) {
-  ESP_LOGI(TAG, "Action: reverse_mode -> %s", state ? "on" : "off");
-  if (this->parent_ != nullptr && this->parent_->set_reverse_mode(state)) {
-    this->publish_state(state);
-    ESP_LOGI(TAG, "Action result: reverse_mode=%s", state ? "on" : "off");
-    return;
-  }
-  ESP_LOGW(TAG, "Failed to set reverse_mode to %s", state ? "on" : "off");
-}
-
-void BQ25756WatchdogSelect::control(size_t index) {
-  if (index > 0x03) {
-    return;
-  }
-  ESP_LOGI(TAG, "Action: watchdog -> %u", static_cast<unsigned>(index));
-  if (this->parent_ != nullptr && this->parent_->set_watchdog_code(static_cast<uint8_t>(index))) {
-    this->publish_state(index);
-    ESP_LOGI(TAG, "Action result: watchdog=%u", static_cast<unsigned>(index));
-    return;
-  }
-  ESP_LOGW(TAG, "Failed to set watchdog option index %u", static_cast<unsigned>(index));
-}
-
-void BQ25756WatchdogResetButton::press_action() {
-  ESP_LOGI(TAG, "Action: watchdog_reset");
-  if (this->parent_ != nullptr && this->parent_->reset_watchdog()) {
-    ESP_LOGI(TAG, "Watchdog reset requested");
-    return;
-  }
-  ESP_LOGW(TAG, "Failed to reset watchdog");
 }
 
 void BQ25756DumpRegistersButton::press_action() {

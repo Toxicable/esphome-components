@@ -37,7 +37,7 @@ Charger_14 is used in its **external ESPHome control mode**. The cycle reference
 - `charge_status`;
 - `status_flags`.
 
-Charge voltage, charge current, input-current and input-voltage limits remain owned by the `bq25756` configuration for the stuffed Charger_14 variant. The cycle only enables or disables an already configured charger. It does not write raw charger registers or duplicate board policy.
+Charge voltage, charge current, input-current and input-voltage limits remain owned by the `bq25756` configuration for the stuffed Charger_14 variant. The cycle only enables or disables an already configured charger. It does not write raw charger registers or duplicate board policy. The Charger_14 enable control may also be used for manual charging while the programmable load is idle; the load output remains forced off in that state.
 
 When a Charger_14 adapter is configured, the programmable-load core owns its charge-enable switch and keeps it off outside the charging phase. The core also guarantees that a non-zero load request and charger enable cannot be active together.
 

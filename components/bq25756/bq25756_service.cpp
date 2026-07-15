@@ -121,8 +121,15 @@ bool Bq25756Service::ensure_adc_enabled(bool include_vfb, uint8_t &reg2b_old, ui
     return false;
   }
 
-  reg2b_new = static_cast<uint8_t>((reg2b_old | REG2B_ADC_EN_MASK) & ~REG2B_ADC_RATE_MASK);
-  if (reg2b_new != reg2b_old && !this->write_byte(REG2B_ADC_CONTROL, reg2b_new)) {
+  // Explicitly select continuous, 15-bit, non-averaged conversion rather than
+  // inheriting the 13-bit power-on default. This gives deterministic ADC
+  // behavior and maximizes low-current resolution.
+  reg2b_new = REG2B_ADC_CONTINUOUS_15_BIT;
+  if (!this->write_byte(REG2B_ADC_CONTROL, reg2b_new)) {
+    return false;
+  }
+  uint8_t reg2b_verify = 0;
+  if (!this->read_byte(REG2B_ADC_CONTROL, reg2b_verify) || reg2b_verify != reg2b_new) {
     return false;
   }
 

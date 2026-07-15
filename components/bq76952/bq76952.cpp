@@ -105,6 +105,10 @@ void BQ76952Component::set_fault_sensor(text_sensor::TextSensor *sensor) {
   this->fault_sensor_ = sensor;
 }
 
+void BQ76952Component::set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor) {
+  this->capacity_calibration_status_sensor_ = sensor;
+}
+
 void BQ76952Component::set_output_enabled_switch(switch_::Switch *control) {
   this->output_enabled_switch_ = control;
 }
@@ -132,6 +136,9 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
     this->state_sensor_->publish_state(state_name(snapshot.state));
   }
   this->publish_faults(snapshot);
+  if (this->capacity_calibration_status_sensor_ != nullptr) {
+    this->capacity_calibration_status_sensor_->publish_state(this->service_.capacity_calibration_status());
+  }
 
   if (this->output_enabled_switch_ != nullptr) {
     this->output_enabled_switch_->publish_state(snapshot.output_enabled);
@@ -227,6 +234,9 @@ void BQ76952Component::dump_config() {
   ESP_LOGCONFIG(TAG, "  Autonomous FET control: %s", YESNO(config.fet.autonomous));
   ESP_LOGCONFIG(TAG, "  Precharge: %s", YESNO(config.fet.precharge.enabled));
   ESP_LOGCONFIG(TAG, "  Predischarge: %s", YESNO(config.fet.predischarge.enabled));
+  ESP_LOGCONFIG(TAG, "  SoC endpoints: empty=%u mV full=%u mV",
+                static_cast<unsigned>(config.soc.empty_cell_voltage_mv),
+                static_cast<unsigned>(config.soc.full_cell_voltage_mv));
 
   LOG_SENSOR("  ", "BAT Voltage", this->bat_voltage_sensor_);
   LOG_SENSOR("  ", "PACK Voltage", this->pack_voltage_sensor_);
@@ -246,6 +256,7 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "TS3 Temperature", this->thermistor_temperature_sensors_[2]);
   LOG_TEXT_SENSOR("  ", "State", this->state_sensor_);
   LOG_TEXT_SENSOR("  ", "Fault", this->fault_sensor_);
+  LOG_TEXT_SENSOR("  ", "Capacity Calibration Status", this->capacity_calibration_status_sensor_);
   LOG_SWITCH("  ", "Output Enabled", this->output_enabled_switch_);
 }
 

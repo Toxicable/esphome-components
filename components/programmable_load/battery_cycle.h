@@ -143,5 +143,16 @@ class BatteryCycleStartButton : public button::Button {
   BatteryCycle *procedure_{nullptr};
 };
 
+class BatteryCycleStopButton : public button::Button {
+ public:
+  void set_host(ProgrammableLoadComponent *host) { this->host_ = host; }
+  void set_procedure(BatteryCycle *procedure) { this->procedure_ = procedure; }
+
+ protected:
+  void press_action() override;
+  ProgrammableLoadComponent *host_{nullptr};
+  BatteryCycle *procedure_{nullptr};
+};
+
 }  // namespace programmable_load
 }  // namespace esphome

@@ -338,5 +338,11 @@ void BatteryCycleStartButton::press_action() {
   }
 }
 
+void BatteryCycleStopButton::press_action() {
+  if (this->host_ != nullptr && this->procedure_ != nullptr) {
+    this->host_->stop_procedure(this->procedure_);
+  }
+}
+
 }  // namespace programmable_load
 }  // namespace esphome

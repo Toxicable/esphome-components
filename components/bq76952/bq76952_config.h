@@ -138,6 +138,14 @@ struct BQ76952ProtectionConfig {
   uint8_t current_recovery_time_s{0};
 };
 
+// SoC endpoint policy is intentionally independent of CUV/COV safety
+// protections. These voltages define when capacity learning records empty and
+// full coulomb-counter anchors.
+struct BQ76952SocConfig {
+  uint16_t empty_cell_voltage_mv{3000};
+  uint16_t full_cell_voltage_mv{4200};
+};
+
 // Complete desired state for one BQ76952. There are deliberately no optional
 // fields and no implicit "preserve whatever the chip already contains" mode.
 // ESPHome must construct every group explicitly.
@@ -152,6 +160,7 @@ struct BQ76952Config {
   BQ76952FetConfig fet{};
   BQ76952BalancingConfig balancing{};
   BQ76952ProtectionConfig protections{};
+  BQ76952SocConfig soc{};
 };
 
 }  // namespace bq76952

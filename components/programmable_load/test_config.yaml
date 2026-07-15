@@ -178,6 +178,8 @@ programmable_load:
       termination_hold_time: 10s
       start:
         name: "Run Battery Drain and Charge Cycle"
+      stop:
+        name: "Stop Battery Drain and Charge Cycle"
       phase:
         name: "Battery Cycle Phase"
       result:

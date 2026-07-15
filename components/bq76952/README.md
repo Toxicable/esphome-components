@@ -113,6 +113,11 @@ bq76952:
 
     current_recovery_time_s: 3
 
+  ## Capacity-learning endpoints. These are independent of CUV/COV safety limits.
+  soc:
+    empty_cell_voltage_mv: 3000
+    full_cell_voltage_mv: 4200
+
   # High-level operating mode: offline, normal, sleep, deep_sleep,
   # config_update, or shutdown_pending.
   state:
@@ -130,6 +135,8 @@ bq76952:
     name: "BMS State of Charge"
   learned_capacity:
     name: "BMS Learned Capacity"
+  capacity_calibration_status:
+    name: "BMS Capacity Calibration Status"
 
   cell1_voltage:
     name: "BMS Cell 1"
@@ -196,6 +203,15 @@ The BQ76952 integrated-charge value is an internal coulomb-counter position in A
 `learned_capacity` reports the confirmed full-to-empty coulomb-count span in amp-hours. It remains unavailable while the estimator is unlearned or only has a provisional one-endpoint estimate. A value is published only after both a valid full and empty endpoint have been observed.
 
 The value is diagnostic rather than a configured nominal capacity: it can change as later complete cycles refresh the learned endpoints.
+
+`capacity_calibration_status` explains the current learning stage:
+
+- `unlearned`: no full or empty endpoint has been observed; SoC uses the voltage fallback.
+- `full detected - discharge to empty` or `empty detected - charge to full`: one measured endpoint is stored and the opposite endpoint is needed.
+- `estimated - needs full cycle`: a temporary span was inferred from one endpoint and the boot-time voltage estimate.
+- `calibrated`: both endpoints were measured and `learned_capacity` is confirmed.
+
+The `soc` endpoints control capacity learning only; they do not change CUV/COV safety protection. A full or empty endpoint normally requires the corresponding voltage condition to persist while the required charge/discharge direction has been observed.
 
 ## OTP programming
 

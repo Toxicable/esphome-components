@@ -55,6 +55,8 @@ bq25756:
       name: "Measured Voltage"
     calibrate:
       name: "Calibrate"
+    status:
+      name: "Charger Calibration Status"
   measurements:
     input_current:
       name: "Charger Input Current"
@@ -66,9 +68,6 @@ bq25756:
       name: "Charger Output Voltage"
     temperature_percent:
       name: "Charger TS Percent"
-  diagnostics:
-    feedback_voltage:
-      name: "Charger Feedback Voltage"
   status:
     charging:
       name: "Charge Status"

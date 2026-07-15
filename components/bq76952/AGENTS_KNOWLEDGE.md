@@ -32,6 +32,7 @@ Component-scoped rules for `components/bq76952`.
 - Every hardware/policy group is required by the ESPHome schema.
 - `cell_chemistry` is required. Only `lithium_ion` is supported until another chemistry gets its own SoC fallback curve.
 - `current_gain_policy` explicitly selects existing calibration or derivation from the configured shunt.
+- `soc.empty_cell_voltage_mv` and `soc.full_cell_voltage_mv` define SoC capacity-learning endpoints independently of CUV/COV safety thresholds.
 - REG0, REG1, and REG2 states are explicit. REG1/REG2 voltage codes are supplied even when disabled.
 - TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes.
 - Protection masks are derived from fixed policy, not exposed as raw user bitmasks.
@@ -88,7 +89,7 @@ Component-scoped rules for `components/bq76952`.
 - Do not expose passed-charge accumulation or a reset-passed-charge control to users.
 - `relative_charge_ah` is an internal continuous coordinate built from counter deltas so learned SoC survives counter reset/wraparound.
 - The BQ accumulator increases while charging, so calculate learned SoC as `(relative_charge - empty_anchor) / (full_anchor - empty_anchor)`.
-- Expose only confirmed full-to-empty `learned_capacity` as an Ah diagnostic; provisional one-endpoint spans remain internal.
+- Expose confirmed full-to-empty `learned_capacity` as an Ah diagnostic. `capacity_calibration_status` reports `unlearned`, a detected full/empty endpoint with the required next direction, a one-endpoint estimate, or `calibrated` without exposing the provisional Ah value.
 - SoC has no device-address dependency. It is an ancillary object owned and set up by the service.
 - Current is user-facing positive for discharge and negative for charge.
 - Full/empty endpoints use configured COV/CUV thresholds, protection state, current direction, and hold time.

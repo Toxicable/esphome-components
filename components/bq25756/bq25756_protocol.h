@@ -37,6 +37,10 @@ static constexpr uint8_t REG19_EN_REV_MASK = 0x01;
 
 static constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;
 static constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
+static constexpr uint8_t REG2B_ADC_SAMPLE_MASK = 0x30;
+static constexpr uint8_t REG2B_ADC_AVG_MASK = 0x08;
+static constexpr uint8_t REG2B_ADC_AVG_INIT_MASK = 0x04;
+static constexpr uint8_t REG2B_ADC_CONTINUOUS_15_BIT = REG2B_ADC_EN_MASK;
 static constexpr uint8_t REG2C_IAC_ADC_DIS_MASK = 0x80;
 static constexpr uint8_t REG2C_IBAT_ADC_DIS_MASK = 0x40;
 static constexpr uint8_t REG2C_VAC_ADC_DIS_MASK = 0x20;

@@ -71,6 +71,7 @@ class BQ76952Service {
   const BQ76952Config &config() const;
 
   bool poll(BQ76952Snapshot &snapshot);
+  const char *capacity_calibration_status() const;
 
   bool set_output_enabled(bool enabled);
   bool clear_alarm_latches();

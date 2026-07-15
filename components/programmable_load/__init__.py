@@ -4,8 +4,6 @@ from esphome.components import button, number, output, sensor, switch as switch_
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
-    ENTITY_CATEGORY_CONFIG,
-    ENTITY_CATEGORY_DIAGNOSTIC,
     UNIT_AMPERE,
 )
 
@@ -29,6 +27,9 @@ DcrStartButton = programmable_load_ns.class_(
 BatteryCycle = programmable_load_ns.class_("BatteryCycle")
 BatteryCycleStartButton = programmable_load_ns.class_(
     "BatteryCycleStartButton", button.Button
+)
+BatteryCycleStopButton = programmable_load_ns.class_(
+    "BatteryCycleStopButton", button.Button
 )
 
 CONF_HARDWARE = "hardware"
@@ -63,6 +64,9 @@ CONF_PERIOD = "period"
 CONF_DEADBAND = "deadband"
 CONF_RISE_RATE = "rise_rate"
 CONF_FALL_RATE = "fall_rate"
+CONF_PROPORTIONAL_GAIN = "proportional_gain"
+CONF_INTEGRAL_GAIN = "integral_gain"
+CONF_LOG_CONTROL_SAMPLES = "log_control_samples"
 
 CONF_COOLING = "cooling"
 CONF_FAN_OUTPUT = "fan_output"
@@ -87,6 +91,7 @@ CONF_SAMPLE_TIME = "sample_time"
 CONF_RECOVERY_TIME = "recovery_time"
 CONF_REPEATS = "repeats"
 CONF_START = "start"
+CONF_STOP = "stop"
 CONF_RESISTANCE = "resistance"
 
 CONF_BATTERY_CYCLE = "battery_cycle"
@@ -220,6 +225,9 @@ CONTROL_SCHEMA = cv.Schema(
         cv.Optional(CONF_DEADBAND, default=0.01): _non_negative,
         cv.Optional(CONF_RISE_RATE, default=2.0): _positive,
         cv.Optional(CONF_FALL_RATE, default=4.0): _positive,
+        cv.Optional(CONF_PROPORTIONAL_GAIN, default=0.2): _positive,
+        cv.Optional(CONF_INTEGRAL_GAIN, default=0.4): _non_negative,
+        cv.Optional(CONF_LOG_CONTROL_SAMPLES, default=False): cv.boolean,
     }
 )
 
@@ -310,9 +318,8 @@ BATTERY_CYCLE_SCHEMA = cv.Schema(
         cv.Optional(CONF_TERMINATION_HOLD_TIME, default="2s"):
             cv.positive_time_period_milliseconds,
         cv.Required(CONF_START): button.button_schema(BatteryCycleStartButton),
-        cv.Optional(CONF_PHASE): text_sensor.text_sensor_schema(
-            entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-        ),
+        cv.Required(CONF_STOP): button.button_schema(BatteryCycleStopButton),
+        cv.Optional(CONF_PHASE): text_sensor.text_sensor_schema(),
         cv.Optional(CONF_RESULT): text_sensor.text_sensor_schema(),
         cv.Optional(CONF_DISCHARGED_CAPACITY): sensor.sensor_schema(
             unit_of_measurement="Ah",
@@ -423,13 +430,8 @@ CONFIG_SCHEMA = cv.All(
                 device_class=DEVICE_CLASS_CURRENT,
             ),
             cv.Required(CONF_STATE): text_sensor.text_sensor_schema(),
-            cv.Required(CONF_FAULT): text_sensor.text_sensor_schema(
-                entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-            ),
-            cv.Optional(CONF_CLEAR_FAULT): button.button_schema(
-                ClearFaultButton,
-                entity_category=ENTITY_CATEGORY_CONFIG,
-            ),
+            cv.Required(CONF_FAULT): text_sensor.text_sensor_schema(),
+            cv.Optional(CONF_CLEAR_FAULT): button.button_schema(ClearFaultButton),
             cv.Optional(CONF_PROCEDURES, default={}): PROCEDURES_SCHEMA,
         }
     ).extend(cv.COMPONENT_SCHEMA),
@@ -505,6 +507,9 @@ async def to_code(config):
     cg.add(var.set_deadband(control[CONF_DEADBAND]))
     cg.add(var.set_rise_rate(control[CONF_RISE_RATE]))
     cg.add(var.set_fall_rate(control[CONF_FALL_RATE]))
+    cg.add(var.set_proportional_gain(control[CONF_PROPORTIONAL_GAIN]))
+    cg.add(var.set_integral_gain(control[CONF_INTEGRAL_GAIN]))
+    cg.add(var.set_log_control_samples(control[CONF_LOG_CONTROL_SAMPLES]))
 
     cooling = config[CONF_COOLING]
     fan = await cg.get_variable(cooling[CONF_FAN_OUTPUT])
@@ -635,6 +640,9 @@ async def to_code(config):
         cycle_start = await button.new_button(cycle_config[CONF_START])
         cg.add(cycle_start.set_host(var))
         cg.add(cycle_start.set_procedure(cycle))
+        cycle_stop = await button.new_button(cycle_config[CONF_STOP])
+        cg.add(cycle_stop.set_host(var))
+        cg.add(cycle_stop.set_procedure(cycle))
 
         if CONF_PHASE in cycle_config:
             phase = await text_sensor.new_text_sensor(cycle_config[CONF_PHASE])

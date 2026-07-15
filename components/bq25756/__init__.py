@@ -38,7 +38,6 @@ AUTO_LOAD = ["button", "number", "sensor", "switch", "text_sensor"]
 bq25756_ns = cg.esphome_ns.namespace("bq25756")
 BQ25756Component = bq25756_ns.class_("BQ25756Component", cg.PollingComponent, i2c.I2CDevice)
 BQ25756ChargeEnableSwitch = bq25756_ns.class_("BQ25756ChargeEnableSwitch", switch_.Switch)
-BQ25756HizModeSwitch = bq25756_ns.class_("BQ25756HizModeSwitch", switch_.Switch)
 BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
 BQ25756CalibrateFeedbackButton = bq25756_ns.class_("BQ25756CalibrateFeedbackButton", button.Button)
 BQ25756CalibrationVoltageNumber = bq25756_ns.class_("BQ25756CalibrationVoltageNumber", number.Number)
@@ -58,8 +57,6 @@ CONF_BATTERY_CURRENT = "battery_current"
 CONF_INPUT_VOLTAGE = "input_voltage"
 CONF_BATTERY_VOLTAGE = "battery_voltage"
 CONF_TEMPERATURE_PERCENT = "temperature_percent"
-CONF_DIAGNOSTICS = "diagnostics"
-CONF_FEEDBACK_VOLTAGE = "feedback_voltage"
 CONF_STATUS = "status"
 CONF_CHARGING_STATUS = "charging"
 CONF_TEMPERATURE_STATUS = "temperature"
@@ -72,6 +69,7 @@ CONF_CALIBRATION = "calibration"
 CONF_RESTORE = "restore"
 CONF_MEASURED_VOLTAGE = "measured_voltage"
 CONF_CALIBRATE = "calibrate"
+CONF_CALIBRATION_STATUS = "status"
 
 CELL_CHEMISTRY_PROFILES = {
     "lithium_ion": {"maximum_cell_voltage": 4.2, "minimum_cell_voltage": 3.0},
@@ -112,12 +110,6 @@ MEASUREMENTS_SCHEMA = cv.Schema(
     }
 )
 
-DIAGNOSTICS_SCHEMA = cv.Schema(
-    {
-        cv.Optional(CONF_FEEDBACK_VOLTAGE): sensor.sensor_schema(unit_of_measurement=UNIT_MILLIVOLT, accuracy_decimals=0, device_class=DEVICE_CLASS_VOLTAGE, state_class=STATE_CLASS_MEASUREMENT, entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
-    }
-)
-
 CONFIG_SCHEMA = (
     cv.Schema(
         {
@@ -133,14 +125,14 @@ CONFIG_SCHEMA = (
                 cv.Required(CONF_CALIBRATE): button.button_schema(
                     BQ25756CalibrateFeedbackButton, entity_category=ENTITY_CATEGORY_CONFIG,
                 ),
+                cv.Required(CONF_CALIBRATION_STATUS): text_sensor.text_sensor_schema(),
             }),
             cv.Optional(CONF_MEASUREMENTS, default={}): MEASUREMENTS_SCHEMA,
-            cv.Optional(CONF_DIAGNOSTICS, default={}): DIAGNOSTICS_SCHEMA,
             cv.Optional(CONF_STATUS, default={}): cv.Schema({
                 cv.Optional(CONF_CHARGING_STATUS): text_sensor.text_sensor_schema(),
-                cv.Optional(CONF_TEMPERATURE_STATUS): text_sensor.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
-                cv.Optional(CONF_MPPT_STATUS): text_sensor.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
-                cv.Optional(CONF_FAULTS): text_sensor.text_sensor_schema(entity_category=ENTITY_CATEGORY_DIAGNOSTIC),
+                cv.Optional(CONF_TEMPERATURE_STATUS): text_sensor.text_sensor_schema(),
+                cv.Optional(CONF_MPPT_STATUS): text_sensor.text_sensor_schema(),
+                cv.Optional(CONF_FAULTS): text_sensor.text_sensor_schema(),
             }),
             cv.Optional(CONF_CONTROLS, default={}): cv.Schema({
                 cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(BQ25756ChargeEnableSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
@@ -189,11 +181,6 @@ async def to_code(config):
     if CONF_TEMPERATURE_PERCENT in measurements:
         sens = await sensor.new_sensor(measurements[CONF_TEMPERATURE_PERCENT])
         cg.add(var.set_ts_percent_sensor(sens))
-    diagnostics = config[CONF_DIAGNOSTICS]
-    if CONF_FEEDBACK_VOLTAGE in diagnostics:
-        sens = await sensor.new_sensor(diagnostics[CONF_FEEDBACK_VOLTAGE])
-        cg.add(var.set_vfb_voltage_sensor(sens))
-
     status = config[CONF_STATUS]
     if CONF_CHARGING_STATUS in status:
         ts = await text_sensor.new_text_sensor(status[CONF_CHARGING_STATUS])
@@ -225,5 +212,9 @@ async def to_code(config):
         )
         await cg.register_parented(voltage_number, var)
         cg.add(var.set_calibration_voltage_number(voltage_number))
+        calibration_status = await text_sensor.new_text_sensor(
+            calibration[CONF_CALIBRATION_STATUS]
+        )
+        cg.add(var.set_calibration_status_text_sensor(calibration_status))
         calibrate_button = await button.new_button(calibration[CONF_CALIBRATE])
         await cg.register_parented(calibrate_button, var)

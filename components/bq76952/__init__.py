@@ -49,6 +49,7 @@ BQ76952TemperatureProtectionConfig = bq76952_ns.struct(
     "BQ76952TemperatureProtectionConfig"
 )
 BQ76952ProtectionConfig = bq76952_ns.struct("BQ76952ProtectionConfig")
+BQ76952SocConfig = bq76952_ns.struct("BQ76952SocConfig")
 BQ76952Config = bq76952_ns.struct("BQ76952Config")
 
 BQ76952Protocol = bq76952_ns.class_("BQ76952Protocol", i2c.I2CDevice)
@@ -102,6 +103,9 @@ CONF_MAXIMUM_TEMPERATURE_C = "maximum_temperature_c"
 CONF_MAXIMUM_BALANCED_CELLS = "maximum_balanced_cells"
 
 CONF_PROTECTIONS = "protections"
+CONF_SOC = "soc"
+CONF_EMPTY_CELL_VOLTAGE_MV = "empty_cell_voltage_mv"
+CONF_FULL_CELL_VOLTAGE_MV = "full_cell_voltage_mv"
 CONF_CELL_UNDERVOLTAGE = "cell_undervoltage"
 CONF_CELL_OVERVOLTAGE = "cell_overvoltage"
 CONF_CHARGE_OVERCURRENT = "charge_overcurrent"
@@ -137,6 +141,7 @@ CONF_TS2_TEMPERATURE = "ts2_temperature"
 CONF_TS3_TEMPERATURE = "ts3_temperature"
 CONF_STATE = "state"
 CONF_FAULT = "fault"
+CONF_CAPACITY_CALIBRATION_STATUS = "capacity_calibration_status"
 CONF_OUTPUT_ENABLED_CONTROL = "output_enabled_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
 CONF_PROGRAM_FACTORY_OTP = "program_factory_otp"
@@ -314,6 +319,13 @@ PROTECTION_SCHEMA = cv.Schema(
     }
 )
 
+SOC_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_EMPTY_CELL_VOLTAGE_MV): cv.int_range(min=2500, max=4200),
+        cv.Required(CONF_FULL_CELL_VOLTAGE_MV): cv.int_range(min=2500, max=4500),
+    }
+)
+
 VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
     unit_of_measurement=UNIT_VOLT,
     accuracy_decimals=3,
@@ -328,6 +340,10 @@ def _validate_config(config):
     predischarge = config[CONF_FET][CONF_PREDISCHARGE]
     balancing = config[CONF_BALANCING]
     protections = config[CONF_PROTECTIONS]
+    soc = config[CONF_SOC]
+
+    if soc[CONF_EMPTY_CELL_VOLTAGE_MV] >= soc[CONF_FULL_CELL_VOLTAGE_MV]:
+        raise cv.Invalid("soc.empty_cell_voltage_mv must be below soc.full_cell_voltage_mv")
     temperature = protections[CONF_TEMPERATURE]
     thermistors = config[CONF_THERMISTORS]
 
@@ -417,6 +433,7 @@ schema = {
     cv.Required(CONF_FET): FET_SCHEMA,
     cv.Required(CONF_BALANCING): BALANCING_SCHEMA,
     cv.Required(CONF_PROTECTIONS): PROTECTION_SCHEMA,
+    cv.Required(CONF_SOC): SOC_SCHEMA,
     cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_LD_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
@@ -465,6 +482,9 @@ schema = {
     ),
     cv.Optional(CONF_STATE): text_sensor.text_sensor_schema(),
     cv.Optional(CONF_FAULT): text_sensor.text_sensor_schema(),
+    cv.Optional(CONF_CAPACITY_CALIBRATION_STATUS): text_sensor.text_sensor_schema(
+        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+    ),
     cv.Optional(CONF_OUTPUT_ENABLED_CONTROL): switch_.switch_schema(
         BQ76952OutputEnabledSwitch, entity_category=ENTITY_CATEGORY_CONFIG
     ),
@@ -610,6 +630,14 @@ def _build_cpp_config(config):
             config[CONF_PROTECTIONS][CONF_CURRENT_RECOVERY_TIME_S],
         ),
     )
+    soc = _struct(
+        BQ76952SocConfig,
+        config[CONF_SOC],
+        (
+            ("empty_cell_voltage_mv", CONF_EMPTY_CELL_VOLTAGE_MV),
+            ("full_cell_voltage_mv", CONF_FULL_CELL_VOLTAGE_MV),
+        ),
+    )
 
     return cg.StructInitializer(
         BQ76952Config,
@@ -623,6 +651,7 @@ def _build_cpp_config(config):
         ("fet", fet),
         ("balancing", balancing),
         ("protections", protections),
+        ("soc", soc),
     )
 
 
@@ -661,6 +690,10 @@ async def to_code(config):
     text_sensor_setters = (
         (CONF_STATE, var.set_state_sensor),
         (CONF_FAULT, var.set_fault_sensor),
+        (
+            CONF_CAPACITY_CALIBRATION_STATUS,
+            var.set_capacity_calibration_status_sensor,
+        ),
     )
     for key, setter in text_sensor_setters:
         if key in config:

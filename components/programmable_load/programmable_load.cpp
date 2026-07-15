@@ -142,6 +142,7 @@ void ProgrammableLoadComponent::setup() {
       this->current_updated_ms_ = millis();
       this->current_seen_ = true;
       this->measurement_sequence_++;
+      this->current_sequence_++;
     });
     if (this->current_sensor_->has_state()) {
       this->current_updated_ms_ = now;
@@ -249,7 +250,6 @@ void ProgrammableLoadComponent::loop() {
     if (this->state_ == State::RUNNING) this->update_control_();
   } else {
     this->force_output_off_();
-    this->apply_charger_command_(ChargerCommand::DISABLE);
   }
   if ((uint32_t) (now - this->last_fan_update_ms_) >= 500) {
     this->last_fan_update_ms_ = now;
@@ -271,7 +271,7 @@ bool ProgrammableLoadComponent::start_manual(float current_a) {
   this->owner_ = Owner::MANUAL;
   this->requested_current_a_ =
       clampf(current_a, 0.0f, this->limits_.maximum_current_a);
-  this->commanded_current_a_ = 0.0f;
+  this->reset_control_();
   this->set_state_(State::RUNNING);
   if (this->manual_current_number_ != nullptr) {
     this->manual_current_number_->publish_state(this->requested_current_a_);
@@ -288,6 +288,7 @@ bool ProgrammableLoadComponent::update_manual(float current_a) {
   }
   this->requested_current_a_ =
       clampf(current_a, 0.0f, this->limits_.maximum_current_a);
+  this->reset_control_integrator_();
   this->apply_charger_command_(ChargerCommand::DISABLE);
   if (this->manual_current_number_ != nullptr) {
     this->manual_current_number_->publish_state(this->requested_current_a_);
@@ -319,10 +320,19 @@ bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
   }
   this->owner_ = Owner::PROCEDURE;
   this->active_procedure_ = procedure;
-  this->commanded_current_a_ = 0.0f;
+  this->reset_control_();
   this->set_state_(State::RUNNING);
   this->apply_procedure_result_(result);
   return this->state_ == State::RUNNING;
+}
+
+bool ProgrammableLoadComponent::stop_procedure(Procedure *procedure) {
+  if (procedure == nullptr || this->state_ != State::RUNNING ||
+      this->owner_ != Owner::PROCEDURE || this->active_procedure_ != procedure) {
+    return false;
+  }
+  this->release_owner_(StopReason::USER_REQUEST);
+  return true;
 }
 
 void ProgrammableLoadComponent::stop() {
@@ -483,7 +493,7 @@ void ProgrammableLoadComponent::update_control_() {
       this->charger_enable_switch_ != nullptr &&
       this->charger_enable_switch_->state;
   if (this->charger_commanded_enabled_ || charger_enabled) {
-    this->commanded_current_a_ = 0.0f;
+    this->reset_control_();
     this->force_output_off_();
     if (this->charger_control_mismatch_()) {
       this->trip_fault_(Fault::CHARGER_CONTROL_ERROR);
@@ -500,22 +510,75 @@ void ProgrammableLoadComponent::update_control_() {
     this->trip_fault_(Fault::CONTROL_ERROR);
     return;
   }
-  const float target =
-      clampf(this->requested_current_a_, 0.0f, current_limit);
+  if (this->control_has_current_sample_ &&
+      this->current_sequence_ == this->last_control_current_sequence_) {
+    return;
+  }
+  const uint32_t current_timestamp_ms = this->current_updated_ms_;
+  const float dt_s = this->control_has_current_sample_
+                         ? static_cast<float>(current_timestamp_ms -
+                                              this->last_control_current_timestamp_ms_) /
+                               1000.0f
+                         : static_cast<float>(this->control_period_ms_) / 1000.0f;
+  this->last_control_current_sequence_ = this->current_sequence_;
+  this->last_control_current_timestamp_ms_ = current_timestamp_ms;
+  this->control_has_current_sample_ = true;
+  if (!std::isfinite(dt_s) || dt_s <= 0.0f || dt_s > 1.0f) {
+    return;
+  }
+
+  const float target = clampf(this->requested_current_a_, 0.0f, current_limit);
   const float error = target - this->measurement_.current_a;
-  const float period_s = static_cast<float>(this->control_period_ms_) / 1000.0f;
-  float next = this->commanded_current_a_;
-  if (!std::isfinite(next)) {
+  const float bounded_error = std::fabs(error) <= this->deadband_a_ ? 0.0f : error;
+  if (!std::isfinite(this->commanded_current_a_) ||
+      !std::isfinite(this->control_integrator_a_)) {
     this->trip_fault_(Fault::CONTROL_ERROR);
     return;
   }
-  if (error > this->deadband_a_) {
-    next += std::min(error, this->rise_rate_a_per_s_ * period_s);
-  } else if (error < -this->deadband_a_) {
-    next -= std::min(-error, this->fall_rate_a_per_s_ * period_s);
+
+  const float proportional = this->proportional_gain_ * bounded_error;
+  float desired = target + proportional + this->control_integrator_a_;
+  const bool saturated_low = desired < 0.0f;
+  const bool saturated_high = desired > current_limit;
+  if ((!saturated_low && !saturated_high) ||
+      (saturated_low && bounded_error > 0.0f) ||
+      (saturated_high && bounded_error < 0.0f)) {
+    this->control_integrator_a_ = clampf(
+        this->control_integrator_a_ +
+            this->integral_gain_per_s_ * bounded_error * dt_s,
+        -current_limit, current_limit);
+    desired = target + proportional + this->control_integrator_a_;
   }
+  desired = clampf(desired, 0.0f, current_limit);
+  const float maximum_rise = this->rise_rate_a_per_s_ * dt_s;
+  const float maximum_fall = this->fall_rate_a_per_s_ * dt_s;
+  const float next = clampf(desired,
+                            this->commanded_current_a_ - maximum_fall,
+                            this->commanded_current_a_ + maximum_rise);
   this->commanded_current_a_ = clampf(next, 0.0f, current_limit);
   this->drive_output_(this->commanded_current_a_);
+  if (this->log_control_samples_) {
+    ESP_LOGI(TAG,
+             "PI sample=%u dt=%.3fs target=%.3fA measured=%.3fA error=%.3fA "
+             "p=%.3fA i=%.3fA desired=%.3fA command=%.3fA",
+             this->current_sequence_, dt_s, target,
+             this->measurement_.current_a, error, proportional,
+             this->control_integrator_a_, desired, this->commanded_current_a_);
+  }
+}
+
+void ProgrammableLoadComponent::reset_control_() {
+  this->commanded_current_a_ = 0.0f;
+  this->reset_control_integrator_();
+}
+
+void ProgrammableLoadComponent::reset_control_integrator_() {
+  this->control_integrator_a_ = 0.0f;
+  // Do not reuse the sample that preceded a target or ownership change.
+  // The next command is produced only after the current sensor publishes again.
+  this->control_has_current_sample_ = true;
+  this->last_control_current_sequence_ = this->current_sequence_;
+  this->last_control_current_timestamp_ms_ = this->current_updated_ms_;
 }
 
 void ProgrammableLoadComponent::update_fan_() {
@@ -645,9 +708,12 @@ void ProgrammableLoadComponent::apply_procedure_result_(
     this->trip_fault_(Fault::CHARGER_CONTROL_ERROR);
     return;
   }
+  if (this->requested_current_a_ != result.requested_current_a) {
+    this->reset_control_integrator_();
+  }
   this->requested_current_a_ = result.requested_current_a;
   if (result.charger_command == ChargerCommand::ENABLE) {
-    this->commanded_current_a_ = 0.0f;
+    this->reset_control_();
     this->force_output_off_();
   }
 }
@@ -689,7 +755,7 @@ void ProgrammableLoadComponent::release_owner_(StopReason reason) {
   this->active_procedure_ = nullptr;
   this->owner_ = Owner::NONE;
   this->requested_current_a_ = 0.0f;
-  this->commanded_current_a_ = 0.0f;
+  this->reset_control_();
   this->force_output_off_();
   this->apply_charger_command_(ChargerCommand::DISABLE);
   if (procedure != nullptr) procedure->stop(reason);
@@ -710,7 +776,7 @@ void ProgrammableLoadComponent::trip_fault_(Fault fault) {
   this->active_procedure_ = nullptr;
   this->owner_ = Owner::NONE;
   this->requested_current_a_ = 0.0f;
-  this->commanded_current_a_ = 0.0f;
+  this->reset_control_();
   this->force_output_off_();
   this->apply_charger_command_(ChargerCommand::DISABLE);
   if (procedure != nullptr) procedure->stop(StopReason::FAULTED);
@@ -823,7 +889,6 @@ void ClearFaultButton::press_action() {
 }  // namespace programmable_load
 }  // namespace esphome
 
-// ESPHome compiles only the component-named translation unit for an external
-// component. Keep procedure definitions here so optional procedures are linked.
+// Keep the battery-cycle implementation here because ESPHome does not add it
+// as a separate source file for this external component.
 #include "battery_cycle.cpp"
-#include "dcr_test.cpp"

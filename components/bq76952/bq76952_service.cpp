@@ -117,6 +117,10 @@ const BQ76952Config &BQ76952Service::config() const {
   return this->config_;
 }
 
+const char *BQ76952Service::capacity_calibration_status() const {
+  return this->soc_.capacity_calibration_status();
+}
+
 void BQ76952Service::setup() {
   if (!this->config_set_) {
     ESP_LOGE(TAG, "No BQ76952 configuration was supplied");
@@ -821,8 +825,8 @@ bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
   soc_sample.average_cell_voltage_mv = average_cell;
   soc_sample.cell_undervoltage_active = (snapshot.fault_flags & BQ76952_FAULT_CELL_UNDERVOLTAGE) != 0;
   soc_sample.cell_overvoltage_active = (snapshot.fault_flags & BQ76952_FAULT_CELL_OVERVOLTAGE) != 0;
-  soc_sample.empty_cell_voltage_mv = this->config_.protections.cell_undervoltage.threshold_mv;
-  soc_sample.full_cell_voltage_mv = this->config_.protections.cell_overvoltage.threshold_mv;
+  soc_sample.empty_cell_voltage_mv = this->config_.soc.empty_cell_voltage_mv;
+  soc_sample.full_cell_voltage_mv = this->config_.soc.full_cell_voltage_mv;
   snapshot.state_of_charge_percent = this->soc_.update(soc_sample);
   snapshot.learned_capacity_ah = this->soc_.has_confirmed_capacity()
                                      ? this->soc_.learned_capacity_ah()

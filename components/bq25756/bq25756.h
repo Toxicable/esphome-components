@@ -10,7 +10,6 @@
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/number/number.h"
-#include "esphome/components/select/select.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
@@ -67,6 +66,9 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   void set_battery_target_voltage(float voltage_v) { battery_target_voltage_v_ = voltage_v; }
   void set_restore_calibration(bool restore) { restore_calibration_ = restore; }
   void set_calibration_voltage_number(number::Number *number) { calibration_voltage_number_ = number; }
+  void set_calibration_status_text_sensor(text_sensor::TextSensor *sensor) {
+    calibration_status_text_sensor_ = sensor;
+  }
 
   void set_iac_current_sensor(sensor::Sensor *sensor) {
     iac_current_sensor_ = sensor;
@@ -82,9 +84,6 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   }
   void set_ts_percent_sensor(sensor::Sensor *sensor) {
     ts_percent_sensor_ = sensor;
-  }
-  void set_vfb_voltage_sensor(sensor::Sensor *sensor) {
-    vfb_voltage_sensor_ = sensor;
   }
   void set_vfb_reg_target_sensor(sensor::Sensor *sensor) {
     vfb_reg_target_sensor_ = sensor;
@@ -118,21 +117,9 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   void set_charge_enable_switch(switch_::Switch *sw) {
     charge_enable_switch_ = sw;
   }
-  void set_hiz_mode_switch(switch_::Switch *sw) {
-    hiz_mode_switch_ = sw;
-  }
-  void set_reverse_mode_switch(switch_::Switch *sw) {
-    reverse_mode_switch_ = sw;
-  }
-  void set_watchdog_select(select::Select *sel) {
-    watchdog_select_ = sel;
-  }
 
   bool set_charge_enabled(bool enabled);
-  bool set_hiz_mode(bool enabled);
-  bool set_reverse_mode(bool enabled);
   bool set_watchdog_code(uint8_t code);
-  bool reset_watchdog();
   bool calibrate_feedback(float measured_battery_voltage_v);
   bool calibrate_from_configured_voltage();
   void log_charge_enable_precheck_(bool requested_on);
@@ -156,6 +143,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool apply_battery_target_();
   bool load_calibration_();
   bool save_calibration_();
+  void publish_calibration_status_(const char *status);
   void maybe_log_event_(
     uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault, float iac_ma, float ibat_ma, float vac_mv, float vbat_mv
   );
@@ -167,7 +155,6 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   sensor::Sensor *vac_voltage_sensor_{nullptr};
   sensor::Sensor *vbat_voltage_sensor_{nullptr};
   sensor::Sensor *ts_percent_sensor_{nullptr};
-  sensor::Sensor *vfb_voltage_sensor_{nullptr};
   sensor::Sensor *vfb_reg_target_sensor_{nullptr};
   sensor::Sensor *vbat_ov_rising_fb_sensor_{nullptr};
   sensor::Sensor *vbat_ov_falling_fb_sensor_{nullptr};
@@ -178,11 +165,9 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   text_sensor::TextSensor *ts_status_text_sensor_{nullptr};
   text_sensor::TextSensor *mppt_status_text_sensor_{nullptr};
   text_sensor::TextSensor *status_flags_text_sensor_{nullptr};
+  text_sensor::TextSensor *calibration_status_text_sensor_{nullptr};
 
   switch_::Switch *charge_enable_switch_{nullptr};
-  switch_::Switch *hiz_mode_switch_{nullptr};
-  switch_::Switch *reverse_mode_switch_{nullptr};
-  select::Select *watchdog_select_{nullptr};
   number::Number *calibration_voltage_number_{nullptr};
 
   bool initialized_{false};
@@ -206,6 +191,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   float fb_to_pack_voltage_scale_{1.0f};
   float battery_target_voltage_v_{0.0f};
   bool restore_calibration_{true};
+  bool calibration_restored_{false};
   decltype(global_preferences->make_preference<FeedbackCalibration>(0)) calibration_preference_{};
   bool calibration_preference_valid_{false};
   bool has_last_event_status_{false};
@@ -218,26 +204,6 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
 class BQ25756ChargeEnableSwitch : public switch_::Switch, public Parented<BQ25756Component> {
  protected:
   void write_state(bool state) override;
-};
-
-class BQ25756HizModeSwitch : public switch_::Switch, public Parented<BQ25756Component> {
- protected:
-  void write_state(bool state) override;
-};
-
-class BQ25756ReverseModeSwitch : public switch_::Switch, public Parented<BQ25756Component> {
- protected:
-  void write_state(bool state) override;
-};
-
-class BQ25756WatchdogSelect : public select::Select, public Parented<BQ25756Component> {
- protected:
-  void control(size_t index) override;
-};
-
-class BQ25756WatchdogResetButton : public button::Button, public Parented<BQ25756Component> {
- protected:
-  void press_action() override;
 };
 
 class BQ25756DumpRegistersButton : public button::Button, public Parented<BQ25756Component> {

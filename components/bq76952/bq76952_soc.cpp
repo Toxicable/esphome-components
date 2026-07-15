@@ -31,6 +31,22 @@ float BQ76952Soc::learned_capacity_ah() const {
   return this->has_confirmed_capacity() ? this->learned_span_ah_ : NAN;
 }
 
+const char *BQ76952Soc::capacity_calibration_status() const {
+  if (this->has_confirmed_capacity()) {
+    return "calibrated";
+  }
+  if (this->have_full_ && !this->have_empty_) {
+    return "full detected - discharge to empty";
+  }
+  if (this->have_empty_ && !this->have_full_) {
+    return "empty detected - charge to full";
+  }
+  if (this->span_provisional_) {
+    return "estimated - needs full cycle";
+  }
+  return "unlearned";
+}
+
 float BQ76952Soc::estimate_from_voltage(int16_t cell_voltage_mv, uint16_t empty_mv, uint16_t full_mv) const {
   const int16_t bounded =
       std::max<int16_t>(static_cast<int16_t>(empty_mv), std::min<int16_t>(static_cast<int16_t>(full_mv),

@@ -126,6 +126,13 @@ class ProgrammableLoadComponent : public Component {
   void set_fall_rate(float current_a_per_s) {
     this->fall_rate_a_per_s_ = current_a_per_s;
   }
+  void set_proportional_gain(float gain) { this->proportional_gain_ = gain; }
+  void set_integral_gain(float gain_per_s) {
+    this->integral_gain_per_s_ = gain_per_s;
+  }
+  void set_log_control_samples(bool enabled) {
+    this->log_control_samples_ = enabled;
+  }
 
   // Cooling policy.
   void set_fan_temperature_range(float start_c, float full_c) {
@@ -157,6 +164,7 @@ class ProgrammableLoadComponent : public Component {
   bool start_manual(float current_a);
   bool update_manual(float current_a);
   bool start_procedure(Procedure *procedure);
+  bool stop_procedure(Procedure *procedure);
   void stop();
 
   // Fault API.
@@ -185,6 +193,8 @@ class ProgrammableLoadComponent : public Component {
   void update_faults_();
   void update_operation_();
   void update_control_();
+  void reset_control_();
+  void reset_control_integrator_();
   void update_fan_();
 
   Fault detect_running_fault_() const;
@@ -236,6 +246,7 @@ class ProgrammableLoadComponent : public Component {
 
   float requested_current_a_{0.0f};
   float commanded_current_a_{0.0f};
+  float control_integrator_a_{0.0f};
 
   bool restore_calibration_{true};
   uint32_t sample_timeout_ms_{250};
@@ -244,6 +255,10 @@ class ProgrammableLoadComponent : public Component {
   uint32_t current_updated_ms_{0};
   uint32_t voltage_updated_ms_{0};
   uint32_t measurement_sequence_{0};
+  uint32_t current_sequence_{0};
+  uint32_t last_control_current_sequence_{0};
+  uint32_t last_control_current_timestamp_ms_{0};
+  bool control_has_current_sample_{false};
   bool current_seen_{false};
   bool voltage_seen_{false};
 
@@ -269,6 +284,9 @@ class ProgrammableLoadComponent : public Component {
   float deadband_a_{0.01f};
   float rise_rate_a_per_s_{2.0f};
   float fall_rate_a_per_s_{4.0f};
+  float proportional_gain_{0.2f};
+  float integral_gain_per_s_{0.4f};
+  bool log_control_samples_{false};
   float fan_start_temperature_c_{35.0f};
   float fan_full_temperature_c_{70.0f};
 

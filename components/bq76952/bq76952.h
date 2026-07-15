@@ -39,6 +39,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
 
   void set_state_sensor(text_sensor::TextSensor *sensor);
   void set_fault_sensor(text_sensor::TextSensor *sensor);
+  void set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor);
 
   void set_output_enabled_switch(switch_::Switch *control);
 
@@ -69,6 +70,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
 
   text_sensor::TextSensor *state_sensor_{nullptr};
   text_sensor::TextSensor *fault_sensor_{nullptr};
+  text_sensor::TextSensor *capacity_calibration_status_sensor_{nullptr};
 
   switch_::Switch *output_enabled_switch_{nullptr};
 };
