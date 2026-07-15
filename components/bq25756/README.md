@@ -43,6 +43,8 @@ bq25756:
       name: "Charger Status"
     faults:
       name: "Charger Faults"
+    configuration_status:
+      name: "Charger Configuration Status"
 
   controls:
     charge_enable:
@@ -67,3 +69,12 @@ voltage. Repeat after changing the feedback-divider hardware.
 The component disables the charger watchdog internally, so it does not need
 periodic host resets. I2C always owns charge enable and both current limits;
 the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
+
+## Configuration health
+
+The component audits charger-owned configuration registers every 10 seconds.
+If the charger resets or a configured register drifts, it restores the
+configured voltage/current limits, pin overrides, watchdog state, ADC setup,
+and PFM setting without changing the charge-enable state. Configure
+`status.configuration_status` to expose `configured` or `repair_failed` in
+Home Assistant.

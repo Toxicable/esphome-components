@@ -29,6 +29,7 @@ bool BQ25756Component::set_watchdog_code(uint8_t code) {
 void BQ25756Component::setup() {
   this->initialized_ = false;
   this->next_init_retry_ms_ = 0;
+  this->next_configuration_audit_ms_ = 0;
   this->load_calibration_();
   this->publish_calibration_status_(
       !this->restore_calibration_ ? "configured"
@@ -42,6 +43,8 @@ void BQ25756Component::setup() {
     return;
   }
 
+  this->publish_configuration_status_("configured");
+  this->next_configuration_audit_ms_ = millis() + CONFIGURATION_AUDIT_INTERVAL_MS;
   this->status_clear_warning();
 }
 
@@ -69,6 +72,12 @@ bool BQ25756Component::save_calibration_() {
 void BQ25756Component::publish_calibration_status_(const char *status) {
   if (this->calibration_status_text_sensor_ != nullptr) {
     this->calibration_status_text_sensor_->publish_state(status);
+  }
+}
+
+void BQ25756Component::publish_configuration_status_(const char *status) {
+  if (this->configuration_status_text_sensor_ != nullptr) {
+    this->configuration_status_text_sensor_->publish_state(status);
   }
 }
 
@@ -210,6 +219,76 @@ bool BQ25756Component::initialize_() {
   return true;
 }
 
+bool BQ25756Component::configured_state_matches_() {
+  uint8_t part_info = 0;
+  uint8_t reg15 = 0;
+  uint8_t reg17 = 0;
+  uint8_t reg18 = 0;
+  uint8_t reg19 = 0;
+  ::bq25756_core::Reg16Value reg00{};
+  ::bq25756_core::Reg16Value reg02{};
+  ::bq25756_core::Reg16Value reg06{};
+  ::bq25756_core::Reg16Value reg08{};
+  if (!this->service_.read_byte(::bq25756_core::REG3D_PART_INFORMATION, part_info) ||
+      !this->service_.read_byte(::bq25756_core::REG15_TIMER_CONTROL, reg15) ||
+      !this->service_.read_byte(::bq25756_core::REG17_CHARGER_CONTROL, reg17) ||
+      !this->service_.read_byte(::bq25756_core::REG18_PIN_CONTROL, reg18) ||
+      !this->service_.read_byte(::bq25756_core::REG19_POWER_PATH_CONTROL, reg19) ||
+      !this->service_.read_u16_le(::bq25756_core::REG00_CHARGE_VOLTAGE_LIMIT, reg00) ||
+      !this->service_.read_u16_le(::bq25756_core::REG02_CHARGE_CURRENT_LIMIT, reg02) ||
+      !this->service_.read_u16_le(::bq25756_core::REG06_INPUT_CURRENT_DPM_LIMIT, reg06) ||
+      !this->service_.read_u16_le(::bq25756_core::REG08_INPUT_VOLTAGE_DPM_LIMIT, reg08)) {
+    ESP_LOGW(TAG, "Unable to audit charger configuration registers");
+    return false;
+  }
+  if ((part_info & ::bq25756_core::PART_NUM_MASK) != ::bq25756_core::BQ25756_PART_NUM_BITS) {
+    ESP_LOGW(TAG, "Configuration audit found unexpected REG3D=0x%02X", part_info);
+    return false;
+  }
+  if (this->disable_watchdog_ && (reg15 & ::bq25756_core::REG15_WATCHDOG_MASK) != 0) return false;
+  if (this->has_charge_voltage_limit_mv_ &&
+      (reg00.raw_le & ::bq25756_core::REG00_VFB_REG_MASK) !=
+          (::bq25756_core::encode_charge_voltage_limit_mv(this->charge_voltage_limit_mv_) &
+           ::bq25756_core::REG00_VFB_REG_MASK)) return false;
+  if (this->has_charge_current_limit_ma_ &&
+      (reg02.raw_le & ::bq25756_core::REG02_ICHG_REG_MASK) !=
+          (::bq25756_core::encode_charge_current_limit_ma(this->charge_current_limit_ma_) &
+           ::bq25756_core::REG02_ICHG_REG_MASK)) return false;
+  if (this->has_input_current_dpm_limit_ma_ &&
+      (reg06.raw_le & ::bq25756_core::REG06_IAC_DPM_MASK) !=
+          (::bq25756_core::encode_input_current_dpm_limit_ma(this->input_current_dpm_limit_ma_) &
+           ::bq25756_core::REG06_IAC_DPM_MASK)) return false;
+  if (this->has_input_voltage_dpm_limit_mv_ &&
+      (reg08.raw_le & ::bq25756_core::REG08_VAC_DPM_MASK) !=
+          (::bq25756_core::encode_input_voltage_dpm_limit_mv(this->input_voltage_dpm_limit_mv_) &
+           ::bq25756_core::REG08_VAC_DPM_MASK)) return false;
+  if (this->disable_ce_pin_ && (reg17 & ::bq25756_core::REG17_DIS_CE_PIN_MASK) == 0) return false;
+  if (this->disable_ilim_hiz_pin_ && (reg18 & ::bq25756_core::REG18_EN_ILIM_HIZ_PIN_MASK) != 0) return false;
+  if (this->disable_ichg_pin_ && (reg18 & ::bq25756_core::REG18_EN_ICHG_PIN_MASK) != 0) return false;
+  if (this->disable_pfm_ && (reg19 & ::bq25756_core::REG19_EN_PFM_MASK) != 0) return false;
+  return true;
+}
+
+bool BQ25756Component::audit_configured_state_() {
+  if (this->configured_state_matches_()) {
+    this->publish_configuration_status_("configured");
+    return true;
+  }
+
+  ESP_LOGW(TAG, "Charger configuration drift detected; repairing configured registers");
+  if ((this->disable_watchdog_ && !this->set_watchdog_code(0)) || !this->ensure_adc_enabled_() ||
+      !this->apply_configured_limits_() || !this->apply_battery_target_() ||
+      !this->apply_configured_pin_overrides_() ||
+      (this->disable_pfm_ && !this->service_.set_pfm_enabled(false)) || !this->configured_state_matches_()) {
+    this->publish_configuration_status_("repair_failed");
+    return false;
+  }
+
+  ESP_LOGI(TAG, "Charger configuration repaired after reset or register drift");
+  this->publish_configuration_status_("configured");
+  return true;
+}
+
 void BQ25756Component::update() {
   if (!this->initialized_) {
     const uint32_t now = millis();
@@ -221,7 +300,18 @@ void BQ25756Component::update() {
       this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
       return;
     }
+    this->publish_configuration_status_("configured");
+    this->next_configuration_audit_ms_ = now + CONFIGURATION_AUDIT_INTERVAL_MS;
     this->status_clear_warning();
+  }
+
+  const uint32_t now = millis();
+  if (now >= this->next_configuration_audit_ms_) {
+    this->next_configuration_audit_ms_ = now + CONFIGURATION_AUDIT_INTERVAL_MS;
+    if (!this->audit_configured_state_()) {
+      this->status_set_warning();
+      return;
+    }
   }
 
   ::bq25756_core::Status status;
@@ -365,6 +455,7 @@ void BQ25756Component::dump_config() {
   LOG_TEXT_SENSOR("  ", "TS Status", this->ts_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "MPPT Status", this->mppt_status_text_sensor_);
   LOG_TEXT_SENSOR("  ", "Status Flags", this->status_flags_text_sensor_);
+  LOG_TEXT_SENSOR("  ", "Configuration Status", this->configuration_status_text_sensor_);
   LOG_SWITCH("  ", "Charge Enable", this->charge_enable_switch_);
   if (this->is_failed()) {
     ESP_LOGE(TAG, "Communication failed");

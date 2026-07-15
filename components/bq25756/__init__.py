@@ -71,6 +71,7 @@ CONF_RESTORE = "restore"
 CONF_MEASURED_VOLTAGE = "measured_voltage"
 CONF_CALIBRATE = "calibrate"
 CONF_CALIBRATION_STATUS = "status"
+CONF_CONFIGURATION_STATUS = "configuration_status"
 
 CELL_CHEMISTRY_PROFILES = {
     "lithium_ion": {"maximum_cell_voltage": 4.2, "minimum_cell_voltage": 3.0},
@@ -135,6 +136,9 @@ CONFIG_SCHEMA = (
                 cv.Optional(CONF_TEMPERATURE_STATUS): text_sensor.text_sensor_schema(),
                 cv.Optional(CONF_MPPT_STATUS): text_sensor.text_sensor_schema(),
                 cv.Optional(CONF_FAULTS): text_sensor.text_sensor_schema(),
+                cv.Optional(CONF_CONFIGURATION_STATUS): text_sensor.text_sensor_schema(
+                    entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
+                ),
             }),
             cv.Optional(CONF_CONTROLS, default={}): cv.Schema({
                 cv.Optional(CONF_CHARGE_ENABLE): switch_.switch_schema(BQ25756ChargeEnableSwitch, entity_category=ENTITY_CATEGORY_CONFIG),
@@ -197,6 +201,9 @@ async def to_code(config):
     if CONF_FAULTS in status:
         ts = await text_sensor.new_text_sensor(status[CONF_FAULTS])
         cg.add(var.set_status_flags_text_sensor(ts))
+    if CONF_CONFIGURATION_STATUS in status:
+        ts = await text_sensor.new_text_sensor(status[CONF_CONFIGURATION_STATUS])
+        cg.add(var.set_configuration_status_text_sensor(ts))
 
     controls = config[CONF_CONTROLS]
     if CONF_CHARGE_ENABLE in controls:

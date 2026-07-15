@@ -70,6 +70,9 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   void set_calibration_status_text_sensor(text_sensor::TextSensor *sensor) {
     calibration_status_text_sensor_ = sensor;
   }
+  void set_configuration_status_text_sensor(text_sensor::TextSensor *sensor) {
+    configuration_status_text_sensor_ = sensor;
+  }
 
   void set_iac_current_sensor(sensor::Sensor *sensor) {
     iac_current_sensor_ = sensor;
@@ -140,6 +143,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool initialize_();
   bool apply_configured_limits_();
   bool apply_configured_pin_overrides_();
+  bool configured_state_matches_();
+  bool audit_configured_state_();
   bool ensure_adc_enabled_();
   void log_adc_configuration_(const ::bq25756_core::AdcConfigurationState &state,
                               ::bq25756_core::AdcEnsureResult result);
@@ -147,6 +152,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool load_calibration_();
   bool save_calibration_();
   void publish_calibration_status_(const char *status);
+  void publish_configuration_status_(const char *status);
   void maybe_log_event_(
     uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault, float iac_ma, float ibat_ma, float vac_mv, float vbat_mv
   );
@@ -169,6 +175,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   text_sensor::TextSensor *mppt_status_text_sensor_{nullptr};
   text_sensor::TextSensor *status_flags_text_sensor_{nullptr};
   text_sensor::TextSensor *calibration_status_text_sensor_{nullptr};
+  text_sensor::TextSensor *configuration_status_text_sensor_{nullptr};
 
   switch_::Switch *charge_enable_switch_{nullptr};
   number::Number *calibration_voltage_number_{nullptr};
@@ -176,6 +183,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool initialized_{false};
   uint32_t next_init_retry_ms_{0};
   static constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
+  uint32_t next_configuration_audit_ms_{0};
+  static constexpr uint32_t CONFIGURATION_AUDIT_INTERVAL_MS = 10000;
 
   bool disable_watchdog_{true};
   bool event_logging_{true};
