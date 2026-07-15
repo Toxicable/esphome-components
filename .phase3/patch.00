@@ -1,0 +1,210 @@
+diff --git a/components/bq25756/AGENTS_KNOWLEDGE.md b/components/bq25756/AGENTS_KNOWLEDGE.md
+index b93f9eb..8d3d98f 100644
+--- a/components/bq25756/AGENTS_KNOWLEDGE.md
++++ b/components/bq25756/AGENTS_KNOWLEDGE.md
+@@ -22,3 +22,4 @@ Component-scoped notes for `components/bq25756`.
+ - `CE` is still a hardware gate for charging unless `DIS_CE_PIN` is set; a floating/high CE pin can block charging while the I2C `EN_CHG` bit still reads enabled.
+ - The reusable core depends on the internal `component_common` package for endian and register-field helpers. BQ25756 declares it through `AUTO_LOAD`; explicit external-component allowlists must also list `component_common`.
+ - Core files use sibling-relative `../component_common/...` includes so the same sources compile under ESPHome and the Charger_14 STM32 CMake target.
++- `BQ25756Component` implements `component_common::ChargerInterface`; the cached typed snapshot is refreshed from raw status, ADC, and control registers each successful poll.
+diff --git a/components/bq25756/CONTEXT_INDEX.md b/components/bq25756/CONTEXT_INDEX.md
+index 0dfac92..171c995 100644
+--- a/components/bq25756/CONTEXT_INDEX.md
++++ b/components/bq25756/CONTEXT_INDEX.md
+@@ -18,9 +18,9 @@
+ ## Edit Map
+ - `__init__.py`: ESPHome schema, entity wiring, codegen bindings, and `component_common` auto-load.
+ - `bq25756_bus.h`: host register bus boundary for reusable core code.
+-- `bq25756_protocol.*`: register map, status decoding, ADC decoding, limit encoders, and typed common fields.
++- `bq25756_protocol.*`: register map, status/ADC decoding, typed charger snapshot construction, limit encoders, and common fields.
+ - `bq25756_service.*`: reusable BQ25756 behavior built on `RegisterBus` and common endian/masked-register helpers.
+-- `bq25756.h` / `bq25756.cpp`: ESPHome component wrapper, logging, entities, and I2C adapter.
++- `bq25756.h` / `bq25756.cpp`: ESPHome component wrapper, typed charger capability, logging, entities, and I2C adapter.
+ - `README.md`: user-facing configuration and supported entities.
+ - `AGENTS_KNOWLEDGE.md`: active component invariants and datasheet-backed gotchas.
+ - `tests/bq25756_service_test.cpp`: fake-bus tests for host-independent service behavior.
+diff --git a/components/bq25756/README.md b/components/bq25756/README.md
+index 9bd77a2..e5d0e5e 100644
+--- a/components/bq25756/README.md
++++ b/components/bq25756/README.md
+@@ -71,3 +71,8 @@ voltage. Repeat after changing the feedback-divider hardware.
+ The component disables the charger watchdog internally, so it does not need
+ periodic host resets. I2C always owns charge enable and both current limits;
+ the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
++
++
++## Typed charger interface
++
++`BQ25756Component` implements `component_common::ChargerInterface`. Other components consume its battery current, battery voltage, charge state, power-good, fault state, and charge-enable control without requiring sensor, text-sensor, or switch entities.
+diff --git a/components/bq25756/__init__.py b/components/bq25756/__init__.py
+index 32302d5..60252d5 100644
+--- a/components/bq25756/__init__.py
++++ b/components/bq25756/__init__.py
+@@ -35,8 +35,13 @@ from esphome.const import (
+ DEPENDENCIES = ["i2c"]
+ AUTO_LOAD = ["component_common", "button", "number", "sensor", "switch", "text_sensor"]
+ 
++component_common_ns = cg.global_ns.namespace("component_common")
++ChargerInterface = component_common_ns.class_("ChargerInterface")
++
+ bq25756_ns = cg.esphome_ns.namespace("bq25756")
+-BQ25756Component = bq25756_ns.class_("BQ25756Component", cg.PollingComponent, i2c.I2CDevice)
++BQ25756Component = bq25756_ns.class_(
++    "BQ25756Component", cg.PollingComponent, i2c.I2CDevice, ChargerInterface
++)
+ BQ25756ChargeEnableSwitch = bq25756_ns.class_("BQ25756ChargeEnableSwitch", switch_.Switch)
+ BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
+ BQ25756CalibrateFeedbackButton = bq25756_ns.class_("BQ25756CalibrateFeedbackButton", button.Button)
+diff --git a/components/bq25756/bq25756.cpp b/components/bq25756/bq25756.cpp
+index 907f567..4bd20e6 100644
+--- a/components/bq25756/bq25756.cpp
++++ b/components/bq25756/bq25756.cpp
+@@ -13,10 +13,23 @@ namespace bq25756 {
+ namespace {
+ static const char *const TAG = "bq25756";
+ static constexpr uint32_t CALIBRATION_PREFERENCE_KEY = 0xB2575601;
++
+ }  // namespace
+ 
+ BQ25756Component::BQ25756Component() : service_(this) {}
+ 
++::component_common::ChargerCapabilities BQ25756Component::capabilities() const {
++  return {true, true, true, true, true, true};
++}
++
++::component_common::ChargerSnapshot BQ25756Component::snapshot() const {
++  return this->charger_snapshot_;
++}
++
++bool BQ25756Component::request_enabled(bool enabled) {
++  return this->set_charge_enabled(enabled);
++}
++
+ bool BQ25756Component::set_charge_enabled(bool enabled) {
+   this->log_charge_enable_precheck_(enabled);
+   return this->service_.set_charge_enabled(enabled);
+@@ -225,6 +238,7 @@ void BQ25756Component::update() {
+   ::bq25756_core::Status status;
+   if (!this->service_.read_status(status)) {
+     ESP_LOGW(TAG, "Failed reading charger status registers");
++    this->charger_snapshot_.valid = false;
+     this->status_set_warning();
+     return;
+   }
+@@ -232,6 +246,7 @@ void BQ25756Component::update() {
+   ::bq25756_core::Measurements measurements;
+   if (!this->service_.read_measurements(measurements, false)) {
+     ESP_LOGW(TAG, "Failed reading one or more ADC registers");
++    this->charger_snapshot_.valid = false;
+     this->status_set_warning();
+     return;
+   }
+@@ -241,6 +256,8 @@ void BQ25756Component::update() {
+     measurements.vac_mv, measurements.vbat_mv
+   );
+ 
++  this->refresh_charger_snapshot_(status, measurements);
++
+   ESP_LOGD(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status.status1, status.status2, status.status3, status.fault);
+   ESP_LOGD(
+     TAG,
+@@ -316,6 +333,20 @@ void BQ25756Component::update() {
+   this->status_clear_warning();
+ }
+ 
++void BQ25756Component::refresh_charger_snapshot_(
++    const ::bq25756_core::Status &status,
++    const ::bq25756_core::Measurements &measurements) {
++  ::bq25756_core::ControlStates controls{};
++  if (!this->service_.read_control_states(controls)) {
++    this->charger_snapshot_.valid = false;
++    return;
++  }
++
++  this->charger_snapshot_ = ::bq25756_core::make_charger_snapshot(
++      status, measurements, controls, this->charger_snapshot_.sequence + 1,
++      millis());
++}
++
+ void BQ25756Component::dump_config() {
+   ESP_LOGCONFIG(TAG, "BQ25756:");
+   LOG_I2C_DEVICE(this);
+diff --git a/components/bq25756/bq25756.h b/components/bq25756/bq25756.h
+index f7317f9..356a38a 100644
+--- a/components/bq25756/bq25756.h
++++ b/components/bq25756/bq25756.h
+@@ -6,6 +6,7 @@
+ 
+ #include "bq25756_bus.h"
+ #include "bq25756_service.h"
++#include "../component_common/charger.h"
+ 
+ #include "esphome/components/button/button.h"
+ #include "esphome/components/i2c/i2c.h"
+@@ -24,7 +25,10 @@ struct FeedbackCalibration {
+   float feedback_to_battery_ratio{1.0f};
+ };
+ 
+-class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public ::bq25756_core::RegisterBus {
++class BQ25756Component : public PollingComponent,
++                         public i2c::I2CDevice,
++                         public ::bq25756_core::RegisterBus,
++                         public ::component_common::ChargerInterface {
+  public:
+   BQ25756Component();
+ 
+@@ -120,6 +124,11 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public
+   }
+ 
+   bool set_charge_enabled(bool enabled);
++
++  ::component_common::ChargerCapabilities capabilities() const override;
++  ::component_common::ChargerSnapshot snapshot() const override;
++  bool request_enabled(bool enabled) override;
++
+   bool set_watchdog_code(uint8_t code);
+   bool calibrate_feedback(float measured_battery_voltage_v);
+   bool calibrate_from_configured_voltage();
+@@ -136,6 +145,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public
+ 
+  protected:
+   void publish_status_texts_(const ::bq25756_core::Status &status);
++  void refresh_charger_snapshot_(const ::bq25756_core::Status &status,
++                                 const ::bq25756_core::Measurements &measurements);
+   void publish_control_states_();
+   bool initialize_();
+   bool apply_configured_limits_();
+@@ -150,6 +161,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public
+   );
+ 
+   ::bq25756_core::Bq25756Service service_;
++  ::component_common::ChargerSnapshot charger_snapshot_{};
+ 
+   sensor::Sensor *iac_current_sensor_{nullptr};
+   sensor::Sensor *ibat_current_sensor_{nullptr};
+diff --git a/components/bq25756/bq25756_protocol.cpp b/components/bq25756/bq25756_protocol.cpp
+index 9ff5f11..c477c51 100644
+--- a/components/bq25756/bq25756_protocol.cpp
++++ b/components/bq25756/bq25756_protocol.cpp
+@@ -1,7 +1,53 @@
+ #include "bq25756_protocol.h"
+ 
++#include <cmath>
++
+ namespace bq25756_core {
+ 
++
++::component_common::ChargerState decode_charger_state(uint8_t status1) {
++  using State = ::component_common::ChargerState;
++  switch (status1 & REG21_CHARGE_STAT_MASK) {
++    case 0: return State::NOT_CHARGING;
++    case 1: return State::TRICKLE;
++    case 2: return State::PRECHARGE;
++    case 3: return State::FAST_CC;
++    case 4: return State::TAPER_CV;
++    case 6: return State::TOPOFF;
++    case 7: return State::TERMINATION_DONE;
++    default: return State::UNKNOWN;
++  }
++}
++
