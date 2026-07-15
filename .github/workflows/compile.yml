@@ -5,22 +5,45 @@ on:
   pull_request:
 
 jobs:
-  repository-checks:
+  host-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare devcontainer mount points
+      - name: Install host tools
         run: |
-          mkdir -p "$HOME/.codex" "$HOME/.ssh"
+          sudo apt-get update
+          sudo apt-get install -y clangd
 
-      - name: Run repository checks in devcontainer
-        uses: devcontainers/ci@v0.3
+      - name: Run syntax and host checks
+        run: |
+          ./check_py.bash
+          bash ./check_host.bash
+          ./check.bash
+
+  esphome-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          runCmd: |
-            ./check_py.bash
-            bash ./check_host.bash
-            ./check.bash
-            bash ./check_esphome.bash
+          python-version: "3.11"
+          cache: pip
+
+      - name: Cache PlatformIO packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: ${{ runner.os }}-platformio-esphome-2026.5.3
+
+      - name: Install pinned ESPHome
+        run: python -m pip install "esphome==2026.5.3"
+
+      - name: Compile and validate ESPHome fixtures
+        run: bash ./check_esphome.bash
