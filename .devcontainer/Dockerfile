@@ -10,7 +10,6 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
     clang-format \
     clangd \
     git \
-    g++ \
     wget \
     flex \
     bison \
