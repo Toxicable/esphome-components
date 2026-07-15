@@ -17,7 +17,7 @@ from esphome.const import (
 # external_components:
 #   - source: github://Toxicable/esphome-components@main
 #     refresh: 0s
-#     components: [ bq25756 ]
+#     components: [ component_common, bq25756 ]
 #
 # i2c:
 #   id: i2c2_bus
@@ -33,7 +33,7 @@ from esphome.const import (
 #   disable_watchdog: true
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "number", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["component_common", "button", "number", "sensor", "switch", "text_sensor"]
 
 bq25756_ns = cg.esphome_ns.namespace("bq25756")
 BQ25756Component = bq25756_ns.class_("BQ25756Component", cg.PollingComponent, i2c.I2CDevice)
