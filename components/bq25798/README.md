@@ -1,5 +1,7 @@
 # BQ25798
 
+> **Lifecycle status: legacy.** This driver remains because the pool-cleaner configuration still uses it. New charger work should use `bq25756`, which has typed configuration, status snapshots, tests, and the shared charger capability. Do not expand this component beyond migration-critical fixes.
+
 Datasheet: https://www.ti.com/lit/ds/symlink/bq25798.pdf
 
 ## What it does

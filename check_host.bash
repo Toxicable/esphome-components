@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
-python3 tools/check_core_purity.py components/component_common components/bq25756
+python3 tools/check_core_purity.py components/component_common components/bq25756 components/bq76952/bq76952_registers.h components/bq76952/bq76952_status.h components/bq76952/bq76952_status.cpp
 
 if [[ -n "${CXX:-}" ]]; then
   cxx="$CXX"
@@ -42,5 +42,11 @@ common_flags=(
   components/bq25756/bq25756_service.cpp \
   -o "$build_dir/bq25756_service_test"
 "$build_dir/bq25756_service_test"
+
+"$cxx" "${common_flags[@]}" \
+  tests/bq76952_status_test.cpp \
+  components/bq76952/bq76952_status.cpp \
+  -o "$build_dir/bq76952_status_test"
+"$build_dir/bq76952_status_test"
 
 echo "host tests: passed ($cxx)"

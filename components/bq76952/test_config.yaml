@@ -1,0 +1,137 @@
+esphome:
+  name: bq76952-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ component_common, bq76952 ]
+
+logger:
+
+i2c:
+  id: i2c_ext
+  sda: GPIO35
+  scl: GPIO36
+  frequency: 400kHz
+
+bq76952:
+  id: bms
+  i2c_id: i2c_ext
+  address: 0x08
+  update_interval: 1s
+
+  cell_count: 4
+  cell_chemistry: lithium_ion
+  sense_resistor_milliohm: 1.0
+  i2c_crc_enabled: false
+  current_gain_policy: factory_calibration
+
+  regulators:
+    reg0_enabled: true
+    reg1_enabled: true
+    reg1_voltage: 3.3v
+    reg2_enabled: false
+    reg2_voltage: 3.3v
+
+  thermistors:
+    ts1: 18k
+    ts2: disabled
+    ts3: disabled
+
+  fet:
+    autonomous: true
+    sleep_charge_enabled: true
+    precharge:
+      enabled: false
+      start_cell_voltage_mv: 2500
+      stop_cell_voltage_mv: 3000
+    predischarge:
+      enabled: true
+      timeout_ms: 2550
+      stop_delta_mv: 500
+
+  balancing:
+    minimum_cell_voltage_mv: 3000
+    start_delta_mv: 40
+    stop_delta_mv: 20
+    minimum_temperature_c: 0
+    maximum_temperature_c: 45
+    maximum_balanced_cells: 2
+
+  protections:
+    cell_undervoltage:
+      threshold_mv: 2800
+      delay_ms: 200
+      recovery_hysteresis_mv: 100
+    cell_overvoltage:
+      threshold_mv: 4200
+      delay_ms: 200
+      recovery_hysteresis_mv: 100
+    charge_overcurrent:
+      threshold_a: 20
+      delay_ms: 100
+    discharge_overcurrent:
+      threshold_a: 40
+      delay_ms: 100
+    discharge_severe_overcurrent:
+      threshold_a: 60
+      delay_ms: 23
+    discharge_sustained_overcurrent:
+      threshold_a: 30
+      delay_s: 5
+    discharge_short_circuit:
+      threshold_mv: 100
+      delay_us: 210
+      recovery_time_s: 5
+    temperature:
+      charge_minimum_c: 0
+      charge_maximum_c: 45
+      discharge_minimum_c: -20
+      discharge_maximum_c: 60
+      recovery_hysteresis_c: 5
+    current_recovery_time_s: 3
+
+  soc:
+    empty_cell_voltage_mv: 3000
+    full_cell_voltage_mv: 4200
+
+  lifecycle:
+    name: "BMS Lifecycle"
+  state:
+    name: "BMS State"
+  fault:
+    name: "BMS Fault"
+  fault_flags:
+    name: "BMS Fault Flags"
+  pack_voltage:
+    name: "BMS Pack Voltage"
+  current:
+    name: "BMS Current"
+  state_of_charge:
+    name: "BMS State of Charge"
+  learned_capacity:
+    name: "BMS Learned Capacity"
+  cell1_voltage:
+    name: "BMS Cell 1"
+  cell2_voltage:
+    name: "BMS Cell 2"
+  cell3_voltage:
+    name: "BMS Cell 3"
+  cell4_voltage:
+    name: "BMS Cell 4"
+  output_enabled_control:
+    name: "BMS Output Enabled"
+  clear_alarms:
+    name: "BMS Clear Alarms"
+
+  manufacturing:
+    program_factory_otp:
+      name: "DANGER - Program BMS OTP Once"

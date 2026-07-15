@@ -3,60 +3,14 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 
 #include "bq76952_config.h"
-#include "bq76952_protocol.h"
+#include "bq76952_i2c_transport.h"
+#include "bq76952_status.h"
 #include "bq76952_soc.h"
 
 namespace esphome {
 namespace bq76952 {
-
-enum class BQ76952OperatingState : uint8_t {
-  OFFLINE = 0,
-  NORMAL,
-  SLEEP,
-  DEEP_SLEEP,
-  CONFIG_UPDATE,
-  SHUTDOWN_PENDING,
-};
-
-// Normalized faults decoded from the device's raw Safety Status A/B/C,
-// Battery Status, and permanent-failure registers. The three TI register banks
-// remain an internal protocol detail rather than leaking through the snapshot.
-enum BQ76952FaultFlags : uint32_t {
-  BQ76952_FAULT_NONE = 0,
-  BQ76952_FAULT_CELL_UNDERVOLTAGE = 1U << 0,
-  BQ76952_FAULT_CELL_OVERVOLTAGE = 1U << 1,
-  BQ76952_FAULT_CHARGE_OVERCURRENT = 1U << 2,
-  BQ76952_FAULT_DISCHARGE_OVERCURRENT = 1U << 3,
-  BQ76952_FAULT_DISCHARGE_SEVERE_OVERCURRENT = 1U << 4,
-  BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT = 1U << 5,
-  BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT = 1U << 6,
-  BQ76952_FAULT_TEMPERATURE = 1U << 7,
-  BQ76952_FAULT_PRECHARGE_TIMEOUT = 1U << 8,
-  BQ76952_FAULT_PERMANENT_FAILURE = 1U << 9,
-};
-
-// Internal service-to-ESPHome snapshot. Raw protocol registers, raw FET bits,
-// and the device coulomb-counter value are consumed inside the service.
-struct BQ76952Snapshot {
-  bool online{false};
-  bool output_enabled{false};
-  BQ76952OperatingState state{BQ76952OperatingState::OFFLINE};
-  uint32_t fault_flags{BQ76952_FAULT_NONE};
-
-  std::array<int16_t, 16> cell_voltage_mv{};
-  uint8_t cell_count{0};
-  int32_t stack_voltage_mv{0};
-  int32_t pack_voltage_mv{0};
-  int32_t load_detect_voltage_mv{0};
-  float current_a{0.0f};
-  float state_of_charge_percent{0.0f};
-  float learned_capacity_ah{std::numeric_limits<float>::quiet_NaN()};
-  float die_temperature_c{0.0f};
-  std::array<float, 3> thermistor_temperature_c{};
-};
 
 // Product-level BMS behaviour. The service owns desired configuration,
 // connection recovery, configuration synchronization, measurement conversion,
@@ -64,13 +18,13 @@ struct BQ76952Snapshot {
 // not know about ESPHome entities.
 class BQ76952Service {
  public:
-  explicit BQ76952Service(BQ76952Protocol &protocol);
+  explicit BQ76952Service(BQ76952I2CTransport &transport);
 
   void setup();
   void set_config(const BQ76952Config &config);
   const BQ76952Config &config() const;
 
-  bool poll(BQ76952Snapshot &snapshot);
+  bool poll(::bq76952_core::Snapshot &snapshot);
   const char *capacity_calibration_status() const;
 
   bool set_output_enabled(bool enabled);
@@ -104,17 +58,16 @@ class BQ76952Service {
 
   bool require_full_access();
   bool load_unit_scaling();
-  bool read_snapshot(BQ76952Snapshot &snapshot);
-  bool read_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c,
-                        uint32_t &fault_flags);
+  bool read_snapshot(::bq76952_core::Snapshot &snapshot);
   bool read_coulomb_counter(float &charge_ah);
   uint16_t cell_mode_mask() const;
   uint8_t raw_cell_channel(uint8_t logical_cell) const;
 
-  BQ76952Protocol &protocol_;
+  BQ76952I2CTransport &transport_;
   BQ76952Soc soc_;
   BQ76952Config config_{};
   bool config_set_{false};
+  component_common::LifecycleState lifecycle_{component_common::LifecycleState::DISCONNECTED};
   bool online_{false};
   bool configured_{false};
   int32_t current_lsb_ua_{1000};

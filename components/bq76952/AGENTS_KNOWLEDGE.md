@@ -6,10 +6,11 @@ Component-scoped rules for `components/bq76952`.
 
 - `bq76952_config.h` defines complete desired device state. It has no `std::optional`, `has_*`, legacy aliases, or preserve-by-omission semantics.
 - `bq76952_registers.h` groups direct commands, subcommands, data-memory addresses, bit fields, encoding constants, transport timings, and fixed product policy. Do not scatter datasheet or policy literals through implementation files.
-- `bq76952_protocol.cpp` owns direct-register access, active/desired I2C CRC framing, subcommand transfer-buffer framing, checksums, data-memory read/write verification, and CONFIG_UPDATE transitions.
+- `bq76952_i2c_transport.cpp` owns direct-register access, active/desired I2C CRC framing, subcommand transfer-buffer framing, checksums, data-memory read/write verification, and CONFIG_UPDATE transitions.
 - `bq76952_service.cpp` owns configuration synchronization, connection recovery, measurements, protections, FET policy, runtime actions, and the ancillary SoC instance.
 - `bq76952_soc.cpp` isolates SoC estimation/persistence logic but remains owned by `BQ76952Service`.
-- `bq76952.cpp` is the ESPHome facade. Keep protocol, product policy and SoC logic out of it.
+- `bq76952.cpp` is the ESPHome facade. Keep transport, product policy and SoC logic out of it.
+- `__init__.py` remains the public ESPHome entry point; private `_schema.py`, `_types.py`, and `_codegen.py` modules do not create extra YAML components.
 - Do not reintroduce `BQ76952ConfigState`, another compatibility adapter, or monolithic state-bag inheritance.
 
 ## Fixed hardware and product policy
@@ -37,14 +38,14 @@ Component-scoped rules for `components/bq76952`.
 - TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes.
 - Protection masks are derived from fixed policy, not exposed as raw user bitmasks.
 
-## Protocol robustness
+## Transport robustness
 
 - Direct command reads and writes must honour optional I2C CRC on every data byte.
 - Startup probing begins without CRC, retries the alternate framing on failed reads, and remembers the framing that answers.
 - Keep the detected active framing separate from the configured target; a Comm Type change takes effect only after exiting `CONFIG_UPDATE`.
 - Subcommand/data-memory reads validate echoed command, response length and checksum before returning payload.
 - Data-memory writes verify by reading the value back.
-- Keep generic transfer-buffer mechanics in `BQ76952Protocol`; the service should not duplicate packet framing.
+- Keep generic transfer-buffer mechanics in `BQ76952I2CTransport`; the service should not duplicate packet framing.
 - Configuration writes occur only in `CONFIG_UPDATE`; read-only audits must not cycle FETs or regulators.
 
 ## Precharge and predischarge
@@ -72,9 +73,11 @@ Component-scoped rules for `components/bq76952`.
 
 ## User-facing status
 
-- Expose `state` for operating mode: offline, normal, sleep, deep_sleep, config_update, or shutdown_pending.
-- Expose `fault` for active normalized protection causes.
-- Do not expose raw FET status or Safety Status A/B/C as another user-facing text entity; log them for diagnostics.
+- `lifecycle` is diagnostic availability/configuration state: disconnected, configuring, ready, or failed.
+- `state` is operating mode only: unknown, normal, sleep, deep_sleep, config_update, or shutdown_pending.
+- `fault` is the highest-priority actionable active cause; `fault_flags` is the optional aggregate diagnostic list.
+- Communication loss changes lifecycle and warning status; publish hardware fault entities as `unknown`, never as a synthetic communication fault or a known `none`.
+- Do not expose raw FET status or Safety Status A/B/C directly; decode them into typed status first.
 
 ## Configuration synchronization
 
@@ -98,12 +101,12 @@ Component-scoped rules for `components/bq76952`.
 ## OTP safety
 
 - BQ76952 OTP is one-time and irreversible.
-- Keep `program_factory_otp` out of normal development configurations.
+- Keep `program_factory_otp` out of normal development configurations and nested under the explicit `manufacturing` section.
 - Documentation must show a prominent warning and recommend exposing the action only in a dedicated manufacturing image after complete live validation.
 - The implementation must run the device OTP pre-check and abort unless it explicitly permits programming.
 
 ## Implementation status
 
-- The target interfaces are implemented in separate protocol, service, SoC and ESPHome facade source files.
+- The target interfaces are implemented in separate I2C transport, status, service, SoC and ESPHome facade source files.
 - The old monolithic implementation and compatibility code have been removed.
 - Extend the appropriate layer rather than putting new register transport, policy or SoC state back into `bq76952.cpp`.

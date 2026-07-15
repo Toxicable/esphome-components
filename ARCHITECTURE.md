@@ -325,14 +325,16 @@ or charger-specific states such as charging, complete, or suspended.
 
 ### Fault snapshot
 
+`component_common/status.h` provides the policy-free lifecycle enum and generic `FaultSnapshot<PrimaryFault, Flags>` structure. Components keep their own operating-state enum, fault enum, priority, raw status, and decoder.
+
 Stateful components should expose a typed snapshot containing enough information for policy and diagnostics:
 
 ```cpp
-struct FaultSnapshot {
-  PrimaryFault primary;
-  uint32_t active_flags;
-  uint32_t latched_flags;
-  uint32_t raw_status;
+struct DeviceSnapshot {
+  component_common::LifecycleState lifecycle;
+  DeviceOperatingState state;
+  component_common::FaultSnapshot<DeviceFault> faults;
+  uint32_t raw_status;  // optional diagnostic data
 };
 ```
 

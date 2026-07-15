@@ -6,6 +6,7 @@
 #include "components/component_common/bit_field.h"
 #include "components/component_common/byte_order.h"
 #include "components/component_common/charger.h"
+#include "components/component_common/status.h"
 
 namespace {
 
@@ -21,7 +22,6 @@ static_assert(Field::replace(0x8F, 0x04) == 0xCF);
 static_assert(component_common::replace_masked<uint8_t>(0xAA, 0x0F, 0x05) == 0xA5);
 static_assert(component_common::any_set<uint8_t>(0x40, 0x60));
 static_assert(!component_common::any_set<uint8_t>(0x10, 0x60));
-
 
 class FakeCharger final : public component_common::ChargerInterface {
  public:
@@ -55,6 +55,17 @@ void test_charger_interface() {
   assert(charger.requested_enabled_);
 }
 
+void test_status_contract() {
+  using Snapshot = component_common::FaultSnapshot<uint8_t>;
+  const Snapshot snapshot{2, 0x03, 0x01};
+  assert(snapshot.primary == 2);
+  assert(snapshot.active_flags == 0x03);
+  assert(snapshot.latched_flags == 0x01);
+  assert(component_common::lifecycle_state_to_string(
+             component_common::LifecycleState::READY) ==
+         std::string_view("ready"));
+}
+
 void test_byte_order() {
   const std::array<uint8_t, 4> little{{0x78, 0x56, 0x34, 0x12}};
   const std::array<uint8_t, 4> big{{0x12, 0x34, 0x56, 0x78}};
@@ -77,5 +88,6 @@ void test_byte_order() {
 int main() {
   test_byte_order();
   test_charger_interface();
+  test_status_contract();
   return 0;
 }

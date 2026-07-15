@@ -1,5 +1,7 @@
 # BQ76922 Battery Monitor BMS
 
+> **Lifecycle status: experimental.** No deployed configuration or compile fixture has been identified. Keep this driver for hardware evaluation only; promotion requires a committed board/configuration and tests. If no owner or real hardware use emerges, retire it rather than maintaining a second BQ769x2 architecture.
+
 ESPHome external component for TI BQ76922 (3S to 5S packs over I2C).
 
 It provides:

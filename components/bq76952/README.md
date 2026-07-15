@@ -4,14 +4,17 @@ ESPHome external component for TI `BQ76952` 3S–16S battery monitors.
 
 The component implements the hard-cut configuration interfaces directly. The previous monolithic state bag and compatibility paths have been removed.
 
+Because the status contract uses `component_common`, explicit external-component allowlists must include both `component_common` and `bq76952`.
+
 ## Architecture
 
 - `bq76952_registers.h`: named direct commands, subcommands, data-memory addresses, bit fields, unit encodings, transport timing, and fixed product-policy constants
-- `bq76952_protocol.cpp`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
+- `bq76952_i2c_transport.cpp`: register, subcommand, data-memory, checksum, CRC, and CONFIG_UPDATE transport
 - `bq76952_config.h`: complete deterministic desired device state
 - `bq76952_service.cpp`: connection recovery, configuration synchronization, measurements, protections, controls, and SoC ownership
 - `bq76952_soc.cpp`: ancillary SoC estimation and persistence logic
 - `bq76952.cpp`: ESPHome entity facade only
+- `_schema.py`, `_types.py`, `_codegen.py`: private schema, C++ declarations, and code-generation modules behind the single `bq76952:` YAML block
 
 There is no compatibility `ConfigState`, state-bag inheritance, or preserve-by-omission behaviour.
 
@@ -118,14 +121,23 @@ bq76952:
     empty_cell_voltage_mv: 3000
     full_cell_voltage_mv: 4200
 
-  # High-level operating mode: offline, normal, sleep, deep_sleep,
-  # config_update, or shutdown_pending.
+  # Communication/configuration lifecycle: disconnected, configuring, ready,
+  # or failed. Diagnostic rather than a hardware fault.
+  lifecycle:
+    name: "BMS Lifecycle"
+
+  # Device operating mode only: normal, sleep, deep_sleep, config_update,
+  # shutdown_pending, or unknown.
   state:
     name: "BMS State"
 
-  # Active protection reason(s), or none.
+  # Highest-priority active protection cause, or none.
   fault:
     name: "BMS Fault"
+
+  # Optional diagnostic list of every active normalized protection cause.
+  fault_flags:
+    name: "BMS Fault Flags"
 
   pack_voltage:
     name: "BMS Pack Voltage"
@@ -158,11 +170,18 @@ bq76952:
 
 The service waits until the device answers its communication probe, then compares the complete desired configuration with data memory. It enters `CONFIG_UPDATE` only when drift is found. Failed synchronization remains pending and retries after communication recovery. Runtime-only sleep, regulator and autonomous-FET state is restored after reconnect or reset.
 
-## State versus fault
+## Lifecycle, state, and fault
 
-- `state` reports the device operating mode, such as `normal`, `sleep`, or `offline`.
-- `fault` reports active protection causes, such as cell undervoltage, overcurrent, overtemperature, or permanent failure.
-- Raw Safety Status A/B/C and FET status bits are internal diagnostics. They are decoded into `fault` and logged when useful rather than exposed as a third text entity.
+- `lifecycle` reports whether communication and deterministic configuration are available: `disconnected`, `configuring`, `ready`, or `failed`.
+- `state` reports only the BQ76952 operating mode: `normal`, `sleep`, `deep_sleep`, `config_update`, `shutdown_pending`, or `unknown`.
+- `fault` reports the highest-priority active protection cause. Priority is permanent failure, short circuit, cell over/undervoltage, severe/normal/sustained overcurrent, temperature, then precharge timeout.
+- `fault_flags` is an optional diagnostic comma-separated list of all active normalized causes.
+- Communication loss changes lifecycle and component warning status; `fault` and `fault_flags` become `unknown` because the hardware protection state cannot be read.
+- Raw Safety Status A/B/C and FET status bits remain internal and are decoded before publication.
+
+### Status migration
+
+Earlier revisions used `state: offline` for communication loss and published every active cause through `fault`. Use `lifecycle` for availability, `state` for device mode, `fault` for the primary actionable cause, and `fault_flags` only when the complete diagnostic set is useful.
 
 ## Fixed product policy
 
@@ -227,9 +246,10 @@ Only add the factory action to a dedicated manufacturing configuration:
 bq76952:
   # ...fully validated configuration...
 
-  # DANGER: irreversible, one-time device programming.
-  program_factory_otp:
-    name: "DANGER - Program BMS OTP Once"
+  manufacturing:
+    # DANGER: irreversible, one-time device programming.
+    program_factory_otp:
+      name: "DANGER - Program BMS OTP Once"
 ```
 
-The normal component configuration is applied live and does not require OTP programming.
+The normal component configuration is applied live and does not require OTP programming. The old top-level `program_factory_otp` key is intentionally unsupported; irreversible actions must remain visibly nested under `manufacturing`.

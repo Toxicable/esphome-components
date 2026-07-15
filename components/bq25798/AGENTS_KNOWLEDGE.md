@@ -2,6 +2,9 @@
 
 Component-scoped notes for `components/bq25798`.
 
+- Lifecycle classification is `legacy`: retained for the pool-cleaner consumer only. New charger development belongs in `bq25756`.
+- Do not add a second typed charger capability here unless migration proves BQ25798 hardware must remain a supported product path.
+
 - Top-level polling component defaults: address `0x6B`, `update_interval: 1s`, `disable_watchdog: true`.
 - Can publish ADC sensors: `ibus_current`, `ibat_current`, `vbus_voltage`, `vbat_voltage`, `vsys_voltage`, `ts_percent`, `die_temperature`.
 - Can publish text status sensors: `charge_status`, `vbus_status`, `status_flags`.

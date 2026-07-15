@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <string>
 
 #include "esphome/core/log.h"
 
@@ -12,32 +11,6 @@ namespace bq76952 {
 
 namespace {
 static const char *const TAG = "bq76952";
-
-const char *state_name(BQ76952OperatingState state) {
-  switch (state) {
-    case BQ76952OperatingState::OFFLINE:
-      return "offline";
-    case BQ76952OperatingState::NORMAL:
-      return "normal";
-    case BQ76952OperatingState::SLEEP:
-      return "sleep";
-    case BQ76952OperatingState::DEEP_SLEEP:
-      return "deep_sleep";
-    case BQ76952OperatingState::CONFIG_UPDATE:
-      return "config_update";
-    case BQ76952OperatingState::SHUTDOWN_PENDING:
-      return "shutdown_pending";
-    default:
-      return "unknown";
-  }
-}
-
-void append_fault(std::string &faults, const char *name) {
-  if (!faults.empty()) {
-    faults += ',';
-  }
-  faults += name;
-}
 }  // namespace
 
 BQ76952Component::BQ76952Component() : service_(*this) {}
@@ -97,12 +70,20 @@ void BQ76952Component::set_ts3_temperature_sensor(sensor::Sensor *sensor) {
   this->thermistor_temperature_sensors_[2] = sensor;
 }
 
+void BQ76952Component::set_lifecycle_sensor(text_sensor::TextSensor *sensor) {
+  this->lifecycle_sensor_ = sensor;
+}
+
 void BQ76952Component::set_state_sensor(text_sensor::TextSensor *sensor) {
   this->state_sensor_ = sensor;
 }
 
 void BQ76952Component::set_fault_sensor(text_sensor::TextSensor *sensor) {
   this->fault_sensor_ = sensor;
+}
+
+void BQ76952Component::set_fault_flags_sensor(text_sensor::TextSensor *sensor) {
+  this->fault_flags_sensor_ = sensor;
 }
 
 void BQ76952Component::set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor) {
@@ -118,22 +99,41 @@ void BQ76952Component::setup() {
 }
 
 void BQ76952Component::update() {
-  BQ76952Snapshot snapshot{};
-  if (!this->service_.poll(snapshot)) {
+  ::bq76952_core::Snapshot snapshot{};
+  const bool valid = this->service_.poll(snapshot);
+  this->publish_lifecycle(snapshot.lifecycle);
+
+  if (!valid) {
     if (this->state_sensor_ != nullptr) {
-      this->state_sensor_->publish_state("offline");
+      this->state_sensor_->publish_state("unknown");
+    }
+    if (this->fault_sensor_ != nullptr) {
+      this->fault_sensor_->publish_state("unknown");
+    }
+    if (this->fault_flags_sensor_ != nullptr) {
+      this->fault_flags_sensor_->publish_state("unknown");
     }
     this->status_set_warning();
     return;
   }
 
   this->publish_snapshot(snapshot);
-  this->status_clear_warning();
+  if (snapshot.lifecycle == component_common::LifecycleState::READY) {
+    this->status_clear_warning();
+  } else {
+    this->status_set_warning();
+  }
 }
 
-void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
+void BQ76952Component::publish_lifecycle(component_common::LifecycleState lifecycle) {
+  if (this->lifecycle_sensor_ != nullptr) {
+    this->lifecycle_sensor_->publish_state(component_common::lifecycle_state_to_string(lifecycle));
+  }
+}
+
+void BQ76952Component::publish_snapshot(const ::bq76952_core::Snapshot &snapshot) {
   if (this->state_sensor_ != nullptr) {
-    this->state_sensor_->publish_state(state_name(snapshot.state));
+    this->state_sensor_->publish_state(::bq76952_core::operating_state_to_string(snapshot.operating_state));
   }
   this->publish_faults(snapshot);
   if (this->capacity_calibration_status_sensor_ != nullptr) {
@@ -191,35 +191,15 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
   }
 }
 
-void BQ76952Component::publish_faults(const BQ76952Snapshot &snapshot) {
-  if (this->fault_sensor_ == nullptr) {
-    return;
+void BQ76952Component::publish_faults(const ::bq76952_core::Snapshot &snapshot) {
+  if (this->fault_sensor_ != nullptr) {
+    this->fault_sensor_->publish_state(::bq76952_core::fault_to_string(snapshot.faults.primary));
   }
-
-  std::string faults;
-  const uint32_t flags = snapshot.fault_flags;
-  if ((flags & BQ76952_FAULT_CELL_UNDERVOLTAGE) != 0)
-    append_fault(faults, "cell_undervoltage");
-  if ((flags & BQ76952_FAULT_CELL_OVERVOLTAGE) != 0)
-    append_fault(faults, "cell_overvoltage");
-  if ((flags & BQ76952_FAULT_CHARGE_OVERCURRENT) != 0)
-    append_fault(faults, "charge_overcurrent");
-  if ((flags & BQ76952_FAULT_DISCHARGE_OVERCURRENT) != 0)
-    append_fault(faults, "discharge_overcurrent");
-  if ((flags & BQ76952_FAULT_DISCHARGE_SEVERE_OVERCURRENT) != 0)
-    append_fault(faults, "discharge_severe_overcurrent");
-  if ((flags & BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT) != 0)
-    append_fault(faults, "discharge_sustained_overcurrent");
-  if ((flags & BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT) != 0)
-    append_fault(faults, "discharge_short_circuit");
-  if ((flags & BQ76952_FAULT_TEMPERATURE) != 0)
-    append_fault(faults, "temperature");
-  if ((flags & BQ76952_FAULT_PRECHARGE_TIMEOUT) != 0)
-    append_fault(faults, "precharge_timeout");
-  if ((flags & BQ76952_FAULT_PERMANENT_FAILURE) != 0)
-    append_fault(faults, "permanent_failure");
-
-  this->fault_sensor_->publish_state(faults.empty() ? "none" : faults);
+  if (this->fault_flags_sensor_ != nullptr) {
+    char faults[256];
+    ::bq76952_core::format_fault_flags(snapshot.faults.active_flags, faults, sizeof(faults));
+    this->fault_flags_sensor_->publish_state(faults);
+  }
 }
 
 void BQ76952Component::dump_config() {
@@ -254,8 +234,10 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "TS1 Temperature", this->thermistor_temperature_sensors_[0]);
   LOG_SENSOR("  ", "TS2 Temperature", this->thermistor_temperature_sensors_[1]);
   LOG_SENSOR("  ", "TS3 Temperature", this->thermistor_temperature_sensors_[2]);
+  LOG_TEXT_SENSOR("  ", "Lifecycle", this->lifecycle_sensor_);
   LOG_TEXT_SENSOR("  ", "State", this->state_sensor_);
   LOG_TEXT_SENSOR("  ", "Fault", this->fault_sensor_);
+  LOG_TEXT_SENSOR("  ", "Fault Flags", this->fault_flags_sensor_);
   LOG_TEXT_SENSOR("  ", "Capacity Calibration Status", this->capacity_calibration_status_sensor_);
   LOG_SWITCH("  ", "Output Enabled", this->output_enabled_switch_);
 }

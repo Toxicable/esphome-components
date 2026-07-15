@@ -1,4 +1,4 @@
-#include "bq76952_protocol.h"
+#include "bq76952_i2c_transport.h"
 
 #include "bq76952_registers.h"
 
@@ -12,8 +12,8 @@ namespace esphome {
 namespace bq76952 {
 
 namespace {
-static const char *const TAG = "bq76952.protocol";
-namespace hw = registers;
+static const char *const TAG = "bq76952.transport";
+namespace hw = ::bq76952_core::registers;
 
 uint8_t crc8(const uint8_t *data, size_t length) {
   uint8_t crc = 0;
@@ -35,11 +35,11 @@ uint8_t transfer_checksum(uint16_t command, const uint8_t *data, size_t length) 
 }
 }  // namespace
 
-bool BQ76952Protocol::read_u8(uint8_t command, uint8_t &value) {
+bool BQ76952I2CTransport::read_u8(uint8_t command, uint8_t &value) {
   return this->read_bytes(command, &value, 1);
 }
 
-bool BQ76952Protocol::read_i16(uint8_t command, int16_t &value) {
+bool BQ76952I2CTransport::read_i16(uint8_t command, int16_t &value) {
   uint16_t raw = 0;
   if (!this->read_u16(command, raw)) {
     return false;
@@ -48,7 +48,7 @@ bool BQ76952Protocol::read_i16(uint8_t command, int16_t &value) {
   return true;
 }
 
-bool BQ76952Protocol::read_u16(uint8_t command, uint16_t &value) {
+bool BQ76952I2CTransport::read_u16(uint8_t command, uint16_t &value) {
   uint8_t raw[2]{};
   if (!this->read_bytes(command, raw, sizeof(raw))) {
     return false;
@@ -57,7 +57,7 @@ bool BQ76952Protocol::read_u16(uint8_t command, uint16_t &value) {
   return true;
 }
 
-bool BQ76952Protocol::read_bytes(uint8_t command, uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::read_bytes(uint8_t command, uint8_t *data, size_t length) {
   if (length == 0) {
     return true;
   }
@@ -82,7 +82,7 @@ bool BQ76952Protocol::read_bytes(uint8_t command, uint8_t *data, size_t length) 
   return true;
 }
 
-bool BQ76952Protocol::read_bytes_with_mode(uint8_t command, uint8_t *data, size_t length, bool crc_enabled) {
+bool BQ76952I2CTransport::read_bytes_with_mode(uint8_t command, uint8_t *data, size_t length, bool crc_enabled) {
   if (!crc_enabled) {
     if (this->write_read(&command, 1, data, length) == i2c::ERROR_OK) {
       return true;
@@ -123,20 +123,20 @@ bool BQ76952Protocol::read_bytes_with_mode(uint8_t command, uint8_t *data, size_
   return true;
 }
 
-bool BQ76952Protocol::write_u8(uint8_t command, uint8_t value) {
+bool BQ76952I2CTransport::write_u8(uint8_t command, uint8_t value) {
   return this->write_bytes(command, &value, 1);
 }
 
-bool BQ76952Protocol::write_u16(uint8_t command, uint16_t value) {
+bool BQ76952I2CTransport::write_u16(uint8_t command, uint16_t value) {
   const uint8_t raw[2] = {static_cast<uint8_t>(value & 0xFFU), static_cast<uint8_t>((value >> 8) & 0xFFU)};
   return this->write_bytes(command, raw, sizeof(raw));
 }
 
-bool BQ76952Protocol::write_bytes(uint8_t command, const uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::write_bytes(uint8_t command, const uint8_t *data, size_t length) {
   return this->write_bytes_with_mode(command, data, length, this->crc_enabled_);
 }
 
-bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data, size_t length,
+bool BQ76952I2CTransport::write_bytes_with_mode(uint8_t command, const uint8_t *data, size_t length,
                                             bool crc_enabled) {
   if (length > 0 && data == nullptr) {
     return false;
@@ -166,11 +166,11 @@ bool BQ76952Protocol::write_bytes_with_mode(uint8_t command, const uint8_t *data
   return this->write(framed.data(), 1 + length * 2) == i2c::ERROR_OK;
 }
 
-bool BQ76952Protocol::send_subcommand(uint16_t subcommand) {
+bool BQ76952I2CTransport::send_subcommand(uint16_t subcommand) {
   return this->write_u16(hw::direct::SUBCOMMAND, subcommand);
 }
 
-bool BQ76952Protocol::wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms) {
+bool BQ76952I2CTransport::wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms) {
   delay_microseconds_safe(hw::transport::TRANSFER_READY_DELAY_US);
   const uint32_t started = millis();
   while ((millis() - started) <= timeout_ms) {
@@ -187,12 +187,12 @@ bool BQ76952Protocol::wait_for_transfer_buffer(uint16_t expected_command, uint32
   return false;
 }
 
-bool BQ76952Protocol::verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length,
+bool BQ76952I2CTransport::verify_transfer_buffer(uint16_t command, const uint8_t *data, size_t length,
                                              uint8_t checksum) const {
   return transfer_checksum(command, data, length) == checksum;
 }
 
-bool BQ76952Protocol::read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length) {
   uint8_t response_length = 0;
   if (!this->read_u8(hw::direct::LENGTH, response_length) || response_length < hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES) {
     return false;
@@ -223,14 +223,14 @@ bool BQ76952Protocol::read_transfer_buffer(uint16_t expected_command, uint8_t *d
   return true;
 }
 
-bool BQ76952Protocol::read_subcommand(uint16_t subcommand, uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::read_subcommand(uint16_t subcommand, uint8_t *data, size_t length) {
   if (!this->send_subcommand(subcommand) || !this->wait_for_transfer_buffer(subcommand, hw::transport::TRANSFER_TIMEOUT_MS)) {
     return false;
   }
   return this->read_transfer_buffer(subcommand, data, length);
 }
 
-bool BQ76952Protocol::write_subcommand(uint16_t subcommand, const uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::write_subcommand(uint16_t subcommand, const uint8_t *data, size_t length) {
   if (length > hw::transport::MAX_TRANSFER_PAYLOAD || (length > 0 && data == nullptr)) {
     return false;
   }
@@ -244,11 +244,11 @@ bool BQ76952Protocol::write_subcommand(uint16_t subcommand, const uint8_t *data,
   return this->write_bytes(hw::direct::CHECKSUM, footer, sizeof(footer));
 }
 
-bool BQ76952Protocol::read_data_memory(uint16_t address, uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::read_data_memory(uint16_t address, uint8_t *data, size_t length) {
   return this->read_subcommand(address, data, length);
 }
 
-bool BQ76952Protocol::write_data_memory(uint16_t address, const uint8_t *data, size_t length) {
+bool BQ76952I2CTransport::write_data_memory(uint16_t address, const uint8_t *data, size_t length) {
   if (!this->write_subcommand(address, data, length)) {
     return false;
   }
@@ -261,11 +261,11 @@ bool BQ76952Protocol::write_data_memory(uint16_t address, const uint8_t *data, s
   return std::memcmp(verify.data(), data, length) == 0;
 }
 
-bool BQ76952Protocol::read_data_memory_u8(uint16_t address, uint8_t &value) {
+bool BQ76952I2CTransport::read_data_memory_u8(uint16_t address, uint8_t &value) {
   return this->read_data_memory(address, &value, 1);
 }
 
-bool BQ76952Protocol::read_data_memory_u16(uint16_t address, uint16_t &value) {
+bool BQ76952I2CTransport::read_data_memory_u16(uint16_t address, uint16_t &value) {
   uint8_t raw[2]{};
   if (!this->read_data_memory(address, raw, sizeof(raw))) {
     return false;
@@ -274,16 +274,16 @@ bool BQ76952Protocol::read_data_memory_u16(uint16_t address, uint16_t &value) {
   return true;
 }
 
-bool BQ76952Protocol::write_data_memory_u8(uint16_t address, uint8_t value) {
+bool BQ76952I2CTransport::write_data_memory_u8(uint16_t address, uint8_t value) {
   return this->write_data_memory(address, &value, 1);
 }
 
-bool BQ76952Protocol::write_data_memory_u16(uint16_t address, uint16_t value) {
+bool BQ76952I2CTransport::write_data_memory_u16(uint16_t address, uint16_t value) {
   const uint8_t raw[2] = {static_cast<uint8_t>(value & 0xFFU), static_cast<uint8_t>((value >> 8) & 0xFFU)};
   return this->write_data_memory(address, raw, sizeof(raw));
 }
 
-bool BQ76952Protocol::set_config_update(bool enabled) {
+bool BQ76952I2CTransport::set_config_update(bool enabled) {
   const uint16_t command = enabled ? hw::subcommand::SET_CONFIG_UPDATE : hw::subcommand::EXIT_CONFIG_UPDATE;
   if (!this->send_subcommand(command)) {
     return false;
@@ -311,7 +311,7 @@ bool BQ76952Protocol::set_config_update(bool enabled) {
   return false;
 }
 
-void BQ76952Protocol::set_crc_enabled(bool enabled) {
+void BQ76952I2CTransport::set_crc_enabled(bool enabled) {
   this->desired_crc_enabled_ = enabled;
   // Probe without CRC first; read_bytes() learns an existing CRC-enabled image.
   this->crc_enabled_ = false;

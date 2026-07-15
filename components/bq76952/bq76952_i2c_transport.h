@@ -13,7 +13,7 @@ class BQ76952Service;
 // Low-level BQ76952 transport only. This class owns register framing,
 // subcommand transfer-buffer handling, checksums, optional I2C CRC, and
 // CONFIG_UPDATE entry/exit. It contains no ESPHome entities or product policy.
-class BQ76952Protocol : public i2c::I2CDevice {
+class BQ76952I2CTransport : public i2c::I2CDevice {
   friend class BQ76952Service;
 
  protected:
