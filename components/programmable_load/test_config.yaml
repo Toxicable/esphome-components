@@ -18,7 +18,7 @@ external_components:
       type: local
       path: ..
     refresh: 0s
-    components: [ programmable_load, bq25756 ]
+    components: [ component_common, programmable_load, bq25756 ]
 
 wifi:
   ssid: "${wifi_ssid}"
