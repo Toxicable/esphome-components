@@ -889,6 +889,3 @@ void ClearFaultButton::press_action() {
 }  // namespace programmable_load
 }  // namespace esphome
 
-// Keep the battery-cycle implementation here because ESPHome does not add it
-// as a separate source file for this external component.
-#include "battery_cycle.cpp"
