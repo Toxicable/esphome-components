@@ -7,7 +7,7 @@ startup, manages charger limits, and publishes telemetry, status, and controls.
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ bq25756 ]
+    components: [ component_common, bq25756 ]
 
 bq25756:
   id: charger
@@ -48,6 +48,10 @@ bq25756:
     charge_enable:
       name: "Charger Charge Enable"
 ```
+
+`component_common` is an internal, auto-loaded implementation dependency. It has
+no top-level YAML block, but it must be present in an explicit
+`external_components.components` allowlist so ESPHome can resolve it.
 
 `cell_chemistry` supports `lithium_ion` (4.20 V / 3.00 V per cell) and
 `lifepo4` (3.65 V / 2.50 V per cell). The pack's maximum target and nominal
