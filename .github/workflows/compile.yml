@@ -17,11 +17,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clangd
 
-      - name: Run syntax and host checks
-        run: |
-          ./check_py.bash
-          bash ./check_host.bash
-          ./check.bash
+      - name: Check Python syntax
+        run: ./check_py.bash
+
+      - name: Run host core tests
+        run: bash ./check_host.bash
+
+      - name: Check C++ sources with clangd
+        run: ./check.bash
 
   esphome-checks:
     runs-on: ubuntu-latest
