@@ -58,7 +58,7 @@ const char *mppt_status_to_string(uint8_t mppt_status) {
 }
 
 Measurements decode_measurements(const Reg16Value &iac, const Reg16Value &ibat, const Reg16Value &vac,
-                                  const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb) {
+                                 const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb) {
   Measurements measurements;
   measurements.iac = iac;
   measurements.ibat = ibat;
@@ -76,27 +76,27 @@ Measurements decode_measurements(const Reg16Value &iac, const Reg16Value &ibat, 
 }
 
 float vfb_reg_target_mv(uint16_t reg00_raw) {
-  return 1504.0f + static_cast<float>(reg00_raw & REG00_VFB_REG_MASK) * 2.0f;
+  return 1504.0f + static_cast<float>(fields::ChargeVoltageLimit::decode(reg00_raw)) * 2.0f;
 }
 
 uint16_t encode_charge_voltage_limit_mv(uint16_t mv) {
   const uint16_t code = static_cast<uint16_t>((mv - 1504) / 2);
-  return static_cast<uint16_t>(code & REG00_VFB_REG_MASK);
+  return fields::ChargeVoltageLimit::encode(code);
 }
 
 uint16_t encode_charge_current_limit_ma(uint16_t ma) {
   const uint16_t code = static_cast<uint16_t>(ma / 50);
-  return static_cast<uint16_t>((code << 2) & REG02_ICHG_REG_MASK);
+  return fields::ChargeCurrentLimit::encode(code);
 }
 
 uint16_t encode_input_current_dpm_limit_ma(uint16_t ma) {
   const uint16_t code = static_cast<uint16_t>(ma / 50);
-  return static_cast<uint16_t>((code << 2) & REG06_IAC_DPM_MASK);
+  return fields::InputCurrentLimit::encode(code);
 }
 
 uint16_t encode_input_voltage_dpm_limit_mv(uint16_t mv) {
   const uint16_t code = static_cast<uint16_t>(mv / 20);
-  return static_cast<uint16_t>((code << 2) & REG08_VAC_DPM_MASK);
+  return fields::InputVoltageLimit::encode(code);
 }
 
 }  // namespace bq25756_core
