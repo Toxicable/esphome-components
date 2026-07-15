@@ -64,15 +64,25 @@ jobs:
       - name: Publish typed charger branch
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           cd target
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b agent/typed-charger-capability
-          git add \
-            components/component_common \
-            components/bq25756 \
-            components/programmable_load \
-            tests
-          git commit -m "Add typed charger capability boundary"
-          git push --force-with-lease origin HEAD:agent/typed-charger-capability
+          {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git checkout -b agent/typed-charger-capability
+            git add \
+              components/component_common \
+              components/bq25756 \
+              components/programmable_load \
+              tests
+            git commit -m "Add typed charger capability boundary"
+            git push origin HEAD:refs/heads/agent/typed-charger-capability
+          } 2>&1 | tee ../phase3-publish.log
+
+      - name: Upload publish failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-publish-failure
+          path: phase3-publish.log
+          if-no-files-found: ignore
