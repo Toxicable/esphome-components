@@ -108,8 +108,10 @@ bool BQ25756Component::calibrate_feedback(float measured_battery_voltage_v) {
     return false;
   }
   ::bq25756_core::Measurements measurements{};
-  if (!this->service_.read_measurements(measurements, true)) {
-    ESP_LOGW(TAG, "Failed to read VFB during battery feedback calibration");
+  ::bq25756_core::AdcConfigurationState adc_state{};
+  if (this->service_.read_measurements(measurements, true, ::bq25756_core::REG2B_ADC_CONTINUOUS_15_BIT, adc_state) !=
+      ::bq25756_core::MeasurementReadResult::OK) {
+    ESP_LOGW(TAG, "ADC measurement unavailable during battery feedback calibration");
     this->publish_calibration_status_("failed");
     return false;
   }
@@ -230,8 +232,21 @@ void BQ25756Component::update() {
   }
 
   ::bq25756_core::Measurements measurements;
-  if (!this->service_.read_measurements(measurements, false)) {
-    ESP_LOGW(TAG, "Failed reading one or more ADC registers");
+  ::bq25756_core::AdcConfigurationState adc_state{};
+  const ::bq25756_core::MeasurementReadResult measurement_result =
+    this->service_.read_measurements(measurements, false, ::bq25756_core::REG2B_ADC_CONTINUOUS_15_BIT, adc_state);
+  if (measurement_result == ::bq25756_core::MeasurementReadResult::CONFIGURATION_CHANGED) {
+    this->log_adc_configuration_(adc_state, ::bq25756_core::AdcEnsureResult::REPAIRED);
+    ESP_LOGD(TAG, "ADC configuration changed; waiting for a new conversion");
+    return;
+  }
+  if (measurement_result == ::bq25756_core::MeasurementReadResult::CONFIGURATION_VERIFY_MISMATCH) {
+    this->log_adc_configuration_(adc_state, ::bq25756_core::AdcEnsureResult::VERIFICATION_MISMATCH);
+    this->status_set_warning();
+    return;
+  }
+  if (measurement_result != ::bq25756_core::MeasurementReadResult::OK) {
+    ESP_LOGW(TAG, "ADC I2C measurement read failed");
     this->status_set_warning();
     return;
   }
@@ -494,19 +509,44 @@ void BQ25756Component::publish_control_states_() {
 }
 
 bool BQ25756Component::ensure_adc_enabled_() {
-  uint8_t reg2b = 0;
-  uint8_t reg2b_new = 0;
-  uint8_t reg2c = 0;
-  uint8_t reg2c_new = 0;
+  ::bq25756_core::AdcConfigurationState adc_state{};
   // Feedback calibration always needs this ADC channel, even when its optional
   // diagnostic sensor is not exposed to Home Assistant.
-  if (!this->service_.ensure_adc_enabled(true, reg2b, reg2b_new, reg2c, reg2c_new)) {
-    ESP_LOGW(TAG, "ADC configuration write failed");
+  const ::bq25756_core::AdcEnsureResult result =
+    this->service_.ensure_adc_enabled(true, ::bq25756_core::REG2B_ADC_CONTINUOUS_15_BIT, adc_state);
+  if (result == ::bq25756_core::AdcEnsureResult::IO_ERROR ||
+      result == ::bq25756_core::AdcEnsureResult::VERIFICATION_MISMATCH) {
+    this->log_adc_configuration_(adc_state, result);
     return false;
   }
-
-  ESP_LOGI(TAG, "ADC config REG2B: 0x%02X -> 0x%02X, REG2C: 0x%02X -> 0x%02X", reg2b, reg2b_new, reg2c, reg2c_new);
+  if (result == ::bq25756_core::AdcEnsureResult::REPAIRED) {
+    this->log_adc_configuration_(adc_state, result);
+  }
   return true;
+}
+
+void BQ25756Component::log_adc_configuration_(
+  const ::bq25756_core::AdcConfigurationState &state, ::bq25756_core::AdcEnsureResult result
+) {
+  if (result == ::bq25756_core::AdcEnsureResult::REPAIRED) {
+    ESP_LOGI(
+      TAG,
+      "ADC repair: REG2B old=0x%02X persistent=0x%02X transient-write=0x%02X; REG2C old=0x%02X requested=0x%02X",
+      state.old_reg2b, state.persistent_reg2b, state.transient_reg2b, state.old_reg2c, state.requested_reg2c
+    );
+  } else if (result == ::bq25756_core::AdcEnsureResult::VERIFICATION_MISMATCH) {
+    ESP_LOGW(
+      TAG,
+      "ADC configuration verification mismatch: REG2B old=0x%02X persistent=0x%02X transient-write=0x%02X; REG2C old=0x%02X requested=0x%02X",
+      state.old_reg2b, state.persistent_reg2b, state.transient_reg2b, state.old_reg2c, state.requested_reg2c
+    );
+  } else {
+    ESP_LOGW(
+      TAG,
+      "ADC configuration I2C read/write failed: REG2B old=0x%02X persistent=0x%02X transient-write=0x%02X; REG2C old=0x%02X requested=0x%02X",
+      state.old_reg2b, state.persistent_reg2b, state.transient_reg2b, state.old_reg2c, state.requested_reg2c
+    );
+  }
 }
 
 void BQ25756Component::maybe_log_event_(

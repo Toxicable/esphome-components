@@ -141,6 +141,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool apply_configured_limits_();
   bool apply_configured_pin_overrides_();
   bool ensure_adc_enabled_();
+  void log_adc_configuration_(const ::bq25756_core::AdcConfigurationState &state,
+                              ::bq25756_core::AdcEnsureResult result);
   bool apply_battery_target_();
   bool load_calibration_();
   bool save_calibration_();

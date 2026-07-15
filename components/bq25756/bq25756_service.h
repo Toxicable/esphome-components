@@ -8,6 +8,28 @@
 
 namespace bq25756_core {
 
+enum class AdcEnsureResult : uint8_t {
+  OK,
+  REPAIRED,
+  IO_ERROR,
+  VERIFICATION_MISMATCH,
+};
+
+enum class MeasurementReadResult : uint8_t {
+  OK,
+  CONFIGURATION_CHANGED,
+  IO_ERROR,
+  CONFIGURATION_VERIFY_MISMATCH,
+};
+
+struct AdcConfigurationState {
+  uint8_t old_reg2b{0};
+  uint8_t persistent_reg2b{0};
+  uint8_t transient_reg2b{0};
+  uint8_t old_reg2c{0};
+  uint8_t requested_reg2c{0};
+};
+
 class Bq25756Service {
  public:
   explicit Bq25756Service(RegisterBus *bus) : bus_(bus) {}
@@ -27,10 +49,11 @@ class Bq25756Service {
   bool set_watchdog_code(uint8_t code);
   bool reset_watchdog();
   bool read_status(Status &status);
-  bool read_measurements(Measurements &measurements, bool include_vfb);
+  MeasurementReadResult read_measurements(Measurements &measurements, bool include_vfb,
+                                          uint8_t requested_adc_config, AdcConfigurationState &adc_state);
   bool read_control_states(ControlStates &states);
-  bool ensure_adc_enabled(bool include_vfb, uint8_t &reg2b_old, uint8_t &reg2b_new, uint8_t &reg2c_old,
-                          uint8_t &reg2c_new);
+  AdcEnsureResult ensure_adc_enabled(bool include_vfb, uint8_t requested_adc_config,
+                                     AdcConfigurationState &adc_state);
   bool apply_limits(bool has_charge_voltage_limit_mv, uint16_t charge_voltage_limit_mv,
                     bool has_charge_current_limit_ma, uint16_t charge_current_limit_ma,
                     bool has_input_current_dpm_limit_ma, uint16_t input_current_dpm_limit_ma,

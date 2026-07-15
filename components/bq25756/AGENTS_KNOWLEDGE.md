@@ -6,7 +6,7 @@ Component-scoped notes for `components/bq25756`.
 - `event_logging` defaults to `true` and emits concise `INFO` event lines when charger status/fault bytes change (not every polling interval).
 - Setup validates `REG0x3D` `PART_NUM[6:3] == 0b0010` before treating the device as a BQ25756.
 - ADC data registers are little-endian in the I2C address space (`REGx` = low byte, `REGx+1` = high byte).
-- ADC setup explicitly writes `REG0x2B = 0b1000_1100` to initialize continuous, 15-bit running-average conversion from a fresh sample, then verifies its steady self-cleared readback (`0b1000_1000`). It does not inherit the POR `ADC_SAMPLE=0b10` 13-bit setting. This makes behavior deterministic and maximizes low-current resolution; validate any ADC-scale change on hardware rather than assuming the documented LSB changes with resolution.
+- ADC setup has a fixed continuous, 15-bit running-average mode. Its persistent state is `REG0x2B = 0b1000_1000`; when the ADC configuration is repaired or averaging restarted, the driver writes the self-clearing `ADC_AVG_INIT` command (`0b1000_1100`) once, then verifies only the persistent state. VFB ADC remains disabled during normal telemetry.
 - Implemented ADC channels: `iac_current`, `ibat_current`, `vac_voltage`, `vbat_voltage`, `ts_percent`, optional `vfb_voltage`.
 - Implemented status text sensors: `charge_status`, `ts_status`, `mppt_status`, `status_flags` (fault/state detail is intentionally aggregated here).
 - Per-fault/per-flag binary status entities were removed to reduce duplicate entity noise; use `status_flags` for fault summary.
