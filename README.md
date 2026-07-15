@@ -15,6 +15,8 @@ Use `tools/pdf_to_text.py` to generate `<pdf>.txt` from PDFs, and provide the `.
 
 - `./check.bash` runs `clangd --check` on C/C++ headers/sources (or pass a specific file path).
 - `./check_py.bash` runs Python syntax checks via `py_compile` without creating `__pycache__` files in the repo.
+- `bash ./check_host.bash` compiles and runs host-side core tests and rejects ESPHome dependencies in selected reusable files.
+- `bash ./check_esphome.bash` compiles every committed `test_config.yaml` and verifies expected-invalid schema fixtures. Run it in the devcontainer so it uses the pinned ESPHome release and toolchain.
 - The devcontainer pins ESPHome and persists VS Code/code-server plus PlatformIO state in named volumes so Coder rebuilds do not lose extensions or re-download ESP-IDF tooling.
 
 Syntax checks do not verify ESPHome source discovery. Changes to shared helpers, `AUTO_LOAD`, public YAML, or external-component allowlists should also compile representative real consumer configurations.
