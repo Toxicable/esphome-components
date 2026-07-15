@@ -40,6 +40,9 @@ static constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
 static constexpr uint8_t REG2B_ADC_SAMPLE_MASK = 0x30;
 static constexpr uint8_t REG2B_ADC_AVG_MASK = 0x08;
 static constexpr uint8_t REG2B_ADC_AVG_INIT_MASK = 0x04;
+static constexpr uint8_t REG2B_ADC_OWNED_MASK =
+  REG2B_ADC_EN_MASK | REG2B_ADC_RATE_MASK | REG2B_ADC_SAMPLE_MASK | REG2B_ADC_AVG_MASK |
+  REG2B_ADC_AVG_INIT_MASK;
 static constexpr uint8_t REG2B_ADC_CONTINUOUS_15_BIT = REG2B_ADC_EN_MASK;
 static constexpr uint8_t REG2C_IAC_ADC_DIS_MASK = 0x80;
 static constexpr uint8_t REG2C_IBAT_ADC_DIS_MASK = 0x40;
@@ -47,6 +50,9 @@ static constexpr uint8_t REG2C_VAC_ADC_DIS_MASK = 0x20;
 static constexpr uint8_t REG2C_VBAT_ADC_DIS_MASK = 0x10;
 static constexpr uint8_t REG2C_TS_ADC_DIS_MASK = 0x04;
 static constexpr uint8_t REG2C_VFB_ADC_DIS_MASK = 0x02;
+static constexpr uint8_t REG2C_ADC_CHANNEL_OWNED_MASK =
+  REG2C_IAC_ADC_DIS_MASK | REG2C_IBAT_ADC_DIS_MASK | REG2C_VAC_ADC_DIS_MASK |
+  REG2C_VBAT_ADC_DIS_MASK | REG2C_TS_ADC_DIS_MASK | REG2C_VFB_ADC_DIS_MASK;
 
 static constexpr uint8_t PART_NUM_MASK = 0x78;
 static constexpr uint8_t BQ25756_PART_NUM_BITS = 0x10;

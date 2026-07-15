@@ -84,6 +84,20 @@ bool Bq25756Service::read_status(Status &status) {
 }
 
 bool Bq25756Service::read_measurements(Measurements &measurements, bool include_vfb) {
+  uint8_t reg2b_old = 0;
+  uint8_t reg2b_new = 0;
+  uint8_t reg2c_old = 0;
+  uint8_t reg2c_new = 0;
+  if (!this->ensure_adc_enabled(include_vfb, reg2b_old, reg2b_new, reg2c_old, reg2c_new)) {
+    return false;
+  }
+
+  // A repaired configuration needs one complete conversion before its data is
+  // accepted. The following polling cycle resumes normal telemetry.
+  if (reg2b_old != reg2b_new || reg2c_old != reg2c_new) {
+    return false;
+  }
+
   Reg16Value iac{};
   Reg16Value ibat{};
   Reg16Value vac{};
@@ -116,38 +130,45 @@ bool Bq25756Service::read_control_states(ControlStates &states) {
 }
 
 bool Bq25756Service::ensure_adc_enabled(bool include_vfb, uint8_t &reg2b_old, uint8_t &reg2b_new, uint8_t &reg2c_old,
-                                 uint8_t &reg2c_new) {
-  if (!this->read_byte(REG2B_ADC_CONTROL, reg2b_old)) {
+                                        uint8_t &reg2c_new) {
+  uint8_t current[2] = {0, 0};
+  if (!this->read_bytes(REG2B_ADC_CONTROL, current, sizeof(current))) {
     return false;
   }
 
-  // Explicitly select continuous, 15-bit, non-averaged conversion rather than
-  // inheriting the 13-bit power-on default. This gives deterministic ADC
-  // behavior and maximizes low-current resolution.
-  reg2b_new = REG2B_ADC_CONTINUOUS_15_BIT;
-  if (!this->write_byte(REG2B_ADC_CONTROL, reg2b_new)) {
-    return false;
-  }
-  uint8_t reg2b_verify = 0;
-  if (!this->read_byte(REG2B_ADC_CONTROL, reg2b_verify) || reg2b_verify != reg2b_new) {
-    return false;
-  }
+  reg2b_old = current[0];
+  reg2c_old = current[1];
 
-  if (!this->read_byte(REG2C_ADC_CHANNEL_CONTROL, reg2c_old)) {
-    return false;
-  }
-
-  reg2c_new = static_cast<uint8_t>(
-    reg2c_old &
-    static_cast<uint8_t>(
-      ~(REG2C_IAC_ADC_DIS_MASK | REG2C_IBAT_ADC_DIS_MASK | REG2C_VAC_ADC_DIS_MASK | REG2C_VBAT_ADC_DIS_MASK |
-        REG2C_TS_ADC_DIS_MASK)
-    )
+  // Own the complete conversion-mode field instead of inheriting the POR
+  // 13-bit setting or stale averaging state.
+  reg2b_new = static_cast<uint8_t>(
+    (reg2b_old & ~REG2B_ADC_OWNED_MASK) | REG2B_ADC_CONTINUOUS_15_BIT
   );
-  reg2c_new = include_vfb ? static_cast<uint8_t>(reg2c_new & ~REG2C_VFB_ADC_DIS_MASK)
-                          : static_cast<uint8_t>(reg2c_new | REG2C_VFB_ADC_DIS_MASK);
 
-  return reg2c_new == reg2c_old || this->write_byte(REG2C_ADC_CHANNEL_CONTROL, reg2c_new);
+  reg2c_new = static_cast<uint8_t>(reg2c_old & ~REG2C_ADC_CHANNEL_OWNED_MASK);
+  if (!include_vfb) {
+    reg2c_new = static_cast<uint8_t>(reg2c_new | REG2C_VFB_ADC_DIS_MASK);
+  }
+
+  const bool reg2b_changed = reg2b_new != reg2b_old;
+  const bool reg2c_changed = reg2c_new != reg2c_old;
+  if (!reg2b_changed && !reg2c_changed) {
+    return true;
+  }
+
+  if (reg2b_changed && !this->write_byte(REG2B_ADC_CONTROL, reg2b_new)) {
+    return false;
+  }
+  if (reg2c_changed && !this->write_byte(REG2C_ADC_CHANNEL_CONTROL, reg2c_new)) {
+    return false;
+  }
+
+  uint8_t verify[2] = {0, 0};
+  if (!this->read_bytes(REG2B_ADC_CONTROL, verify, sizeof(verify))) {
+    return false;
+  }
+
+  return verify[0] == reg2b_new && verify[1] == reg2c_new;
 }
 
 bool Bq25756Service::apply_limits(bool has_charge_voltage_limit_mv, uint16_t charge_voltage_limit_mv,
