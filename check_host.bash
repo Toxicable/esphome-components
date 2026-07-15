@@ -6,7 +6,17 @@ cd "$repo_root"
 
 python3 tools/check_core_purity.py components/component_common components/bq25756
 
-cxx="${CXX:-g++}"
+if [[ -n "${CXX:-}" ]]; then
+  cxx="$CXX"
+elif command -v g++ >/dev/null 2>&1; then
+  cxx="g++"
+elif command -v clang++ >/dev/null 2>&1; then
+  cxx="clang++"
+else
+  echo "a C++17 compiler is required (set CXX, or install g++/clang++)" >&2
+  exit 1
+fi
+
 build_dir="$(mktemp -d "${TMPDIR:-/tmp}/esphome-components-host-tests.XXXXXX")"
 trap 'rm -rf "$build_dir"' EXIT
 
@@ -33,4 +43,4 @@ common_flags=(
   -o "$build_dir/bq25756_service_test"
 "$build_dir/bq25756_service_test"
 
-echo "host tests: passed"
+echo "host tests: passed ($cxx)"
