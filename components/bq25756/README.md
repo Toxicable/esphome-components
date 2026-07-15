@@ -6,7 +6,7 @@ Datasheet: https://www.ti.com/lit/ds/symlink/bq25756.pdf
 I2C polling component for TI BQ25756 that:
 - Confirms communication during setup by checking the `PART_NUM` field in `REG0x3D`.
 - Optionally disables the I2C watchdog via `REG0x15`.
-- Enables continuous ADC conversions for the documented BQ25756 channels.
+- Reconciles continuous, 15-bit, non-averaged ADC conversions before publishing telemetry.
 - Optionally publishes ADC/status/fault entities and exposes common host controls.
 
 ## How to use it
@@ -102,6 +102,8 @@ This component follows the shared layout in `../../ARCHITECTURE.md`.
 ## Notes
 
 - The BQ25756 ADC result registers are little-endian in the I2C map: the low byte is at the base register and the high byte is at the next address.
+- Every telemetry read first audits `REG0x2B` and `REG0x2C`. The component restores continuous 15-bit conversion, disables averaging, enables the required channels, and verifies readback before accepting ADC data.
+- When runtime ADC configuration drift is repaired, the current sample is discarded so a complete conversion can finish before the next poll publishes telemetry.
 - `vfb_voltage` is optional and stays disabled unless configured, matching the datasheet recommendation to avoid unnecessary VFB ADC use during charging.
 - `ILIM_HIZ` and `CE` are still hardware-active by default. If `ILIM_HIZ` is left floating or driven high, the charger can enter HIZ and stop switching even though this component never sets `EN_HIZ` during startup. If `CE` is left floating or high, charging can stay blocked even when `charge_enable` reports on.
 - Set `disable_ce_pin: true` to force software-only control of charging (`REG0x17.DIS_CE_PIN = 1`).
