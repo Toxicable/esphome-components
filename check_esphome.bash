@@ -4,6 +4,19 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
+failure_log="${ESPHOME_FAILURE_LOG:-esphome-failure.log}"
+rm -f "$failure_log"
+
+record_failure() {
+  local config="$1"
+  local log_file="$2"
+  {
+    echo "fixture: $config"
+    echo
+    tail -n 300 "$log_file"
+  } >"$failure_log"
+}
+
 if ! command -v esphome >/dev/null 2>&1; then
   echo "esphome is required; use the repository devcontainer" >&2
   exit 1
@@ -34,7 +47,8 @@ for config in "${configs[@]}"; do
       fi
       log_file="$(mktemp "${TMPDIR:-/tmp}/esphome-invalid.XXXXXX")"
       if esphome config "$config" >"$log_file" 2>&1; then
-        cat "$log_file"
+        record_failure "$config" "$log_file"
+        cat "$failure_log"
         rm -f "$log_file"
         echo "$config: invalid schema unexpectedly passed" >&2
         exit 1
@@ -42,7 +56,8 @@ for config in "${configs[@]}"; do
       while IFS= read -r expected; do
         [[ -z "$expected" ]] && continue
         if ! grep -F -- "$expected" "$log_file" >/dev/null; then
-          cat "$log_file"
+          record_failure "$config" "$log_file"
+          cat "$failure_log"
           rm -f "$log_file"
           echo "$config: expected error text not found: $expected" >&2
           exit 1
@@ -55,8 +70,9 @@ for config in "${configs[@]}"; do
       echo "$config: compiling"
       log_file="$(mktemp "${TMPDIR:-/tmp}/esphome-compile.XXXXXX")"
       if ! esphome compile "$config" >"$log_file" 2>&1; then
+        record_failure "$config" "$log_file"
         echo "$config: compile failed" >&2
-        tail -n 200 "$log_file" >&2
+        cat "$failure_log" >&2
         rm -f "$log_file"
         exit 1
       fi
