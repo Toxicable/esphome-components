@@ -1,0 +1,25 @@
+esphome:
+  name: bq25756-invalid-cell-count
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ component_common, bq25756 ]
+
+i2c:
+  sda: GPIO35
+  scl: GPIO36
+
+bq25756:
+  battery:
+    cell_count: 0
+    cell_chemistry: lithium_ion
+  charging: {}
