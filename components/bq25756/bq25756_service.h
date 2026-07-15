@@ -22,6 +22,7 @@ class Bq25756Service {
   bool probe(uint8_t &part_info);
   bool set_charge_enabled(bool enabled);
   bool set_hiz_mode(bool enabled);
+  bool set_pfm_enabled(bool enabled);
   bool set_reverse_mode(bool enabled);
   bool set_watchdog_code(uint8_t code);
   bool reset_watchdog();

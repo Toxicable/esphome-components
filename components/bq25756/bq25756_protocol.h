@@ -33,6 +33,7 @@ static constexpr uint8_t REG17_EN_HIZ_MASK = 0x04;
 static constexpr uint8_t REG17_EN_CHG_MASK = 0x01;
 static constexpr uint8_t REG18_EN_ICHG_PIN_MASK = 0x80;
 static constexpr uint8_t REG18_EN_ILIM_HIZ_PIN_MASK = 0x40;
+static constexpr uint8_t REG19_EN_PFM_MASK = 0x20;
 static constexpr uint8_t REG19_EN_REV_MASK = 0x01;
 
 static constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;

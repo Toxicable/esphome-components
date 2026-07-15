@@ -194,6 +194,10 @@ bool BQ25756Component::initialize_() {
     ESP_LOGW(TAG, "Failed to apply configured pin control overrides");
     return false;
   }
+  if (this->disable_pfm_ && !this->service_.set_pfm_enabled(false)) {
+    ESP_LOGW(TAG, "Failed to disable PFM mode");
+    return false;
+  }
   if (!this->set_charge_enabled(false)) {
     ESP_LOGW(TAG, "Failed to disable charging during initialization");
     return false;

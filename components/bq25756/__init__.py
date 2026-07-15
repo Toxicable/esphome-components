@@ -48,6 +48,7 @@ CONF_CELL_CHEMISTRY = "cell_chemistry"
 CONF_CHARGING = "charging"
 CONF_BATTERY_CURRENT_LIMIT = "battery_current_limit"
 CONF_INPUT_CURRENT_LIMIT = "input_current_limit"
+CONF_DISABLE_PFM = "disable_pfm"
 CONF_CHARGE_VOLTAGE_LIMIT_MV = "_charge_voltage_limit_mv"
 CONF_FEEDBACK_TO_BATTERY_RATIO = "_feedback_to_battery_ratio"
 CONF_MINIMUM_BATTERY_VOLTAGE = "_minimum_battery_voltage"
@@ -97,6 +98,7 @@ CHARGING_SCHEMA = cv.Schema(
     {
         cv.Optional(CONF_BATTERY_CURRENT_LIMIT): cv.All(cv.current, cv.Range(min=0.4, max=20.0)),
         cv.Optional(CONF_INPUT_CURRENT_LIMIT): cv.All(cv.current, cv.Range(min=0.4, max=20.0)),
+        cv.Optional(CONF_DISABLE_PFM, default=False): cv.boolean,
     }
 )
 
@@ -154,6 +156,7 @@ async def to_code(config):
     cg.add(var.set_disable_ce_pin(True))
     cg.add(var.set_disable_ilim_hiz_pin(True))
     cg.add(var.set_disable_ichg_pin(True))
+    cg.add(var.set_disable_pfm(charging[CONF_DISABLE_PFM]))
     battery = config[CONF_BATTERY]
     cg.add(var.set_charge_voltage_limit_mv(battery[CONF_CHARGE_VOLTAGE_LIMIT_MV]))
     cg.add(var.set_fb_to_pack_voltage_scale(battery[CONF_FEEDBACK_TO_BATTERY_RATIO]))

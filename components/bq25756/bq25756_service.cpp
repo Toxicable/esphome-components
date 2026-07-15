@@ -61,6 +61,11 @@ bool Bq25756Service::set_hiz_mode(bool enabled) {
   return this->update_register_bits(REG17_CHARGER_CONTROL, REG17_EN_HIZ_MASK, enabled ? REG17_EN_HIZ_MASK : 0x00);
 }
 
+bool Bq25756Service::set_pfm_enabled(bool enabled) {
+  return this->update_register_bits(REG19_POWER_PATH_CONTROL, REG19_EN_PFM_MASK,
+                                    enabled ? REG19_EN_PFM_MASK : 0x00);
+}
+
 bool Bq25756Service::set_reverse_mode(bool enabled) {
   return this->update_register_bits(REG19_POWER_PATH_CONTROL, REG19_EN_REV_MASK, enabled ? REG19_EN_REV_MASK : 0x00);
 }

@@ -43,6 +43,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   void set_disable_ichg_pin(bool disable_ichg_pin) {
     disable_ichg_pin_ = disable_ichg_pin;
   }
+  void set_disable_pfm(bool disable_pfm) { disable_pfm_ = disable_pfm; }
   void set_charge_voltage_limit_mv(uint16_t charge_voltage_limit_mv) {
     charge_voltage_limit_mv_ = charge_voltage_limit_mv;
     has_charge_voltage_limit_mv_ = true;
@@ -179,6 +180,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   bool disable_ce_pin_{false};
   bool disable_ilim_hiz_pin_{false};
   bool disable_ichg_pin_{false};
+  bool disable_pfm_{false};
   bool has_charge_voltage_limit_mv_{false};
   bool has_charge_current_limit_ma_{false};
   bool has_input_current_dpm_limit_ma_{false};
