@@ -1,0 +1,443 @@
+ true;
+@@ -871,27 +862,27 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
+ 
+ bool BQ76952Service::clear_alarm_latches() {
+   uint16_t alarm_status = 0;
+-  return this->protocol_.read_u16(hw::direct::ALARM_STATUS, alarm_status) &&
+-         (alarm_status == 0 || this->protocol_.write_u16(hw::direct::ALARM_STATUS, alarm_status));
++  return this->transport_.read_u16(hw::direct::ALARM_STATUS, alarm_status) &&
++         (alarm_status == 0 || this->transport_.write_u16(hw::direct::ALARM_STATUS, alarm_status));
+ }
+ 
+ bool BQ76952Service::program_factory_otp() {
+   ESP_LOGE(TAG, "DANGER: starting irreversible one-time BQ76952 OTP programming");
+   if (!this->synchronize_configuration(ConfigurationSyncMode::RESTORE_RUNTIME_STATE) ||
+-      !this->require_full_access() || !this->protocol_.set_config_update(true)) {
++      !this->require_full_access() || !this->transport_.set_config_update(true)) {
+     ESP_LOGE(TAG, "OTP programming aborted before OTP_WRITE");
+     return false;
+   }
+ 
+   bool ok = true;
+   uint8_t result[3]{};
+-  if (!this->protocol_.send_subcommand(hw::subcommand::OTP_WRITE_CHECK)) {
++  if (!this->transport_.send_subcommand(hw::subcommand::OTP_WRITE_CHECK)) {
+     ok = false;
+   } else {
+     delay(1000);
+   }
+-  if (ok && (!this->protocol_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, 1000) ||
+-      !this->protocol_.read_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, result, sizeof(result)) ||
++  if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, 1000) ||
++      !this->transport_.read_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, result, sizeof(result)) ||
+       (result[0] & 0x80U) == 0)) {
+     ESP_LOGE(TAG, "OTP_WR_CHECK rejected programming");
+     ok = false;
+@@ -899,20 +890,20 @@ bool BQ76952Service::program_factory_otp() {
+ 
+   if (ok) {
+     std::fill_n(result, sizeof(result), 0);
+-    if (!this->protocol_.send_subcommand(hw::subcommand::OTP_WRITE)) {
++    if (!this->transport_.send_subcommand(hw::subcommand::OTP_WRITE)) {
+       ok = false;
+     } else {
+       delay(1000);
+     }
+-    if (ok && (!this->protocol_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE, 1000) ||
+-        !this->protocol_.read_transfer_buffer(hw::subcommand::OTP_WRITE, result, sizeof(result)) ||
++    if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE, 1000) ||
++        !this->transport_.read_transfer_buffer(hw::subcommand::OTP_WRITE, result, sizeof(result)) ||
+         (result[0] & 0x80U) == 0)) {
+       ESP_LOGE(TAG, "OTP_WRITE failed");
+       ok = false;
+     }
+   }
+ 
+-  if (!this->protocol_.set_config_update(false)) {
++  if (!this->transport_.set_config_update(false)) {
+     ok = false;
+   }
+   if (ok) {
+diff --git a/components/bq76952/bq76952_service.h b/components/bq76952/bq76952_service.h
+index 5ce1fd5..5f944b7 100644
+--- a/components/bq76952/bq76952_service.h
++++ b/components/bq76952/bq76952_service.h
+@@ -3,74 +3,28 @@
+ #include <array>
+ #include <cstddef>
+ #include <cstdint>
+-#include <limits>
+ 
+ #include "bq76952_config.h"
+-#include "bq76952_protocol.h"
++#include "bq76952_i2c_transport.h"
++#include "bq76952_status.h"
+ #include "bq76952_soc.h"
+ 
+ namespace esphome {
+ namespace bq76952 {
+ 
+-enum class BQ76952OperatingState : uint8_t {
+-  OFFLINE = 0,
+-  NORMAL,
+-  SLEEP,
+-  DEEP_SLEEP,
+-  CONFIG_UPDATE,
+-  SHUTDOWN_PENDING,
+-};
+-
+-// Normalized faults decoded from the device's raw Safety Status A/B/C,
+-// Battery Status, and permanent-failure registers. The three TI register banks
+-// remain an internal protocol detail rather than leaking through the snapshot.
+-enum BQ76952FaultFlags : uint32_t {
+-  BQ76952_FAULT_NONE = 0,
+-  BQ76952_FAULT_CELL_UNDERVOLTAGE = 1U << 0,
+-  BQ76952_FAULT_CELL_OVERVOLTAGE = 1U << 1,
+-  BQ76952_FAULT_CHARGE_OVERCURRENT = 1U << 2,
+-  BQ76952_FAULT_DISCHARGE_OVERCURRENT = 1U << 3,
+-  BQ76952_FAULT_DISCHARGE_SEVERE_OVERCURRENT = 1U << 4,
+-  BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT = 1U << 5,
+-  BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT = 1U << 6,
+-  BQ76952_FAULT_TEMPERATURE = 1U << 7,
+-  BQ76952_FAULT_PRECHARGE_TIMEOUT = 1U << 8,
+-  BQ76952_FAULT_PERMANENT_FAILURE = 1U << 9,
+-};
+-
+-// Internal service-to-ESPHome snapshot. Raw protocol registers, raw FET bits,
+-// and the device coulomb-counter value are consumed inside the service.
+-struct BQ76952Snapshot {
+-  bool online{false};
+-  bool output_enabled{false};
+-  BQ76952OperatingState state{BQ76952OperatingState::OFFLINE};
+-  uint32_t fault_flags{BQ76952_FAULT_NONE};
+-
+-  std::array<int16_t, 16> cell_voltage_mv{};
+-  uint8_t cell_count{0};
+-  int32_t stack_voltage_mv{0};
+-  int32_t pack_voltage_mv{0};
+-  int32_t load_detect_voltage_mv{0};
+-  float current_a{0.0f};
+-  float state_of_charge_percent{0.0f};
+-  float learned_capacity_ah{std::numeric_limits<float>::quiet_NaN()};
+-  float die_temperature_c{0.0f};
+-  std::array<float, 3> thermistor_temperature_c{};
+-};
+-
+ // Product-level BMS behaviour. The service owns desired configuration,
+ // connection recovery, configuration synchronization, measurement conversion,
+ // protection policy, runtime actions, and the ancillary SoC estimator. It does
+ // not know about ESPHome entities.
+ class BQ76952Service {
+  public:
+-  explicit BQ76952Service(BQ76952Protocol &protocol);
++  explicit BQ76952Service(BQ76952I2CTransport &transport);
+ 
+   void setup();
+   void set_config(const BQ76952Config &config);
+   const BQ76952Config &config() const;
+ 
+-  bool poll(BQ76952Snapshot &snapshot);
++  bool poll(::bq76952_core::Snapshot &snapshot);
+   const char *capacity_calibration_status() const;
+ 
+   bool set_output_enabled(bool enabled);
+@@ -104,17 +58,16 @@ class BQ76952Service {
+ 
+   bool require_full_access();
+   bool load_unit_scaling();
+-  bool read_snapshot(BQ76952Snapshot &snapshot);
+-  bool read_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c,
+-                        uint32_t &fault_flags);
++  bool read_snapshot(::bq76952_core::Snapshot &snapshot);
+   bool read_coulomb_counter(float &charge_ah);
+   uint16_t cell_mode_mask() const;
+   uint8_t raw_cell_channel(uint8_t logical_cell) const;
+ 
+-  BQ76952Protocol &protocol_;
++  BQ76952I2CTransport &transport_;
+   BQ76952Soc soc_;
+   BQ76952Config config_{};
+   bool config_set_{false};
++  component_common::LifecycleState lifecycle_{component_common::LifecycleState::DISCONNECTED};
+   bool online_{false};
+   bool configured_{false};
+   int32_t current_lsb_ua_{1000};
+diff --git a/components/bq76952/bq76952_status.cpp b/components/bq76952/bq76952_status.cpp
+new file mode 100644
+index 0000000..66066c6
+--- /dev/null
++++ b/components/bq76952/bq76952_status.cpp
+@@ -0,0 +1,158 @@
++#include "bq76952_status.h"
++
++#include <cstring>
++
++#include "bq76952_registers.h"
++
++namespace bq76952_core {
++
++namespace {
++namespace hw = registers;
++
++bool append_text(char *buffer, size_t buffer_size, size_t &length, const char *text) {
++  if (buffer == nullptr || buffer_size == 0 || text == nullptr) {
++    return false;
++  }
++  const size_t text_length = std::strlen(text);
++  const size_t separator_length = length == 0 ? 0 : 1;
++  if (length + separator_length + text_length >= buffer_size) {
++    buffer[buffer_size - 1] = '\0';
++    return false;
++  }
++  if (separator_length != 0) {
++    buffer[length++] = ',';
++  }
++  std::memcpy(buffer + length, text, text_length);
++  length += text_length;
++  buffer[length] = '\0';
++  return true;
++}
++
++}  // namespace
++
++OperatingState decode_operating_state(uint16_t control_status, uint16_t battery_status) {
++  if ((battery_status & hw::bits::battery_status::CONFIG_UPDATE) != 0) {
++    return OperatingState::CONFIG_UPDATE;
++  }
++  if ((control_status & hw::bits::control_status::DEEP_SLEEP) != 0) {
++    return OperatingState::DEEP_SLEEP;
++  }
++  if ((battery_status & hw::bits::battery_status::SHUTDOWN_COMMAND) != 0) {
++    return OperatingState::SHUTDOWN_PENDING;
++  }
++  if ((battery_status & hw::bits::battery_status::SLEEP) != 0) {
++    return OperatingState::SLEEP;
++  }
++  return OperatingState::NORMAL;
++}
++
++uint32_t decode_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c) {
++  uint32_t flags = FAULT_NONE;
++  if ((safety_a & hw::bits::protection_a::CUV) != 0) flags |= FAULT_CELL_UNDERVOLTAGE;
++  if ((safety_a & hw::bits::protection_a::COV) != 0) flags |= FAULT_CELL_OVERVOLTAGE;
++  if ((safety_a & hw::bits::protection_a::OCC) != 0) flags |= FAULT_CHARGE_OVERCURRENT;
++  if ((safety_a & hw::bits::protection_a::OCD1) != 0) flags |= FAULT_DISCHARGE_OVERCURRENT;
++  if ((safety_a & hw::bits::protection_a::OCD2) != 0) flags |= FAULT_DISCHARGE_SEVERE_OVERCURRENT;
++  if ((safety_a & hw::bits::protection_a::SCD) != 0) flags |= FAULT_DISCHARGE_SHORT_CIRCUIT;
++  if ((safety_c & hw::bits::protection_c::OCD3) != 0) flags |= FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
++  if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) flags |= FAULT_PRECHARGE_TIMEOUT;
++  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) flags |= FAULT_TEMPERATURE;
++  if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) flags |= FAULT_PERMANENT_FAILURE;
++  return flags;
++}
++
++Fault primary_fault(uint32_t active_flags) {
++  if ((active_flags & FAULT_PERMANENT_FAILURE) != 0) return Fault::PERMANENT_FAILURE;
++  if ((active_flags & FAULT_DISCHARGE_SHORT_CIRCUIT) != 0) return Fault::DISCHARGE_SHORT_CIRCUIT;
++  if ((active_flags & FAULT_CELL_OVERVOLTAGE) != 0) return Fault::CELL_OVERVOLTAGE;
++  if ((active_flags & FAULT_CELL_UNDERVOLTAGE) != 0) return Fault::CELL_UNDERVOLTAGE;
++  if ((active_flags & FAULT_DISCHARGE_SEVERE_OVERCURRENT) != 0) return Fault::DISCHARGE_SEVERE_OVERCURRENT;
++  if ((active_flags & FAULT_CHARGE_OVERCURRENT) != 0) return Fault::CHARGE_OVERCURRENT;
++  if ((active_flags & FAULT_DISCHARGE_OVERCURRENT) != 0) return Fault::DISCHARGE_OVERCURRENT;
++  if ((active_flags & FAULT_DISCHARGE_SUSTAINED_OVERCURRENT) != 0) return Fault::DISCHARGE_SUSTAINED_OVERCURRENT;
++  if ((active_flags & FAULT_TEMPERATURE) != 0) return Fault::TEMPERATURE;
++  if ((active_flags & FAULT_PRECHARGE_TIMEOUT) != 0) return Fault::PRECHARGE_TIMEOUT;
++  return Fault::NONE;
++}
++
++FaultSnapshot make_fault_snapshot(uint32_t active_flags, uint32_t latched_flags) {
++  return {primary_fault(active_flags), active_flags, latched_flags};
++}
++
++const char *operating_state_to_string(OperatingState state) {
++  switch (state) {
++    case OperatingState::NORMAL:
++      return "normal";
++    case OperatingState::SLEEP:
++      return "sleep";
++    case OperatingState::DEEP_SLEEP:
++      return "deep_sleep";
++    case OperatingState::CONFIG_UPDATE:
++      return "config_update";
++    case OperatingState::SHUTDOWN_PENDING:
++      return "shutdown_pending";
++    default:
++      return "unknown";
++  }
++}
++
++const char *fault_to_string(Fault fault) {
++  switch (fault) {
++    case Fault::PERMANENT_FAILURE:
++      return "permanent_failure";
++    case Fault::DISCHARGE_SHORT_CIRCUIT:
++      return "discharge_short_circuit";
++    case Fault::CELL_OVERVOLTAGE:
++      return "cell_overvoltage";
++    case Fault::CELL_UNDERVOLTAGE:
++      return "cell_undervoltage";
++    case Fault::DISCHARGE_SEVERE_OVERCURRENT:
++      return "discharge_severe_overcurrent";
++    case Fault::CHARGE_OVERCURRENT:
++      return "charge_overcurrent";
++    case Fault::DISCHARGE_OVERCURRENT:
++      return "discharge_overcurrent";
++    case Fault::DISCHARGE_SUSTAINED_OVERCURRENT:
++      return "discharge_sustained_overcurrent";
++    case Fault::TEMPERATURE:
++      return "temperature";
++    case Fault::PRECHARGE_TIMEOUT:
++      return "precharge_timeout";
++    default:
++      return "none";
++  }
++}
++
++size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_size) {
++  if (buffer == nullptr || buffer_size == 0) {
++    return 0;
++  }
++  buffer[0] = '\0';
++  size_t length = 0;
++  const struct {
++    uint32_t flag;
++    const char *name;
++  } entries[] = {
++      {FAULT_CELL_UNDERVOLTAGE, "cell_undervoltage"},
++      {FAULT_CELL_OVERVOLTAGE, "cell_overvoltage"},
++      {FAULT_CHARGE_OVERCURRENT, "charge_overcurrent"},
++      {FAULT_DISCHARGE_OVERCURRENT, "discharge_overcurrent"},
++      {FAULT_DISCHARGE_SEVERE_OVERCURRENT, "discharge_severe_overcurrent"},
++      {FAULT_DISCHARGE_SUSTAINED_OVERCURRENT, "discharge_sustained_overcurrent"},
++      {FAULT_DISCHARGE_SHORT_CIRCUIT, "discharge_short_circuit"},
++      {FAULT_TEMPERATURE, "temperature"},
++      {FAULT_PRECHARGE_TIMEOUT, "precharge_timeout"},
++      {FAULT_PERMANENT_FAILURE, "permanent_failure"},
++  };
++  for (const auto &entry : entries) {
++    if ((active_flags & entry.flag) != 0 && !append_text(buffer, buffer_size, length, entry.name)) {
++      return length;
++    }
++  }
++  if (length == 0) {
++    append_text(buffer, buffer_size, length, "none");
++  }
++  return length;
++}
++
++}  // namespace bq76952_core
+diff --git a/components/bq76952/bq76952_status.h b/components/bq76952/bq76952_status.h
+new file mode 100644
+index 0000000..8d1898b
+--- /dev/null
++++ b/components/bq76952/bq76952_status.h
+@@ -0,0 +1,77 @@
++#pragma once
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <limits>
++
++#include "../component_common/status.h"
++
++namespace bq76952_core {
++
++enum class OperatingState : uint8_t {
++  UNKNOWN = 0,
++  NORMAL,
++  SLEEP,
++  DEEP_SLEEP,
++  CONFIG_UPDATE,
++  SHUTDOWN_PENDING,
++};
++
++enum class Fault : uint8_t {
++  NONE = 0,
++  PERMANENT_FAILURE,
++  DISCHARGE_SHORT_CIRCUIT,
++  CELL_OVERVOLTAGE,
++  CELL_UNDERVOLTAGE,
++  DISCHARGE_SEVERE_OVERCURRENT,
++  CHARGE_OVERCURRENT,
++  DISCHARGE_OVERCURRENT,
++  DISCHARGE_SUSTAINED_OVERCURRENT,
++  TEMPERATURE,
++  PRECHARGE_TIMEOUT,
++};
++
++enum FaultFlags : uint32_t {
++  FAULT_NONE = 0,
++  FAULT_CELL_UNDERVOLTAGE = 1U << 0,
++  FAULT_CELL_OVERVOLTAGE = 1U << 1,
++  FAULT_CHARGE_OVERCURRENT = 1U << 2,
++  FAULT_DISCHARGE_OVERCURRENT = 1U << 3,
++  FAULT_DISCHARGE_SEVERE_OVERCURRENT = 1U << 4,
++  FAULT_DISCHARGE_SUSTAINED_OVERCURRENT = 1U << 5,
++  FAULT_DISCHARGE_SHORT_CIRCUIT = 1U << 6,
++  FAULT_TEMPERATURE = 1U << 7,
++  FAULT_PRECHARGE_TIMEOUT = 1U << 8,
++  FAULT_PERMANENT_FAILURE = 1U << 9,
++};
++
++using FaultSnapshot = component_common::FaultSnapshot<Fault, uint32_t>;
++
++struct Snapshot {
++  component_common::LifecycleState lifecycle{component_common::LifecycleState::DISCONNECTED};
++  OperatingState operating_state{OperatingState::UNKNOWN};
++  FaultSnapshot faults{};
++  bool output_enabled{false};
++
++  std::array<int16_t, 16> cell_voltage_mv{};
++  uint8_t cell_count{0};
++  int32_t stack_voltage_mv{0};
++  int32_t pack_voltage_mv{0};
++  int32_t load_detect_voltage_mv{0};
++  float current_a{0.0f};
++  float state_of_charge_percent{0.0f};
++  float learned_capacity_ah{std::numeric_limits<float>::quiet_NaN()};
++  float die_temperature_c{0.0f};
++  std::array<float, 3> thermistor_temperature_c{};
++};
++
++OperatingState decode_operating_state(uint16_t control_status, uint16_t battery_status);
++uint32_t decode_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c);
++Fault primary_fault(uint32_t active_flags);
++FaultSnapshot make_fault_snapshot(uint32_t active_flags, uint32_t latched_flags = 0);
++const char *operating_state_to_string(OperatingState state);
++const char *fault_to_string(Fault fault);
++size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_size);
++
++}  // namespace bq76952_core
+diff --git a/components/bq76952/test_config.yaml b/components/bq76952/test_config.yaml
+new file mode 100644
+index 0000000..1bd62e1
+--- /dev/null
++++ b/components/bq76952/test_config.yaml
+@@ -0,0 +1,137 @@
++esphome:
++  name: bq76952-test
++  min_version: 2026.5.3
++
++esp32:
++  board: esp32-s3-devkitc-1
++  framework:
++    type: esp-idf
++
++external_components:
++  - source:
++      type: local
++      path: ..
++    refresh: 0s
++    components: [ component_common, bq76952 ]
++
++logger:
++
++i2c:
++  id: i2c_ext
++  sda: GPIO35
++  scl: GPIO36
++  frequency: 400kHz
++
++bq76952:
++  i
