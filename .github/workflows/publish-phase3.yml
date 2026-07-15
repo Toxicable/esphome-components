@@ -35,7 +35,7 @@ jobs:
           git apply /tmp/phase3.patch
           git diff --check
 
-      - name: Validate host interfaces
+      - name: Check Python syntax
         shell: bash
         run: |
           set -euo pipefail
@@ -44,7 +44,21 @@ jobs:
             components/component_common/__init__.py \
             components/bq25756/__init__.py \
             components/programmable_load/__init__.py
-          bash ./check_host.bash
+
+      - name: Run host interface tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd target
+          bash ./check_host.bash 2>&1 | tee ../phase3-host.log
+
+      - name: Upload host failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-host-failure
+          path: phase3-host.log
+          if-no-files-found: ignore
 
       - name: Publish typed charger branch
         shell: bash
