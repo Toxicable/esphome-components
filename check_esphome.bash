@@ -53,7 +53,15 @@ for config in "${configs[@]}"; do
       ;;
     *)
       echo "$config: compiling"
-      esphome compile "$config"
+      log_file="$(mktemp "${TMPDIR:-/tmp}/esphome-compile.XXXXXX")"
+      if ! esphome compile "$config" >"$log_file" 2>&1; then
+        echo "$config: compile failed" >&2
+        tail -n 200 "$log_file" >&2
+        rm -f "$log_file"
+        exit 1
+      fi
+      rm -f "$log_file"
+      echo "$config: compiled"
       ;;
   esac
 done
