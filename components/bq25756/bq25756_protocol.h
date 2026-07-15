@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "../component_common/bit_field.h"
+
 namespace bq25756_core {
 
 static constexpr uint8_t REG00_CHARGE_VOLTAGE_LIMIT = 0x00;
@@ -70,6 +72,15 @@ static constexpr uint16_t REG08_VAC_DPM_MASK = 0x3FFC;
 static constexpr float VBAT_OV_RISING_MULTIPLIER = 1.04f;
 static constexpr float VBAT_OV_FALLING_MULTIPLIER = 1.02f;
 
+namespace fields {
+using Watchdog = component_common::RegisterField<uint8_t, REG15_WATCHDOG_MASK>;
+using PartNumber = component_common::RegisterField<uint8_t, PART_NUM_MASK>;
+using ChargeVoltageLimit = component_common::RegisterField<uint16_t, REG00_VFB_REG_MASK>;
+using ChargeCurrentLimit = component_common::RegisterField<uint16_t, REG02_ICHG_REG_MASK>;
+using InputCurrentLimit = component_common::RegisterField<uint16_t, REG06_IAC_DPM_MASK>;
+using InputVoltageLimit = component_common::RegisterField<uint16_t, REG08_VAC_DPM_MASK>;
+}  // namespace fields
+
 struct Reg16Value {
   uint16_t raw_le{0};
   uint8_t lsb{0};
@@ -120,7 +131,7 @@ const char *charge_status_to_string(uint8_t charge_status);
 const char *ts_status_to_string(uint8_t ts_status);
 const char *mppt_status_to_string(uint8_t mppt_status);
 Measurements decode_measurements(const Reg16Value &iac, const Reg16Value &ibat, const Reg16Value &vac,
-                                  const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb);
+                                 const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb);
 float vfb_reg_target_mv(uint16_t reg00_raw);
 uint16_t encode_charge_voltage_limit_mv(uint16_t mv);
 uint16_t encode_charge_current_limit_ma(uint16_t ma);
