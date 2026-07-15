@@ -58,3 +58,11 @@ jobs:
 
       - name: Compile or validate fixture
         run: bash ./check_esphome.bash "${{ matrix.config }}"
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esphome-failure-${{ matrix.name }}
+          path: esphome-failure.log
+          if-no-files-found: ignore
