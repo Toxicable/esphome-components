@@ -27,33 +27,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat payload/.phase4/plain.0{0..8} > phase4.patch
-          sha256sum phase4.patch > phase4-patch.sha256
-          wc -c phase4.patch
-          cat phase4-patch.sha256
-
-      - name: Upload reconstructed patch and chunks
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase4-reconstructed-patch
-          path: |
-            phase4.patch
-            phase4-patch.sha256
-            payload/.phase4/plain.00
-            payload/.phase4/plain.01
-            payload/.phase4/plain.02
-            payload/.phase4/plain.03
-            payload/.phase4/plain.04
-            payload/.phase4/plain.05
-            payload/.phase4/plain.06
-            payload/.phase4/plain.07
-            payload/.phase4/plain.08
+          cat payload/.phase4/plain.0{0..8} > phase4.raw.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          raw = Path('phase4.raw.patch').read_bytes()
+          assert len(raw) == 156405, len(raw)
+          start = 55251
+          duplicate_length = 17447
+          fixed = raw[:start] + raw[start + duplicate_length:]
+          Path('phase4.patch').write_bytes(fixed)
+          PY
+          printf '%s  %s\n' '19fe6ebf8067056adc6ab283e00e4ea57955f31434f86c3310528872c874ad7b' phase4.patch | sha256sum --check
+          test "$(wc -c < phase4.patch)" -eq 138958
 
       - name: Apply BQ consistency patch
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s  %s\n' '2232d0862ccf991784ebf537a95e592477b37db93d3027ddd258c7a597476fd2' phase4.patch | sha256sum --check
           cd target
           git apply --check ../phase4.patch
           git apply --index ../phase4.patch
