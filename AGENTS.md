@@ -14,6 +14,8 @@ Always commit and push changes after you've done a batch - a batch is what makes
 - Source components live under `components/`; prefer scoped changes there unless asked otherwise.
 - Run `./check.bash` to perform `clangd --check` over C/C++ sources (or pass a file path for a single-file check).
 - Run `./check_py.bash` to syntax-check Python files via `py_compile` without creating `__pycache__` artifacts in the repo.
+- Run `bash ./check_host.bash` after changing host-independent helpers, bus/protocol/service files, or their tests.
+- Run `bash ./check_esphome.bash` in the devcontainer after changing public YAML, `AUTO_LOAD`, shared helpers, or external-component source discovery.
 
 ## Cross-component learned project notes
 - Component READMEs should present a single configuration example with optional items commented out instead of separate basic/full examples.
@@ -34,6 +36,9 @@ Always commit and push changes after you've done a batch - a batch is what makes
 - ESPHome I2C `ErrorCode` value `2` maps to `ERROR_NOT_ACKNOWLEDGED` (target did not ACK address/data), useful when logs print numeric errors only.
 - Component READMEs should include an `external_components` snippet; add an explicit `i2c` block when the component depends on I2C.
 - README `external_components` examples should use `source: github://Toxicable/esphome-components@main` with `refresh: 0s`, and list the specific component in `components: [ ... ]`.
+- Internal shared C++ code must live in an ESPHome component package, be requested through `AUTO_LOAD`, and also appear in every explicit external-component allowlist that can load a consumer.
+- Host-independent core code should include shared packages through sibling-relative paths such as `../component_common/bit_field.h`; that path works both in the repository/STM32 builds and after ESPHome copies packages under `esphome/components/`.
+- Shared helper packages must remain policy-free and should not own chip addresses, reset values, fault enums, scaling, or configuration defaults.
 - ESPHome `number.number_schema()` accepts metadata only (no `min_value`/`max_value`/`step`); bounds belong in `number.new_number(...)`.
 - `.clang-format` should keep a JS-like feel for C++ formatting (2-space indents, attached braces, and tighter wrapping).
 - Prefer monolith ESPHome integrations in component `__init__.py` (single `<component_name>:` YAML block with optional nested entity configs) over split platform modules (`sensor.py`, `switch.py`, `number.py`, etc.).
