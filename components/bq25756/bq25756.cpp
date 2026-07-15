@@ -246,7 +246,7 @@ void BQ25756Component::update() {
     TAG,
     "IAC=%.1f mA (0x%04X [%02X %02X]), IBAT=%.0f mA (0x%04X [%02X %02X]), "
     "VAC=%.0f mV (0x%04X [%02X %02X]), VBAT=%.0f mV (0x%04X [%02X %02X]), "
-    "TS=%.3f%% (0x%04X [%02X %02X])%s",
+    "TS=%.3f%% (0x%04X [%02X %02X])",
     measurements.iac_ma,
     measurements.iac.raw_le,
     measurements.iac.lsb,

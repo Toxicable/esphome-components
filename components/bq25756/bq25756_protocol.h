@@ -41,10 +41,12 @@ static constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
 static constexpr uint8_t REG2B_ADC_SAMPLE_MASK = 0x30;
 static constexpr uint8_t REG2B_ADC_AVG_MASK = 0x08;
 static constexpr uint8_t REG2B_ADC_AVG_INIT_MASK = 0x04;
-static constexpr uint8_t REG2B_ADC_OWNED_MASK =
-  REG2B_ADC_EN_MASK | REG2B_ADC_RATE_MASK | REG2B_ADC_SAMPLE_MASK | REG2B_ADC_AVG_MASK |
-  REG2B_ADC_AVG_INIT_MASK;
-static constexpr uint8_t REG2B_ADC_CONTINUOUS_15_BIT = REG2B_ADC_EN_MASK;
+// ADC_AVG_INIT is a self-clearing trigger, not a persistent configuration bit.
+static constexpr uint8_t REG2B_ADC_PERSISTENT_OWNED_MASK =
+  REG2B_ADC_EN_MASK | REG2B_ADC_RATE_MASK | REG2B_ADC_SAMPLE_MASK | REG2B_ADC_AVG_MASK;
+static constexpr uint8_t REG2B_ADC_CONTINUOUS_15_BIT = REG2B_ADC_EN_MASK | REG2B_ADC_AVG_MASK;
+static constexpr uint8_t REG2B_ADC_CONTINUOUS_15_BIT_AVG_INIT =
+  REG2B_ADC_CONTINUOUS_15_BIT | REG2B_ADC_AVG_INIT_MASK;
 static constexpr uint8_t REG2C_IAC_ADC_DIS_MASK = 0x80;
 static constexpr uint8_t REG2C_IBAT_ADC_DIS_MASK = 0x40;
 static constexpr uint8_t REG2C_VAC_ADC_DIS_MASK = 0x20;
@@ -116,11 +118,17 @@ struct ChargePrecheckSnapshot {
   bool en_rev{false};
 };
 
-const char *charge_status_to_string(uint8_t charge_status);
-const char *ts_status_to_string(uint8_t ts_status);
-const char *mppt_status_to_string(uint8_t mppt_status);
-Measurements decode_measurements(const Reg16Value &iac, const Reg16Value &ibat, const Reg16Value &vac,
-                                  const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb);
+const char* charge_status_to_string(uint8_t charge_status);
+const char* ts_status_to_string(uint8_t ts_status);
+const char* mppt_status_to_string(uint8_t mppt_status);
+Measurements decode_measurements(
+  const Reg16Value& iac,
+  const Reg16Value& ibat,
+  const Reg16Value& vac,
+  const Reg16Value& vbat,
+  const Reg16Value& ts,
+  const Reg16Value& vfb
+);
 float vfb_reg_target_mv(uint16_t reg00_raw);
 uint16_t encode_charge_voltage_limit_mv(uint16_t mv);
 uint16_t encode_charge_current_limit_ma(uint16_t ma);
