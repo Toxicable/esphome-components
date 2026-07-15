@@ -5,8 +5,9 @@ on:
   pull_request:
 
 jobs:
-  clangd-check:
+  repository-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,7 +16,11 @@ jobs:
         run: |
           mkdir -p "$HOME/.codex" "$HOME/.ssh"
 
-      - name: Run clangd checks in devcontainer
+      - name: Run repository checks in devcontainer
         uses: devcontainers/ci@v0.3
         with:
-          runCmd: ./check.bash
+          runCmd: |
+            ./check_py.bash
+            bash ./check_host.bash
+            ./check.bash
+            bash ./check_esphome.bash
