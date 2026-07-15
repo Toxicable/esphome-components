@@ -1,0 +1,426 @@
+uired(CONF_THRESHOLD_MV): cv.one_of(*SCD_THRESHOLD_OPTIONS, int=True),
++        cv.Required(CONF_DELAY_US): _validate_scd_delay_us,
++        cv.Required(CONF_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
++    }
++)
++
++TEMPERATURE_PROTECTION_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_CHARGE_MINIMUM_C): cv.int_range(min=-128, max=127),
++        cv.Required(CONF_CHARGE_MAXIMUM_C): cv.int_range(min=-128, max=127),
++        cv.Required(CONF_DISCHARGE_MINIMUM_C): cv.int_range(min=-128, max=127),
++        cv.Required(CONF_DISCHARGE_MAXIMUM_C): cv.int_range(min=-128, max=127),
++        cv.Required(CONF_RECOVERY_HYSTERESIS_C): cv.int_range(min=0, max=255),
++    }
++)
++
++PROTECTION_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_CELL_UNDERVOLTAGE): CELL_VOLTAGE_PROTECTION_SCHEMA,
++        cv.Required(CONF_CELL_OVERVOLTAGE): CELL_VOLTAGE_PROTECTION_SCHEMA,
++        cv.Required(CONF_CHARGE_OVERCURRENT): CURRENT_PROTECTION_SCHEMA,
++        cv.Required(CONF_DISCHARGE_OVERCURRENT): CURRENT_PROTECTION_SCHEMA,
++        cv.Required(CONF_DISCHARGE_SEVERE_OVERCURRENT): CURRENT_PROTECTION_SCHEMA,
++        cv.Required(
++            CONF_DISCHARGE_SUSTAINED_OVERCURRENT
++        ): SUSTAINED_CURRENT_PROTECTION_SCHEMA,
++        cv.Required(CONF_DISCHARGE_SHORT_CIRCUIT): SHORT_CIRCUIT_PROTECTION_SCHEMA,
++        cv.Required(CONF_TEMPERATURE): TEMPERATURE_PROTECTION_SCHEMA,
++        cv.Required(CONF_CURRENT_RECOVERY_TIME_S): cv.int_range(min=0, max=255),
++    }
++)
++
++SOC_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_EMPTY_CELL_VOLTAGE_MV): cv.int_range(min=2500, max=4200),
++        cv.Required(CONF_FULL_CELL_VOLTAGE_MV): cv.int_range(min=2500, max=4500),
++    }
++)
++
++VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
++    unit_of_measurement=UNIT_VOLT,
++    accuracy_decimals=3,
++    device_class=DEVICE_CLASS_VOLTAGE,
++    state_class=STATE_CLASS_MEASUREMENT,
++)
++
++
++def _validate_config(config):
++    cell_count = config[CONF_CELL_COUNT]
++    precharge = config[CONF_FET][CONF_PRECHARGE]
++    predischarge = config[CONF_FET][CONF_PREDISCHARGE]
++    balancing = config[CONF_BALANCING]
++    protections = config[CONF_PROTECTIONS]
++    soc = config[CONF_SOC]
++
++    if soc[CONF_EMPTY_CELL_VOLTAGE_MV] >= soc[CONF_FULL_CELL_VOLTAGE_MV]:
++        raise cv.Invalid("soc.empty_cell_voltage_mv must be below soc.full_cell_voltage_mv")
++    temperature = protections[CONF_TEMPERATURE]
++    thermistors = config[CONF_THERMISTORS]
++
++    if (
++        precharge[CONF_ENABLED]
++        and precharge[CONF_STOP_CELL_VOLTAGE_MV]
++        <= precharge[CONF_START_CELL_VOLTAGE_MV]
++    ):
++        raise cv.Invalid(
++            "precharge stop_cell_voltage_mv must exceed start_cell_voltage_mv"
++        )
++
++    if (
++        predischarge[CONF_ENABLED]
++        and predischarge[CONF_TIMEOUT_MS] == 0
++        and predischarge[CONF_STOP_DELTA_MV] == 0
++    ):
++        raise cv.Invalid(
++            "enabled predischarge requires a non-zero timeout_ms or stop_delta_mv"
++        )
++
++    if balancing[CONF_STOP_DELTA_MV] > balancing[CONF_START_DELTA_MV]:
++        raise cv.Invalid("balancing stop_delta_mv must not exceed start_delta_mv")
++    if balancing[CONF_MAXIMUM_BALANCED_CELLS] > cell_count:
++        raise cv.Invalid("maximum_balanced_cells must not exceed cell_count")
++    if (
++        balancing[CONF_MINIMUM_TEMPERATURE_C]
++        >= balancing[CONF_MAXIMUM_TEMPERATURE_C]
++    ):
++        raise cv.Invalid(
++            "balancing minimum_temperature_c must be below maximum_temperature_c"
++        )
++
++    if temperature[CONF_CHARGE_MINIMUM_C] >= temperature[CONF_CHARGE_MAXIMUM_C]:
++        raise cv.Invalid("charge_minimum_c must be below charge_maximum_c")
++    if (
++        temperature[CONF_DISCHARGE_MINIMUM_C]
++        >= temperature[CONF_DISCHARGE_MAXIMUM_C]
++    ):
++        raise cv.Invalid("discharge_minimum_c must be below discharge_maximum_c")
++
++    normal_ocd = protections[CONF_DISCHARGE_OVERCURRENT]
++    severe_ocd = protections[CONF_DISCHARGE_SEVERE_OVERCURRENT]
++    if severe_ocd[CONF_THRESHOLD_A] <= normal_ocd[CONF_THRESHOLD_A]:
++        raise cv.Invalid(
++            "discharge_severe_overcurrent threshold_a must exceed discharge_overcurrent threshold_a"
++        )
++    if severe_ocd[CONF_DELAY_MS] >= normal_ocd[CONF_DELAY_MS]:
++        raise cv.Invalid(
++            "discharge_severe_overcurrent delay_ms must be shorter than discharge_overcurrent delay_ms"
++        )
++
++    for index, key in enumerate(CELL_VOLTAGE_KEYS, start=1):
++        if key in config and index > cell_count:
++            raise cv.Invalid(f"{key} requires cell_count >= {index}")
++
++    sensor_modes = (
++        (CONF_TS1_TEMPERATURE, CONF_TS1),
++        (CONF_TS2_TEMPERATURE, CONF_TS2),
++        (CONF_TS3_TEMPERATURE, CONF_TS3),
++    )
++    for sensor_key, mode_key in sensor_modes:
++        if (
++            sensor_key in config
++            and str(thermistors[mode_key]) == "disabled"
++        ):
++            raise cv.Invalid(
++                f"{sensor_key} requires thermistors.{mode_key} to be enabled"
++            )
++
++    return config
++
++
++MANUFACTURING_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_PROGRAM_FACTORY_OTP): button.button_schema(
++            BQ76952ProgramFactoryOtpButton,
++            entity_category=ENTITY_CATEGORY_CONFIG,
++        ),
++    }
++)
++
++
++schema = {
++    cv.GenerateID(): cv.declare_id(BQ76952Component),
++    cv.Required(CONF_CELL_COUNT): cv.int_range(min=3, max=16),
++    cv.Required(CONF_CELL_CHEMISTRY): cv.enum(
++        CELL_CHEMISTRY_OPTIONS, lower=True
++    ),
++    cv.Required(CONF_SENSE_RESISTOR_MILLIOHM): cv.float_range(min=0.001),
++    cv.Required(CONF_I2C_CRC_ENABLED): cv.boolean,
++    cv.Required(CONF_CURRENT_GAIN_POLICY): cv.enum(
++        CURRENT_GAIN_POLICY_OPTIONS, lower=True
++    ),
++    cv.Required(CONF_REGULATORS): REGULATOR_SCHEMA,
++    cv.Required(CONF_THERMISTORS): THERMISTOR_SCHEMA,
++    cv.Required(CONF_FET): FET_SCHEMA,
++    cv.Required(CONF_BALANCING): BALANCING_SCHEMA,
++    cv.Required(CONF_PROTECTIONS): PROTECTION_SCHEMA,
++    cv.Required(CONF_SOC): SOC_SCHEMA,
++    cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
++    cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
++    cv.Optional(CONF_LD_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
++    cv.Optional(CONF_LARGEST_INTERCELL_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
++    cv.Optional(CONF_CURRENT): sensor.sensor_schema(
++        unit_of_measurement=UNIT_AMPERE,
++        accuracy_decimals=3,
++        device_class=DEVICE_CLASS_CURRENT,
++        state_class=STATE_CLASS_MEASUREMENT,
++    ),
++    cv.Optional(CONF_STATE_OF_CHARGE): sensor.sensor_schema(
++        unit_of_measurement=UNIT_PERCENT,
++        accuracy_decimals=1,
++        device_class=DEVICE_CLASS_BATTERY,
++        state_class=STATE_CLASS_MEASUREMENT,
++    ),
++    cv.Optional(CONF_LEARNED_CAPACITY): sensor.sensor_schema(
++        unit_of_measurement="Ah",
++        accuracy_decimals=2,
++        state_class=STATE_CLASS_MEASUREMENT,
++        entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++    ),
++    cv.Optional(CONF_DIE_TEMPERATURE): sensor.sensor_schema(
++        unit_of_measurement=UNIT_CELSIUS,
++        accuracy_decimals=1,
++        device_class=DEVICE_CLASS_TEMPERATURE,
++        state_class=STATE_CLASS_MEASUREMENT,
++    ),
++    cv.Optional(CONF_TS1_TEMPERATURE): sensor.sensor_schema(
++        unit_of_measurement=UNIT_CELSIUS,
++        accuracy_decimals=1,
++        device_class=DEVICE_CLASS_TEMPERATURE,
++        state_class=STATE_CLASS_MEASUREMENT,
++    ),
++    cv.Optional(CONF_TS2_TEMPERATURE): sensor.sensor_schema(
++        unit_of_measurement=UNIT_CELSIUS,
++        accuracy_decimals=1,
++        device_class=DEVICE_CLASS_TEMPERATURE,
++        state_class=STATE_CLASS_MEASUREMENT,
++    ),
++    cv.Optional(CONF_TS3_TEMPERATURE): sensor.sensor_schema(
++        unit_of_measurement=UNIT_CELSIUS,
++        accuracy_decimals=1,
++        device_class=DEVICE_CLASS_TEMPERATURE,
++        state_class=STATE_CLASS_MEASUREMENT,
++    ),
++    cv.Optional(CONF_LIFECYCLE): text_sensor.text_sensor_schema(
++        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
++    ),
++    cv.Optional(CONF_STATE): text_sensor.text_sensor_schema(),
++    cv.Optional(CONF_FAULT): text_sensor.text_sensor_schema(),
++    cv.Optional(CONF_FAULT_FLAGS): text_sensor.text_sensor_schema(
++        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
++    ),
++    cv.Optional(CONF_CAPACITY_CALIBRATION_STATUS): text_sensor.text_sensor_schema(
++        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
++    ),
++    cv.Optional(CONF_OUTPUT_ENABLED_CONTROL): switch_.switch_schema(
++        BQ76952OutputEnabledSwitch, entity_category=ENTITY_CATEGORY_CONFIG
++    ),
++    cv.Optional(CONF_CLEAR_ALARMS): button.button_schema(
++        BQ76952ClearAlarmsButton, entity_category=ENTITY_CATEGORY_CONFIG
++    ),
++    cv.Optional(CONF_MANUFACTURING): MANUFACTURING_SCHEMA,
++}
++
++for key in CELL_VOLTAGE_KEYS:
++    schema[cv.Optional(key)] = VOLTAGE_SENSOR_SCHEMA
++
++CONFIG_SCHEMA = cv.All(
++    cv.Schema(schema)
++    .extend(cv.polling_component_schema("1s"))
++    .extend(i2c.i2c_device_schema(default_address=0x08)),
++    _validate_config,
++)
+diff --git a/components/bq76952/_types.py b/components/bq76952/_types.py
+new file mode 100644
+index 0000000..181003a
+--- /dev/null
++++ b/components/bq76952/_types.py
+@@ -0,0 +1,49 @@
++import esphome.codegen as cg
++from esphome.components import button, i2c, switch as switch_
++
++bq76952_ns = cg.esphome_ns.namespace("bq76952")
++
++BQ76952CellChemistry = bq76952_ns.enum("BQ76952CellChemistry", is_class=True)
++BQ76952CurrentGainPolicy = bq76952_ns.enum(
++    "BQ76952CurrentGainPolicy", is_class=True
++)
++BQ76952ThermistorMode = bq76952_ns.enum("BQ76952ThermistorMode", is_class=True)
++
++BQ76952RegulatorConfig = bq76952_ns.struct("BQ76952RegulatorConfig")
++BQ76952ThermistorConfig = bq76952_ns.struct("BQ76952ThermistorConfig")
++BQ76952PrechargeConfig = bq76952_ns.struct("BQ76952PrechargeConfig")
++BQ76952PredischargeConfig = bq76952_ns.struct("BQ76952PredischargeConfig")
++BQ76952FetConfig = bq76952_ns.struct("BQ76952FetConfig")
++BQ76952BalancingConfig = bq76952_ns.struct("BQ76952BalancingConfig")
++BQ76952CellVoltageProtectionConfig = bq76952_ns.struct(
++    "BQ76952CellVoltageProtectionConfig"
++)
++BQ76952CurrentProtectionConfig = bq76952_ns.struct(
++    "BQ76952CurrentProtectionConfig"
++)
++BQ76952SustainedCurrentProtectionConfig = bq76952_ns.struct(
++    "BQ76952SustainedCurrentProtectionConfig"
++)
++BQ76952ShortCircuitProtectionConfig = bq76952_ns.struct(
++    "BQ76952ShortCircuitProtectionConfig"
++)
++BQ76952TemperatureProtectionConfig = bq76952_ns.struct(
++    "BQ76952TemperatureProtectionConfig"
++)
++BQ76952ProtectionConfig = bq76952_ns.struct("BQ76952ProtectionConfig")
++BQ76952SocConfig = bq76952_ns.struct("BQ76952SocConfig")
++BQ76952Config = bq76952_ns.struct("BQ76952Config")
++
++BQ76952I2CTransport = bq76952_ns.class_("BQ76952I2CTransport", i2c.I2CDevice)
++BQ76952Component = bq76952_ns.class_(
++    "BQ76952Component", cg.PollingComponent, BQ76952I2CTransport
++)
++BQ76952OutputEnabledSwitch = bq76952_ns.class_(
++    "BQ76952OutputEnabledSwitch", switch_.Switch
++)
++BQ76952ClearAlarmsButton = bq76952_ns.class_(
++    "BQ76952ClearAlarmsButton", button.Button
++)
++BQ76952ProgramFactoryOtpButton = bq76952_ns.class_(
++    "BQ76952ProgramFactoryOtpButton", button.Button
++)
+diff --git a/components/bq76952/bq76952.cpp b/components/bq76952/bq76952.cpp
+index 4e07eeb..cbdcfdd 100644
+--- a/components/bq76952/bq76952.cpp
++++ b/components/bq76952/bq76952.cpp
+@@ -3,7 +3,6 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <cstdio>
+-#include <string>
+ 
+ #include "esphome/core/log.h"
+ 
+@@ -12,32 +11,6 @@ namespace bq76952 {
+ 
+ namespace {
+ static const char *const TAG = "bq76952";
+-
+-const char *state_name(BQ76952OperatingState state) {
+-  switch (state) {
+-    case BQ76952OperatingState::OFFLINE:
+-      return "offline";
+-    case BQ76952OperatingState::NORMAL:
+-      return "normal";
+-    case BQ76952OperatingState::SLEEP:
+-      return "sleep";
+-    case BQ76952OperatingState::DEEP_SLEEP:
+-      return "deep_sleep";
+-    case BQ76952OperatingState::CONFIG_UPDATE:
+-      return "config_update";
+-    case BQ76952OperatingState::SHUTDOWN_PENDING:
+-      return "shutdown_pending";
+-    default:
+-      return "unknown";
+-  }
+-}
+-
+-void append_fault(std::string &faults, const char *name) {
+-  if (!faults.empty()) {
+-    faults += ',';
+-  }
+-  faults += name;
+-}
+ }  // namespace
+ 
+ BQ76952Component::BQ76952Component() : service_(*this) {}
+@@ -97,6 +70,10 @@ void BQ76952Component::set_ts3_temperature_sensor(sensor::Sensor *sensor) {
+   this->thermistor_temperature_sensors_[2] = sensor;
+ }
+ 
++void BQ76952Component::set_lifecycle_sensor(text_sensor::TextSensor *sensor) {
++  this->lifecycle_sensor_ = sensor;
++}
++
+ void BQ76952Component::set_state_sensor(text_sensor::TextSensor *sensor) {
+   this->state_sensor_ = sensor;
+ }
+@@ -105,6 +82,10 @@ void BQ76952Component::set_fault_sensor(text_sensor::TextSensor *sensor) {
+   this->fault_sensor_ = sensor;
+ }
+ 
++void BQ76952Component::set_fault_flags_sensor(text_sensor::TextSensor *sensor) {
++  this->fault_flags_sensor_ = sensor;
++}
++
+ void BQ76952Component::set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor) {
+   this->capacity_calibration_status_sensor_ = sensor;
+ }
+@@ -118,22 +99,41 @@ void BQ76952Component::setup() {
+ }
+ 
+ void BQ76952Component::update() {
+-  BQ76952Snapshot snapshot{};
+-  if (!this->service_.poll(snapshot)) {
++  ::bq76952_core::Snapshot snapshot{};
++  const bool valid = this->service_.poll(snapshot);
++  this->publish_lifecycle(snapshot.lifecycle);
++
++  if (!valid) {
+     if (this->state_sensor_ != nullptr) {
+-      this->state_sensor_->publish_state("offline");
++      this->state_sensor_->publish_state("unknown");
++    }
++    if (this->fault_sensor_ != nullptr) {
++      this->fault_sensor_->publish_state("unknown");
++    }
++    if (this->fault_flags_sensor_ != nullptr) {
++      this->fault_flags_sensor_->publish_state("unknown");
+     }
+     this->status_set_warning();
+     return;
+   }
+ 
+   this->publish_snapshot(snapshot);
+-  this->status_clear_warning();
++  if (snapshot.lifecycle == component_common::LifecycleState::READY) {
++    this->status_clear_warning();
++  } else {
++    this->status_set_warning();
++  }
++}
++
++void BQ76952Component::publish_lifecycle(component_common::LifecycleState lifecycle) {
++  if (this->lifecycle_sensor_ != nullptr) {
++    this->lifecycle_sensor_->publish_state(component_common::lifecycle_state_to_string(lifecycle));
++  }
+ }
+ 
+-void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
++void BQ76952Component::publish_snapshot(const ::bq76952_core::Snapshot &snapshot) {
+   if (this->state_sensor_ != nullptr) {
+-    this->state_sensor_->publish_state(state_name(snapshot.state));
++    this->state_sensor_->publish_state(::bq76952_core::operating_state_to_string(snapshot.operating_state));
+   }
+   this->publish_faults(snapshot);
+   if (this->capacity_calibration_status_sensor_ != nullptr) {
+@@ -191,35 +191,15 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
+   }
+ }
+ 
+-void BQ76952Component::publish_faults(const BQ76952Snapshot &snapshot) {
+-  if (this->fault_sensor_ == nullptr) {
+-    return;
++void BQ76952Component::publish_faults(const ::bq76952_core::Snapshot &snapshot) {
++  if (this->fault_sensor_ != nullptr) {
++    this->fault_sensor_->publish_state(::bq76952_core::fault_to_string(snapshot.faults.primary));
++  }
++  if (this->fault_flags_sensor_ != nullptr) {
++    char faults[256];
++    ::bq76952_core::format_fault_flags(snapshot.faults.active_flags, faults, sizeof(faults));
++    this->fault_flags_sensor_->publish_state(faults);
+   }
+-
+-  std::string faults;
+-  const uint32_t flags = snapshot.fault_flags;
+-  if ((flags & BQ76952_FAULT_CELL_UNDERVOLTAGE) != 0)
+-    append_fault(faults, "cell_undervoltage");
+-  if ((flags & BQ76952_FAULT_CELL_OVERVOLTAGE) != 0)
+-    append_fault(faults, "cell_overvoltage");
+-  if ((flags &
