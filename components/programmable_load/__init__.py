@@ -1,13 +1,16 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import button, number, output, sensor, switch as switch_, text_sensor
+from esphome.components import button, number, output, sensor, text_sensor
 from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_CURRENT,
     UNIT_AMPERE,
 )
 
-AUTO_LOAD = ["button", "number", "sensor", "switch", "text_sensor"]
+AUTO_LOAD = ["button", "component_common", "number", "sensor", "text_sensor"]
+
+component_common_ns = cg.global_ns.namespace("component_common")
+ChargerInterface = component_common_ns.class_("ChargerInterface")
 
 programmable_load_ns = cg.esphome_ns.namespace("programmable_load")
 
@@ -95,13 +98,9 @@ CONF_STOP = "stop"
 CONF_RESISTANCE = "resistance"
 
 CONF_BATTERY_CYCLE = "battery_cycle"
-CONF_CHARGER14 = "charger14"
-CONF_CHARGE_ENABLE = "charge_enable"
-CONF_IBAT_CURRENT = "ibat_current"
-CONF_VBAT_VOLTAGE = "vbat_voltage"
-CONF_CHARGE_STATUS = "charge_status"
-CONF_STATUS_FLAGS = "status_flags"
-CONF_CONTROL_TIMEOUT = "control_timeout"
+CONF_CHARGER = "charger"
+CONF_CHARGER_SAMPLE_TIMEOUT = "charger_sample_timeout"
+CONF_CHARGER_CONTROL_TIMEOUT = "charger_control_timeout"
 CONF_DISCHARGE_CURRENT = "discharge_current"
 CONF_DISCHARGE_CUTOFF_VOLTAGE = "discharge_cutoff_voltage"
 CONF_DISCHARGE_CUTOFF_HYSTERESIS = "discharge_cutoff_hysteresis"
@@ -283,24 +282,14 @@ DCR_SCHEMA = cv.Schema(
     }
 )
 
-CHARGER14_SCHEMA = cv.Schema(
-    {
-        cv.Required(CONF_CHARGE_ENABLE): cv.use_id(switch_.Switch),
-        cv.Required(CONF_IBAT_CURRENT): cv.use_id(sensor.Sensor),
-        cv.Required(CONF_VBAT_VOLTAGE): cv.use_id(sensor.Sensor),
-        cv.Required(CONF_CHARGE_STATUS): cv.use_id(text_sensor.TextSensor),
-        cv.Required(CONF_STATUS_FLAGS): cv.use_id(text_sensor.TextSensor),
-        cv.Optional(CONF_SAMPLE_TIMEOUT, default="3s"):
-            cv.positive_time_period_milliseconds,
-        cv.Optional(CONF_CONTROL_TIMEOUT, default="5s"):
-            cv.positive_time_period_milliseconds,
-    }
-)
-
 BATTERY_CYCLE_SCHEMA = cv.Schema(
     {
         cv.GenerateID(): cv.declare_id(BatteryCycle),
-        cv.Required(CONF_CHARGER14): CHARGER14_SCHEMA,
+        cv.Required(CONF_CHARGER): cv.use_id(ChargerInterface),
+        cv.Optional(CONF_CHARGER_SAMPLE_TIMEOUT, default="3s"):
+            cv.positive_time_period_milliseconds,
+        cv.Optional(CONF_CHARGER_CONTROL_TIMEOUT, default="5s"):
+            cv.positive_time_period_milliseconds,
         cv.Required(CONF_DISCHARGE_CURRENT): _positive,
         cv.Required(CONF_DISCHARGE_CUTOFF_VOLTAGE): _positive,
         cv.Optional(CONF_DISCHARGE_CUTOFF_HYSTERESIS, default=0.1):
@@ -572,25 +561,16 @@ async def to_code(config):
 
     cycle_config = procedures.get(CONF_BATTERY_CYCLE)
     if cycle_config is not None:
-        charger = cycle_config[CONF_CHARGER14]
-        charge_enable = await cg.get_variable(charger[CONF_CHARGE_ENABLE])
-        ibat_current = await cg.get_variable(charger[CONF_IBAT_CURRENT])
-        vbat_voltage = await cg.get_variable(charger[CONF_VBAT_VOLTAGE])
-        charge_status = await cg.get_variable(charger[CONF_CHARGE_STATUS])
-        status_flags = await cg.get_variable(charger[CONF_STATUS_FLAGS])
-        cg.add(var.set_charger_enable_switch(charge_enable))
-        cg.add(var.set_charger_current_sensor(ibat_current))
-        cg.add(var.set_charger_voltage_sensor(vbat_voltage))
-        cg.add(var.set_charger_status_sensor(charge_status))
-        cg.add(var.set_charger_flags_sensor(status_flags))
+        charger = await cg.get_variable(cycle_config[CONF_CHARGER])
+        cg.add(var.set_charger(charger))
         cg.add(
             var.set_charger_sample_timeout_ms(
-                charger[CONF_SAMPLE_TIMEOUT].total_milliseconds
+                cycle_config[CONF_CHARGER_SAMPLE_TIMEOUT].total_milliseconds
             )
         )
         cg.add(
             var.set_charger_control_timeout_ms(
-                charger[CONF_CONTROL_TIMEOUT].total_milliseconds
+                cycle_config[CONF_CHARGER_CONTROL_TIMEOUT].total_milliseconds
             )
         )
 

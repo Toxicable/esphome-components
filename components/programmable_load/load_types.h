@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "../component_common/charger.h"
+
 namespace esphome {
 namespace programmable_load {
 
@@ -49,17 +51,6 @@ enum class ChargerCommand : uint8_t {
   ENABLE,
 };
 
-enum class ChargerState : uint8_t {
-  UNKNOWN = 0,
-  NOT_CHARGING,
-  TRICKLE,
-  PRECHARGE,
-  FAST_CC,
-  TAPER_CV,
-  TOPOFF,
-  TERMINATION_DONE,
-};
-
 struct Measurement {
   // Incremented whenever either electrical measurement publishes a new sample.
   // Procedures can use this to avoid counting the same conversion repeatedly.
@@ -74,19 +65,8 @@ struct Measurement {
   bool temperature_valid{false};
 };
 
-struct ChargerMeasurement {
-  // Incremented from the Charger_14/BQ25756 battery-current entity. This keeps
-  // energy integration tied to charger ADC frames rather than load-loop ticks.
-  uint32_t sequence{0};
-  uint32_t timestamp_ms{0};
-  float current_a{0.0f};
-  float voltage_v{0.0f};
-  ChargerState state{ChargerState::UNKNOWN};
-  bool enabled{false};
-  bool power_good{false};
-  bool fault_active{false};
-  bool valid{false};
-};
+using ChargerState = ::component_common::ChargerState;
+using ChargerMeasurement = ::component_common::ChargerSnapshot;
 
 struct ProcedureContext {
   Measurement load{};
@@ -121,7 +101,6 @@ struct ProcedureResult {
 
 const char *state_to_string(State state);
 const char *fault_to_string(Fault fault);
-const char *charger_state_to_string(ChargerState state);
 
 }  // namespace programmable_load
 }  // namespace esphome

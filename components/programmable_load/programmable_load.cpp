@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <string>
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
@@ -23,46 +22,12 @@ float clampf(float value, float minimum, float maximum) {
   return std::max(minimum, std::min(maximum, value));
 }
 
-bool contains_token(const std::string &flags, const char *token) {
-  size_t start = 0;
-  while (start < flags.size()) {
-    const size_t end = flags.find(',', start);
-    const size_t length =
-        end == std::string::npos ? flags.size() - start : end - start;
-    if (flags.compare(start, length, token) == 0) {
-      return true;
-    }
-    if (end == std::string::npos) {
-      break;
-    }
-    start = end + 1;
-  }
-  return false;
-}
 
-ChargerState charger_state_from_string(const std::string &state) {
-  if (state == "not_charging") return ChargerState::NOT_CHARGING;
-  if (state == "trickle") return ChargerState::TRICKLE;
-  if (state == "precharge") return ChargerState::PRECHARGE;
-  if (state == "fast_cc") return ChargerState::FAST_CC;
-  if (state == "taper_cv") return ChargerState::TAPER_CV;
-  if (state == "topoff") return ChargerState::TOPOFF;
-  if (state == "termination_done") return ChargerState::TERMINATION_DONE;
-  return ChargerState::UNKNOWN;
-}
 
-bool charger_flags_fault_active(const std::string &flags) {
-  return contains_token(flags, "wd_expired") ||
-         contains_token(flags, "reverse") ||
-         contains_token(flags, "cv_timer") ||
-         contains_token(flags, "charge_timer") ||
-         contains_token(flags, "vac_uv") ||
-         contains_token(flags, "vac_ov") ||
-         contains_token(flags, "ibat_ocp") ||
-         contains_token(flags, "vbat_ov") ||
-         contains_token(flags, "tshut") ||
-         contains_token(flags, "drv_sup");
-}
+
+
+
+
 }  // namespace
 
 const char *state_to_string(State state) {
@@ -99,18 +64,6 @@ const char *fault_to_string(Fault fault) {
   }
 }
 
-const char *charger_state_to_string(ChargerState state) {
-  switch (state) {
-    case ChargerState::NOT_CHARGING: return "not_charging";
-    case ChargerState::TRICKLE: return "trickle";
-    case ChargerState::PRECHARGE: return "precharge";
-    case ChargerState::FAST_CC: return "fast_cc";
-    case ChargerState::TAPER_CV: return "taper_cv";
-    case ChargerState::TOPOFF: return "topoff";
-    case ChargerState::TERMINATION_DONE: return "termination_done";
-    default: return "unknown";
-  }
-}
 
 void ProgrammableLoadComponent::setup() {
   this->control_period_ms_ =
@@ -160,50 +113,6 @@ void ProgrammableLoadComponent::setup() {
       this->voltage_seen_ = true;
     }
   }
-  if (this->charger_current_sensor_ != nullptr) {
-    this->charger_current_sensor_->add_on_state_callback([this](float) {
-      this->charger_current_updated_ms_ = millis();
-      this->charger_current_seen_ = true;
-      this->charger_sequence_++;
-    });
-    if (this->charger_current_sensor_->has_state()) {
-      this->charger_current_updated_ms_ = now;
-      this->charger_current_seen_ = true;
-    }
-  }
-  if (this->charger_voltage_sensor_ != nullptr) {
-    this->charger_voltage_sensor_->add_on_state_callback([this](float) {
-      this->charger_voltage_updated_ms_ = millis();
-      this->charger_voltage_seen_ = true;
-    });
-    if (this->charger_voltage_sensor_->has_state()) {
-      this->charger_voltage_updated_ms_ = now;
-      this->charger_voltage_seen_ = true;
-    }
-  }
-  if (this->charger_status_sensor_ != nullptr) {
-    this->charger_status_sensor_->add_on_state_callback(
-        [this](const std::string &) {
-          this->charger_status_updated_ms_ = millis();
-          this->charger_status_seen_ = true;
-        });
-    if (!this->charger_status_sensor_->state.empty()) {
-      this->charger_status_updated_ms_ = now;
-      this->charger_status_seen_ = true;
-    }
-  }
-  if (this->charger_flags_sensor_ != nullptr) {
-    this->charger_flags_sensor_->add_on_state_callback(
-        [this](const std::string &) {
-          this->charger_flags_updated_ms_ = millis();
-          this->charger_flags_seen_ = true;
-        });
-    if (!this->charger_flags_sensor_->state.empty()) {
-      this->charger_flags_updated_ms_ = now;
-      this->charger_flags_seen_ = true;
-    }
-  }
-
   this->force_output_off_();
   if (this->fan_output_ != nullptr) this->fan_output_->set_level(0.0f);
   this->apply_charger_command_(ChargerCommand::DISABLE);
@@ -228,9 +137,8 @@ void ProgrammableLoadComponent::dump_config() {
                 this->limits_.minimum_voltage_v, this->limits_.maximum_voltage_v);
   ESP_LOGCONFIG(TAG, "  Maximum current/power: %.3f A / %.1f W",
                 this->limits_.maximum_current_a, this->limits_.maximum_power_w);
-  ESP_LOGCONFIG(TAG, "  Charger_14 adapter: %s",
-                this->charger_enable_switch_ != nullptr ? "configured"
-                                                        : "not configured");
+  ESP_LOGCONFIG(TAG, "  Charger capability: %s",
+                this->charger_ != nullptr ? "configured" : "not configured");
   if (this->dac_output_ == nullptr) ESP_LOGE(TAG, "  DAC output is not configured");
   if (this->current_sensor_ == nullptr) ESP_LOGE(TAG, "  Current sensor is not configured");
   if (this->voltage_sensor_ == nullptr) ESP_LOGE(TAG, "  Voltage sensor is not configured");
@@ -402,52 +310,25 @@ void ProgrammableLoadComponent::update_measurement_() {
 }
 
 void ProgrammableLoadComponent::update_charger_measurement_() {
-  const uint32_t now = millis();
-  this->charger_measurement_.sequence = this->charger_sequence_;
-  this->charger_measurement_.timestamp_ms = this->charger_current_updated_ms_;
-  this->charger_measurement_.enabled =
-      this->charger_enable_switch_ != nullptr &&
-      this->charger_enable_switch_->state;
-  const bool configured =
-      this->charger_enable_switch_ != nullptr &&
-      this->charger_current_sensor_ != nullptr &&
-      this->charger_voltage_sensor_ != nullptr &&
-      this->charger_status_sensor_ != nullptr &&
-      this->charger_flags_sensor_ != nullptr;
-  const bool fresh =
-      this->charger_current_seen_ && this->charger_voltage_seen_ &&
-      this->charger_status_seen_ && this->charger_flags_seen_ &&
-      (uint32_t) (now - this->charger_current_updated_ms_) <=
-          this->charger_sample_timeout_ms_ &&
-      (uint32_t) (now - this->charger_voltage_updated_ms_) <=
-          this->charger_sample_timeout_ms_ &&
-      (uint32_t) (now - this->charger_status_updated_ms_) <=
-          this->charger_sample_timeout_ms_ &&
-      (uint32_t) (now - this->charger_flags_updated_ms_) <=
-          this->charger_sample_timeout_ms_;
-  this->charger_measurement_.valid =
-      configured && fresh && this->charger_current_sensor_->has_state() &&
-      this->charger_voltage_sensor_->has_state() &&
-      std::isfinite(this->charger_current_sensor_->state) &&
-      std::isfinite(this->charger_voltage_sensor_->state);
-  if (!this->charger_measurement_.valid) {
-    this->charger_measurement_.current_a = 0.0f;
-    this->charger_measurement_.voltage_v = 0.0f;
-    this->charger_measurement_.state = ChargerState::UNKNOWN;
-    this->charger_measurement_.power_good = false;
-    this->charger_measurement_.fault_active = false;
+  this->charger_measurement_ = {};
+  if (this->charger_ == nullptr) return;
+
+  const auto capabilities = this->charger_->capabilities();
+  if (!capabilities.enable_control || !capabilities.battery_current ||
+      !capabilities.battery_voltage || !capabilities.charge_state ||
+      !capabilities.power_good || !capabilities.fault_status) {
     return;
   }
-  this->charger_measurement_.current_a =
-      this->charger_current_sensor_->state / 1000.0f;
-  this->charger_measurement_.voltage_v =
-      this->charger_voltage_sensor_->state / 1000.0f;
-  this->charger_measurement_.state =
-      charger_state_from_string(this->charger_status_sensor_->state);
-  this->charger_measurement_.power_good =
-      !contains_token(this->charger_flags_sensor_->state, "pg_low");
-  this->charger_measurement_.fault_active =
-      charger_flags_fault_active(this->charger_flags_sensor_->state);
+
+  this->charger_measurement_ = this->charger_->snapshot();
+  const uint32_t now = millis();
+  const bool fresh = this->charger_measurement_.timestamp_ms != 0 &&
+                     (uint32_t) (now - this->charger_measurement_.timestamp_ms) <=
+                         this->charger_sample_timeout_ms_;
+  this->charger_measurement_.valid =
+      this->charger_measurement_.valid && fresh &&
+      std::isfinite(this->charger_measurement_.current_a) &&
+      std::isfinite(this->charger_measurement_.voltage_v);
 }
 
 void ProgrammableLoadComponent::update_faults_() {
@@ -490,8 +371,7 @@ void ProgrammableLoadComponent::update_operation_() {
 
 void ProgrammableLoadComponent::update_control_() {
   const bool charger_enabled =
-      this->charger_enable_switch_ != nullptr &&
-      this->charger_enable_switch_->state;
+      this->charger_measurement_.valid && this->charger_measurement_.enabled;
   if (this->charger_commanded_enabled_ || charger_enabled) {
     this->reset_control_();
     this->force_output_off_();
@@ -661,7 +541,7 @@ bool ProgrammableLoadComponent::fault_condition_active_(Fault fault) const {
               this->measurement_.maximum_temperature_c >
                   this->limits_.maximum_temperature_c);
     case Fault::CHARGER_UNAVAILABLE:
-      return this->charger_enable_switch_ != nullptr &&
+      return this->charger_ != nullptr &&
              !this->charger_measurement_.valid;
     case Fault::CHARGER_FAULT:
       return this->charger_measurement_.valid &&
@@ -721,7 +601,9 @@ void ProgrammableLoadComponent::apply_procedure_result_(
 bool ProgrammableLoadComponent::apply_charger_command_(
     ChargerCommand command) {
   const bool enabled = command == ChargerCommand::ENABLE;
-  if (this->charger_enable_switch_ == nullptr) return !enabled;
+  if (this->charger_ == nullptr) return !enabled;
+  if (!this->charger_->capabilities().enable_control) return false;
+
   const uint32_t now = millis();
   if (!this->charger_command_known_ ||
       this->charger_commanded_enabled_ != enabled) {
@@ -730,21 +612,23 @@ bool ProgrammableLoadComponent::apply_charger_command_(
     this->charger_command_changed_ms_ = now == 0 ? 1 : now;
     this->last_charger_command_attempt_ms_ = 0;
   }
-  if (this->charger_enable_switch_->state != enabled &&
+  if ((!this->charger_measurement_.valid ||
+       this->charger_measurement_.enabled != enabled) &&
       (this->last_charger_command_attempt_ms_ == 0 ||
        (uint32_t) (now - this->last_charger_command_attempt_ms_) >=
            CHARGER_COMMAND_RETRY_MS)) {
     this->last_charger_command_attempt_ms_ = now == 0 ? 1 : now;
-    if (enabled) this->charger_enable_switch_->turn_on();
-    else this->charger_enable_switch_->turn_off();
+    if (!this->charger_->request_enabled(enabled)) return false;
   }
   return true;
 }
 
 bool ProgrammableLoadComponent::charger_control_mismatch_() const {
-  if (!this->charger_command_known_ || this->charger_enable_switch_ == nullptr ||
-      this->charger_enable_switch_->state == this->charger_commanded_enabled_)
+  if (!this->charger_command_known_ || this->charger_ == nullptr ||
+      !this->charger_measurement_.valid ||
+      this->charger_measurement_.enabled == this->charger_commanded_enabled_) {
     return false;
+  }
   return this->charger_command_changed_ms_ != 0 &&
          (uint32_t) (millis() - this->charger_command_changed_ms_) >=
              this->charger_control_timeout_ms_;

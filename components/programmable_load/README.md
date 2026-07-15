@@ -68,38 +68,21 @@ Current and voltage scale/offset are applied before limits or procedures see mea
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ programmable_load, bq25756 ]
+    components: [ component_common, programmable_load, bq25756 ]
 
-# Charger_14 BQ25756 control. These limits must match the stuffed board variant.
+# Charger_14 BQ25756 control. The charger component itself is the internal API;
+# measurements and controls only need entities when a user should see them.
 bq25756:
   id: charger14_bq
   i2c_id: i2c_ext
   address: 0x6B
   update_interval: 1s
-  disable_watchdog: true
-  disable_ce_pin: true
-  disable_ilim_hiz_pin: true
-  disable_ichg_pin: true
-  charge_voltage_limit_mv: 1536
-  charge_current_limit_ma: 5000
-  input_current_dpm_limit_ma: 3000
-  input_voltage_dpm_limit_mv: 12000
-
-  ibat_current:
-    id: charger14_ibat
-    internal: true
-  vbat_voltage:
-    id: charger14_vbat
-    internal: true
-  charge_status:
-    id: charger14_charge_status
-    internal: true
-  status_flags:
-    id: charger14_status_flags
-    internal: true
-  charge_enable:
-    id: charger14_charge_enable
-    internal: true
+  battery:
+    cell_count: 12
+    cell_chemistry: lithium_ion
+  charging:
+    battery_current_limit: 5A
+    input_current_limit: 3A
 
 programmable_load:
   id: load_controller
@@ -173,14 +156,9 @@ programmable_load:
         name: "Battery DCR"
 
     battery_cycle:
-      charger14:
-        charge_enable: charger14_charge_enable
-        ibat_current: charger14_ibat
-        vbat_voltage: charger14_vbat
-        charge_status: charger14_charge_status
-        status_flags: charger14_status_flags
-        sample_timeout: 3s
-        control_timeout: 5s
+      charger: charger14_bq
+      charger_sample_timeout: 3s
+      charger_control_timeout: 5s
 
       discharge_current: 10
       discharge_cutoff_voltage: 42
@@ -209,3 +187,8 @@ programmable_load:
 ```
 
 The example voltages are illustrative. Use cutoff and charge settings appropriate for the actual cell count, chemistry, BMS and Charger_14 hardware variant.
+
+
+## Charger capability
+
+Battery procedures consume a typed `component_common::ChargerInterface`. The charger supplies current, voltage, charge state, power-good, fault state, and enable control directly in C++; Home Assistant entities are optional observers and are not an internal component API.

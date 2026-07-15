@@ -1,9 +1,11 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <string_view>
 
 #include "components/component_common/bit_field.h"
 #include "components/component_common/byte_order.h"
+#include "components/component_common/charger.h"
 
 namespace {
 
@@ -19,6 +21,39 @@ static_assert(Field::replace(0x8F, 0x04) == 0xCF);
 static_assert(component_common::replace_masked<uint8_t>(0xAA, 0x0F, 0x05) == 0xA5);
 static_assert(component_common::any_set<uint8_t>(0x40, 0x60));
 static_assert(!component_common::any_set<uint8_t>(0x10, 0x60));
+
+
+class FakeCharger final : public component_common::ChargerInterface {
+ public:
+  component_common::ChargerCapabilities capabilities() const override {
+    return {true, true, true, true, true, true};
+  }
+
+  component_common::ChargerSnapshot snapshot() const override {
+    return snapshot_;
+  }
+
+  bool request_enabled(bool enabled) override {
+    requested_enabled_ = enabled;
+    return true;
+  }
+
+  component_common::ChargerSnapshot snapshot_{};
+  bool requested_enabled_{false};
+};
+
+void test_charger_interface() {
+  FakeCharger charger;
+  charger.snapshot_.state = component_common::ChargerState::FAST_CC;
+  charger.snapshot_.valid = true;
+
+  assert(charger.capabilities().enable_control);
+  assert(charger.snapshot().valid);
+  assert(component_common::charger_state_to_string(charger.snapshot().state) ==
+         std::string_view("fast_cc"));
+  assert(charger.request_enabled(true));
+  assert(charger.requested_enabled_);
+}
 
 void test_byte_order() {
   const std::array<uint8_t, 4> little{{0x78, 0x56, 0x34, 0x12}};
@@ -41,5 +76,6 @@ void test_byte_order() {
 
 int main() {
   test_byte_order();
+  test_charger_interface();
   return 0;
 }

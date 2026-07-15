@@ -29,5 +29,6 @@ That form resolves both in this source tree and after ESPHome copies the loaded 
 
 - `bit_field.h`: contiguous register-field encode/decode/replace and masked updates.
 - `byte_order.h`: fixed-width unsigned little-endian and big-endian load/store.
+- `charger.h`: typed charger capabilities, snapshots, and control boundary for component composition.
 
 Keep this package small and policy-free. Chip addresses, reset values, scaling, faults, and configuration defaults remain in the owning component or chip family.

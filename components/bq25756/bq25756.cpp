@@ -13,9 +13,22 @@ namespace bq25756 {
 namespace {
 static const char *const TAG = "bq25756";
 static constexpr uint32_t CALIBRATION_PREFERENCE_KEY = 0xB2575601;
+
 }  // namespace
 
 BQ25756Component::BQ25756Component() : service_(this) {}
+
+::component_common::ChargerCapabilities BQ25756Component::capabilities() const {
+  return {true, true, true, true, true, true};
+}
+
+::component_common::ChargerSnapshot BQ25756Component::snapshot() const {
+  return this->charger_snapshot_;
+}
+
+bool BQ25756Component::request_enabled(bool enabled) {
+  return this->set_charge_enabled(enabled);
+}
 
 bool BQ25756Component::set_charge_enabled(bool enabled) {
   this->log_charge_enable_precheck_(enabled);
@@ -225,6 +238,7 @@ void BQ25756Component::update() {
   ::bq25756_core::Status status;
   if (!this->service_.read_status(status)) {
     ESP_LOGW(TAG, "Failed reading charger status registers");
+    this->charger_snapshot_.valid = false;
     this->status_set_warning();
     return;
   }
@@ -232,6 +246,7 @@ void BQ25756Component::update() {
   ::bq25756_core::Measurements measurements;
   if (!this->service_.read_measurements(measurements, false)) {
     ESP_LOGW(TAG, "Failed reading one or more ADC registers");
+    this->charger_snapshot_.valid = false;
     this->status_set_warning();
     return;
   }
@@ -240,6 +255,8 @@ void BQ25756Component::update() {
     status.status1, status.status2, status.status3, status.fault, measurements.iac_ma, measurements.ibat_ma,
     measurements.vac_mv, measurements.vbat_mv
   );
+
+  this->refresh_charger_snapshot_(status, measurements);
 
   ESP_LOGD(TAG, "STATUS[21..24]=%02X %02X %02X %02X", status.status1, status.status2, status.status3, status.fault);
   ESP_LOGD(
@@ -314,6 +331,20 @@ void BQ25756Component::update() {
   this->publish_status_texts_(status);
   this->publish_control_states_();
   this->status_clear_warning();
+}
+
+void BQ25756Component::refresh_charger_snapshot_(
+    const ::bq25756_core::Status &status,
+    const ::bq25756_core::Measurements &measurements) {
+  ::bq25756_core::ControlStates controls{};
+  if (!this->service_.read_control_states(controls)) {
+    this->charger_snapshot_.valid = false;
+    return;
+  }
+
+  this->charger_snapshot_ = ::bq25756_core::make_charger_snapshot(
+      status, measurements, controls, this->charger_snapshot_.sequence + 1,
+      millis());
 }
 
 void BQ25756Component::dump_config() {

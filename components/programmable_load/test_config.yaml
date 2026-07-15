@@ -75,24 +75,7 @@ bq25756:
   charging:
     battery_current_limit: 5A
     input_current_limit: 3A
-  measurements:
-    battery_current:
-      id: charger14_ibat
-      internal: true
-    battery_voltage:
-      id: charger14_vbat
-      internal: true
-  status:
-    charging:
-      id: charger14_charge_status
-      internal: true
-    faults:
-      id: charger14_status_flags
-      internal: true
-  controls:
-    charge_enable:
-      id: charger14_charge_enable
-      internal: true
+
 
 programmable_load:
   id: load_controller
@@ -156,14 +139,9 @@ programmable_load:
       resistance:
         name: "Battery DCR"
     battery_cycle:
-      charger14:
-        charge_enable: charger14_charge_enable
-        ibat_current: charger14_ibat
-        vbat_voltage: charger14_vbat
-        charge_status: charger14_charge_status
-        status_flags: charger14_status_flags
-        sample_timeout: 3s
-        control_timeout: 5s
+      charger: charger14_bq
+      charger_sample_timeout: 3s
+      charger_control_timeout: 5s
       discharge_current: 10
       discharge_cutoff_voltage: 42
       discharge_cutoff_hysteresis: 0.5

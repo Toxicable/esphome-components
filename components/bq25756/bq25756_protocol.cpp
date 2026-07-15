@@ -1,6 +1,52 @@
 #include "bq25756_protocol.h"
 
+#include <cmath>
+
 namespace bq25756_core {
+
+
+::component_common::ChargerState decode_charger_state(uint8_t status1) {
+  using State = ::component_common::ChargerState;
+  switch (status1 & REG21_CHARGE_STAT_MASK) {
+    case 0: return State::NOT_CHARGING;
+    case 1: return State::TRICKLE;
+    case 2: return State::PRECHARGE;
+    case 3: return State::FAST_CC;
+    case 4: return State::TAPER_CV;
+    case 6: return State::TOPOFF;
+    case 7: return State::TERMINATION_DONE;
+    default: return State::UNKNOWN;
+  }
+}
+
+bool charger_fault_active(const Status &status) {
+  return (status.status1 & REG21_WATCHDOG_STAT_MASK) != 0 ||
+         (status.status3 & REG23_REVERSE_STAT_MASK) != 0 ||
+         (status.status3 & REG23_CV_TIMER_STAT_MASK) != 0 ||
+         (status.fault & REG24_ACTIVE_FAULT_MASK) != 0;
+}
+
+::component_common::ChargerSnapshot make_charger_snapshot(
+    const Status &status, const Measurements &measurements,
+    const ControlStates &controls, uint32_t sequence, uint32_t timestamp_ms) {
+  ::component_common::ChargerSnapshot snapshot{};
+  snapshot.sequence = sequence;
+  snapshot.timestamp_ms = timestamp_ms;
+  snapshot.current_a = measurements.ibat_ma / 1000.0f;
+  snapshot.voltage_v = measurements.vbat_mv / 1000.0f;
+  snapshot.state = decode_charger_state(status.status1);
+  snapshot.status_flags = static_cast<uint32_t>(status.status1) |
+                          (static_cast<uint32_t>(status.status2) << 8) |
+                          (static_cast<uint32_t>(status.status3) << 16);
+  snapshot.fault_flags = status.fault;
+  snapshot.enabled = controls.charge_enabled;
+  snapshot.power_good =
+      (status.status2 & REG22_POWER_GOOD_STAT_MASK) != 0;
+  snapshot.fault_active = charger_fault_active(status);
+  snapshot.valid = std::isfinite(snapshot.current_a) &&
+                   std::isfinite(snapshot.voltage_v);
+  return snapshot;
+}
 
 const char *charge_status_to_string(uint8_t charge_status) {
   switch (charge_status) {

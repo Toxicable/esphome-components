@@ -71,3 +71,8 @@ voltage. Repeat after changing the feedback-divider hardware.
 The component disables the charger watchdog internally, so it does not need
 periodic host resets. I2C always owns charge enable and both current limits;
 the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
+
+
+## Typed charger interface
+
+`BQ25756Component` implements `component_common::ChargerInterface`. Other components consume its battery current, battery voltage, charge state, power-good, fault state, and charge-enable control without requiring sensor, text-sensor, or switch entities.

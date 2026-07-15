@@ -6,6 +6,7 @@
 
 #include "bq25756_bus.h"
 #include "bq25756_service.h"
+#include "../component_common/charger.h"
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
@@ -24,7 +25,10 @@ struct FeedbackCalibration {
   float feedback_to_battery_ratio{1.0f};
 };
 
-class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public ::bq25756_core::RegisterBus {
+class BQ25756Component : public PollingComponent,
+                         public i2c::I2CDevice,
+                         public ::bq25756_core::RegisterBus,
+                         public ::component_common::ChargerInterface {
  public:
   BQ25756Component();
 
@@ -120,6 +124,11 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   }
 
   bool set_charge_enabled(bool enabled);
+
+  ::component_common::ChargerCapabilities capabilities() const override;
+  ::component_common::ChargerSnapshot snapshot() const override;
+  bool request_enabled(bool enabled) override;
+
   bool set_watchdog_code(uint8_t code);
   bool calibrate_feedback(float measured_battery_voltage_v);
   bool calibrate_from_configured_voltage();
@@ -136,6 +145,8 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
 
  protected:
   void publish_status_texts_(const ::bq25756_core::Status &status);
+  void refresh_charger_snapshot_(const ::bq25756_core::Status &status,
+                                 const ::bq25756_core::Measurements &measurements);
   void publish_control_states_();
   bool initialize_();
   bool apply_configured_limits_();
@@ -150,6 +161,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   );
 
   ::bq25756_core::Bq25756Service service_;
+  ::component_common::ChargerSnapshot charger_snapshot_{};
 
   sensor::Sensor *iac_current_sensor_{nullptr};
   sensor::Sensor *ibat_current_sensor_{nullptr};

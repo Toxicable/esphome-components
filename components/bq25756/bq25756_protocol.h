@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "../component_common/bit_field.h"
+#include "../component_common/charger.h"
 
 namespace bq25756_core {
 
@@ -37,6 +38,28 @@ static constexpr uint8_t REG18_EN_ICHG_PIN_MASK = 0x80;
 static constexpr uint8_t REG18_EN_ILIM_HIZ_PIN_MASK = 0x40;
 static constexpr uint8_t REG19_EN_PFM_MASK = 0x20;
 static constexpr uint8_t REG19_EN_REV_MASK = 0x01;
+
+static constexpr uint8_t REG21_IAC_DPM_STAT_MASK = 0x40;
+static constexpr uint8_t REG21_VAC_DPM_STAT_MASK = 0x20;
+static constexpr uint8_t REG21_WATCHDOG_STAT_MASK = 0x08;
+static constexpr uint8_t REG21_CHARGE_STAT_MASK = 0x07;
+static constexpr uint8_t REG22_POWER_GOOD_STAT_MASK = 0x80;
+static constexpr uint8_t REG22_TS_STAT_MASK = 0x70;
+static constexpr uint8_t REG22_MPPT_STAT_MASK = 0x03;
+static constexpr uint8_t REG23_CV_TIMER_STAT_MASK = 0x08;
+static constexpr uint8_t REG23_REVERSE_STAT_MASK = 0x04;
+static constexpr uint8_t REG24_VAC_UV_FAULT_MASK = 0x80;
+static constexpr uint8_t REG24_VAC_OV_FAULT_MASK = 0x40;
+static constexpr uint8_t REG24_IBAT_OCP_FAULT_MASK = 0x20;
+static constexpr uint8_t REG24_VBAT_OV_FAULT_MASK = 0x10;
+static constexpr uint8_t REG24_THERMAL_SHUTDOWN_FAULT_MASK = 0x08;
+static constexpr uint8_t REG24_CHARGE_TIMER_FAULT_MASK = 0x04;
+static constexpr uint8_t REG24_DRIVER_SUPPLY_FAULT_MASK = 0x02;
+static constexpr uint8_t REG24_ACTIVE_FAULT_MASK =
+    REG24_VAC_UV_FAULT_MASK | REG24_VAC_OV_FAULT_MASK |
+    REG24_IBAT_OCP_FAULT_MASK | REG24_VBAT_OV_FAULT_MASK |
+    REG24_THERMAL_SHUTDOWN_FAULT_MASK |
+    REG24_CHARGE_TIMER_FAULT_MASK | REG24_DRIVER_SUPPLY_FAULT_MASK;
 
 static constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;
 static constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
@@ -130,6 +153,11 @@ struct ChargePrecheckSnapshot {
 const char *charge_status_to_string(uint8_t charge_status);
 const char *ts_status_to_string(uint8_t ts_status);
 const char *mppt_status_to_string(uint8_t mppt_status);
+::component_common::ChargerState decode_charger_state(uint8_t status1);
+bool charger_fault_active(const Status &status);
+::component_common::ChargerSnapshot make_charger_snapshot(
+    const Status &status, const Measurements &measurements,
+    const ControlStates &controls, uint32_t sequence, uint32_t timestamp_ms);
 Measurements decode_measurements(const Reg16Value &iac, const Reg16Value &ibat, const Reg16Value &vac,
                                  const Reg16Value &vbat, const Reg16Value &ts, const Reg16Value &vfb);
 float vfb_reg_target_mv(uint16_t reg00_raw);

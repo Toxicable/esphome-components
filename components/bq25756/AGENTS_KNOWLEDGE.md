@@ -22,3 +22,4 @@ Component-scoped notes for `components/bq25756`.
 - `CE` is still a hardware gate for charging unless `DIS_CE_PIN` is set; a floating/high CE pin can block charging while the I2C `EN_CHG` bit still reads enabled.
 - The reusable core depends on the internal `component_common` package for endian and register-field helpers. BQ25756 declares it through `AUTO_LOAD`; explicit external-component allowlists must also list `component_common`.
 - Core files use sibling-relative `../component_common/...` includes so the same sources compile under ESPHome and the Charger_14 STM32 CMake target.
+- `BQ25756Component` implements `component_common::ChargerInterface`; the cached typed snapshot is refreshed from raw status, ADC, and control registers each successful poll.

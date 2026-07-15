@@ -97,6 +97,38 @@ void test_probe_and_control_decode() {
   assert(states.watchdog_code == 2);
 }
 
+
+void test_typed_charger_snapshot() {
+  bq25756_core::Status status{};
+  status.status1 = 3;
+  status.status2 = bq25756_core::REG22_POWER_GOOD_STAT_MASK;
+
+  bq25756_core::Measurements measurements{};
+  measurements.ibat_ma = 2500.0f;
+  measurements.vbat_mv = 48120.0f;
+
+  bq25756_core::ControlStates controls{};
+  controls.charge_enabled = true;
+
+  const auto snapshot = bq25756_core::make_charger_snapshot(
+      status, measurements, controls, 7, 1234);
+  assert(snapshot.sequence == 7);
+  assert(snapshot.timestamp_ms == 1234);
+  assert(snapshot.current_a == 2.5f);
+  assert(snapshot.voltage_v == 48.12f);
+  assert(snapshot.state == component_common::ChargerState::FAST_CC);
+  assert(snapshot.enabled);
+  assert(snapshot.power_good);
+  assert(!snapshot.fault_active);
+  assert(snapshot.valid);
+
+  status.status1 |= bq25756_core::REG21_WATCHDOG_STAT_MASK;
+  assert(bq25756_core::charger_fault_active(status));
+  status.status1 = 5;
+  assert(bq25756_core::decode_charger_state(status.status1) ==
+         component_common::ChargerState::UNKNOWN);
+}
+
 void test_adc_reconciliation() {
   FakeBus bus;
   bq25756_core::Bq25756Service service(&bus);
@@ -124,5 +156,6 @@ int main() {
   test_register_field_updates();
   test_probe_and_control_decode();
   test_adc_reconciliation();
+  test_typed_charger_snapshot();
   return 0;
 }

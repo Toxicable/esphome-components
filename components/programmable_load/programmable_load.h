@@ -7,10 +7,11 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/output/float_output.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
+
+#include "../component_common/charger.h"
 
 #include "calibration.h"
 #include "load_types.h"
@@ -51,23 +52,10 @@ class ProgrammableLoadComponent : public Component {
     this->sample_timeout_ms_ = timeout_ms;
   }
 
-  // Charger_14 external-control boundary. These entities are supplied by the
-  // BQ25756 component and may be internal. The core owns charge-enable while a
-  // charger is attached, ensuring the load and charger are never active together.
-  void set_charger_enable_switch(switch_::Switch *sw) {
-    this->charger_enable_switch_ = sw;
-  }
-  void set_charger_current_sensor(sensor::Sensor *sensor) {
-    this->charger_current_sensor_ = sensor;
-  }
-  void set_charger_voltage_sensor(sensor::Sensor *sensor) {
-    this->charger_voltage_sensor_ = sensor;
-  }
-  void set_charger_status_sensor(text_sensor::TextSensor *sensor) {
-    this->charger_status_sensor_ = sensor;
-  }
-  void set_charger_flags_sensor(text_sensor::TextSensor *sensor) {
-    this->charger_flags_sensor_ = sensor;
+  // Typed charger capability. Home Assistant entities remain optional
+  // observers owned by the charger rather than an internal component API.
+  void set_charger(::component_common::ChargerInterface *charger) {
+    this->charger_ = charger;
   }
   void set_charger_sample_timeout_ms(uint32_t timeout_ms) {
     this->charger_sample_timeout_ms_ = timeout_ms;
@@ -220,11 +208,7 @@ class ProgrammableLoadComponent : public Component {
   sensor::Sensor *voltage_sensor_{nullptr};
   std::vector<TemperatureInput> temperature_inputs_;
 
-  switch_::Switch *charger_enable_switch_{nullptr};
-  sensor::Sensor *charger_current_sensor_{nullptr};
-  sensor::Sensor *charger_voltage_sensor_{nullptr};
-  text_sensor::TextSensor *charger_status_sensor_{nullptr};
-  text_sensor::TextSensor *charger_flags_sensor_{nullptr};
+  ::component_common::ChargerInterface *charger_{nullptr};
 
   number::Number *manual_current_number_{nullptr};
   text_sensor::TextSensor *state_sensor_{nullptr};
@@ -264,15 +248,6 @@ class ProgrammableLoadComponent : public Component {
 
   uint32_t charger_sample_timeout_ms_{3000};
   uint32_t charger_control_timeout_ms_{5000};
-  uint32_t charger_current_updated_ms_{0};
-  uint32_t charger_voltage_updated_ms_{0};
-  uint32_t charger_status_updated_ms_{0};
-  uint32_t charger_flags_updated_ms_{0};
-  uint32_t charger_sequence_{0};
-  bool charger_current_seen_{false};
-  bool charger_voltage_seen_{false};
-  bool charger_status_seen_{false};
-  bool charger_flags_seen_{false};
   bool charger_command_known_{false};
   bool charger_commanded_enabled_{false};
   uint32_t charger_command_changed_ms_{0};

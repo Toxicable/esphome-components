@@ -18,9 +18,9 @@
 ## Edit Map
 - `__init__.py`: ESPHome schema, entity wiring, codegen bindings, and `component_common` auto-load.
 - `bq25756_bus.h`: host register bus boundary for reusable core code.
-- `bq25756_protocol.*`: register map, status decoding, ADC decoding, limit encoders, and typed common fields.
+- `bq25756_protocol.*`: register map, status/ADC decoding, typed charger snapshot construction, limit encoders, and common fields.
 - `bq25756_service.*`: reusable BQ25756 behavior built on `RegisterBus` and common endian/masked-register helpers.
-- `bq25756.h` / `bq25756.cpp`: ESPHome component wrapper, logging, entities, and I2C adapter.
+- `bq25756.h` / `bq25756.cpp`: ESPHome component wrapper, typed charger capability, logging, entities, and I2C adapter.
 - `README.md`: user-facing configuration and supported entities.
 - `AGENTS_KNOWLEDGE.md`: active component invariants and datasheet-backed gotchas.
 - `tests/bq25756_service_test.cpp`: fake-bus tests for host-independent service behavior.
