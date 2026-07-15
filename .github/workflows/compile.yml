@@ -19,8 +19,25 @@ jobs:
         run: bash ./check_host.bash
 
   esphome-checks:
+    name: ESPHome ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bq25756
+            config: components/bq25756/test_config.yaml
+          - name: bq25756-invalid-cell-count
+            config: components/bq25756/test_invalid_cell_count.yaml
+          - name: drv8243
+            config: components/drv8243/test_config.yaml
+          - name: esc-higher
+            config: components/esc_higher/test_config.yaml
+          - name: mcf8329a
+            config: components/mcf8329a/test_config.yaml
+          - name: programmable-load
+            config: components/programmable_load/test_config.yaml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,5 +56,5 @@ jobs:
       - name: Install pinned ESPHome
         run: python -m pip install "esphome==2026.5.3"
 
-      - name: Compile and validate ESPHome fixtures
-        run: bash ./check_esphome.bash
+      - name: Compile or validate fixture
+        run: bash ./check_esphome.bash "${{ matrix.config }}"
