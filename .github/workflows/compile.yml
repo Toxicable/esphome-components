@@ -5,7 +5,7 @@ on:
   pull_request:
 
 concurrency:
-  group: compile-checks-${{ github.ref }}
+  group: compile-checks-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
