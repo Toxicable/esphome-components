@@ -1,0 +1,62 @@
+name: Publish Phase 3
+
+on:
+  push:
+    branches:
+      - agent/phase3-publisher
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout publisher payload
+        uses: actions/checkout@v4
+        with:
+          path: payload
+
+      - name: Checkout Phase 2 base
+        uses: actions/checkout@v4
+        with:
+          ref: agent/shared-utilities-tests
+          path: target
+          fetch-depth: 0
+
+      - name: Reconstruct and apply Phase 3
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat payload/.phase3/patch.* > /tmp/phase3.patch
+          cd target
+          git apply --check /tmp/phase3.patch
+          git apply /tmp/phase3.patch
+          git diff --check
+
+      - name: Validate host interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          python3 -m py_compile \
+            components/component_common/__init__.py \
+            components/bq25756/__init__.py \
+            components/programmable_load/__init__.py
+          bash ./check_host.bash
+
+      - name: Publish typed charger branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b agent/typed-charger-capability
+          git add \
+            components/component_common \
+            components/bq25756 \
+            components/programmable_load \
+            tests
+          git commit -m "Add typed charger capability boundary"
+          git push --force-with-lease origin HEAD:agent/typed-charger-capability
