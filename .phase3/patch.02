@@ -1,0 +1,200 @@
+diff --git a/components/programmable_load/CONTEXT_INDEX.md b/components/programmable_load/CONTEXT_INDEX.md
+index c401ee1..df671ff 100644
+--- a/components/programmable_load/CONTEXT_INDEX.md
++++ b/components/programmable_load/CONTEXT_INDEX.md
+@@ -15,20 +15,20 @@
+ 12. `components/programmable_load/programmable_load.cpp`
+ 
+ ## Edit Map
+-- `__init__.py`: ESPHome schema, cross-entity Charger_14 wiring, entity creation, and codegen bindings.
+-- `load_types.h`: Core state, fault, load/charger measurements, procedure context, and procedure result types.
++- `__init__.py`: ESPHome schema, typed charger-component wiring, entity creation, and codegen bindings.
++- `load_types.h`: Core state, fault, load measurements, shared charger aliases, procedure context, and procedure result types.
+ - `calibration.h`: Persisted calibration record and version.
+ - `procedure.h`: Pure procedure boundary between the core and optional tests.
+ - `dcr_test.h` / `dcr_test.cpp`: Explicit DCR procedure and start-button entity.
+ - `battery_cycle.h` / `battery_cycle.cpp`: Full discharge/rest/Charger_14 recharge procedure, integration, progress and results.
+-- `programmable_load.h`: Component class surface, calibration, ownership, Charger_14 adapter and generated entities.
+-- `programmable_load.cpp`: Core control, limits, cooling, state/fault publishing, Charger_14 mutual exclusion, and procedure implementation includes required by ESPHome source discovery.
++- `programmable_load.h`: Component class surface, calibration, ownership, typed charger capability, and generated entities.
++- `programmable_load.cpp`: Core control, limits, cooling, state/fault publishing, typed charger mutual exclusion, and procedure coordination.
+ - `README.md`: User-facing configuration example and safety/ownership notes.
+ - `AGENTS_KNOWLEDGE.md`: Active component invariants and gotchas.
+ - `test_config.yaml`: Full ESPHome compile fixture including BQ25756-backed Charger_14 cycle wiring.
+ 
+ ## Architecture
+ - Monolith component: one `programmable_load:` YAML block, no split platform modules.
+-- One configurable control loop owns measurement updates, limits, output control, cooling, Charger_14 charge enable, and status publishing.
++- One configurable control loop owns measurement updates, limits, output control, cooling, typed charger enable, and status publishing.
+ - Procedures receive a `ProcedureContext` and return a `ProcedureResult`; they never call the core.
+-- Charger_14 support is an external-control adapter over BQ25756 entities, not the onboard STM32 firmware path.
++- Charger support uses `component_common::ChargerInterface`; BQ25756 entities are optional observers, not the internal API. The onboard STM32 firmware path remains separate.
+diff --git a/components/programmable_load/README.md b/components/programmable_load/README.md
+index 8852d45..68c0d27 100644
+--- a/components/programmable_load/README.md
++++ b/components/programmable_load/README.md
+@@ -68,38 +68,21 @@ Current and voltage scale/offset are applied before limits or procedures see mea
+ external_components:
+   - source: github://Toxicable/esphome-components@main
+     refresh: 0s
+-    components: [ programmable_load, bq25756 ]
++    components: [ component_common, programmable_load, bq25756 ]
+ 
+-# Charger_14 BQ25756 control. These limits must match the stuffed board variant.
++# Charger_14 BQ25756 control. The charger component itself is the internal API;
++# measurements and controls only need entities when a user should see them.
+ bq25756:
+   id: charger14_bq
+   i2c_id: i2c_ext
+   address: 0x6B
+   update_interval: 1s
+-  disable_watchdog: true
+-  disable_ce_pin: true
+-  disable_ilim_hiz_pin: true
+-  disable_ichg_pin: true
+-  charge_voltage_limit_mv: 1536
+-  charge_current_limit_ma: 5000
+-  input_current_dpm_limit_ma: 3000
+-  input_voltage_dpm_limit_mv: 12000
+-
+-  ibat_current:
+-    id: charger14_ibat
+-    internal: true
+-  vbat_voltage:
+-    id: charger14_vbat
+-    internal: true
+-  charge_status:
+-    id: charger14_charge_status
+-    internal: true
+-  status_flags:
+-    id: charger14_status_flags
+-    internal: true
+-  charge_enable:
+-    id: charger14_charge_enable
+-    internal: true
++  battery:
++    cell_count: 12
++    cell_chemistry: lithium_ion
++  charging:
++    battery_current_limit: 5A
++    input_current_limit: 3A
+ 
+ programmable_load:
+   id: load_controller
+@@ -173,14 +156,9 @@ programmable_load:
+         name: "Battery DCR"
+ 
+     battery_cycle:
+-      charger14:
+-        charge_enable: charger14_charge_enable
+-        ibat_current: charger14_ibat
+-        vbat_voltage: charger14_vbat
+-        charge_status: charger14_charge_status
+-        status_flags: charger14_status_flags
+-        sample_timeout: 3s
+-        control_timeout: 5s
++      charger: charger14_bq
++      charger_sample_timeout: 3s
++      charger_control_timeout: 5s
+ 
+       discharge_current: 10
+       discharge_cutoff_voltage: 42
+@@ -209,3 +187,8 @@ programmable_load:
+ ```
+ 
+ The example voltages are illustrative. Use cutoff and charge settings appropriate for the actual cell count, chemistry, BMS and Charger_14 hardware variant.
++
++
++## Charger capability
++
++Battery procedures consume a typed `component_common::ChargerInterface`. The charger supplies current, voltage, charge state, power-good, fault state, and enable control directly in C++; Home Assistant entities are optional observers and are not an internal component API.
+diff --git a/components/programmable_load/__init__.py b/components/programmable_load/__init__.py
+index d38cca3..786799b 100644
+--- a/components/programmable_load/__init__.py
++++ b/components/programmable_load/__init__.py
+@@ -1,13 +1,16 @@
+ import esphome.codegen as cg
+ import esphome.config_validation as cv
+-from esphome.components import button, number, output, sensor, switch as switch_, text_sensor
++from esphome.components import button, number, output, sensor, text_sensor
+ from esphome.const import (
+     CONF_ID,
+     DEVICE_CLASS_CURRENT,
+     UNIT_AMPERE,
+ )
+ 
+-AUTO_LOAD = ["button", "number", "sensor", "switch", "text_sensor"]
++AUTO_LOAD = ["button", "component_common", "number", "sensor", "text_sensor"]
++
++component_common_ns = cg.global_ns.namespace("component_common")
++ChargerInterface = component_common_ns.class_("ChargerInterface")
+ 
+ programmable_load_ns = cg.esphome_ns.namespace("programmable_load")
+ 
+@@ -95,13 +98,9 @@ CONF_STOP = "stop"
+ CONF_RESISTANCE = "resistance"
+ 
+ CONF_BATTERY_CYCLE = "battery_cycle"
+-CONF_CHARGER14 = "charger14"
+-CONF_CHARGE_ENABLE = "charge_enable"
+-CONF_IBAT_CURRENT = "ibat_current"
+-CONF_VBAT_VOLTAGE = "vbat_voltage"
+-CONF_CHARGE_STATUS = "charge_status"
+-CONF_STATUS_FLAGS = "status_flags"
+-CONF_CONTROL_TIMEOUT = "control_timeout"
++CONF_CHARGER = "charger"
++CONF_CHARGER_SAMPLE_TIMEOUT = "charger_sample_timeout"
++CONF_CHARGER_CONTROL_TIMEOUT = "charger_control_timeout"
+ CONF_DISCHARGE_CURRENT = "discharge_current"
+ CONF_DISCHARGE_CUTOFF_VOLTAGE = "discharge_cutoff_voltage"
+ CONF_DISCHARGE_CUTOFF_HYSTERESIS = "discharge_cutoff_hysteresis"
+@@ -283,24 +282,14 @@ DCR_SCHEMA = cv.Schema(
+     }
+ )
+ 
+-CHARGER14_SCHEMA = cv.Schema(
+-    {
+-        cv.Required(CONF_CHARGE_ENABLE): cv.use_id(switch_.Switch),
+-        cv.Required(CONF_IBAT_CURRENT): cv.use_id(sensor.Sensor),
+-        cv.Required(CONF_VBAT_VOLTAGE): cv.use_id(sensor.Sensor),
+-        cv.Required(CONF_CHARGE_STATUS): cv.use_id(text_sensor.TextSensor),
+-        cv.Required(CONF_STATUS_FLAGS): cv.use_id(text_sensor.TextSensor),
+-        cv.Optional(CONF_SAMPLE_TIMEOUT, default="3s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_CONTROL_TIMEOUT, default="5s"):
+-            cv.positive_time_period_milliseconds,
+-    }
+-)
+-
+ BATTERY_CYCLE_SCHEMA = cv.Schema(
+     {
+         cv.GenerateID(): cv.declare_id(BatteryCycle),
+-        cv.Required(CONF_CHARGER14): CHARGER14_SCHEMA,
++        cv.Required(CONF_CHARGER): cv.use_id(ChargerInterface),
++        cv.Optional(CONF_CHARGER_SAMPLE_TIMEOUT, default="3s"):
++            cv.positive_time_period_milliseconds,
++        cv.Optional(CONF_CHARGER_CONTROL_TIMEOUT, default="5s"):
++            cv.positive_time_period_milliseconds,
+         cv.Required(CONF_DISCHARGE_CURRENT): _positive,
+         cv.Required(CONF_DISCHARGE_CUTOFF_VOLTAGE): _positive,
+         cv.Optional(CONF_DISCHARGE_CUTOFF_HYSTERESIS, default=0.1):
+@@ -572,25 +561,16 @@ async def to_code(config):
+ 
+     cycle_config = procedures.get(CONF_BATTERY_CYCLE)
+     if cycle_config is not None:
+-        charger = cycle_config[CONF_CHARGER14]
+-        charge_enable = await cg.get_variable(charger[CONF_CHARGE_ENABLE])
+-        ibat_current = await cg.get_variable(charger[CONF_IBAT_CURRENT])
+-        vbat_voltage = await cg.get_variable(charger[CONF_VBAT_VOLTAGE])
+-        charge_status = await cg.get_variable(charger[CONF_CHARGE_STATUS])
+-        status_flags = await cg.get_variable(charger[CONF_STATUS_FLAGS])
+-        cg.add(var.set_charger_enable_switch(charge_enable))
+-        cg.add(var.set_charger_current_sensor(ibat_current))
+-        cg.add(var.set_charger_voltage_sensor(vbat_voltage))
+-        cg.add(var.set_charger_status_sensor(charge_status))
+-        cg.add(var.set_charger_flags_sensor(status_flags))
++        charger = await cg.get_variable(cycle_config[CONF_CHARGER])
++        cg.add(var.set_charger(charger))
+         cg.add(
+             var.set_charger_sample_timeout_ms(
+-                charger[CONF_SAMPLE_TIMEOUT].total_milliseconds
