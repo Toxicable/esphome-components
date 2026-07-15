@@ -1,0 +1,226 @@
+-    this->charger_measurement_.state = ChargerState::UNKNOWN;
+-    this->charger_measurement_.power_good = false;
+-    this->charger_measurement_.fault_active = false;
++  this->charger_measurement_ = {};
++  if (this->charger_ == nullptr) return;
++
++  const auto capabilities = this->charger_->capabilities();
++  if (!capabilities.enable_control || !capabilities.battery_current ||
++      !capabilities.battery_voltage || !capabilities.charge_state ||
++      !capabilities.power_good || !capabilities.fault_status) {
+     return;
+   }
+-  this->charger_measurement_.current_a =
+-      this->charger_current_sensor_->state / 1000.0f;
+-  this->charger_measurement_.voltage_v =
+-      this->charger_voltage_sensor_->state / 1000.0f;
+-  this->charger_measurement_.state =
+-      charger_state_from_string(this->charger_status_sensor_->state);
+-  this->charger_measurement_.power_good =
+-      !contains_token(this->charger_flags_sensor_->state, "pg_low");
+-  this->charger_measurement_.fault_active =
+-      charger_flags_fault_active(this->charger_flags_sensor_->state);
++
++  this->charger_measurement_ = this->charger_->snapshot();
++  const uint32_t now = millis();
++  const bool fresh = this->charger_measurement_.timestamp_ms != 0 &&
++                     (uint32_t) (now - this->charger_measurement_.timestamp_ms) <=
++                         this->charger_sample_timeout_ms_;
++  this->charger_measurement_.valid =
++      this->charger_measurement_.valid && fresh &&
++      std::isfinite(this->charger_measurement_.current_a) &&
++      std::isfinite(this->charger_measurement_.voltage_v);
+ }
+ 
+ void ProgrammableLoadComponent::update_faults_() {
+@@ -490,8 +371,7 @@ void ProgrammableLoadComponent::update_operation_() {
+ 
+ void ProgrammableLoadComponent::update_control_() {
+   const bool charger_enabled =
+-      this->charger_enable_switch_ != nullptr &&
+-      this->charger_enable_switch_->state;
++      this->charger_measurement_.valid && this->charger_measurement_.enabled;
+   if (this->charger_commanded_enabled_ || charger_enabled) {
+     this->reset_control_();
+     this->force_output_off_();
+@@ -661,7 +541,7 @@ bool ProgrammableLoadComponent::fault_condition_active_(Fault fault) const {
+               this->measurement_.maximum_temperature_c >
+                   this->limits_.maximum_temperature_c);
+     case Fault::CHARGER_UNAVAILABLE:
+-      return this->charger_enable_switch_ != nullptr &&
++      return this->charger_ != nullptr &&
+              !this->charger_measurement_.valid;
+     case Fault::CHARGER_FAULT:
+       return this->charger_measurement_.valid &&
+@@ -721,7 +601,9 @@ void ProgrammableLoadComponent::apply_procedure_result_(
+ bool ProgrammableLoadComponent::apply_charger_command_(
+     ChargerCommand command) {
+   const bool enabled = command == ChargerCommand::ENABLE;
+-  if (this->charger_enable_switch_ == nullptr) return !enabled;
++  if (this->charger_ == nullptr) return !enabled;
++  if (!this->charger_->capabilities().enable_control) return false;
++
+   const uint32_t now = millis();
+   if (!this->charger_command_known_ ||
+       this->charger_commanded_enabled_ != enabled) {
+@@ -730,21 +612,23 @@ bool ProgrammableLoadComponent::apply_charger_command_(
+     this->charger_command_changed_ms_ = now == 0 ? 1 : now;
+     this->last_charger_command_attempt_ms_ = 0;
+   }
+-  if (this->charger_enable_switch_->state != enabled &&
++  if ((!this->charger_measurement_.valid ||
++       this->charger_measurement_.enabled != enabled) &&
+       (this->last_charger_command_attempt_ms_ == 0 ||
+        (uint32_t) (now - this->last_charger_command_attempt_ms_) >=
+            CHARGER_COMMAND_RETRY_MS)) {
+     this->last_charger_command_attempt_ms_ = now == 0 ? 1 : now;
+-    if (enabled) this->charger_enable_switch_->turn_on();
+-    else this->charger_enable_switch_->turn_off();
++    if (!this->charger_->request_enabled(enabled)) return false;
+   }
+   return true;
+ }
+ 
+ bool ProgrammableLoadComponent::charger_control_mismatch_() const {
+-  if (!this->charger_command_known_ || this->charger_enable_switch_ == nullptr ||
+-      this->charger_enable_switch_->state == this->charger_commanded_enabled_)
++  if (!this->charger_command_known_ || this->charger_ == nullptr ||
++      !this->charger_measurement_.valid ||
++      this->charger_measurement_.enabled == this->charger_commanded_enabled_) {
+     return false;
++  }
+   return this->charger_command_changed_ms_ != 0 &&
+          (uint32_t) (millis() - this->charger_command_changed_ms_) >=
+              this->charger_control_timeout_ms_;
+diff --git a/components/programmable_load/programmable_load.h b/components/programmable_load/programmable_load.h
+index 412c3f1..13031c8 100644
+--- a/components/programmable_load/programmable_load.h
++++ b/components/programmable_load/programmable_load.h
+@@ -7,11 +7,12 @@
+ #include "esphome/components/number/number.h"
+ #include "esphome/components/output/float_output.h"
+ #include "esphome/components/sensor/sensor.h"
+-#include "esphome/components/switch/switch.h"
+ #include "esphome/components/text_sensor/text_sensor.h"
+ #include "esphome/core/component.h"
+ #include "esphome/core/preferences.h"
+ 
++#include "../component_common/charger.h"
++
+ #include "calibration.h"
+ #include "load_types.h"
+ #include "procedure.h"
+@@ -51,23 +52,10 @@ class ProgrammableLoadComponent : public Component {
+     this->sample_timeout_ms_ = timeout_ms;
+   }
+ 
+-  // Charger_14 external-control boundary. These entities are supplied by the
+-  // BQ25756 component and may be internal. The core owns charge-enable while a
+-  // charger is attached, ensuring the load and charger are never active together.
+-  void set_charger_enable_switch(switch_::Switch *sw) {
+-    this->charger_enable_switch_ = sw;
+-  }
+-  void set_charger_current_sensor(sensor::Sensor *sensor) {
+-    this->charger_current_sensor_ = sensor;
+-  }
+-  void set_charger_voltage_sensor(sensor::Sensor *sensor) {
+-    this->charger_voltage_sensor_ = sensor;
+-  }
+-  void set_charger_status_sensor(text_sensor::TextSensor *sensor) {
+-    this->charger_status_sensor_ = sensor;
+-  }
+-  void set_charger_flags_sensor(text_sensor::TextSensor *sensor) {
+-    this->charger_flags_sensor_ = sensor;
++  // Typed charger capability. Home Assistant entities remain optional
++  // observers owned by the charger rather than an internal component API.
++  void set_charger(::component_common::ChargerInterface *charger) {
++    this->charger_ = charger;
+   }
+   void set_charger_sample_timeout_ms(uint32_t timeout_ms) {
+     this->charger_sample_timeout_ms_ = timeout_ms;
+@@ -220,11 +208,7 @@ class ProgrammableLoadComponent : public Component {
+   sensor::Sensor *voltage_sensor_{nullptr};
+   std::vector<TemperatureInput> temperature_inputs_;
+ 
+-  switch_::Switch *charger_enable_switch_{nullptr};
+-  sensor::Sensor *charger_current_sensor_{nullptr};
+-  sensor::Sensor *charger_voltage_sensor_{nullptr};
+-  text_sensor::TextSensor *charger_status_sensor_{nullptr};
+-  text_sensor::TextSensor *charger_flags_sensor_{nullptr};
++  ::component_common::ChargerInterface *charger_{nullptr};
+ 
+   number::Number *manual_current_number_{nullptr};
+   text_sensor::TextSensor *state_sensor_{nullptr};
+@@ -264,15 +248,6 @@ class ProgrammableLoadComponent : public Component {
+ 
+   uint32_t charger_sample_timeout_ms_{3000};
+   uint32_t charger_control_timeout_ms_{5000};
+-  uint32_t charger_current_updated_ms_{0};
+-  uint32_t charger_voltage_updated_ms_{0};
+-  uint32_t charger_status_updated_ms_{0};
+-  uint32_t charger_flags_updated_ms_{0};
+-  uint32_t charger_sequence_{0};
+-  bool charger_current_seen_{false};
+-  bool charger_voltage_seen_{false};
+-  bool charger_status_seen_{false};
+-  bool charger_flags_seen_{false};
+   bool charger_command_known_{false};
+   bool charger_commanded_enabled_{false};
+   uint32_t charger_command_changed_ms_{0};
+diff --git a/components/programmable_load/test_config.yaml b/components/programmable_load/test_config.yaml
+index dcab2b7..35f41e8 100644
+--- a/components/programmable_load/test_config.yaml
++++ b/components/programmable_load/test_config.yaml
+@@ -75,24 +75,7 @@ bq25756:
+   charging:
+     battery_current_limit: 5A
+     input_current_limit: 3A
+-  measurements:
+-    battery_current:
+-      id: charger14_ibat
+-      internal: true
+-    battery_voltage:
+-      id: charger14_vbat
+-      internal: true
+-  status:
+-    charging:
+-      id: charger14_charge_status
+-      internal: true
+-    faults:
+-      id: charger14_status_flags
+-      internal: true
+-  controls:
+-    charge_enable:
+-      id: charger14_charge_enable
+-      internal: true
++
+ 
+ programmable_load:
+   id: load_controller
+@@ -156,14 +139,9 @@ programmable_load:
+       resistance:
+         name: "Battery DCR"
+     battery_cycle:
+-      charger14:
+-        charge_enable: charger14_charge_enable
+-        ibat_current: charger14_ibat
+-        vbat_voltage: charger14_vbat
+-        charge_status: charger14_charge_status
+-        status_flags: charger14_status_flags
+-        sample_timeout: 3s
+-        control_timeout: 5s
++      charger: charger14_bq
++      charger_sample_timeout: 3s
++      charger_control_timeout: 5s
+       discharge_current: 10
+       discharge_cutoff_voltage: 42
+       discharge_cutoff_hysteresis: 0.5
+diff --git a/tests/bq25756_service_test.cpp b/tests/bq25756_service_test.cpp
+index 9b778a0..74180e8 100644
+--- a/tests/bq25756_service_test.cpp
++++ b/tests/bq25756_service_test.cpp
+@@ -97,6 +97,38 @@ void test_probe_and_control_decode() {
+   assert(states.watchdog_code == 2);
+ }
+ 
++
