@@ -32,13 +32,22 @@ jobs:
           wc -c phase4.patch
           cat phase4-patch.sha256
 
-      - name: Upload reconstructed patch
+      - name: Upload reconstructed patch and chunks
         uses: actions/upload-artifact@v4
         with:
           name: phase4-reconstructed-patch
           path: |
             phase4.patch
             phase4-patch.sha256
+            payload/.phase4/plain.00
+            payload/.phase4/plain.01
+            payload/.phase4/plain.02
+            payload/.phase4/plain.03
+            payload/.phase4/plain.04
+            payload/.phase4/plain.05
+            payload/.phase4/plain.06
+            payload/.phase4/plain.07
+            payload/.phase4/plain.08
 
       - name: Apply BQ consistency patch
         shell: bash
