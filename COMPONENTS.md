@@ -7,6 +7,7 @@ Update this table when a component is added, adopted by a real device, supersede
 ## Status definitions
 
 - **active** — used by a current board, project, or device configuration and expected to receive fixes.
+- **internal** — implementation support loaded by other components; it has no user-facing YAML block of its own.
 - **experimental** — retained for evaluation or hardware bring-up, but not yet relied on by a deployed configuration.
 - **legacy** — still used or contains functionality that has not yet been migrated, but new work should prefer its replacement.
 - **candidate-removal** — no current consumer was found during the repository review. Confirm local, private, old-branch, and unindexed configurations before deleting it.
@@ -23,6 +24,7 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `bq76922` | experimental | No deployed configuration found; device support remains potentially useful | Promote only with a real board/configuration and compile coverage, otherwise retire. |
 | `bq76952` | active | Boat/BMS configurations | Primary modern BMS implementation. Preserve the complete desired-state configuration model. |
 | `bq769x0` | candidate-removal | No current consumer found | Confirm external use before removal. |
+| `component_common` | internal | Header-only endian and register-field helpers; first used by `bq25756` | Keep small, host-independent, and policy-free. Add helpers only after a real second use or a demonstrated error-prone pattern. |
 | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
 | `esc_higher` | active | ESC Higher board and boat configuration | Maintain as the board-facing ESC integration. |
 | `fdc1004` | candidate-removal | No current consumer found | Confirm external use before removal. |
