@@ -1,0 +1,68 @@
+name: Publish Phase 4
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.head_ref == 'agent/phase4-publisher'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout publisher payload
+        uses: actions/checkout@v4
+        with:
+          path: payload
+
+      - name: Checkout Phase 3 base
+        uses: actions/checkout@v4
+        with:
+          ref: agent/typed-charger-capability
+          path: target
+          fetch-depth: 0
+
+      - name: Apply BQ consistency patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode payload/.phase4/patch.xz.b64 | xz --decompress > /tmp/phase4.patch
+          printf '%s  %s\n' 'ba0e70a476f8b7b94ec52d804aa4c0120734a5d3c0203abd58baed8240f13b30' /tmp/phase4.patch | sha256sum --check
+          cd target
+          git apply --check /tmp/phase4.patch
+          git apply --index /tmp/phase4.patch
+          git diff --cached --check
+
+      - name: Check Python modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          python3 -m py_compile components/bq76952/*.py
+
+      - name: Run host tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd target
+          bash ./check_host.bash 2>&1 | tee ../phase4-host.log
+
+      - name: Upload host failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-host-failure
+          path: phase4-host.log
+          if-no-files-found: ignore
+
+      - name: Publish BQ consistency branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b agent/bq-consistency
+          git commit -m 'Standardize BQ lifecycle and fault boundaries'
+          git push origin HEAD:refs/heads/agent/bq-consistency
