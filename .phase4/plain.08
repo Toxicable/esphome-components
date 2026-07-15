@@ -1,0 +1,318 @@
+d: bms
++  i2c_id: i2c_ext
++  address: 0x08
++  update_interval: 1s
++
++  cell_count: 4
++  cell_chemistry: lithium_ion
++  sense_resistor_milliohm: 1.0
++  i2c_crc_enabled: false
++  current_gain_policy: factory_calibration
++
++  regulators:
++    reg0_enabled: true
++    reg1_enabled: true
++    reg1_voltage: 3.3v
++    reg2_enabled: false
++    reg2_voltage: 3.3v
++
++  thermistors:
++    ts1: 18k
++    ts2: disabled
++    ts3: disabled
++
++  fet:
++    autonomous: true
++    sleep_charge_enabled: true
++    precharge:
++      enabled: false
++      start_cell_voltage_mv: 2500
++      stop_cell_voltage_mv: 3000
++    predischarge:
++      enabled: true
++      timeout_ms: 2550
++      stop_delta_mv: 500
++
++  balancing:
++    minimum_cell_voltage_mv: 3000
++    start_delta_mv: 40
++    stop_delta_mv: 20
++    minimum_temperature_c: 0
++    maximum_temperature_c: 45
++    maximum_balanced_cells: 2
++
++  protections:
++    cell_undervoltage:
++      threshold_mv: 2800
++      delay_ms: 200
++      recovery_hysteresis_mv: 100
++    cell_overvoltage:
++      threshold_mv: 4200
++      delay_ms: 200
++      recovery_hysteresis_mv: 100
++    charge_overcurrent:
++      threshold_a: 20
++      delay_ms: 100
++    discharge_overcurrent:
++      threshold_a: 40
++      delay_ms: 100
++    discharge_severe_overcurrent:
++      threshold_a: 60
++      delay_ms: 23
++    discharge_sustained_overcurrent:
++      threshold_a: 30
++      delay_s: 5
++    discharge_short_circuit:
++      threshold_mv: 100
++      delay_us: 210
++      recovery_time_s: 5
++    temperature:
++      charge_minimum_c: 0
++      charge_maximum_c: 45
++      discharge_minimum_c: -20
++      discharge_maximum_c: 60
++      recovery_hysteresis_c: 5
++    current_recovery_time_s: 3
++
++  soc:
++    empty_cell_voltage_mv: 3000
++    full_cell_voltage_mv: 4200
++
++  lifecycle:
++    name: "BMS Lifecycle"
++  state:
++    name: "BMS State"
++  fault:
++    name: "BMS Fault"
++  fault_flags:
++    name: "BMS Fault Flags"
++  pack_voltage:
++    name: "BMS Pack Voltage"
++  current:
++    name: "BMS Current"
++  state_of_charge:
++    name: "BMS State of Charge"
++  learned_capacity:
++    name: "BMS Learned Capacity"
++  cell1_voltage:
++    name: "BMS Cell 1"
++  cell2_voltage:
++    name: "BMS Cell 2"
++  cell3_voltage:
++    name: "BMS Cell 3"
++  cell4_voltage:
++    name: "BMS Cell 4"
++  output_enabled_control:
++    name: "BMS Output Enabled"
++  clear_alarms:
++    name: "BMS Clear Alarms"
++
++  manufacturing:
++    program_factory_otp:
++      name: "DANGER - Program BMS OTP Once"
+diff --git a/components/component_common/AGENTS_KNOWLEDGE.md b/components/component_common/AGENTS_KNOWLEDGE.md
+index f233ea3..4d2748c 100644
+--- a/components/component_common/AGENTS_KNOWLEDGE.md
++++ b/components/component_common/AGENTS_KNOWLEDGE.md
+@@ -6,3 +6,4 @@
+ - Helpers must remain C++17, host-independent, allocation-free, and free of ESPHome headers, logging, entities, chip policy, and register addresses.
+ - Host-independent consumers use sibling-relative includes so the same core builds from the repository and from ESPHome's generated source tree.
+ - `charger.h` is the generic machine-to-machine charger boundary. Keep transport, chip faults, entity types, and product policy in the implementing component.
++- `status.h` provides only generic lifecycle and fault-snapshot structure; component-specific operating states, fault enums, priorities, and raw status stay with the component.
+diff --git a/components/component_common/CONTEXT_INDEX.md b/components/component_common/CONTEXT_INDEX.md
+index bd99a4a..a5f46e9 100644
+--- a/components/component_common/CONTEXT_INDEX.md
++++ b/components/component_common/CONTEXT_INDEX.md
+@@ -13,5 +13,6 @@
+ - `bit_field.h`: generic contiguous field and masked-bit operations.
+ - `byte_order.h`: unsigned fixed-width endian load/store.
+ - `charger.h`: typed charger capabilities, snapshots, states, and enable command.
++- `status.h`: generic lifecycle and typed fault-snapshot contract.
+ - `README.md`: ESPHome loading, allowlist, and include-path contract.
+ - `tests/component_common_test.cpp`: host-side helper behaviour and compile-time checks.
+diff --git a/components/component_common/README.md b/components/component_common/README.md
+index d76dd37..5845f18 100644
+--- a/components/component_common/README.md
++++ b/components/component_common/README.md
+@@ -30,5 +30,6 @@ That form resolves both in this source tree and after ESPHome copies the loaded
+ - `bit_field.h`: contiguous register-field encode/decode/replace and masked updates.
+ - `byte_order.h`: fixed-width unsigned little-endian and big-endian load/store.
+ - `charger.h`: typed charger capabilities, snapshots, and control boundary for component composition.
++- `status.h`: lifecycle states and a generic typed fault snapshot for stateful components.
+ 
+ Keep this package small and policy-free. Chip addresses, reset values, scaling, faults, and configuration defaults remain in the owning component or chip family.
+diff --git a/components/component_common/status.h b/components/component_common/status.h
+new file mode 100644
+index 0000000..b4e397e
+--- /dev/null
++++ b/components/component_common/status.h
+@@ -0,0 +1,35 @@
++#pragma once
++
++#include <cstdint>
++
++namespace component_common {
++
++enum class LifecycleState : uint8_t {
++  DISCONNECTED = 0,
++  CONFIGURING,
++  READY,
++  FAILED,
++};
++
++inline const char *lifecycle_state_to_string(LifecycleState state) {
++  switch (state) {
++    case LifecycleState::DISCONNECTED:
++      return "disconnected";
++    case LifecycleState::CONFIGURING:
++      return "configuring";
++    case LifecycleState::READY:
++      return "ready";
++    case LifecycleState::FAILED:
++      return "failed";
++    default:
++      return "unknown";
++  }
++}
++
++template<typename PrimaryFault, typename Flags = uint32_t> struct FaultSnapshot {
++  PrimaryFault primary{};
++  Flags active_flags{};
++  Flags latched_flags{};
++};
++
++}  // namespace component_common
+diff --git a/tests/bq76952_status_test.cpp b/tests/bq76952_status_test.cpp
+new file mode 100644
+index 0000000..a3546f5
+--- /dev/null
++++ b/tests/bq76952_status_test.cpp
+@@ -0,0 +1,70 @@
++#include <cassert>
++#include <cstdint>
++#include <cstring>
++#include <string_view>
++
++#include "components/bq76952/bq76952_registers.h"
++#include "components/bq76952/bq76952_status.h"
++
++namespace {
++
++namespace hw = bq76952_core::registers;
++
++void test_lifecycle_and_operating_state() {
++  assert(component_common::lifecycle_state_to_string(
++             component_common::LifecycleState::DISCONNECTED) ==
++         std::string_view("disconnected"));
++  assert(bq76952_core::decode_operating_state(0, 0) ==
++         bq76952_core::OperatingState::NORMAL);
++  assert(bq76952_core::decode_operating_state(
++             hw::bits::control_status::DEEP_SLEEP, 0) ==
++         bq76952_core::OperatingState::DEEP_SLEEP);
++  assert(bq76952_core::decode_operating_state(
++             0, hw::bits::battery_status::CONFIG_UPDATE) ==
++         bq76952_core::OperatingState::CONFIG_UPDATE);
++  assert(bq76952_core::operating_state_to_string(
++             bq76952_core::OperatingState::SLEEP) ==
++         std::string_view("sleep"));
++}
++
++void test_fault_decode_and_priority() {
++  const uint8_t safety_a = static_cast<uint8_t>(
++      hw::bits::protection_a::CUV | hw::bits::protection_a::SCD);
++  const uint8_t safety_b = hw::bits::protection_b::ANY_TEMPERATURE;
++  const uint32_t flags = bq76952_core::decode_fault_flags(
++      hw::bits::battery_status::PERMANENT_FAILURE, safety_a, safety_b, 0);
++
++  assert((flags & bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0);
++  assert((flags & bq76952_core::FAULT_DISCHARGE_SHORT_CIRCUIT) != 0);
++  assert((flags & bq76952_core::FAULT_TEMPERATURE) != 0);
++  assert((flags & bq76952_core::FAULT_PERMANENT_FAILURE) != 0);
++
++  const auto snapshot = bq76952_core::make_fault_snapshot(flags);
++  assert(snapshot.primary == bq76952_core::Fault::PERMANENT_FAILURE);
++  assert(snapshot.active_flags == flags);
++  assert(snapshot.latched_flags == 0);
++  assert(bq76952_core::fault_to_string(snapshot.primary) ==
++         std::string_view("permanent_failure"));
++}
++
++void test_fault_flag_formatting() {
++  char buffer[128]{};
++  const uint32_t flags = bq76952_core::FAULT_CELL_OVERVOLTAGE |
++                         bq76952_core::FAULT_TEMPERATURE;
++  const size_t length =
++      bq76952_core::format_fault_flags(flags, buffer, sizeof(buffer));
++  assert(length == std::strlen("cell_overvoltage,temperature"));
++  assert(std::string_view(buffer) == "cell_overvoltage,temperature");
++
++  bq76952_core::format_fault_flags(0, buffer, sizeof(buffer));
++  assert(std::string_view(buffer) == "none");
++}
++
++}  // namespace
++
++int main() {
++  test_lifecycle_and_operating_state();
++  test_fault_decode_and_priority();
++  test_fault_flag_formatting();
++  return 0;
++}
+diff --git a/tests/component_common_test.cpp b/tests/component_common_test.cpp
+index db853ea..f2150de 100644
+--- a/tests/component_common_test.cpp
++++ b/tests/component_common_test.cpp
+@@ -6,6 +6,7 @@
+ #include "components/component_common/bit_field.h"
+ #include "components/component_common/byte_order.h"
+ #include "components/component_common/charger.h"
++#include "components/component_common/status.h"
+ 
+ namespace {
+ 
+@@ -22,7 +23,6 @@ static_assert(component_common::replace_masked<uint8_t>(0xAA, 0x0F, 0x05) == 0xA
+ static_assert(component_common::any_set<uint8_t>(0x40, 0x60));
+ static_assert(!component_common::any_set<uint8_t>(0x10, 0x60));
+ 
+-
+ class FakeCharger final : public component_common::ChargerInterface {
+  public:
+   component_common::ChargerCapabilities capabilities() const override {
+@@ -55,6 +55,17 @@ void test_charger_interface() {
+   assert(charger.requested_enabled_);
+ }
+ 
++void test_status_contract() {
++  using Snapshot = component_common::FaultSnapshot<uint8_t>;
++  const Snapshot snapshot{2, 0x03, 0x01};
++  assert(snapshot.primary == 2);
++  assert(snapshot.active_flags == 0x03);
++  assert(snapshot.latched_flags == 0x01);
++  assert(component_common::lifecycle_state_to_string(
++             component_common::LifecycleState::READY) ==
++         std::string_view("ready"));
++}
++
+ void test_byte_order() {
+   const std::array<uint8_t, 4> little{{0x78, 0x56, 0x34, 0x12}};
+   const std::array<uint8_t, 4> big{{0x12, 0x34, 0x56, 0x78}};
+@@ -77,5 +88,6 @@ void test_byte_order() {
+ int main() {
+   test_byte_order();
+   test_charger_interface();
++  test_status_contract();
+   return 0;
+ }
+diff --git a/tools/check_core_purity.py b/tools/check_core_purity.py
+index 2851fab..0c83f08 100644
+--- a/tools/check_core_purity.py
++++ b/tools/check_core_purity.py
+@@ -8,7 +8,7 @@ import re
+ import sys
+ 
+ SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp"}
+-CORE_FILE_RE = re.compile(r".*_(?:bus|protocol|service)\.(?:c|cc|cpp|cxx|h|hh|hpp)$")
++CORE_FILE_RE = re.compile(r".*_(?:bus|protocol|service|status)\.(?:c|cc|cpp|cxx|h|hh|hpp)$")
+ INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
+ FORBIDDEN_TOKENS = ("ESP_LOG", "esphome::")
+ 
