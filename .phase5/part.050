@@ -1,0 +1,59 @@
+nst;
+ 
+  private:
+-  RegisterBus *bus_{nullptr};
++  mcf83xx_common::RegisterAccess registers_;
+ };
+ 
+ }  // namespace mcf8329a_core
+diff --git a/components/mcf8329a/mcf8329a_tables.h b/components/mcf8329a/mcf8329a_tables.h
+index 9412d22..f37002f 100644
+--- a/components/mcf8329a/mcf8329a_tables.h
++++ b/components/mcf8329a/mcf8329a_tables.h
+@@ -2,8 +2,7 @@
+ 
+ #include <cstdint>
+ 
+-namespace esphome {
+-namespace mcf8329a {
++namespace mcf8329a_core {
+ namespace tables {
+ 
+ // Key: FAULT_CONFIG1.ILIMIT field code [0..15]
+@@ -225,5 +224,4 @@ static constexpr float MPET_OPEN_LOOP_SLEW_HZ_PER_S[8] = {
+ };
+ 
+ }  // namespace tables
+-}  // namespace mcf8329a
+-}  // namespace esphome
++}  // namespace mcf8329a_core
+diff --git a/components/mcf8329a/mcf8329a_tuning.cpp b/components/mcf8329a/mcf8329a_tuning.cpp
+index f1aa344..38c9ba9 100644
+--- a/components/mcf8329a/mcf8329a_tuning.cpp
++++ b/components/mcf8329a/mcf8329a_tuning.cpp
+@@ -17,6 +17,7 @@ namespace esphome {
+ namespace mcf8329a {
+ 
+ using namespace ::mcf8329a_core::regs;
++namespace tables = ::mcf8329a_core::tables;
+ 
+ static const char* const TUNING_TAG = "mcf8329a";
+ struct InitialTuneCandidate {
+diff --git a/components/mcf8329a/test_config.yaml b/components/mcf8329a/test_config.yaml
+index 84993ed..988b33c 100644
+--- a/components/mcf8329a/test_config.yaml
++++ b/components/mcf8329a/test_config.yaml
+@@ -18,7 +18,7 @@ external_components:
+       type: local
+       path: ..
+     refresh: 0s
+-    components: [ mcf8329a ]
++    components: [ component_common, mcf83xx_common, mcf8329a ]
+ 
+ wifi:
+   ssid: "${wifi_ssid}"
+diff --git a/components/mcf83xx_common/AGENTS_KNOWLEDGE.md b/components/mcf83xx_common/AGENTS_KNOWLEDGE.md
+new file mode 100644
+index 0000000..158db5f
+--- /dev/null
++
