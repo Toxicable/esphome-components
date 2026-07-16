@@ -26,9 +26,9 @@ struct FeedbackCalibration {
 };
 
 class BQ25756Component : public PollingComponent,
-                         public i2c::I2CDevice,
-                         public ::bq25756_core::RegisterBus,
-                         public ::component_common::ChargerInterface {
+                          public i2c::I2CDevice,
+                          public ::bq25756_core::RegisterBus,
+                          public ::component_common::ChargerInterface {
  public:
   BQ25756Component();
 
@@ -225,6 +225,27 @@ class BQ25756Component : public PollingComponent,
   uint8_t last_status2_{0};
   uint8_t last_status3_{0};
   uint8_t last_fault_{0};
+};
+
+class BQ25756ManagedComponent : public BQ25756Component {
+ public:
+  void setup() override;
+  void update() override;
+  bool read_registers(uint8_t reg, uint8_t *data, size_t len) override;
+  bool write_registers(uint8_t reg, const uint8_t *data, size_t len) override;
+
+ protected:
+  ::bq25756_core::Bq25756Configuration build_configuration_() const;
+  bool restore_manifest_configuration_();
+  bool audit_manifest_configuration_();
+  void mark_communication_lost_();
+
+  bool io_failed_this_cycle_{false};
+  bool manifest_ready_{false};
+  uint8_t consecutive_failed_cycles_{0};
+  uint32_t next_manifest_audit_ms_{0};
+  static constexpr uint8_t COMMUNICATION_FAILURE_THRESHOLD = 3;
+  static constexpr uint32_t MANIFEST_AUDIT_INTERVAL_MS = 10000;
 };
 
 class BQ25756ChargeEnableSwitch : public switch_::Switch, public Parented<BQ25756Component> {
