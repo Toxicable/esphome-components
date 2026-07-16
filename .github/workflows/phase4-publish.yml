@@ -30,7 +30,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat payload/.phase4/followup.0{0..3} > status-followup.patch
+          cat \
+            payload/.phase4/followup.00 \
+            payload/.phase4/followup.schema-header \
+            payload/.phase4/followup.01 \
+            payload/.phase4/followup.02 \
+            payload/.phase4/followup.03 \
+            > status-followup.patch
           wc -c status-followup.patch
           sha256sum status-followup.patch
 
