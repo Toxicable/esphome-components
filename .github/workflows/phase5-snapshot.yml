@@ -1,0 +1,34 @@
+name: Phase 5 source snapshot
+
+on:
+  push:
+    branches:
+      - agent/phase5-source-snapshot
+  pull_request:
+
+jobs:
+  snapshot:
+    if: github.ref_name == 'agent/phase5-source-snapshot' || github.head_ref == 'agent/phase5-source-snapshot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout MCF family base
+        uses: actions/checkout@v4
+        with:
+          ref: agent/bq-consistency
+
+      - name: Upload MCF family source
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-mcf-source
+          path: |
+            ARCHITECTURE.md
+            COMPONENTS.md
+            README.md
+            check_host.bash
+            .github/workflows/compile.yml
+            components/component_common
+            components/mcf8316d
+            components/mcf8329a
+            tests
+            tools
+          if-no-files-found: error
