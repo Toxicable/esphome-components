@@ -1,0 +1,45 @@
++  const uint32_t speed = bus.registers[REG_ALGO_DEBUG1];
++  assert((speed & ALGO_DEBUG1_OVERRIDE_MASK) != 0U);
++  assert(((speed & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16U) == 16384U);
++
++  bus.delays.clear();
++  assert(service.pulse_clear_faults());
++  assert((bus.delays == std::vector<uint32_t>{2000U, 2000U}));
++  assert((bus.registers[REG_ALGO_CTRL1] & ALGO_CTRL1_CLR_FLT_MASK) == 0U);
++}
++
++void test_mcf8329a_service() {
++  using namespace mcf8329a_core;
++  using namespace mcf8329a_core::regs;
++
++  FakeBus bus;
++  MCF8329AService service(&bus);
++
++  assert(service.set_brake_input(true));
++  assert((bus.registers[REG_PIN_CONFIG] & PIN_CONFIG_BRAKE_INPUT_MASK) == PIN_CONFIG_BRAKE_INPUT_BRAKE);
++  assert((bus.delays == std::vector<uint32_t>{100U}));
++
++  bus.delays.clear();
++  assert(service.set_direction_input(DirectionInputMode::CW));
++  assert((bus.registers[REG_PERI_CONFIG1] & PERI_CONFIG1_DIR_INPUT_MASK) == PERI_CONFIG1_DIR_INPUT_CW);
++  assert((bus.delays == std::vector<uint32_t>{100U}));
++
++  bus.delays.clear();
++  assert(service.write_speed_command_raw(0x1234U));
++  assert((bus.registers[REG_ALGO_DEBUG1] & ALGO_DEBUG1_OVERRIDE_MASK) != 0U);
++  assert(((bus.registers[REG_ALGO_DEBUG1] & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16U) == 0x1234U);
++  assert((bus.delays == std::vector<uint32_t>{100U}));
++
++  bus.delays.clear();
++  assert(service.write_mpet_results_to_shadow());
++  assert((bus.registers[REG_ALGO_DEBUG2] & ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK) == 0U);
++  assert((bus.delays == std::vector<uint32_t>{100U, 2000U, 100U}));
++}
++
++}  // namespace
++
++int main() {
++  test_mcf8316d_service();
++  test_mcf8329a_service();
++  return 0;
++}
