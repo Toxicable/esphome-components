@@ -24,7 +24,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
 
   void set_config(const BQ76952Config &config);
 
-  void set_bat_voltage_sensor(sensor::Sensor *sensor);
+  void set_battery_voltage_sensor(sensor::Sensor *sensor);
   void set_pack_voltage_sensor(sensor::Sensor *sensor);
   void set_ld_voltage_sensor(sensor::Sensor *sensor);
   void set_largest_intercell_voltage_sensor(sensor::Sensor *sensor);
@@ -57,7 +57,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
 
   BQ76952Service service_;
 
-  sensor::Sensor *bat_voltage_sensor_{nullptr};
+  sensor::Sensor *battery_voltage_sensor_{nullptr};
   sensor::Sensor *pack_voltage_sensor_{nullptr};
   sensor::Sensor *ld_voltage_sensor_{nullptr};
   sensor::Sensor *largest_intercell_voltage_sensor_{nullptr};

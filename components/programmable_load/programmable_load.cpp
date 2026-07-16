@@ -288,7 +288,6 @@ bool ProgrammableLoadComponent::update_manual(float current_a) {
   }
   this->requested_current_a_ =
       clampf(current_a, 0.0f, this->limits_.maximum_current_a);
-  this->reset_control_integrator_();
   this->apply_charger_command_(ChargerCommand::DISABLE);
   if (this->manual_current_number_ != nullptr) {
     this->manual_current_number_->publish_state(this->requested_current_a_);
@@ -531,23 +530,25 @@ void ProgrammableLoadComponent::update_control_() {
   const float error = target - this->measurement_.current_a;
   const float bounded_error = std::fabs(error) <= this->deadband_a_ ? 0.0f : error;
   if (!std::isfinite(this->commanded_current_a_) ||
-      !std::isfinite(this->control_integrator_a_)) {
+      !std::isfinite(this->previous_control_error_a_)) {
     this->trip_fault_(Fault::CONTROL_ERROR);
     return;
   }
 
-  const float proportional = this->proportional_gain_ * bounded_error;
-  float desired = target + proportional + this->control_integrator_a_;
+  // Incremental PI: the existing command is the operating-point estimate.
+  // Do not recreate it from the target, because DAC/load nonlinearity would
+  // turn an ordinary setpoint adjustment into a large open-loop step.
+  const float proportional_step = this->proportional_gain_ *
+                                  (bounded_error - this->previous_control_error_a_);
+  const float integral_step = this->integral_gain_per_s_ * bounded_error * dt_s;
+  float desired = this->commanded_current_a_ + proportional_step + integral_step;
   const bool saturated_low = desired < 0.0f;
   const bool saturated_high = desired > current_limit;
-  if ((!saturated_low && !saturated_high) ||
-      (saturated_low && bounded_error > 0.0f) ||
-      (saturated_high && bounded_error < 0.0f)) {
-    this->control_integrator_a_ = clampf(
-        this->control_integrator_a_ +
-            this->integral_gain_per_s_ * bounded_error * dt_s,
-        -current_limit, current_limit);
-    desired = target + proportional + this->control_integrator_a_;
+  if ((saturated_low && bounded_error < 0.0f) ||
+      (saturated_high && bounded_error > 0.0f)) {
+    // Anti-windup: reject the integral contribution that drives farther into
+    // a physical output limit. The command itself holds all PI state.
+    desired = this->commanded_current_a_ + proportional_step;
   }
   desired = clampf(desired, 0.0f, current_limit);
   const float maximum_rise = this->rise_rate_a_per_s_ * dt_s;
@@ -556,25 +557,26 @@ void ProgrammableLoadComponent::update_control_() {
                             this->commanded_current_a_ - maximum_fall,
                             this->commanded_current_a_ + maximum_rise);
   this->commanded_current_a_ = clampf(next, 0.0f, current_limit);
+  this->previous_control_error_a_ = bounded_error;
   this->drive_output_(this->commanded_current_a_);
   if (this->log_control_samples_) {
     ESP_LOGI(TAG,
-             "PI sample=%u dt=%.3fs target=%.3fA measured=%.3fA error=%.3fA "
-             "p=%.3fA i=%.3fA desired=%.3fA command=%.3fA",
+             "incremental PI sample=%u dt=%.3fs target=%.3fA measured=%.3fA "
+             "error=%.3fA dp=%.3fA di=%.3fA desired=%.3fA command=%.3fA",
              this->current_sequence_, dt_s, target,
-             this->measurement_.current_a, error, proportional,
-             this->control_integrator_a_, desired, this->commanded_current_a_);
+             this->measurement_.current_a, error, proportional_step,
+             integral_step, desired, this->commanded_current_a_);
   }
 }
 
 void ProgrammableLoadComponent::reset_control_() {
   this->commanded_current_a_ = 0.0f;
-  this->reset_control_integrator_();
+  this->reset_control_history_();
 }
 
-void ProgrammableLoadComponent::reset_control_integrator_() {
-  this->control_integrator_a_ = 0.0f;
-  // Do not reuse the sample that preceded a target or ownership change.
+void ProgrammableLoadComponent::reset_control_history_() {
+  this->previous_control_error_a_ = 0.0f;
+  // Do not reuse the sample that preceded an ownership change.
   // The next command is produced only after the current sensor publishes again.
   this->control_has_current_sample_ = true;
   this->last_control_current_sequence_ = this->current_sequence_;
@@ -707,9 +709,6 @@ void ProgrammableLoadComponent::apply_procedure_result_(
   if (!this->apply_charger_command_(result.charger_command)) {
     this->trip_fault_(Fault::CHARGER_CONTROL_ERROR);
     return;
-  }
-  if (this->requested_current_a_ != result.requested_current_a) {
-    this->reset_control_integrator_();
   }
   this->requested_current_a_ = result.requested_current_a;
   if (result.charger_command == ChargerCommand::ENABLE) {

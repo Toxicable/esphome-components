@@ -194,7 +194,7 @@ class ProgrammableLoadComponent : public Component {
   void update_operation_();
   void update_control_();
   void reset_control_();
-  void reset_control_integrator_();
+  void reset_control_history_();
   void update_fan_();
 
   Fault detect_running_fault_() const;
@@ -246,7 +246,7 @@ class ProgrammableLoadComponent : public Component {
 
   float requested_current_a_{0.0f};
   float commanded_current_a_{0.0f};
-  float control_integrator_a_{0.0f};
+  float previous_control_error_a_{0.0f};
 
   bool restore_calibration_{true};
   uint32_t sample_timeout_ms_{250};

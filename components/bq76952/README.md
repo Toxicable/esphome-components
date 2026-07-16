@@ -127,6 +127,9 @@ bq76952:
   fault:
     name: "BMS Fault"
 
+  # Sum of enabled cell measurements; use this as the user-facing battery voltage.
+  battery_voltage:
+    name: "Battery Voltage"
   pack_voltage:
     name: "BMS Pack Voltage"
   current:

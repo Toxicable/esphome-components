@@ -46,8 +46,8 @@ void BQ76952Component::set_config(const BQ76952Config &config) {
   this->service_.set_config(config);
 }
 
-void BQ76952Component::set_bat_voltage_sensor(sensor::Sensor *sensor) {
-  this->bat_voltage_sensor_ = sensor;
+void BQ76952Component::set_battery_voltage_sensor(sensor::Sensor *sensor) {
+  this->battery_voltage_sensor_ = sensor;
 }
 
 void BQ76952Component::set_pack_voltage_sensor(sensor::Sensor *sensor) {
@@ -143,9 +143,6 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
   if (this->output_enabled_switch_ != nullptr) {
     this->output_enabled_switch_->publish_state(snapshot.output_enabled);
   }
-  if (this->bat_voltage_sensor_ != nullptr) {
-    this->bat_voltage_sensor_->publish_state(static_cast<float>(snapshot.stack_voltage_mv) / 1000.0F);
-  }
   if (this->pack_voltage_sensor_ != nullptr) {
     this->pack_voltage_sensor_->publish_state(static_cast<float>(snapshot.pack_voltage_mv) / 1000.0F);
   }
@@ -155,6 +152,7 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
 
   int16_t minimum_cell_mv = 0;
   int16_t maximum_cell_mv = 0;
+  int32_t cell_sum_mv = 0;
   if (snapshot.cell_count > 0) {
     minimum_cell_mv = snapshot.cell_voltage_mv[0];
     maximum_cell_mv = snapshot.cell_voltage_mv[0];
@@ -165,6 +163,10 @@ void BQ76952Component::publish_snapshot(const BQ76952Snapshot &snapshot) {
     }
     minimum_cell_mv = std::min(minimum_cell_mv, snapshot.cell_voltage_mv[i]);
     maximum_cell_mv = std::max(maximum_cell_mv, snapshot.cell_voltage_mv[i]);
+    cell_sum_mv += snapshot.cell_voltage_mv[i];
+  }
+  if (this->battery_voltage_sensor_ != nullptr) {
+    this->battery_voltage_sensor_->publish_state(static_cast<float>(cell_sum_mv) / 1000.0F);
   }
   if (this->largest_intercell_voltage_sensor_ != nullptr && snapshot.cell_count >= 2) {
     this->largest_intercell_voltage_sensor_->publish_state(
@@ -238,7 +240,7 @@ void BQ76952Component::dump_config() {
                 static_cast<unsigned>(config.soc.empty_cell_voltage_mv),
                 static_cast<unsigned>(config.soc.full_cell_voltage_mv));
 
-  LOG_SENSOR("  ", "BAT Voltage", this->bat_voltage_sensor_);
+  LOG_SENSOR("  ", "Battery Voltage", this->battery_voltage_sensor_);
   LOG_SENSOR("  ", "PACK Voltage", this->pack_voltage_sensor_);
   LOG_SENSOR("  ", "LD Voltage", this->ld_voltage_sensor_);
   LOG_SENSOR("  ", "Largest Inter-Cell Voltage", this->largest_intercell_voltage_sensor_);

@@ -185,6 +185,7 @@ class BQ25756Component : public PollingComponent, public i2c::I2CDevice, public 
   static constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
   uint32_t next_configuration_audit_ms_{0};
   static constexpr uint32_t CONFIGURATION_AUDIT_INTERVAL_MS = 10000;
+  static constexpr uint32_t CALIBRATION_ADC_SETTLE_MS = 100;
 
   bool disable_watchdog_{true};
   bool event_logging_{true};

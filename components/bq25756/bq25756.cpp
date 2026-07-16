@@ -118,8 +118,19 @@ bool BQ25756Component::calibrate_feedback(float measured_battery_voltage_v) {
   }
   ::bq25756_core::Measurements measurements{};
   ::bq25756_core::AdcConfigurationState adc_state{};
-  if (this->service_.read_measurements(measurements, true, ::bq25756_core::REG2B_ADC_CONTINUOUS_15_BIT, adc_state) !=
-      ::bq25756_core::MeasurementReadResult::OK) {
+  const ::bq25756_core::MeasurementReadResult measurement_result =
+    this->service_.read_measurements(measurements, true, ::bq25756_core::REG2B_ADC_CONTINUOUS_15_BIT, adc_state);
+  if (measurement_result == ::bq25756_core::MeasurementReadResult::CONFIGURATION_CHANGED) {
+    // Enabling VFB starts a new ADC conversion.  Read it only after that
+    // conversion has completed, rather than reporting a false calibration
+    // failure on the first button press.
+    ESP_LOGI(TAG, "Feedback ADC enabled; retrying calibration after a fresh conversion");
+    this->publish_calibration_status_("pending");
+    this->set_timeout("bq25756_calibration_retry", CALIBRATION_ADC_SETTLE_MS,
+                      [this, measured_battery_voltage_v]() { this->calibrate_feedback(measured_battery_voltage_v); });
+    return true;
+  }
+  if (measurement_result != ::bq25756_core::MeasurementReadResult::OK) {
     ESP_LOGW(TAG, "ADC measurement unavailable during battery feedback calibration");
     this->publish_calibration_status_("failed");
     return false;

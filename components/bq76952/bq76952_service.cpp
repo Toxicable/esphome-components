@@ -359,6 +359,14 @@ bool BQ76952Service::apply_thermistors(bool write, bool &matches) {
 
 bool BQ76952Service::apply_fet_configuration(bool write, bool &matches) {
   const auto &fet = this->config_.fet;
+  // Restore these multifunction pins to their previous unused configuration.
+  // Board-specific hardware inhibits must not be enabled globally by the
+  // component because their external pull-up topology is not universal.
+  if (!this->sync_u8(hw::data_memory::CFETOFF_PIN_CONFIG, 0x00, 0xFF, write, matches, "CFETOFF pin configuration") ||
+      !this->sync_u8(hw::data_memory::DFETOFF_PIN_CONFIG, 0x00, 0xFF, write, matches, "DFETOFF pin configuration")) {
+    return false;
+  }
+
   uint8_t desired_options = static_cast<uint8_t>(hw::bits::fet_options::FET_CONTROL_ENABLE | hw::bits::fet_options::HOST_FET_ENABLE |
                                                   hw::bits::fet_options::SERIES_FETS);
   if (fet.sleep_charge_enabled) {
