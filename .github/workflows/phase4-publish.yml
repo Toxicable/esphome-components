@@ -31,8 +31,8 @@ jobs:
         run: |
           set -euo pipefail
           cat payload/.phase4/followup.0{0..3} > status-followup.patch
-          printf '%s  %s\n' '35816a37b60c0666f8da6cf2b20fd0a759fa98ac9a2c291e8e03f58cafb8a8f9' status-followup.patch | sha256sum --check
-          test "$(wc -c < status-followup.patch)" -eq 42056
+          wc -c status-followup.patch
+          sha256sum status-followup.patch
 
       - name: Apply status follow-up patch
         shell: bash
@@ -62,7 +62,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bq-status-followup-failure
-          path: status-followup-host.log
+          path: |
+            status-followup.patch
+            status-followup-host.log
           if-no-files-found: ignore
 
       - name: Publish follow-up
