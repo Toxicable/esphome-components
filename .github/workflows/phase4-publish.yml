@@ -26,28 +26,24 @@ jobs:
           path: target
           fetch-depth: 0
 
-      - name: Reconstruct status follow-up patch
+      - name: Reconstruct exact status transformer
         shell: bash
         run: |
           set -euo pipefail
-          cat \
-            payload/.phase4/followup.00 \
-            payload/.phase4/followup.schema-header \
-            payload/.phase4/followup.01 \
-            payload/.phase4/followup.02 \
-            payload/.phase4/followup.03 \
-            > status-followup.patch
-          wc -c status-followup.patch
-          sha256sum status-followup.patch
+          cat payload/.phase4/apply-status.0.b64 payload/.phase4/apply-status.1a.b64 > apply-status.b64
+          rev payload/.phase4/apply-status.1b.rev >> apply-status.b64
+          rev payload/.phase4/apply-status.1c.rev >> apply-status.b64
+          tr -d '\n' < payload/.phase4/apply-status.1d.folded | rev >> apply-status.b64
+          base64 --decode apply-status.b64 | gzip --decompress > apply_status_followup.py
+          printf '%s  %s\n' 'fbe33d28f00f028c6ec1fc81892374e3d278314fecc2d96b96998793bad851f2' apply_status_followup.py | sha256sum --check
 
-      - name: Apply status follow-up patch
+      - name: Apply ESPHome-facing status changes
         shell: bash
         run: |
           set -euo pipefail
           cd target
-          git apply --check ../status-followup.patch
-          git apply --index ../status-followup.patch
-          git diff --cached --check
+          python3 ../apply_status_followup.py
+          git diff --check
 
       - name: Check Python modules
         shell: bash
@@ -69,7 +65,7 @@ jobs:
         with:
           name: bq-status-followup-failure
           path: |
-            status-followup.patch
+            apply_status_followup.py
             status-followup-host.log
           if-no-files-found: ignore
 
@@ -80,5 +76,11 @@ jobs:
           cd target
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            ARCHITECTURE.md \
+            COMPONENTS.md \
+            components/component_common \
+            components/bq76952 \
+            tests
           git commit -m 'Make BQ status ESPHome-facing'
           git push origin HEAD:refs/heads/agent/bq-consistency
