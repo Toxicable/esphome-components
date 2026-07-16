@@ -11,6 +11,7 @@ Component-scoped rules for `components/bq76952`.
 - `bq76952_soc.cpp` isolates SoC estimation/persistence logic but remains owned by `BQ76952Service`.
 - `bq76952.cpp` is the ESPHome facade. Keep transport, product policy and SoC logic out of it.
 - `__init__.py` remains the public ESPHome entry point; private `_schema.py`, `_types.py`, and `_codegen.py` modules do not create extra YAML components.
+- At the public boundary, follow normal ESPHome conventions: standard entity schemas and categories, component/I2C registration, and component warning/error status. Private modules are implementation details, not additional user-facing platforms.
 - Do not reintroduce `BQ76952ConfigState`, another compatibility adapter, or monolithic state-bag inheritance.
 
 ## Fixed hardware and product policy
