@@ -1,0 +1,334 @@
+@@ -31,5 +36,4 @@ struct Calibration {
+   OutputCalibration output{};
+ };
+ 
+-}  // namespace programmable_load
+-}  // namespace esphome
++}  // namespace programmable_load_core
+diff --git a/components/programmable_load/calibration_actions.h b/components/programmable_load/calibration_actions.h
+new file mode 100644
+index 0000000..c129bd2
+--- /dev/null
++++ b/components/programmable_load/calibration_actions.h
+@@ -0,0 +1,56 @@
++#pragma once
++
++#include "esphome/core/automation.h"
++
++namespace esphome {
++namespace programmable_load {
++
++template<typename... Ts> class ApplyCalibrationAction : public Action<Ts...> {
++ public:
++  explicit ApplyCalibrationAction(ProgrammableLoadComponent *parent)
++      : parent_(parent) {}
++
++  TEMPLATABLE_VALUE(float, current_scale)
++  TEMPLATABLE_VALUE(float, current_offset)
++  TEMPLATABLE_VALUE(float, voltage_scale)
++  TEMPLATABLE_VALUE(float, voltage_offset)
++  TEMPLATABLE_VALUE(float, output_zero_level)
++  TEMPLATABLE_VALUE(float, output_full_scale_current)
++  TEMPLATABLE_VALUE(bool, persist)
++
++  void play(Ts... x) override {
++    if (this->parent_ == nullptr) return;
++    Calibration calibration{};
++    calibration.version = ::programmable_load_core::CALIBRATION_VERSION;
++    calibration.current.scale = this->current_scale_.value(x...);
++    calibration.current.offset = this->current_offset_.value(x...);
++    calibration.voltage.scale = this->voltage_scale_.value(x...);
++    calibration.voltage.offset = this->voltage_offset_.value(x...);
++    calibration.output.zero_level = this->output_zero_level_.value(x...);
++    calibration.output.full_scale_current_a =
++        this->output_full_scale_current_.value(x...);
++    this->parent_->apply_calibration(calibration, this->persist_.value(x...));
++  }
++
++ protected:
++  ProgrammableLoadComponent *parent_{nullptr};
++};
++
++template<typename... Ts> class ResetCalibrationAction : public Action<Ts...> {
++ public:
++  explicit ResetCalibrationAction(ProgrammableLoadComponent *parent)
++      : parent_(parent) {}
++
++  TEMPLATABLE_VALUE(bool, persist)
++
++  void play(Ts... x) override {
++    if (this->parent_ != nullptr)
++      this->parent_->reset_calibration(this->persist_.value(x...));
++  }
++
++ protected:
++  ProgrammableLoadComponent *parent_{nullptr};
++};
++
++}  // namespace programmable_load
++}  // namespace esphome
+diff --git a/components/programmable_load/load_types.h b/components/programmable_load/load_types.h
+index 3ef73c3..e80874a 100644
+--- a/components/programmable_load/load_types.h
++++ b/components/programmable_load/load_types.h
+@@ -1,106 +1,39 @@
+ #pragma once
+ 
+-#include <cstdint>
+-
+-#include "../component_common/charger.h"
++#include "programmable_load_core.h"
+ 
+ namespace esphome {
+ namespace programmable_load {
+ 
+-static constexpr float ABSOLUTE_MAXIMUM_VOLTAGE_V = 75.0f;
+-
+-enum class State : uint8_t {
+-  IDLE = 0,
+-  RUNNING,
+-  FAULT,
+-};
+-
+-enum class Fault : uint8_t {
+-  NONE = 0,
+-  CURRENT_MEASUREMENT_UNAVAILABLE,
+-  VOLTAGE_MEASUREMENT_UNAVAILABLE,
+-  REQUIRED_TEMPERATURE_UNAVAILABLE,
+-  INPUT_UNDERVOLTAGE,
+-  INPUT_OVERVOLTAGE,
+-  HARDWARE_OVERVOLTAGE,
+-  OVERCURRENT,
+-  OVERPOWER,
+-  OVERTEMPERATURE,
+-  CHARGER_UNAVAILABLE,
+-  CHARGER_FAULT,
+-  CHARGER_CONTROL_ERROR,
+-  CHARGE_TIMEOUT,
+-  CONTROL_ERROR,
+-  PROCEDURE_ERROR,
+-};
+-
+-enum class StopReason : uint8_t {
+-  USER_REQUEST = 0,
+-  COMPLETED,
+-  FAULTED,
+-};
+-
+-enum class ProcedureStatus : uint8_t {
+-  RUNNING = 0,
+-  COMPLETE,
+-  FAILED,
+-};
+-
+-enum class ChargerCommand : uint8_t {
+-  DISABLE = 0,
+-  ENABLE,
+-};
+-
+-struct Measurement {
+-  // Incremented whenever either electrical measurement publishes a new sample.
+-  // Procedures can use this to avoid counting the same conversion repeatedly.
+-  uint32_t sequence{0};
+-  uint32_t timestamp_ms{0};
+-  float current_a{0.0f};
+-  float voltage_v{0.0f};
+-  float power_w{0.0f};
+-  float maximum_temperature_c{0.0f};
+-  bool current_valid{false};
+-  bool voltage_valid{false};
+-  bool temperature_valid{false};
+-};
+-
+-using ChargerState = ::component_common::ChargerState;
+-using ChargerMeasurement = ::component_common::ChargerSnapshot;
+-
+-struct ProcedureContext {
+-  Measurement load{};
+-  ChargerMeasurement charger{};
+-};
+-
+-struct HardwareLimits {
+-  // Board-specific limit, additionally capped by
+-  // ABSOLUTE_MAXIMUM_VOLTAGE_V inside the core.
+-  float maximum_voltage_v{ABSOLUTE_MAXIMUM_VOLTAGE_V};
+-};
+-
+-struct Limits {
+-  float maximum_current_a{0.0f};
+-  float minimum_voltage_v{0.0f};
+-  float maximum_voltage_v{0.0f};
+-  float maximum_power_w{0.0f};
+-  float maximum_temperature_c{0.0f};
+-};
+-
+-struct FaultPolicy {
+-  bool auto_clear{false};
+-  uint32_t clear_delay_ms{2000};
+-};
+-
+-struct ProcedureResult {
+-  ProcedureStatus status{ProcedureStatus::RUNNING};
+-  float requested_current_a{0.0f};
+-  Fault fault{Fault::NONE};
+-  ChargerCommand charger_command{ChargerCommand::DISABLE};
+-};
+-
+-const char *state_to_string(State state);
+-const char *fault_to_string(Fault fault);
++using ::programmable_load_core::ABSOLUTE_MAXIMUM_VOLTAGE_V;
++using ::programmable_load_core::CALIBRATION_VERSION;
++using ::programmable_load_core::Calibration;
++using ::programmable_load_core::CalibrationSource;
++using ::programmable_load_core::ChargerCommand;
++using ::programmable_load_core::ChargerMeasurement;
++using ::programmable_load_core::ChargerState;
++using ::programmable_load_core::Fault;
++using ::programmable_load_core::FaultFlags;
++using ::programmable_load_core::FaultPolicy;
++using ::programmable_load_core::HardwareLimits;
++using ::programmable_load_core::Limits;
++using ::programmable_load_core::LinearCalibration;
++using ::programmable_load_core::Measurement;
++using ::programmable_load_core::OperationLock;
++using ::programmable_load_core::OperationOwner;
++using ::programmable_load_core::OutputCalibration;
++using ::programmable_load_core::ProcedureContext;
++using ::programmable_load_core::ProcedureResult;
++using ::programmable_load_core::ProcedureStatus;
++using ::programmable_load_core::State;
++using ::programmable_load_core::StopReason;
++using ::programmable_load_core::calibration_source_to_string;
++using ::programmable_load_core::fault_flag;
++using ::programmable_load_core::fault_to_string;
++using ::programmable_load_core::format_faults;
++using ::programmable_load_core::has_fault;
++using ::programmable_load_core::normalize_hardware_maximum_voltage;
++using ::programmable_load_core::state_to_string;
+ 
+ }  // namespace programmable_load
+ }  // namespace esphome
+diff --git a/components/programmable_load/programmable_load.cpp b/components/programmable_load/programmable_load.cpp
+index 50a9d67..f818949 100644
+--- a/components/programmable_load/programmable_load.cpp
++++ b/components/programmable_load/programmable_load.cpp
+@@ -30,48 +30,12 @@ float clampf(float value, float minimum, float maximum) {
+ 
+ }  // namespace
+ 
+-const char *state_to_string(State state) {
+-  switch (state) {
+-    case State::IDLE: return "idle";
+-    case State::RUNNING: return "running";
+-    case State::FAULT: return "fault";
+-    default: return "unknown";
+-  }
+-}
+-
+-const char *fault_to_string(Fault fault) {
+-  switch (fault) {
+-    case Fault::NONE: return "none";
+-    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
+-      return "current_measurement_unavailable";
+-    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
+-      return "voltage_measurement_unavailable";
+-    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
+-      return "required_temperature_unavailable";
+-    case Fault::INPUT_UNDERVOLTAGE: return "input_undervoltage";
+-    case Fault::INPUT_OVERVOLTAGE: return "input_overvoltage";
+-    case Fault::HARDWARE_OVERVOLTAGE: return "hardware_overvoltage";
+-    case Fault::OVERCURRENT: return "overcurrent";
+-    case Fault::OVERPOWER: return "overpower";
+-    case Fault::OVERTEMPERATURE: return "overtemperature";
+-    case Fault::CHARGER_UNAVAILABLE: return "charger_unavailable";
+-    case Fault::CHARGER_FAULT: return "charger_fault";
+-    case Fault::CHARGER_CONTROL_ERROR: return "charger_control_error";
+-    case Fault::CHARGE_TIMEOUT: return "charge_timeout";
+-    case Fault::CONTROL_ERROR: return "control_error";
+-    case Fault::PROCEDURE_ERROR: return "procedure_error";
+-    default: return "unknown";
+-  }
+-}
+-
+-
+ void ProgrammableLoadComponent::setup() {
+   this->control_period_ms_ =
+       std::max<uint32_t>(10, std::min<uint32_t>(1000, this->control_period_ms_));
+-  if (!finite_positive(this->hardware_limits_.maximum_voltage_v) ||
+-      this->hardware_limits_.maximum_voltage_v > ABSOLUTE_MAXIMUM_VOLTAGE_V) {
+-    this->hardware_limits_.maximum_voltage_v = ABSOLUTE_MAXIMUM_VOLTAGE_V;
+-  }
++  this->hardware_limits_.maximum_voltage_v =
++      normalize_hardware_maximum_voltage(
++          this->hardware_limits_.maximum_voltage_v);
+ 
+   this->configured_calibration_.version = CALIBRATION_VERSION;
+   this->calibration_.version = CALIBRATION_VERSION;
+@@ -82,8 +46,9 @@ void ProgrammableLoadComponent::setup() {
+     if (this->restore_calibration_) {
+       Calibration persisted{};
+       if (this->calibration_preference_.load(&persisted) &&
+-          this->calibration_valid_(persisted)) {
++          ::programmable_load_core::calibration_valid(persisted)) {
+         this->calibration_ = persisted;
++        this->calibration_source_ = CalibrationSource::RESTORED;
+         ESP_LOGI(TAG, "Restored programmable-load calibration");
+       }
+     }
+@@ -119,6 +84,7 @@ void ProgrammableLoadComponent::setup() {
+   this->update_measurement_();
+   this->update_charger_measurement_();
+   this->publish_status_();
++  this->publish_calibration_();
+   if (this->manual_current_number_ != nullptr) {
+     this->manual_current_number_->publish_state(0.0f);
+   }
+@@ -130,7 +96,20 @@ void ProgrammableLoadComponent::setup() {
+ void ProgrammableLoadComponent::dump_config() {
+   ESP_LOGCONFIG(TAG, "Programmable Load:");
+   ESP_LOGCONFIG(TAG, "  State: %s", state_to_string(this->state_));
+-  ESP_LOGCONFIG(TAG, "  Fault: %s", fault_to_string(this->fault_));
++  char faults[256];
++  format_faults(this->faults_, faults, sizeof(faults));
++  ESP_LOGCONFIG(TAG, "  Fault: %s", faults);
++  ESP_LOGCONFIG(TAG, "  Calibration: %s",
++                calibration_source_to_string(this->calibration_source_));
++  ESP_LOGCONFIG(TAG, "    Current: raw * %.7g + %.7g A",
++                this->calibration_.current.scale,
++                this->calibration_.current.offset);
++  ESP_LOGCONFIG(TAG, "    Voltage: raw * %.7g + %.7g V",
++                this->calibration_.voltage.scale,
++                this->calibration_.voltage.offset);
++  ESP_LOGCONFIG(TAG, "    Output: zero=%.7g full-scale=%.7g A",
++                this->calibration_.output.zero_level,
++                this->calibration_.output.full_scale_current_a);
+   ESP_LOGCONFIG(TAG, "  Hardware maximum voltage: %.2f V",
+                 this->hardware_limits_.maximum_voltage_v);
+   ESP_LOGCONFIG(TAG, "  Operating voltage: %.2f to %.2f V",
+@@ -166,17 +145,16 @@ void ProgrammableLoadComponent::loop() {
+ }
+ 
+ bool ProgrammableLoadComponent::start_manual(float current_a) {
+-  if (this->state_ != State::IDLE || this->owner_ != Owner::NONE ||
+-      !finite_positive(current_a)) return false;
++  if (this->state_ != State::IDLE || !finite_positive(current_a) ||
++      !this->operation_lock_.acquire_manual()) return false;
+   this->update_measurement_();
+   this->update_charger_measurement_();
+-  const Fault fault = this->detect_running_fault_();
+-  if (fault != Fault::NONE) {
+-    this->trip_fault_(fault);
++  const FaultFlags faults = this->detect_running_faults_();
++  if (faults != 0u) {
++    this->trip_faults_(faults);
+     return false;
+   }
+   this->apply_charger_command_(ChargerCommand::DISABLE);
+-  this->owner_ = Owner::MANUAL;
+   this->requested_current_a_ =
+       clampf(current_a, 0.0f, this->limits_.maximum_current_a);
+   this->reset_control_();
+@@ -188,8 +166,9 @@ bool ProgrammableLoadComponent::start_manual(float current_a) {
+ }
+ 
+ bool ProgrammableLoadComponent::update_manual(float current_a) {
