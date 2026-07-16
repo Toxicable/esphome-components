@@ -1,0 +1,5 @@
+diff --git a/components/bq76952/_schema.py b/components/bq76952/_schema.py
+index 4e8cbe0..a72b87d 100644
+--- a/components/bq76952/_schema.py
++++ b/components/bq76952/_schema.py
+@@ -112,10 +112,9 @@ CONF_DIE_TEMPERATURE = "die_temperature"
