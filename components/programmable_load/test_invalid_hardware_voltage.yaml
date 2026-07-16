@@ -1,5 +1,5 @@
 esphome:
-  name: programmable-load-invalid-voltage
+  name: pl-invalid-voltage
   min_version: 2026.5.3
 
 esp32:
