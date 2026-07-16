@@ -125,3 +125,4 @@ index e3784f4..cb3efbf 100644
 +"$build_dir/mcf83xx_services_test"
 +
  echo "host tests: passed ($cxx)"
+diff --git a/components/mcf8316d/AGENTS_KNOWLEDGE.md b/compone
