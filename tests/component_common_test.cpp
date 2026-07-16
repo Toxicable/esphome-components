@@ -6,6 +6,7 @@
 #include "components/component_common/bit_field.h"
 #include "components/component_common/byte_order.h"
 #include "components/component_common/charger.h"
+#include "components/component_common/register_manifest.h"
 #include "components/component_common/status.h"
 
 namespace {
@@ -22,6 +23,28 @@ static_assert(Field::replace(0x8F, 0x04) == 0xCF);
 static_assert(component_common::replace_masked<uint8_t>(0xAA, 0x0F, 0x05) == 0xA5);
 static_assert(component_common::any_set<uint8_t>(0x40, 0x60));
 static_assert(!component_common::any_set<uint8_t>(0x10, 0x60));
+
+constexpr std::array<component_common::RegisterManifestEntry, 2> VALID_MANIFEST{{
+    {"config", 0x10, 1, 0x0F, 0x30, 0, 0x40, 0x80},
+    {"status", 0x20, 2, 0, 0, 0x00FF, 0, 0xFF00},
+}};
+constexpr std::array<component_common::RegisterImageEntry, 1> VALID_IMAGE{{
+    {"config", 0x10, 1, 0x05, 0x0F, 0x40},
+}};
+constexpr std::array<component_common::RegisterManifestEntry, 1> UNCLASSIFIED_MANIFEST{{
+    {"broken", 0x10, 1, 0x01, 0, 0, 0, 0},
+}};
+constexpr std::array<component_common::RegisterManifestEntry, 2> OVERLAPPING_MANIFEST{{
+    {"wide", 0x10, 2, 0xFFFF, 0, 0, 0, 0},
+    {"overlap", 0x11, 1, 0xFF, 0, 0, 0, 0},
+}};
+
+static_assert(component_common::register_manifest_valid(VALID_MANIFEST));
+static_assert(component_common::configuration_image_layout_complete(VALID_MANIFEST, VALID_IMAGE));
+static_assert(!component_common::register_manifest_valid(UNCLASSIFIED_MANIFEST));
+static_assert(!component_common::register_manifest_valid(OVERLAPPING_MANIFEST));
+static_assert(component_common::register_value_matches(0xA5, 0x05, 0x0F));
+static_assert(component_common::merge_register_value(0xA0, 0x05, 0x0F) == 0xA5);
 
 class FakeCharger final : public component_common::ChargerInterface {
  public:
@@ -81,11 +104,19 @@ void test_byte_order() {
   assert(encoded == big);
 }
 
+void test_configuration_fingerprint() {
+  const uint32_t first = component_common::configuration_fingerprint(VALID_IMAGE);
+  const uint32_t second = component_common::configuration_fingerprint(VALID_IMAGE);
+  assert(first == second);
+  assert(first != component_common::FNV1A_OFFSET_BASIS);
+}
+
 }  // namespace
 
 int main() {
   test_byte_order();
   test_charger_interface();
   test_status_contract();
+  test_configuration_fingerprint();
   return 0;
 }
