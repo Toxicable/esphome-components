@@ -11,7 +11,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
+AUTO_LOAD = ["mcf83xx_common", "sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
 
 mcf8316d_ns = cg.esphome_ns.namespace("mcf8316d")
 MCF8316DComponent = mcf8316d_ns.class_("MCF8316DComponent", cg.PollingComponent, i2c.I2CDevice)

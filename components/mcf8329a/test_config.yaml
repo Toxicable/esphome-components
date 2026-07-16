@@ -18,7 +18,7 @@ external_components:
       type: local
       path: ..
     refresh: 0s
-    components: [ mcf8329a ]
+    components: [ component_common, mcf83xx_common, mcf8329a ]
 
 wifi:
   ssid: "${wifi_ssid}"

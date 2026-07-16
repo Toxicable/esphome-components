@@ -7,27 +7,19 @@ namespace mcf8316d_core {
 using namespace regs;
 
 bool MCF8316DService::read_reg32(uint16_t offset, uint32_t &value) const {
-  return this->bus_ != nullptr && this->bus_->read_register32(offset, &value);
+  return this->registers_.read32(offset, value);
 }
 
 bool MCF8316DService::read_reg16(uint16_t offset, uint16_t &value) const {
-  return this->bus_ != nullptr && this->bus_->read_register16(offset, &value);
+  return this->registers_.read16(offset, value);
 }
 
 bool MCF8316DService::write_reg32(uint16_t offset, uint32_t value) const {
-  return this->bus_ != nullptr && this->bus_->write_register32(offset, value);
+  return this->registers_.write32(offset, value);
 }
 
 bool MCF8316DService::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const {
-  uint32_t current = 0;
-  if (!this->read_reg32(offset, current)) {
-    return false;
-  }
-  const uint32_t next = (current & ~mask) | (value & mask);
-  if (next == current) {
-    return true;
-  }
-  return this->write_reg32(offset, next);
+  return this->registers_.update_bits32(offset, mask, value);
 }
 
 bool MCF8316DService::set_brake_input(bool brake_on) const {
@@ -84,22 +76,11 @@ bool MCF8316DService::write_speed_command_percent(float speed_percent) const {
 }
 
 bool MCF8316DService::pulse_clear_faults() const {
-  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
-    return false;
-  }
-  this->bus_->delay_microseconds(2000u);
-  const bool ok = this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 0u);
-  this->bus_->delay_microseconds(2000u);
-  return ok;
+  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 2000U, 2000U);
 }
 
 bool MCF8316DService::pulse_watchdog_tickle() const {
-  if (!this->update_bits32(
-        REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK
-      )) {
-    return false;
-  }
-  return this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0u);
+  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK);
 }
 
 }  // namespace mcf8316d_core

@@ -1,5 +1,7 @@
 #include "mcf8316d.h"
 
+#include "../mcf83xx_common/protocol.h"
+
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -522,20 +524,15 @@ bool MCF8316DComponent::read_register32(uint16_t offset, uint32_t *value) {
   if (value == nullptr) {
     return false;
   }
-  const uint32_t control_word = ::mcf8316d_core::build_control_word(true, offset, true);
-  const uint8_t cw[3] = {
-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
-    static_cast<uint8_t>(control_word & 0xFF),
-  };
+  const auto command = ::mcf83xx_common::make_control_frame(
+      true, offset, ::mcf83xx_common::RegisterWidth::BITS_32);
   uint8_t rx[4] = {0, 0, 0, 0};
-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
+  const i2c::ErrorCode err = this->write_read(command.data(), command.size(), rx, sizeof(rx));
   if (err != i2c::ERROR_OK) {
     ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
     return false;
   }
-  *value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) |
-           (static_cast<uint32_t>(rx[2]) << 16) | (static_cast<uint32_t>(rx[3]) << 24);
+  *value = ::mcf83xx_common::decode_read32(rx);
   return true;
 }
 
@@ -543,34 +540,21 @@ bool MCF8316DComponent::read_register16(uint16_t offset, uint16_t *value) {
   if (value == nullptr) {
     return false;
   }
-  const uint32_t control_word = ::mcf8316d_core::build_control_word(true, offset, false);
-  const uint8_t cw[3] = {
-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
-    static_cast<uint8_t>(control_word & 0xFF),
-  };
+  const auto command = ::mcf83xx_common::make_control_frame(
+      true, offset, ::mcf83xx_common::RegisterWidth::BITS_16);
   uint8_t rx[2] = {0, 0};
-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
+  const i2c::ErrorCode err = this->write_read(command.data(), command.size(), rx, sizeof(rx));
   if (err != i2c::ERROR_OK) {
     ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
     return false;
   }
-  *value = static_cast<uint16_t>(rx[0]) | (static_cast<uint16_t>(rx[1]) << 8);
+  *value = ::mcf83xx_common::decode_read16(rx);
   return true;
 }
 
 bool MCF8316DComponent::write_register32(uint16_t offset, uint32_t value) {
-  const uint32_t control_word = ::mcf8316d_core::build_control_word(false, offset, true);
-  const uint8_t tx[7] = {
-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
-    static_cast<uint8_t>(control_word & 0xFF),
-    static_cast<uint8_t>(value & 0xFF),
-    static_cast<uint8_t>((value >> 8) & 0xFF),
-    static_cast<uint8_t>((value >> 16) & 0xFF),
-    static_cast<uint8_t>((value >> 24) & 0xFF),
-  };
-  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
+  const auto frame = ::mcf83xx_common::make_write32_frame(offset, value);
+  const i2c::ErrorCode err = this->write(frame.data(), frame.size());
   if (err != i2c::ERROR_OK) {
     ESP_LOGW(
       TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)

@@ -187,7 +187,6 @@ enum class DirectionInputMode : uint8_t {
   CCW = 2,
 };
 
-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit);
 float decode_vm_voltage(uint32_t raw);
 float decode_max_speed_hz(uint16_t code);
 float decode_speed_hz(int32_t raw, float max_speed_hz);

@@ -4,7 +4,24 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
-python3 tools/check_core_purity.py components/component_common components/bq25756 components/bq76952/bq76952_registers.h components/bq76952/bq76952_status.h components/bq76952/bq76952_status.cpp
+python3 tools/check_core_purity.py \
+  components/component_common \
+  components/bq25756 \
+  components/bq76952/bq76952_registers.h \
+  components/bq76952/bq76952_status.h \
+  components/bq76952/bq76952_status.cpp \
+  components/mcf83xx_common \
+  components/mcf8316d/mcf8316d_bus.h \
+  components/mcf8316d/mcf8316d_protocol.h \
+  components/mcf8316d/mcf8316d_protocol.cpp \
+  components/mcf8316d/mcf8316d_service.h \
+  components/mcf8316d/mcf8316d_service.cpp \
+  components/mcf8329a/mcf8329a_bus.h \
+  components/mcf8329a/mcf8329a_protocol.h \
+  components/mcf8329a/mcf8329a_protocol.cpp \
+  components/mcf8329a/mcf8329a_service.h \
+  components/mcf8329a/mcf8329a_service.cpp \
+  components/mcf8329a/mcf8329a_tables.h
 
 if [[ -n "${CXX:-}" ]]; then
   cxx="$CXX"
@@ -48,5 +65,19 @@ common_flags=(
   components/bq76952/bq76952_status.cpp \
   -o "$build_dir/bq76952_status_test"
 "$build_dir/bq76952_status_test"
+
+"$cxx" "${common_flags[@]}" \
+  tests/mcf83xx_common_test.cpp \
+  -o "$build_dir/mcf83xx_common_test"
+"$build_dir/mcf83xx_common_test"
+
+"$cxx" "${common_flags[@]}" \
+  tests/mcf83xx_services_test.cpp \
+  components/mcf8316d/mcf8316d_protocol.cpp \
+  components/mcf8316d/mcf8316d_service.cpp \
+  components/mcf8329a/mcf8329a_protocol.cpp \
+  components/mcf8329a/mcf8329a_service.cpp \
+  -o "$build_dir/mcf83xx_services_test"
+"$build_dir/mcf83xx_services_test"
 
 echo "host tests: passed ($cxx)"

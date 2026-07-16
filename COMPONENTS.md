@@ -32,8 +32,9 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `l04xmtw` | active | Pool-cleaner configuration | Maintain while the current sensor hardware remains in use. |
 | `lps25hb` | experimental | Present in current hardware work, but no deployed YAML consumer was found | Keep lightweight; promote when a real configuration is committed. |
 | `makita_xgt` | active | Project and hardware references | Maintain while the battery-interface project remains current. |
-| `mcf8316d` | active | ESC Low hardware | Retain the public component while extracting only genuinely shared MCF83xx internals. |
-| `mcf8329a` | active | Boat and pool-cleaner configurations | Retain the public component while extracting only genuinely shared MCF83xx internals. |
+| `mcf8316d` | active | ESC Low hardware | Public MCF8316D integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
+| `mcf8329a` | active | Boat and pool-cleaner configurations | Public MCF8329A integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
+| `mcf83xx_common` | internal | Shared by active MCF8316D and MCF8329A components | Keep limited to the register-bus contract, family framing, read-modify-write and pulse mechanics. |
 | `mcp4726` | active | Programmable-load configuration | Maintain as the DAC integration used by the load controller. |
 | `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not yet accounted for in the upstream migration | Migrate the required behavior upstream or consciously drop it, then remove the local shadow. |
 | `programmable_load` | active | Programmable-load board/project | Primary orchestrator component; replace entity-to-entity control with typed C++ capabilities. |

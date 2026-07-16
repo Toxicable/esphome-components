@@ -11,9 +11,9 @@ Component-scoped active guidance for `components/mcf8329a`.
 
 ## Architecture
 - Monolith ESPHome integration style: controls/telemetry/buttons are configured inline under `mcf8329a:`.
-- `mcf8329a_bus.h` defines the host-agnostic register transport boundary used by the core service.
-- Register/bitfield constants, control-word encoding, decode helpers, and state/label mappings live in `mcf8329a_protocol.cpp/.h` (`namespace mcf8329a_core`).
-- Reusable register access and chip command helpers live in `mcf8329a_service.cpp/.h`; the ESPHome wrapper owns I2C transactions by implementing `mcf8329a_core::RegisterBus`.
+- `mcf83xx_common` defines the host-agnostic family register bus, framing and read-modify-write mechanics; `mcf8329a_bus.h` remains a compatibility alias.
+- Chip register/bitfield constants, decode helpers, and state/label mappings live in `mcf8329a_protocol.cpp/.h` (`namespace mcf8329a_core`).
+- Chip command helpers live in `mcf8329a_service.cpp/.h`; the ESPHome wrapper owns I2C transactions by implementing the `mcf83xx_common::RegisterBus` alias.
 - Tuning logic is isolated in `mcf8329a_tuning.cpp/.h` (`MCF8329ATuningController`); component owns orchestration.
 - Shared decode/lookup tables are centralized in `mcf8329a_tables.h`.
 - `mcf8329a.cpp`, `mcf8329a_protocol.cpp`, `mcf8329a_service.cpp`, and `mcf8329a_tuning.cpp` compile as normal sibling translation units; do not include `.cpp` files into other `.cpp` files.

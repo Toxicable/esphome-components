@@ -17,7 +17,7 @@ Important I2C note:
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ mcf8329a ]
+    components: [ component_common, mcf83xx_common, mcf8329a ]
 
 
 i2c:
@@ -175,9 +175,9 @@ Safety guardrails:
 
 This component follows the shared layout in `../../ARCHITECTURE.md`.
 
-- `mcf8329a_bus.h` defines the reusable register-bus interface.
-- `mcf8329a_protocol.*` owns register/bitfield constants, control-word encoding, decode helpers, and state/label mappings.
-- `mcf8329a_service.*` owns reusable register access and chip command helpers on top of the bus interface.
+- `../mcf83xx_common` owns the shared MCx83xx register-bus, I2C frame and read-modify-write mechanics; `mcf8329a_bus.h` is a compatibility alias.
+- `mcf8329a_protocol.*` owns chip register/bitfield constants, decode helpers, and state/label mappings.
+- `mcf8329a_service.*` owns chip command helpers on top of the shared register-access layer.
 - `mcf8329a_tuning.*` owns the guarded initial-tune and MPET state machines.
 - `mcf8329a_tables.h` owns shared lookup/decode tables.
 - `mcf8329a.h` / `mcf8329a.cpp` own ESPHome entities, YAML-facing behavior, logging, runtime orchestration, and the I2C bus adapter.

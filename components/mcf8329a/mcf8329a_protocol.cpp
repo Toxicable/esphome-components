@@ -4,10 +4,6 @@
 
 namespace mcf8329a_core {
 
-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit) {
-  const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
-  return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
-}
 
 float decode_vm_voltage(uint32_t raw) {
   return static_cast<float>(static_cast<double>(raw) * (60.0 / 134217728.0));
@@ -30,11 +26,11 @@ float decode_fg_speed_hz(uint32_t raw, float max_speed_hz) {
 }
 
 float decode_open_loop_accel_hz_per_s(uint8_t code) {
-  return esphome::mcf8329a::tables::OPEN_LOOP_ACCEL_HZ_PER_S[code & 0x0Fu];
+  return tables::OPEN_LOOP_ACCEL_HZ_PER_S[code & 0x0Fu];
 }
 
 float decode_open_to_closed_handoff_percent(uint8_t code) {
-  return esphome::mcf8329a::tables::OPEN_TO_CLOSED_HANDOFF_PERCENT[code & 0x1Fu];
+  return tables::OPEN_TO_CLOSED_HANDOFF_PERCENT[code & 0x1Fu];
 }
 
 const char *mode_to_string(uint8_t mode) {

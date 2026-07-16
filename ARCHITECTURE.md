@@ -109,6 +109,26 @@ The helper's `__init__.py` may contain only namespace/type declarations and meta
 
 Use `AUTO_LOAD` for implementation helpers. Use `DEPENDENCIES` only when the user must configure another component explicitly; `DEPENDENCIES` does not substitute for an internal shared-code package.
 
+### Family-level internal packages
+
+When two related chips share mechanics but not register maps or product policy, use an internal family component rather than putting chip details into `component_common`.
+
+For example, `mcf83xx_common` owns only the MCx83xx register-bus contract, control-word/frame encoding, read-modify-write and pulse operations. `mcf8316d` and `mcf8329a` retain their own registers, faults, scaling, tuning, startup sequencing and ESPHome entities.
+
+A public family member loads the helper transitively:
+
+```python
+AUTO_LOAD = ["mcf83xx_common", "sensor", "switch"]
+```
+
+An explicit external-component allowlist must permit the complete chain:
+
+```yaml
+components: [ component_common, mcf83xx_common, mcf8316d ]
+```
+
+Do not make the family helper a top-level YAML block. Do not move a field into the family package merely because both chips happen to use a similarly named register.
+
 ### Source discovery is package-local and non-recursive
 
 ESPHome external components collect supported C/C++ source files directly inside each loaded component package. Do not assume that nested implementation directories will be copied into the generated source tree.
@@ -136,11 +156,14 @@ components/component_common/
 
 Keep reusable `.cpp` files directly in the component directory. Header-only helpers are preferable where they remain small and do not create excessive compile-time cost.
 
-Include shared headers through the generated ESPHome path:
+Host-independent component cores should use sibling-relative includes so the same files compile in repository host tests and after ESPHome copies component packages:
 
 ```cpp
-#include "esphome/components/component_common/register_field.h"
+#include "../component_common/bit_field.h"
+#include "../mcf83xx_common/register_access.h"
 ```
+
+ESPHome-only facade code may use generated `esphome/components/...` include paths.
 
 Re-check these assumptions when changing the pinned ESPHome version. They reflect the external-component loader and source-copy behavior expected by this repository, not a general CMake source-discovery mechanism.
 
