@@ -1,0 +1,127 @@
+diff --git a/.github/workflows/compile.yml b/.github/workflows/compile.yml
+index b655297..bfbdc77 100644
+--- a/.github/workflows/compile.yml
++++ b/.github/workflows/compile.yml
+@@ -40,6 +40,8 @@ jobs:
+             config: components/drv8243/test_config.yaml
+           - name: esc-higher
+             config: components/esc_higher/test_config.yaml
++          - name: mcf8316d
++            config: components/mcf8316d/test_config.yaml
+           - name: mcf8329a
+             config: components/mcf8329a/test_config.yaml
+           - name: programmable-load
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index bac5e66..f936247 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -109,6 +109,26 @@ The helper's `__init__.py` may contain only namespace/type declarations and meta
+ 
+ Use `AUTO_LOAD` for implementation helpers. Use `DEPENDENCIES` only when the user must configure another component explicitly; `DEPENDENCIES` does not substitute for an internal shared-code package.
+ 
++### Family-level internal packages
++
++When two related chips share mechanics but not register maps or product policy, use an internal family component rather than putting chip details into `component_common`.
++
++For example, `mcf83xx_common` owns only the MCx83xx register-bus contract, control-word/frame encoding, read-modify-write and pulse operations. `mcf8316d` and `mcf8329a` retain their own registers, faults, scaling, tuning, startup sequencing and ESPHome entities.
++
++A public family member loads the helper transitively:
++
++```python
++AUTO_LOAD = ["mcf83xx_common", "sensor", "switch"]
++```
++
++An explicit external-component allowlist must permit the complete chain:
++
++```yaml
++components: [ component_common, mcf83xx_common, mcf8316d ]
++```
++
++Do not make the family helper a top-level YAML block. Do not move a field into the family package merely because both chips happen to use a similarly named register.
++
+ ### Source discovery is package-local and non-recursive
+ 
+ ESPHome external components collect supported C/C++ source files directly inside each loaded component package. Do not assume that nested implementation directories will be copied into the generated source tree.
+@@ -136,12 +156,15 @@ components/component_common/
+ 
+ Keep reusable `.cpp` files directly in the component directory. Header-only helpers are preferable where they remain small and do not create excessive compile-time cost.
+ 
+-Include shared headers through the generated ESPHome path:
++Host-independent component cores should use sibling-relative includes so the same files compile in repository host tests and after ESPHome copies component packages:
+ 
+ ```cpp
+-#include "esphome/components/component_common/register_field.h"
++#include "../component_common/bit_field.h"
++#include "../mcf83xx_common/register_access.h"
+ ```
+ 
++ESPHome-only facade code may use generated `esphome/components/...` include paths.
++
+ Re-check these assumptions when changing the pinned ESPHome version. They reflect the external-component loader and source-copy behavior expected by this repository, not a general CMake source-discovery mechanism.
+ 
+ ### Keep explicit allowlists
+diff --git a/COMPONENTS.md b/COMPONENTS.md
+index 69052c3..359b21a 100644
+--- a/COMPONENTS.md
++++ b/COMPONENTS.md
+@@ -32,8 +32,9 @@ Status describes maintenance intent only. It does not imply that an active compo
+ | `l04xmtw` | active | Pool-cleaner configuration | Maintain while the current sensor hardware remains in use. |
+ | `lps25hb` | experimental | Present in current hardware work, but no deployed YAML consumer was found | Keep lightweight; promote when a real configuration is committed. |
+ | `makita_xgt` | active | Project and hardware references | Maintain while the battery-interface project remains current. |
+-| `mcf8316d` | active | ESC Low hardware | Retain the public component while extracting only genuinely shared MCF83xx internals. |
+-| `mcf8329a` | active | Boat and pool-cleaner configurations | Retain the public component while extracting only genuinely shared MCF83xx internals. |
++| `mcf8316d` | active | ESC Low hardware | Public MCF8316D integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
++| `mcf8329a` | active | Boat and pool-cleaner configurations | Public MCF8329A integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
++| `mcf83xx_common` | internal | Shared by active MCF8316D and MCF8329A components | Keep limited to the register-bus contract, family framing, read-modify-write and pulse mechanics. |
+ | `mcp4726` | active | Programmable-load configuration | Maintain as the DAC integration used by the load controller. |
+ | `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not yet accounted for in the upstream migration | Migrate the required behavior upstream or consciously drop it, then remove the local shadow. |
+ | `programmable_load` | active | Programmable-load board/project | Primary orchestrator component; replace entity-to-entity control with typed C++ capabilities. |
+diff --git a/check_host.bash b/check_host.bash
+index e3784f4..cb3efbf 100644
+--- a/check_host.bash
++++ b/check_host.bash
+@@ -4,7 +4,24 @@ set -euo pipefail
+ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ cd "$repo_root"
+ 
+-python3 tools/check_core_purity.py components/component_common components/bq25756 components/bq76952/bq76952_registers.h components/bq76952/bq76952_status.h components/bq76952/bq76952_status.cpp
++python3 tools/check_core_purity.py \
++  components/component_common \
++  components/bq25756 \
++  components/bq76952/bq76952_registers.h \
++  components/bq76952/bq76952_status.h \
++  components/bq76952/bq76952_status.cpp \
++  components/mcf83xx_common \
++  components/mcf8316d/mcf8316d_bus.h \
++  components/mcf8316d/mcf8316d_protocol.h \
++  components/mcf8316d/mcf8316d_protocol.cpp \
++  components/mcf8316d/mcf8316d_service.h \
++  components/mcf8316d/mcf8316d_service.cpp \
++  components/mcf8329a/mcf8329a_bus.h \
++  components/mcf8329a/mcf8329a_protocol.h \
++  components/mcf8329a/mcf8329a_protocol.cpp \
++  components/mcf8329a/mcf8329a_service.h \
++  components/mcf8329a/mcf8329a_service.cpp \
++  components/mcf8329a/mcf8329a_tables.h
+ 
+ if [[ -n "${CXX:-}" ]]; then
+   cxx="$CXX"
+@@ -49,4 +66,18 @@ common_flags=(
+   -o "$build_dir/bq76952_status_test"
+ "$build_dir/bq76952_status_test"
+ 
++"$cxx" "${common_flags[@]}" \
++  tests/mcf83xx_common_test.cpp \
++  -o "$build_dir/mcf83xx_common_test"
++"$build_dir/mcf83xx_common_test"
++
++"$cxx" "${common_flags[@]}" \
++  tests/mcf83xx_services_test.cpp \
++  components/mcf8316d/mcf8316d_protocol.cpp \
++  components/mcf8316d/mcf8316d_service.cpp \
++  components/mcf8329a/mcf8329a_protocol.cpp \
++  components/mcf8329a/mcf8329a_service.cpp \
++  -o "$build_dir/mcf83xx_services_test"
++"$build_dir/mcf83xx_services_test"
++
+ echo "host tests: passed ($cxx)"
