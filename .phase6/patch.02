@@ -1,0 +1,308 @@
+-    return config
+-
+-
+-COOLING_SCHEMA = cv.All(
+-    cv.Schema(
+-        {
+-            cv.Required(CONF_FAN_OUTPUT): cv.use_id(output.FloatOutput),
+-            cv.Optional(CONF_FAN_START_TEMPERATURE, default=35.0): cv.float_,
+-            cv.Optional(CONF_FAN_FULL_TEMPERATURE, default=70.0): cv.float_,
+-        }
+-    ),
+-    _validate_cooling,
+-)
+-
+-FAULT_POLICY_SCHEMA = cv.Schema(
+-    {
+-        cv.Optional(CONF_AUTO_CLEAR, default=False): cv.boolean,
+-        cv.Optional(CONF_CLEAR_DELAY, default="2s"):
+-            cv.positive_time_period_milliseconds,
+-    }
+-)
+-
+-DCR_SCHEMA = cv.Schema(
+-    {
+-        cv.GenerateID(): cv.declare_id(DcrTest),
+-        cv.Optional(CONF_BASELINE_CURRENT, default=0.0): _non_negative,
+-        cv.Required(CONF_PULSE_CURRENT): _positive,
+-        cv.Optional(CONF_SETTLE_TIME, default="100ms"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_SAMPLE_TIME, default="500ms"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_RECOVERY_TIME, default="1s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_REPEATS, default=3): cv.int_range(min=1, max=32),
+-        cv.Required(CONF_START): button.button_schema(DcrStartButton),
+-        cv.Required(CONF_RESISTANCE): sensor.sensor_schema(
+-            unit_of_measurement="mΩ",
+-            accuracy_decimals=1,
+-        ),
+-    }
+-)
+-
+-BATTERY_CYCLE_SCHEMA = cv.Schema(
+-    {
+-        cv.GenerateID(): cv.declare_id(BatteryCycle),
+-        cv.Required(CONF_CHARGER): cv.use_id(ChargerInterface),
+-        cv.Optional(CONF_CHARGER_SAMPLE_TIMEOUT, default="3s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_CHARGER_CONTROL_TIMEOUT, default="5s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Required(CONF_DISCHARGE_CURRENT): _positive,
+-        cv.Required(CONF_DISCHARGE_CUTOFF_VOLTAGE): _positive,
+-        cv.Optional(CONF_DISCHARGE_CUTOFF_HYSTERESIS, default=0.1):
+-            _non_negative,
+-        cv.Optional(CONF_DISCHARGE_CUTOFF_HOLD_TIME, default="2s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_REST_TIME, default="5s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_CHARGE_START_TIMEOUT, default="30s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_CHARGE_STALL_TIMEOUT, default="30s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_CHARGE_TIMEOUT, default="24h"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_TERMINATION_HOLD_TIME, default="2s"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Required(CONF_START): button.button_schema(BatteryCycleStartButton),
+-        cv.Required(CONF_STOP): button.button_schema(BatteryCycleStopButton),
+-        cv.Optional(CONF_PHASE): text_sensor.text_sensor_schema(),
+-        cv.Optional(CONF_RESULT): text_sensor.text_sensor_schema(),
+-        cv.Optional(CONF_DISCHARGED_CAPACITY): sensor.sensor_schema(
+-            unit_of_measurement="Ah",
+-            accuracy_decimals=3,
+-        ),
+-        cv.Optional(CONF_DISCHARGED_ENERGY): sensor.sensor_schema(
+-            unit_of_measurement="Wh",
+-            accuracy_decimals=3,
+-        ),
+-        cv.Optional(CONF_CHARGED_CAPACITY): sensor.sensor_schema(
+-            unit_of_measurement="Ah",
+-            accuracy_decimals=3,
+-        ),
+-        cv.Optional(CONF_CHARGED_ENERGY): sensor.sensor_schema(
+-            unit_of_measurement="Wh",
+-            accuracy_decimals=3,
+-        ),
+-    }
+-)
+-
+-PROCEDURES_SCHEMA = cv.Schema(
+-    {
+-        cv.Optional(CONF_DCR): DCR_SCHEMA,
+-        cv.Optional(CONF_BATTERY_CYCLE): BATTERY_CYCLE_SCHEMA,
+-    }
+-)
+-
+-
+-def _validate_config(config):
+-    hardware_maximum_voltage = config[CONF_HARDWARE][
+-        CONF_HARDWARE_MAXIMUM_VOLTAGE
+-    ]
+-    operating_maximum_voltage = config[CONF_LIMITS][CONF_MAXIMUM_VOLTAGE]
+-    if operating_maximum_voltage > hardware_maximum_voltage:
+-        raise cv.Invalid(
+-            "limits.maximum_voltage must not exceed "
+-            "hardware.maximum_voltage"
+-        )
+-
+-    maximum_current = config[CONF_LIMITS][CONF_MAXIMUM_CURRENT]
+-    output_full_scale = config[CONF_CALIBRATION][CONF_OUTPUT][
+-        CONF_FULL_SCALE_CURRENT
+-    ]
+-    if maximum_current > output_full_scale:
+-        raise cv.Invalid(
+-            "limits.maximum_current must not exceed "
+-            "calibration.output.full_scale_current"
+-        )
+-
+-    procedures = config[CONF_PROCEDURES]
+-    dcr = procedures.get(CONF_DCR)
+-    if dcr is not None:
+-        if dcr[CONF_BASELINE_CURRENT] > maximum_current:
+-            raise cv.Invalid(
+-                "procedures.dcr.baseline_current must not exceed "
+-                "limits.maximum_current"
+-            )
+-        if dcr[CONF_PULSE_CURRENT] > maximum_current:
+-            raise cv.Invalid(
+-                "procedures.dcr.pulse_current must not exceed "
+-                "limits.maximum_current"
+-            )
+-        if dcr[CONF_PULSE_CURRENT] == dcr[CONF_BASELINE_CURRENT]:
+-            raise cv.Invalid(
+-                "procedures.dcr.pulse_current must differ from "
+-                "baseline_current"
+-            )
+-
+-    cycle = procedures.get(CONF_BATTERY_CYCLE)
+-    if cycle is not None:
+-        if cycle[CONF_DISCHARGE_CURRENT] > maximum_current:
+-            raise cv.Invalid(
+-                "procedures.battery_cycle.discharge_current must not exceed "
+-                "limits.maximum_current"
+-            )
+-        cutoff = cycle[CONF_DISCHARGE_CUTOFF_VOLTAGE]
+-        minimum = config[CONF_LIMITS][CONF_MINIMUM_VOLTAGE]
+-        maximum = config[CONF_LIMITS][CONF_MAXIMUM_VOLTAGE]
+-        if cutoff <= minimum:
+-            raise cv.Invalid(
+-                "procedures.battery_cycle.discharge_cutoff_voltage must be "
+-                "greater than limits.minimum_voltage so the cycle can stop "
+-                "normally before the load undervoltage fault"
+-            )
+-        if cutoff >= maximum:
+-            raise cv.Invalid(
+-                "procedures.battery_cycle.discharge_cutoff_voltage must be "
+-                "less than limits.maximum_voltage"
+-            )
+-
+-    return config
+-
+-
+-CONFIG_SCHEMA = cv.All(
+-    cv.Schema(
+-        {
+-            cv.GenerateID(): cv.declare_id(ProgrammableLoadComponent),
+-            cv.Required(CONF_HARDWARE): HARDWARE_SCHEMA,
+-            cv.Required(CONF_MEASUREMENTS): MEASUREMENTS_SCHEMA,
+-            cv.Required(CONF_CALIBRATION): CALIBRATION_SCHEMA,
+-            cv.Required(CONF_LIMITS): LIMITS_SCHEMA,
+-            cv.Optional(CONF_CONTROL, default={}): CONTROL_SCHEMA,
+-            cv.Required(CONF_COOLING): COOLING_SCHEMA,
+-            cv.Optional(CONF_FAULT_POLICY, default={}): FAULT_POLICY_SCHEMA,
+-            cv.Required(CONF_MANUAL_CURRENT): number.number_schema(
+-                ManualCurrentNumber,
+-                unit_of_measurement=UNIT_AMPERE,
+-                device_class=DEVICE_CLASS_CURRENT,
+-            ),
+-            cv.Required(CONF_STATE): text_sensor.text_sensor_schema(),
+-            cv.Required(CONF_FAULT): text_sensor.text_sensor_schema(),
+-            cv.Optional(CONF_CLEAR_FAULT): button.button_schema(ClearFaultButton),
+-            cv.Optional(CONF_PROCEDURES, default={}): PROCEDURES_SCHEMA,
+-        }
+-    ).extend(cv.COMPONENT_SCHEMA),
+-    _validate_config,
+-)
+-
+-
+-async def to_code(config):
+-    var = cg.new_Pvariable(config[CONF_ID])
+-    await cg.register_component(var, config)
+-
+-    hardware = config[CONF_HARDWARE]
+-    dac = await cg.get_variable(hardware[CONF_DAC])
+-    cg.add(var.set_dac_output(dac))
+-    cg.add(
+-        var.set_hardware_maximum_voltage(
+-            hardware[CONF_HARDWARE_MAXIMUM_VOLTAGE]
+-        )
+-    )
+-
+-    measurements = config[CONF_MEASUREMENTS]
+-    current = await cg.get_variable(measurements[CONF_CURRENT])
+-    voltage = await cg.get_variable(measurements[CONF_VOLTAGE])
+-    cg.add(var.set_current_sensor(current))
+-    cg.add(var.set_voltage_sensor(voltage))
+-    cg.add(
+-        var.set_sample_timeout_ms(
+-            measurements[CONF_SAMPLE_TIMEOUT].total_milliseconds
+-        )
+-    )
+-    for temperature_config in measurements[CONF_TEMPERATURES]:
+-        temperature = await cg.get_variable(temperature_config[CONF_SENSOR])
+-        cg.add(
+-            var.add_temperature_sensor(
+-                temperature,
+-                temperature_config[CONF_REQUIRED],
+-            )
+-        )
+-
+-    calibration = config[CONF_CALIBRATION]
+-    current_calibration = calibration[CONF_CURRENT]
+-    voltage_calibration = calibration[CONF_VOLTAGE]
+-    output_calibration = calibration[CONF_OUTPUT]
+-    cg.add(
+-        var.set_current_calibration(
+-            current_calibration[CONF_SCALE],
+-            current_calibration[CONF_OFFSET],
+-        )
+-    )
+-    cg.add(
+-        var.set_voltage_calibration(
+-            voltage_calibration[CONF_SCALE],
+-            voltage_calibration[CONF_OFFSET],
+-        )
+-    )
+-    cg.add(
+-        var.set_output_calibration(
+-            output_calibration[CONF_ZERO_LEVEL],
+-            output_calibration[CONF_FULL_SCALE_CURRENT],
+-        )
+-    )
+-    cg.add(var.set_restore_calibration(calibration[CONF_RESTORE]))
+-
+-    limits = config[CONF_LIMITS]
+-    cg.add(var.set_maximum_current(limits[CONF_MAXIMUM_CURRENT]))
+-    cg.add(var.set_minimum_voltage(limits[CONF_MINIMUM_VOLTAGE]))
+-    cg.add(var.set_maximum_voltage(limits[CONF_MAXIMUM_VOLTAGE]))
+-    cg.add(var.set_maximum_power(limits[CONF_MAXIMUM_POWER]))
+-    cg.add(var.set_maximum_temperature(limits[CONF_MAXIMUM_TEMPERATURE]))
+-
+-    control = config[CONF_CONTROL]
+-    cg.add(var.set_control_period_ms(control[CONF_PERIOD].total_milliseconds))
+-    cg.add(var.set_deadband(control[CONF_DEADBAND]))
+-    cg.add(var.set_rise_rate(control[CONF_RISE_RATE]))
+-    cg.add(var.set_fall_rate(control[CONF_FALL_RATE]))
+-    cg.add(var.set_proportional_gain(control[CONF_PROPORTIONAL_GAIN]))
+-    cg.add(var.set_integral_gain(control[CONF_INTEGRAL_GAIN]))
+-    cg.add(var.set_log_control_samples(control[CONF_LOG_CONTROL_SAMPLES]))
+-
+-    cooling = config[CONF_COOLING]
+-    fan = await cg.get_variable(cooling[CONF_FAN_OUTPUT])
+-    cg.add(var.set_fan_output(fan))
+-    cg.add(
+-        var.set_fan_temperature_range(
+-            cooling[CONF_FAN_START_TEMPERATURE],
+-            cooling[CONF_FAN_FULL_TEMPERATURE],
+-        )
+-    )
+-
+-    fault_policy = config[CONF_FAULT_POLICY]
+-    cg.add(var.set_fault_auto_clear(fault_policy[CONF_AUTO_CLEAR]))
+-    cg.add(
+-        var.set_fault_clear_delay_ms(
+-            fault_policy[CONF_CLEAR_DELAY].total_milliseconds
+-        )
+-    )
+-
+-    manual_current = await number.new_number(
+-        config[CONF_MANUAL_CURRENT],
+-        min_value=0.0,
+-        max_value=limits[CONF_MAXIMUM_CURRENT],
+-        step=0.1,
+-    )
+-    cg.add(manual_current.set_parent(var))
+-    cg.add(var.set_manual_current_number(manual_current))
+-
+-    state = await text_sensor.new_text_sensor(config[CONF_STATE])
+-    fault = await text_sensor.new_text_sensor(config[CONF_FAULT])
+-    cg.add(var.set_state_sensor(state))
+-    cg.add(var.set_fault_sensor(fault))
+-
+-    if CONF_CLEAR_FAULT in config:
+-        clear_fault = await button.new_button(config[CONF_CLEAR_FAULT])
+-        cg.add(clear_fault.set_parent(var))
+-
+-    procedures = config[CONF_PROCEDURES]
+-
+-    dcr_config = procedures.get(CONF_DCR)
+-    if dcr_config is not None:
+-        dcr = cg.new_Pvariable(dcr_config[CONF_ID])
+-        cg.add(dcr.set_baseline_current(dcr_config[CONF_BASELINE_CURRENT]))
+-        cg.add(dcr.set_pulse_current(dcr_config[CONF_PULSE_CURRENT]))
+-        cg.add(
+-            dcr.set_timing(
+-                dcr_config[CONF_SETTLE_TIME].total_milliseconds,
+-                dcr_config[CONF_SAMPLE_TIME].total_milliseconds,
+-                dcr_config[CONF_RECOVERY_TIME].total_milliseconds,
