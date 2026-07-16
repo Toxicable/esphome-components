@@ -32,6 +32,8 @@ A component coordinating other devices or procedures should own a typed C++ stat
 
 Entities are presentation and user-control surfaces. They are not the preferred machine-to-machine API inside one firmware image.
 
+An orchestrator must also have one explicit ownership authority. Manual control and procedures acquire the same lock; a procedure returns requested outputs to the core, and the core applies safety limits, hardware limits and cross-device interlocks. Procedures never directly drive hardware. Keep the public operational state small (`idle`, `running`, `fault`) and publish procedure-specific progress separately when useful.
+
 ## ESPHome external-component constraints
 
 These constraints are part of the architecture because they determine which source layouts ESPHome can discover and compile.
@@ -362,7 +364,8 @@ struct DeviceSnapshot {
 };
 ```
 
-The ESPHome-facing wrapper may publish the active bitset as one deterministic comma-delimited text sensor when users need the complete set.
+The ESPHome-facing wrapper may publish the active or latched bitset as one deterministic comma-delimited text sensor when users need the complete set. Multiple simultaneous safety causes should not be discarded merely to choose one primary fault.
+
 - `raw_status` is diagnostic and optional.
 
 The ESPHome wrapper decides which parts become entities.
@@ -417,7 +420,7 @@ Raw register dumps, manual internal modes, verbose telemetry, and implementation
 
 ### Manufacturing and irreversible actions
 
-Calibration writes, OTP programming, destructive resets, and other irreversible or manufacturing-only operations require an explicit manufacturing/advanced configuration section and prominent documentation. Marking an irreversible button as diagnostic is not sufficient protection.
+Irreversible calibration-memory writes, OTP programming, destructive resets, and manufacturing-only operations require an explicit manufacturing/advanced configuration section and prominent documentation. Reversible runtime calibration may live in a dedicated `calibration:` section, but must be atomic, validated, idle-only, and expose persistence/reset behavior clearly. Marking an irreversible button as diagnostic is not sufficient protection.
 
 ## Python organisation
 

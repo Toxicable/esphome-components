@@ -37,7 +37,7 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `mcf83xx_common` | internal | Shared by active MCF8316D and MCF8329A components | Keep limited to the register-bus contract, family framing, read-modify-write and pulse mechanics. |
 | `mcp4726` | active | Programmable-load configuration | Maintain as the DAC integration used by the load controller. |
 | `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not yet accounted for in the upstream migration | Migrate the required behavior upstream or consciously drop it, then remove the local shadow. |
-| `programmable_load` | active | Programmable-load board/project | Primary orchestrator component; replace entity-to-entity control with typed C++ capabilities. |
+| `programmable_load` | active | Programmable-load board/project | Typed orchestrator with exclusive manual/procedure ownership, hard hardware limits, aggregate faults and explicit calibration diagnostics/actions. |
 | `web_dial` | candidate-removal | No current consumer found | Confirm external use before removal. |
 
 ## Removal checklist

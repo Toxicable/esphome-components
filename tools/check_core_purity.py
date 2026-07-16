@@ -8,7 +8,7 @@ import re
 import sys
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp"}
-CORE_FILE_RE = re.compile(r".*_(?:bus|protocol|service|status)\.(?:c|cc|cpp|cxx|h|hh|hpp)$")
+CORE_FILE_RE = re.compile(r"(?:.*_(?:bus|protocol|service|status|core)|calibration)\.(?:c|cc|cpp|cxx|h|hh|hpp)$")
 INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
 FORBIDDEN_TOKENS = ("ESP_LOG", "esphome::")
 

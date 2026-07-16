@@ -29,17 +29,11 @@ The battery-cycle procedure performs this sequence:
 
 The cutoff must be above `limits.minimum_voltage`. This lets the procedure end normally before the core undervoltage protection trips.
 
-Charger_14 is used in its **external ESPHome control mode**. The cycle references the entities published by the board's `bq25756` component:
+Charger_14 is used in its **external ESPHome control mode**. The cycle receives the `bq25756` component ID and talks to its typed `component_common::ChargerInterface` directly in C++. Charger entities are optional observers; the procedure does not depend on Home Assistant entity IDs or entity publication.
 
-- `charge_enable`;
-- `ibat_current` in mA;
-- `vbat_voltage` in mV;
-- `charge_status`;
-- `status_flags`.
+Charge voltage, charge current, input-current and input-voltage limits remain owned by the `bq25756` configuration for the stuffed Charger_14 variant. The cycle only enables or disables an already configured charger. It does not write raw charger registers or duplicate board policy. A visible charger enable entity may still be provided for manual use while the programmable load is idle.
 
-Charge voltage, charge current, input-current and input-voltage limits remain owned by the `bq25756` configuration for the stuffed Charger_14 variant. The cycle only enables or disables an already configured charger. It does not write raw charger registers or duplicate board policy. The Charger_14 enable control may also be used for manual charging while the programmable load is idle; the load output remains forced off in that state.
-
-When a Charger_14 adapter is configured, the programmable-load core owns its charge-enable switch and keeps it off outside the charging phase. The core also guarantees that a non-zero load request and charger enable cannot be active together.
+When a charger capability is configured, the programmable-load core owns charge-enable requests during a procedure and keeps charging off outside the charging phase. The core guarantees that a non-zero load request and charger enable cannot be active together.
 
 The onboard Charger_14 STM32 firmware is a separate autonomous mode and currently has no host command protocol. This procedure therefore does not target the onboard STM32.
 
@@ -61,6 +55,35 @@ Input-current and input-voltage DPM states are not treated as faults because the
 ## Calibration
 
 Current and voltage scale/offset are applied before limits or procedures see measurements. DAC zero level and full-scale current map a requested current to the output. Calibration can be restored from preferences, replaced atomically, persisted, or reset to configured defaults.
+
+Calibration changes are accepted only while the load is `idle`. A complete six-value calibration is validated and applied as one transaction; a persistence failure restores the previous active values. Optional diagnostic entities expose the active coefficients and a `status` value of `configured`, `restored`, or `applied`.
+
+The reset button restores the values written under `calibration:` and persists them. Automations can apply or reset calibration explicitly:
+
+```yaml
+button:
+  - platform: template
+    name: "Apply Load Calibration"
+    on_press:
+      - programmable_load.apply_calibration:
+          id: load_controller
+          current_scale: 1.0012
+          current_offset: -0.006
+          voltage_scale: 0.9997
+          voltage_offset: 0.014
+          output_zero_level: 0.002
+          output_full_scale_current: 80.1
+          persist: true
+
+  - platform: template
+    name: "Reset Load Calibration"
+    on_press:
+      - programmable_load.reset_calibration:
+          id: load_controller
+          persist: true
+```
+
+The apply action intentionally requires every coefficient so an automation cannot leave the calibration half-updated.
 
 ## Configuration
 
@@ -110,6 +133,22 @@ programmable_load:
     output:
       zero_level: 0.0
       full_scale_current: 80.1
+    status:
+      name: "Load Calibration Source"
+    current_scale:
+      name: "Load Current Calibration Scale"
+    current_offset:
+      name: "Load Current Calibration Offset"
+    voltage_scale:
+      name: "Load Voltage Calibration Scale"
+    voltage_offset:
+      name: "Load Voltage Calibration Offset"
+    output_zero_level:
+      name: "Load Output Zero Level"
+    output_full_scale_current:
+      name: "Load Output Full-scale Current"
+    reset:
+      name: "Reset Load Calibration"
 
   limits:
     maximum_current: 40

@@ -21,7 +21,10 @@ python3 tools/check_core_purity.py \
   components/mcf8329a/mcf8329a_protocol.cpp \
   components/mcf8329a/mcf8329a_service.h \
   components/mcf8329a/mcf8329a_service.cpp \
-  components/mcf8329a/mcf8329a_tables.h
+  components/mcf8329a/mcf8329a_tables.h \
+  components/programmable_load/calibration.h \
+  components/programmable_load/programmable_load_core.h \
+  components/programmable_load/programmable_load_core.cpp
 
 if [[ -n "${CXX:-}" ]]; then
   cxx="$CXX"
@@ -79,5 +82,11 @@ common_flags=(
   components/mcf8329a/mcf8329a_service.cpp \
   -o "$build_dir/mcf83xx_services_test"
 "$build_dir/mcf83xx_services_test"
+
+"$cxx" "${common_flags[@]}" \
+  tests/programmable_load_core_test.cpp \
+  components/programmable_load/programmable_load_core.cpp \
+  -o "$build_dir/programmable_load_core_test"
+"$build_dir/programmable_load_core_test"
 
 echo "host tests: passed ($cxx)"

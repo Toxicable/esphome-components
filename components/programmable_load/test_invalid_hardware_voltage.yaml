@@ -1,5 +1,5 @@
 esphome:
-  name: programmable-load-test
+  name: programmable-load-invalid-voltage
   min_version: 2026.5.3
 
 esp32:
@@ -101,7 +101,7 @@ programmable_load:
   id: load_controller
   hardware:
     dac: load_dac
-    maximum_voltage: 75
+    maximum_voltage: 76
   measurements:
     current: load_current
     voltage: load_voltage
