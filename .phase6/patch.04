@@ -1,0 +1,349 @@
++        var.set_fan_temperature_range(
++            cooling[CONF_FAN_START_TEMPERATURE],
++            cooling[CONF_FAN_FULL_TEMPERATURE],
++        )
++    )
++
++    fault_policy = config[CONF_FAULT_POLICY]
++    cg.add(var.set_fault_auto_clear(fault_policy[CONF_AUTO_CLEAR]))
++    cg.add(
++        var.set_fault_clear_delay_ms(
++            fault_policy[CONF_CLEAR_DELAY].total_milliseconds
++        )
++    )
++
++    manual_current = await number.new_number(
++        config[CONF_MANUAL_CURRENT],
++        min_value=0.0,
++        max_value=limits[CONF_MAXIMUM_CURRENT],
++        step=0.1,
++    )
++    cg.add(manual_current.set_parent(var))
++    cg.add(var.set_manual_current_number(manual_current))
++
++    state = await text_sensor.new_text_sensor(config[CONF_STATE])
++    fault = await text_sensor.new_text_sensor(config[CONF_FAULT])
++    cg.add(var.set_state_sensor(state))
++    cg.add(var.set_fault_sensor(fault))
++
++    if CONF_CLEAR_FAULT in config:
++        clear_fault = await button.new_button(config[CONF_CLEAR_FAULT])
++        cg.add(clear_fault.set_parent(var))
++
++    procedures = config[CONF_PROCEDURES]
++
++    dcr_config = procedures.get(CONF_DCR)
++    if dcr_config is not None:
++        dcr = cg.new_Pvariable(dcr_config[CONF_ID])
++        cg.add(dcr.set_baseline_current(dcr_config[CONF_BASELINE_CURRENT]))
++        cg.add(dcr.set_pulse_current(dcr_config[CONF_PULSE_CURRENT]))
++        cg.add(
++            dcr.set_timing(
++                dcr_config[CONF_SETTLE_TIME].total_milliseconds,
++                dcr_config[CONF_SAMPLE_TIME].total_milliseconds,
++                dcr_config[CONF_RECOVERY_TIME].total_milliseconds,
++            )
++        )
++        cg.add(dcr.set_repeats(dcr_config[CONF_REPEATS]))
++
++        start = await button.new_button(dcr_config[CONF_START])
++        cg.add(start.set_host(var))
++        cg.add(start.set_procedure(dcr))
++
++        resistance = await sensor.new_sensor(dcr_config[CONF_RESISTANCE])
++        cg.add(dcr.set_resistance_sensor(resistance))
++
++    cycle_config = procedures.get(CONF_BATTERY_CYCLE)
++    if cycle_config is not None:
++        charger = await cg.get_variable(cycle_config[CONF_CHARGER])
++        cg.add(var.set_charger(charger))
++        cg.add(
++            var.set_charger_sample_timeout_ms(
++                cycle_config[CONF_CHARGER_SAMPLE_TIMEOUT].total_milliseconds
++            )
++        )
++        cg.add(
++            var.set_charger_control_timeout_ms(
++                cycle_config[CONF_CHARGER_CONTROL_TIMEOUT].total_milliseconds
++            )
++        )
++
++        cycle = cg.new_Pvariable(cycle_config[CONF_ID])
++        cg.add(cycle.set_discharge_current(cycle_config[CONF_DISCHARGE_CURRENT]))
++        cg.add(
++            cycle.set_discharge_cutoff_voltage(
++                cycle_config[CONF_DISCHARGE_CUTOFF_VOLTAGE]
++            )
++        )
++        cg.add(
++            cycle.set_discharge_cutoff_hysteresis(
++                cycle_config[CONF_DISCHARGE_CUTOFF_HYSTERESIS]
++            )
++        )
++        cg.add(
++            cycle.set_discharge_cutoff_hold_time_ms(
++                cycle_config[CONF_DISCHARGE_CUTOFF_HOLD_TIME].total_milliseconds
++            )
++        )
++        cg.add(
++            cycle.set_rest_time_ms(
++                cycle_config[CONF_REST_TIME].total_milliseconds
++            )
++        )
++        cg.add(
++            cycle.set_charge_start_timeout_ms(
++                cycle_config[CONF_CHARGE_START_TIMEOUT].total_milliseconds
++            )
++        )
++        cg.add(
++            cycle.set_charge_stall_timeout_ms(
++                cycle_config[CONF_CHARGE_STALL_TIMEOUT].total_milliseconds
++            )
++        )
++        cg.add(
++            cycle.set_charge_timeout_ms(
++                cycle_config[CONF_CHARGE_TIMEOUT].total_milliseconds
++            )
++        )
++        cg.add(
++            cycle.set_termination_hold_time_ms(
++                cycle_config[CONF_TERMINATION_HOLD_TIME].total_milliseconds
++            )
++        )
++
++        cycle_start = await button.new_button(cycle_config[CONF_START])
++        cg.add(cycle_start.set_host(var))
++        cg.add(cycle_start.set_procedure(cycle))
++        cycle_stop = await button.new_button(cycle_config[CONF_STOP])
++        cg.add(cycle_stop.set_host(var))
++        cg.add(cycle_stop.set_procedure(cycle))
++
++        if CONF_PHASE in cycle_config:
++            phase = await text_sensor.new_text_sensor(cycle_config[CONF_PHASE])
++            cg.add(cycle.set_phase_sensor(phase))
++        if CONF_RESULT in cycle_config:
++            result = await text_sensor.new_text_sensor(cycle_config[CONF_RESULT])
++            cg.add(cycle.set_result_sensor(result))
++        if CONF_DISCHARGED_CAPACITY in cycle_config:
++            value = await sensor.new_sensor(cycle_config[CONF_DISCHARGED_CAPACITY])
++            cg.add(cycle.set_discharged_capacity_sensor(value))
++        if CONF_DISCHARGED_ENERGY in cycle_config:
++            value = await sensor.new_sensor(cycle_config[CONF_DISCHARGED_ENERGY])
++            cg.add(cycle.set_discharged_energy_sensor(value))
++        if CONF_CHARGED_CAPACITY in cycle_config:
++            value = await sensor.new_sensor(cycle_config[CONF_CHARGED_CAPACITY])
++            cg.add(cycle.set_charged_capacity_sensor(value))
++        if CONF_CHARGED_ENERGY in cycle_config:
++            value = await sensor.new_sensor(cycle_config[CONF_CHARGED_ENERGY])
++            cg.add(cycle.set_charged_energy_sensor(value))
+diff --git a/components/programmable_load/_schema.py b/components/programmable_load/_schema.py
+new file mode 100644
+index 0000000..dbb6af8
+--- /dev/null
++++ b/components/programmable_load/_schema.py
+@@ -0,0 +1,368 @@
++import esphome.config_validation as cv
++from esphome.components import button, number, output, sensor, text_sensor
++from esphome.const import (
++    CONF_ID,
++    DEVICE_CLASS_CURRENT,
++    ENTITY_CATEGORY_CONFIG,
++    ENTITY_CATEGORY_DIAGNOSTIC,
++    UNIT_AMPERE,
++    UNIT_VOLT,
++)
++
++from ._types import *
++
++ABSOLUTE_MAXIMUM_VOLTAGE = 75.0
++
++
++def _positive(value):
++    value = cv.float_(value)
++    if value <= 0:
++        raise cv.Invalid("value must be greater than zero")
++    return value
++
++
++def _hardware_voltage(value):
++    value = _positive(value)
++    if value > ABSOLUTE_MAXIMUM_VOLTAGE:
++        raise cv.Invalid(
++            f"hardware.maximum_voltage must not exceed the absolute "
++            f"{ABSOLUTE_MAXIMUM_VOLTAGE:g} V component ceiling"
++        )
++    return value
++
++
++def _positive_scale(value):
++    value = cv.float_(value)
++    if value <= 0:
++        raise cv.Invalid("calibration scale must be greater than zero")
++    return value
++
++
++def _non_negative(value):
++    value = cv.float_(value)
++    if value < 0:
++        raise cv.Invalid("value must not be negative")
++    return value
++
++
++def _normalized_level(value):
++    value = cv.float_(value)
++    if value < 0 or value >= 1:
++        raise cv.Invalid("zero_level must be in the range 0 <= value < 1")
++    return value
++
++
++TEMPERATURE_INPUT_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_SENSOR): cv.use_id(sensor.Sensor),
++        cv.Optional(CONF_REQUIRED, default=False): cv.boolean,
++    }
++)
++
++HARDWARE_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_DAC): cv.use_id(output.FloatOutput),
++        cv.Required(CONF_HARDWARE_MAXIMUM_VOLTAGE): _hardware_voltage,
++    }
++)
++
++MEASUREMENTS_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_CURRENT): cv.use_id(sensor.Sensor),
++        cv.Required(CONF_VOLTAGE): cv.use_id(sensor.Sensor),
++        cv.Optional(CONF_TEMPERATURES, default=[]): cv.ensure_list(
++            TEMPERATURE_INPUT_SCHEMA
++        ),
++        cv.Optional(CONF_SAMPLE_TIMEOUT, default="250ms"):
++            cv.positive_time_period_milliseconds,
++    }
++)
++
++LINEAR_CALIBRATION_SCHEMA = cv.Schema(
++    {
++        cv.Optional(CONF_SCALE, default=1.0): _positive_scale,
++        cv.Optional(CONF_OFFSET, default=0.0): cv.float_,
++    }
++)
++
++OUTPUT_CALIBRATION_SCHEMA = cv.Schema(
++    {
++        cv.Optional(CONF_ZERO_LEVEL, default=0.0): _normalized_level,
++        cv.Required(CONF_FULL_SCALE_CURRENT): _positive,
++    }
++)
++
++CALIBRATION_SCHEMA = cv.Schema(
++    {
++        cv.Optional(CONF_RESTORE, default=True): cv.boolean,
++        cv.Optional(CONF_CURRENT, default={}): LINEAR_CALIBRATION_SCHEMA,
++        cv.Optional(CONF_VOLTAGE, default={}): LINEAR_CALIBRATION_SCHEMA,
++        cv.Required(CONF_OUTPUT): OUTPUT_CALIBRATION_SCHEMA,
++        cv.Optional(CONF_CALIBRATION_STATUS): text_sensor.text_sensor_schema(
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC
++        ),
++        cv.Optional(CONF_CURRENT_SCALE): sensor.sensor_schema(
++            accuracy_decimals=6,
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++        ),
++        cv.Optional(CONF_CURRENT_OFFSET): sensor.sensor_schema(
++            unit_of_measurement=UNIT_AMPERE,
++            accuracy_decimals=6,
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++        ),
++        cv.Optional(CONF_VOLTAGE_SCALE): sensor.sensor_schema(
++            accuracy_decimals=6,
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++        ),
++        cv.Optional(CONF_VOLTAGE_OFFSET): sensor.sensor_schema(
++            unit_of_measurement=UNIT_VOLT,
++            accuracy_decimals=6,
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++        ),
++        cv.Optional(CONF_OUTPUT_ZERO_LEVEL): sensor.sensor_schema(
++            accuracy_decimals=6,
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++        ),
++        cv.Optional(CONF_OUTPUT_FULL_SCALE_CURRENT): sensor.sensor_schema(
++            unit_of_measurement=UNIT_AMPERE,
++            accuracy_decimals=3,
++            entity_category=ENTITY_CATEGORY_DIAGNOSTIC,
++        ),
++        cv.Optional(CONF_RESET_CALIBRATION): button.button_schema(
++            ResetCalibrationButton,
++            entity_category=ENTITY_CATEGORY_CONFIG,
++        ),
++    }
++)
++
++
++def _validate_limits(config):
++    if config[CONF_MAXIMUM_VOLTAGE] <= config[CONF_MINIMUM_VOLTAGE]:
++        raise cv.Invalid(
++            "maximum_voltage must be greater than minimum_voltage"
++        )
++    return config
++
++
++LIMITS_SCHEMA = cv.All(
++    cv.Schema(
++        {
++            cv.Required(CONF_MAXIMUM_CURRENT): _positive,
++            cv.Required(CONF_MINIMUM_VOLTAGE): _non_negative,
++            cv.Required(CONF_MAXIMUM_VOLTAGE): _positive,
++            cv.Required(CONF_MAXIMUM_POWER): _positive,
++            cv.Required(CONF_MAXIMUM_TEMPERATURE): cv.float_,
++        }
++    ),
++    _validate_limits,
++)
++
++CONTROL_SCHEMA = cv.Schema(
++    {
++        cv.Optional(CONF_PERIOD, default="50ms"):
++            cv.positive_time_period_milliseconds,
++        cv.Optional(CONF_DEADBAND, default=0.01): _non_negative,
++        cv.Optional(CONF_RISE_RATE, default=2.0): _positive,
++        cv.Optional(CONF_FALL_RATE, default=4.0): _positive,
++        cv.Optional(CONF_PROPORTIONAL_GAIN, default=0.2): _positive,
++        cv.Optional(CONF_INTEGRAL_GAIN, default=0.4): _non_negative,
++        cv.Optional(CONF_LOG_CONTROL_SAMPLES, default=False): cv.boolean,
++    }
++)
++
++
++def _validate_cooling(config):
++    if (
++        config[CONF_FAN_FULL_TEMPERATURE]
++        <= config[CONF_FAN_START_TEMPERATURE]
++    ):
++        raise cv.Invalid(
++            "fan_full_temperature must be greater than "
++            "fan_start_temperature"
++        )
++    return config
++
++
++COOLING_SCHEMA = cv.All(
++    cv.Schema(
++        {
++            cv.Required(CONF_FAN_OUTPUT): cv.use_id(output.FloatOutput),
++            cv.Optional(CONF_FAN_START_TEMPERATURE, default=35.0): cv.float_,
++            cv.Optional(CONF_FAN_FULL_TEMPERATURE, default=70.0): cv.float_,
++        }
++    ),
++    _validate_cooling,
++)
++
++FAULT_POLICY_SCHEMA = cv.Schema(
++    {
++        cv.Optional(CONF_AUTO_CLEAR, default=False): cv.boolean,
++        cv.Optional(CONF_CLEAR_DELAY, default="2s"):
++            cv.positive_time_period_milliseconds,
++    }
++)
++
++DCR_SCHEMA = cv.Schema(
