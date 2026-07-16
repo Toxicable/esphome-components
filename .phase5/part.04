@@ -1,0 +1,182 @@
+6) & 0xFF),
+-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+-    static_cast<uint8_t>(control_word & 0xFF),
+-    static_cast<uint8_t>(value & 0xFF),
+-    static_cast<uint8_t>((value >> 8) & 0xFF),
+-    static_cast<uint8_t>((value >> 16) & 0xFF),
+-    static_cast<uint8_t>((value >> 24) & 0xFF),
+-  };
+-  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
++  const auto frame = ::mcf83xx_common::make_write32_frame(offset, value);
++  const i2c::ErrorCode err = this->write(frame.data(), frame.size());
+   if (err != i2c::ERROR_OK) {
+     ESP_LOGW(
+       TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
+diff --git a/components/mcf8329a/mcf8329a_bus.h b/components/mcf8329a/mcf8329a_bus.h
+index c752b07..f2c0a5c 100644
+--- a/components/mcf8329a/mcf8329a_bus.h
++++ b/components/mcf8329a/mcf8329a_bus.h
+@@ -1,17 +1,9 @@
+ #pragma once
+ 
+-#include <cstdint>
++#include "../mcf83xx_common/register_bus.h"
+ 
+ namespace mcf8329a_core {
+ 
+-class RegisterBus {
+- public:
+-  virtual ~RegisterBus() = default;
+-
+-  virtual bool read_register32(uint16_t offset, uint32_t *value) = 0;
+-  virtual bool read_register16(uint16_t offset, uint16_t *value) = 0;
+-  virtual bool write_register32(uint16_t offset, uint32_t value) = 0;
+-  virtual void delay_microseconds(uint32_t delay_us) = 0;
+-};
++using RegisterBus = mcf83xx_common::RegisterBus;
+ 
+ }  // namespace mcf8329a_core
+diff --git a/components/mcf8329a/mcf8329a_protocol.cpp b/components/mcf8329a/mcf8329a_protocol.cpp
+index 0f615e0..58bfa42 100644
+--- a/components/mcf8329a/mcf8329a_protocol.cpp
++++ b/components/mcf8329a/mcf8329a_protocol.cpp
+@@ -4,10 +4,6 @@
+ 
+ namespace mcf8329a_core {
+ 
+-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit) {
+-  const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
+-  return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
+-}
+ 
+ float decode_vm_voltage(uint32_t raw) {
+   return static_cast<float>(static_cast<double>(raw) * (60.0 / 134217728.0));
+@@ -30,11 +26,11 @@ float decode_fg_speed_hz(uint32_t raw, float max_speed_hz) {
+ }
+ 
+ float decode_open_loop_accel_hz_per_s(uint8_t code) {
+-  return esphome::mcf8329a::tables::OPEN_LOOP_ACCEL_HZ_PER_S[code & 0x0Fu];
++  return tables::OPEN_LOOP_ACCEL_HZ_PER_S[code & 0x0Fu];
+ }
+ 
+ float decode_open_to_closed_handoff_percent(uint8_t code) {
+-  return esphome::mcf8329a::tables::OPEN_TO_CLOSED_HANDOFF_PERCENT[code & 0x1Fu];
++  return tables::OPEN_TO_CLOSED_HANDOFF_PERCENT[code & 0x1Fu];
+ }
+ 
+ const char *mode_to_string(uint8_t mode) {
+diff --git a/components/mcf8329a/mcf8329a_protocol.h b/components/mcf8329a/mcf8329a_protocol.h
+index 7eacc55..4bbe3e6 100644
+--- a/components/mcf8329a/mcf8329a_protocol.h
++++ b/components/mcf8329a/mcf8329a_protocol.h
+@@ -187,7 +187,6 @@ enum class DirectionInputMode : uint8_t {
+   CCW = 2,
+ };
+ 
+-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit);
+ float decode_vm_voltage(uint32_t raw);
+ float decode_max_speed_hz(uint16_t code);
+ float decode_speed_hz(int32_t raw, float max_speed_hz);
+diff --git a/components/mcf8329a/mcf8329a_service.cpp b/components/mcf8329a/mcf8329a_service.cpp
+index 7a72816..d96b40f 100644
+--- a/components/mcf8329a/mcf8329a_service.cpp
++++ b/components/mcf8329a/mcf8329a_service.cpp
+@@ -4,34 +4,20 @@ namespace mcf8329a_core {
+ 
+ using namespace regs;
+ 
+-static constexpr uint32_t WRITE_TRANSACTION_DELAY_US = 100u;
+-
+ bool MCF8329AService::read_reg32(uint16_t offset, uint32_t &value) const {
+-  return this->bus_ != nullptr && this->bus_->read_register32(offset, &value);
++  return this->registers_.read32(offset, value);
+ }
+ 
+ bool MCF8329AService::read_reg16(uint16_t offset, uint16_t &value) const {
+-  return this->bus_ != nullptr && this->bus_->read_register16(offset, &value);
++  return this->registers_.read16(offset, value);
+ }
+ 
+ bool MCF8329AService::write_reg32(uint16_t offset, uint32_t value) const {
+-  if (this->bus_ == nullptr || !this->bus_->write_register32(offset, value)) {
+-    return false;
+-  }
+-  this->bus_->delay_microseconds(WRITE_TRANSACTION_DELAY_US);
+-  return true;
++  return this->registers_.write32(offset, value);
+ }
+ 
+ bool MCF8329AService::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const {
+-  uint32_t current = 0;
+-  if (!this->read_reg32(offset, current)) {
+-    return false;
+-  }
+-  const uint32_t next = (current & ~mask) | (value & mask);
+-  if (next == current) {
+-    return true;
+-  }
+-  return this->write_reg32(offset, next);
++  return this->registers_.update_bits32(offset, mask, value);
+ }
+ 
+ float MCF8329AService::decode_vm_voltage(uint32_t raw) const {
+@@ -116,32 +102,16 @@ bool MCF8329AService::set_mpet_characterization_bits() const {
+ }
+ 
+ bool MCF8329AService::write_mpet_results_to_shadow() const {
+-  if (!this->update_bits32(
+-        REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK
+-      )) {
+-    return false;
+-  }
+-  this->bus_->delay_microseconds(2000u);
+-  return this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, 0u);
++  return this->registers_.pulse_bits32(
++      REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, 2000U);
+ }
+ 
+ bool MCF8329AService::pulse_clear_faults() const {
+-  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
+-    return false;
+-  }
+-  this->bus_->delay_microseconds(2000u);
+-  const bool ok = this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 0u);
+-  this->bus_->delay_microseconds(2000u);
+-  return ok;
++  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 2000U, 2000U);
+ }
+ 
+ bool MCF8329AService::pulse_watchdog_tickle() const {
+-  if (!this->update_bits32(
+-        REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK
+-      )) {
+-    return false;
+-  }
+-  return this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0u);
++  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK);
+ }
+ 
+ bool MCF8329AService::clear_mpet_bits(bool *changed, uint32_t *before, uint32_t *after) const {
+diff --git a/components/mcf8329a/mcf8329a_service.h b/components/mcf8329a/mcf8329a_service.h
+index 9dde618..cbaa717 100644
+--- a/components/mcf8329a/mcf8329a_service.h
++++ b/components/mcf8329a/mcf8329a_service.h
+@@ -2,6 +2,7 @@
+ 
+ #include <cstdint>
+ 
++#include "../mcf83xx_common/register_access.h"
+ #include "mcf8329a_bus.h"
+ #include "mcf8329a_protocol.h"
+ 
+@@ -9,7 +10,7 @@ namespace mcf8329a_core {
+ 
+ class MCF8329AService {
+  public:
+-  explicit MCF8329AService(RegisterBus *bus) : bus_(bus) {}
++  explicit MCF8329AService(RegisterBus *bus) : registers_(bus, 100U) {}
+ 
+   bool read_reg32(uint16_t offset, uint32_t &value) const;
+   bool read_reg16(uint16_t offset, uint16_t &value) const;
+@@ -36,7 +37,7 @@ class MCF8329AService {
+   bool clear_mpet_bits(bool *changed = nullptr, uint32_t *before = nullptr, uint32_t *after = nullptr) co
