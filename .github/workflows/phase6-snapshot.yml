@@ -1,0 +1,31 @@
+name: Phase 6 source snapshot
+
+on:
+  pull_request:
+
+jobs:
+  snapshot:
+    if: github.head_ref == 'agent/phase6-source-snapshot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout programmable-load base
+        uses: actions/checkout@v4
+        with:
+          ref: agent/mcf83xx-family
+
+      - name: Upload programmable-load source
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-programmable-load-source
+          path: |
+            .github/workflows/compile.yml
+            ARCHITECTURE.md
+            COMPONENTS.md
+            README.md
+            check_host.bash
+            check_py.bash
+            components/component_common
+            components/programmable_load
+            tests
+            tools
+          if-no-files-found: error
