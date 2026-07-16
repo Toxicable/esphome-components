@@ -1,0 +1,258 @@
+ CONF_TS1_TEMPERATURE = "ts1_temperature"
+ CONF_TS2_TEMPERATURE = "ts2_temperature"
+ CONF_TS3_TEMPERATURE = "ts3_temperature"
+-CONF_LIFECYCLE = "lifecycle"
++CONF_CONNECTION_STATE = "connection_state"
+ CONF_STATE = "state"
+ CONF_FAULT = "fault"
+-CONF_FAULT_FLAGS = "fault_flags"
+ CONF_CAPACITY_CALIBRATION_STATUS = "capacity_calibration_status"
+ CONF_OUTPUT_ENABLED_CONTROL = "output_enabled_control"
+ CONF_CLEAR_ALARMS = "clear_alarms"
+@@ -466,14 +465,11 @@ schema = {
+         device_class=DEVICE_CLASS_TEMPERATURE,
+         state_class=STATE_CLASS_MEASUREMENT,
+     ),
+-    cv.Optional(CONF_LIFECYCLE): text_sensor.text_sensor_schema(
++    cv.Optional(CONF_CONNECTION_STATE): text_sensor.text_sensor_schema(
+         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+     ),
+     cv.Optional(CONF_STATE): text_sensor.text_sensor_schema(),
+     cv.Optional(CONF_FAULT): text_sensor.text_sensor_schema(),
+-    cv.Optional(CONF_FAULT_FLAGS): text_sensor.text_sensor_schema(
+-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+-    ),
+     cv.Optional(CONF_CAPACITY_CALIBRATION_STATUS): text_sensor.text_sensor_schema(
+         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
+     ),
+diff --git a/components/bq76952/bq76952.cpp b/components/bq76952/bq76952.cpp
+index cbdcfdd..b32f1fe 100644
+--- a/components/bq76952/bq76952.cpp
++++ b/components/bq76952/bq76952.cpp
+@@ -70,8 +70,8 @@ void BQ76952Component::set_ts3_temperature_sensor(sensor::Sensor *sensor) {
+   this->thermistor_temperature_sensors_[2] = sensor;
+ }
+ 
+-void BQ76952Component::set_lifecycle_sensor(text_sensor::TextSensor *sensor) {
+-  this->lifecycle_sensor_ = sensor;
++void BQ76952Component::set_connection_state_sensor(text_sensor::TextSensor *sensor) {
++  this->connection_state_sensor_ = sensor;
+ }
+ 
+ void BQ76952Component::set_state_sensor(text_sensor::TextSensor *sensor) {
+@@ -82,9 +82,6 @@ void BQ76952Component::set_fault_sensor(text_sensor::TextSensor *sensor) {
+   this->fault_sensor_ = sensor;
+ }
+ 
+-void BQ76952Component::set_fault_flags_sensor(text_sensor::TextSensor *sensor) {
+-  this->fault_flags_sensor_ = sensor;
+-}
+ 
+ void BQ76952Component::set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor) {
+   this->capacity_calibration_status_sensor_ = sensor;
+@@ -101,7 +98,7 @@ void BQ76952Component::setup() {
+ void BQ76952Component::update() {
+   ::bq76952_core::Snapshot snapshot{};
+   const bool valid = this->service_.poll(snapshot);
+-  this->publish_lifecycle(snapshot.lifecycle);
++  this->publish_connection_state(snapshot.connection_state);
+ 
+   if (!valid) {
+     if (this->state_sensor_ != nullptr) {
+@@ -110,24 +107,22 @@ void BQ76952Component::update() {
+     if (this->fault_sensor_ != nullptr) {
+       this->fault_sensor_->publish_state("unknown");
+     }
+-    if (this->fault_flags_sensor_ != nullptr) {
+-      this->fault_flags_sensor_->publish_state("unknown");
+-    }
+     this->status_set_warning();
+     return;
+   }
+ 
+   this->publish_snapshot(snapshot);
+-  if (snapshot.lifecycle == component_common::LifecycleState::READY) {
++  if (snapshot.configuration_ready) {
+     this->status_clear_warning();
+   } else {
+     this->status_set_warning();
+   }
+ }
+ 
+-void BQ76952Component::publish_lifecycle(component_common::LifecycleState lifecycle) {
+-  if (this->lifecycle_sensor_ != nullptr) {
+-    this->lifecycle_sensor_->publish_state(component_common::lifecycle_state_to_string(lifecycle));
++void BQ76952Component::publish_connection_state(component_common::ConnectionState connection_state) {
++  if (this->connection_state_sensor_ != nullptr) {
++    this->connection_state_sensor_->publish_state(
++        component_common::connection_state_to_string(connection_state));
+   }
+ }
+ 
+@@ -193,12 +188,9 @@ void BQ76952Component::publish_snapshot(const ::bq76952_core::Snapshot &snapshot
+ 
+ void BQ76952Component::publish_faults(const ::bq76952_core::Snapshot &snapshot) {
+   if (this->fault_sensor_ != nullptr) {
+-    this->fault_sensor_->publish_state(::bq76952_core::fault_to_string(snapshot.faults.primary));
+-  }
+-  if (this->fault_flags_sensor_ != nullptr) {
+     char faults[256];
+-    ::bq76952_core::format_fault_flags(snapshot.faults.active_flags, faults, sizeof(faults));
+-    this->fault_flags_sensor_->publish_state(faults);
++    ::bq76952_core::format_faults(snapshot.active_faults, faults, sizeof(faults));
++    this->fault_sensor_->publish_state(faults);
+   }
+ }
+ 
+@@ -234,10 +226,9 @@ void BQ76952Component::dump_config() {
+   LOG_SENSOR("  ", "TS1 Temperature", this->thermistor_temperature_sensors_[0]);
+   LOG_SENSOR("  ", "TS2 Temperature", this->thermistor_temperature_sensors_[1]);
+   LOG_SENSOR("  ", "TS3 Temperature", this->thermistor_temperature_sensors_[2]);
+-  LOG_TEXT_SENSOR("  ", "Lifecycle", this->lifecycle_sensor_);
++  LOG_TEXT_SENSOR("  ", "Connection State", this->connection_state_sensor_);
+   LOG_TEXT_SENSOR("  ", "State", this->state_sensor_);
+   LOG_TEXT_SENSOR("  ", "Fault", this->fault_sensor_);
+-  LOG_TEXT_SENSOR("  ", "Fault Flags", this->fault_flags_sensor_);
+   LOG_TEXT_SENSOR("  ", "Capacity Calibration Status", this->capacity_calibration_status_sensor_);
+   LOG_SWITCH("  ", "Output Enabled", this->output_enabled_switch_);
+ }
+diff --git a/components/bq76952/bq76952.h b/components/bq76952/bq76952.h
+index acc0d08..3025b53 100644
+--- a/components/bq76952/bq76952.h
++++ b/components/bq76952/bq76952.h
+@@ -37,10 +37,9 @@ class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
+   void set_ts2_temperature_sensor(sensor::Sensor *sensor);
+   void set_ts3_temperature_sensor(sensor::Sensor *sensor);
+ 
+-  void set_lifecycle_sensor(text_sensor::TextSensor *sensor);
++  void set_connection_state_sensor(text_sensor::TextSensor *sensor);
+   void set_state_sensor(text_sensor::TextSensor *sensor);
+   void set_fault_sensor(text_sensor::TextSensor *sensor);
+-  void set_fault_flags_sensor(text_sensor::TextSensor *sensor);
+   void set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor);
+ 
+   void set_output_enabled_switch(switch_::Switch *control);
+@@ -54,7 +53,7 @@ class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
+   bool program_factory_otp();
+ 
+  private:
+-  void publish_lifecycle(component_common::LifecycleState lifecycle);
++  void publish_connection_state(component_common::ConnectionState connection_state);
+   void publish_snapshot(const ::bq76952_core::Snapshot &snapshot);
+   void publish_faults(const ::bq76952_core::Snapshot &snapshot);
+ 
+@@ -71,10 +70,9 @@ class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
+   sensor::Sensor *die_temperature_sensor_{nullptr};
+   std::array<sensor::Sensor *, 3> thermistor_temperature_sensors_{};
+ 
+-  text_sensor::TextSensor *lifecycle_sensor_{nullptr};
++  text_sensor::TextSensor *connection_state_sensor_{nullptr};
+   text_sensor::TextSensor *state_sensor_{nullptr};
+   text_sensor::TextSensor *fault_sensor_{nullptr};
+-  text_sensor::TextSensor *fault_flags_sensor_{nullptr};
+   text_sensor::TextSensor *capacity_calibration_status_sensor_{nullptr};
+ 
+   switch_::Switch *output_enabled_switch_{nullptr};
+diff --git a/components/bq76952/bq76952_service.cpp b/components/bq76952/bq76952_service.cpp
+index fb6fa5a..38bf31f 100644
+--- a/components/bq76952/bq76952_service.cpp
++++ b/components/bq76952/bq76952_service.cpp
+@@ -123,11 +123,11 @@ const char *BQ76952Service::capacity_calibration_status() const {
+ 
+ void BQ76952Service::setup() {
+   if (!this->config_set_) {
+-    this->lifecycle_ = component_common::LifecycleState::FAILED;
++    this->connection_state_ = component_common::ConnectionState::FAILED;
+     ESP_LOGE(TAG, "No BQ76952 configuration was supplied");
+     return;
+   }
+-  this->lifecycle_ = component_common::LifecycleState::CONFIGURING;
++  this->connection_state_ = component_common::ConnectionState::CONNECTING;
+   this->soc_.setup(this->config_.cell_chemistry);
+   this->next_configuration_retry_ms_ = 0;
+   this->next_configuration_audit_ms_ = 0;
+@@ -149,9 +149,7 @@ bool BQ76952Service::establish_connection() {
+     this->load_unit_scaling();
+   }
+   this->online_ = true;
+-  if (!this->configured_) {
+-    this->lifecycle_ = component_common::LifecycleState::CONFIGURING;
+-  }
++  this->connection_state_ = component_common::ConnectionState::CONNECTED;
+   return true;
+ }
+ 
+@@ -161,21 +159,24 @@ void BQ76952Service::note_communication_failure() {
+   }
+   this->online_ = false;
+   this->configured_ = false;
+-  this->lifecycle_ = component_common::LifecycleState::DISCONNECTED;
++  this->connection_state_ = component_common::ConnectionState::DISCONNECTED;
+ }
+ 
+ bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
+   snapshot = {};
+   snapshot.cell_count = this->config_.cell_count;
+-  snapshot.lifecycle = this->lifecycle_;
++  snapshot.connection_state = this->connection_state_;
++  snapshot.configuration_ready = this->configured_;
+ 
+   if (!this->config_set_) {
+-    this->lifecycle_ = component_common::LifecycleState::FAILED;
+-    snapshot.lifecycle = this->lifecycle_;
++    this->connection_state_ = component_common::ConnectionState::FAILED;
++    snapshot.connection_state = this->connection_state_;
++    snapshot.configuration_ready = false;
+     return false;
+   }
+   if (!this->establish_connection()) {
+-    snapshot.lifecycle = this->lifecycle_;
++    snapshot.connection_state = this->connection_state_;
++    snapshot.configuration_ready = false;
+     return false;
+   }
+ 
+@@ -194,16 +195,16 @@ bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
+     }
+   }
+ 
+-  this->lifecycle_ = this->configured_ ? component_common::LifecycleState::READY
+-                                       : component_common::LifecycleState::CONFIGURING;
+   if (!this->read_snapshot(snapshot)) {
+     this->note_communication_failure();
+     snapshot = {};
+     snapshot.cell_count = this->config_.cell_count;
+-    snapshot.lifecycle = this->lifecycle_;
++    snapshot.connection_state = this->connection_state_;
++    snapshot.configuration_ready = false;
+     return false;
+   }
+-  snapshot.lifecycle = this->lifecycle_;
++  snapshot.connection_state = this->connection_state_;
++  snapshot.configuration_ready = this->configured_;
+   return true;
+ }
+ bool BQ76952Service::configuration_matches(bool &matches) {
+@@ -742,8 +743,8 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
+   snapshot.operating_state = ::bq76952_core::decode_operating_state(control_status, battery_status);
+   snapshot.output_enabled = (fet_status & hw::bits::fet_status::CHARGE) != 0 &&
+                             (fet_status & hw::bits::fet_status::DISCHARGE) != 0;
+-  snapshot.faults = ::bq76952_core::make_fault_snapshot(
+-      ::bq76952_core::decode_fault_flags(battery_status, safety_a, safety_b, safety_c));
++  snapshot.active_faults =
++      ::bq76952_core::decode_faults(battery_status, safety_a, safety_b, safety_c);
+ 
+   std::array<int16_t, 16> raw_cells{};
+   for (uint8_t raw = 0; raw < raw_cells.size(); raw++) {
+@@ -814,8 +815,8 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
+   soc_sample.minimum_cell_voltage_mv = min_cell;
+   soc_sample.maximum_cell_voltage_mv = max_cell;
+   soc_sample.average_cell_voltage_mv = average_cell;
+-  soc_sample.cell_undervoltage_active = (snapshot.faults.active_flags & ::bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0;
+-  soc_sample.cell_overvoltage_active = (snapshot.faults.active_flags & ::bq76952_core::FAULT_CELL_OVERVOLTAGE) != 0;
++  soc_sample.cell_undervoltage_active = (snapshot.active_faults & ::bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0;
++  soc_sample.cell_overvoltage_active = (snapshot.active_faults & ::bq76952_core::FAULT_CELL_OVERVOLTAGE) != 0;
+   soc_sample.empty_cell_voltage_mv = this->config_.soc.empty_cell_voltage_mv;
+   soc_sample.full_cell_voltage_mv = this->config_.soc.full_cell_voltage_mv;
+   snapshot.state_of_charge_percent = this->soc_.update(soc_sample);
+diff --git a/components/bq76952/bq76952_service.h b/components/bq76952/bq76952_service.h
