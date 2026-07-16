@@ -61,20 +61,37 @@ static const char *const TAG = "bq25756.managed";
 }
 
 bool BQ25756ManagedComponent::restore_manifest_configuration_() {
+  ::bq25756_core::ControlStates controls{};
+  if (!this->service_.read_control_states(controls)) {
+    ESP_LOGW(TAG, "Cannot restore configuration: control state is unavailable");
+    return false;
+  }
+
+  const bool restore_charge_enable = controls.charge_enabled;
+  if (restore_charge_enable && !this->service_.set_charge_enabled(false)) {
+    ESP_LOGW(TAG, "Cannot restore configuration: failed to disable charging first");
+    return false;
+  }
+
   const auto image = ::bq25756_core::make_configuration_image(this->build_configuration_());
   ::bq25756_core::ConfigurationReconcileResult result{};
   const bool restored = this->service_.reconcile_configuration(image, true, result);
   if (!result.io_ok) {
-    ESP_LOGW(TAG, "Configuration restore failed during register I/O");
+    ESP_LOGW(TAG, "Configuration restore failed during register I/O; charging remains disabled");
     return false;
   }
   if (!restored || !result.matches) {
     ESP_LOGW(TAG,
              "Configuration restore verification failed: desired=0x%08X observed=0x%08X "
-             "remaining=%u",
+             "remaining=%u; charging remains disabled",
              static_cast<unsigned>(result.desired_fingerprint),
              static_cast<unsigned>(result.observed_fingerprint),
              static_cast<unsigned>(result.remaining_mismatch_count));
+    return false;
+  }
+
+  if (restore_charge_enable && !this->service_.set_charge_enabled(true)) {
+    ESP_LOGW(TAG, "Configuration restored but prior charge-enable state could not be resumed");
     return false;
   }
 
