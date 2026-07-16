@@ -1,20 +1,23 @@
 name: Phase 4 source snapshot
 
 on:
-  pull_request:
+  push:
+    branches:
+      - agent/phase4-source-snapshot
 
 jobs:
   snapshot:
-    if: github.head_ref == 'agent/phase4-source-snapshot'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout BQ consistency branch
         uses: actions/checkout@v4
+        with:
+          ref: agent/bq-consistency
 
       - name: Upload BQ source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: phase4-bq-source
+          name: phase4-bq-source-current
           path: |
             ARCHITECTURE.md
             COMPONENTS.md
