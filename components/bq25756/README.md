@@ -7,7 +7,7 @@ startup, manages charger limits, and publishes telemetry, status, and controls.
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ bq25756 ]
+    components: [ component_common, bq25756 ]
 
 bq25756:
   id: charger
@@ -70,11 +70,23 @@ The component disables the charger watchdog internally, so it does not need
 periodic host resets. I2C always owns charge enable and both current limits;
 the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
 
-## Configuration health
+## Register ownership and recovery
 
-The component audits charger-owned configuration registers every 10 seconds.
-If the charger resets or a configured register drifts, it restores the
-configured voltage/current limits, pin overrides, watchdog state, ADC setup,
-and PFM setting without changing the charge-enable state. Configure
-`status.configuration_status` to expose `configured` or `repair_failed` in
-Home Assistant.
+The host-independent library contains a complete register manifest for the
+current BQ25756 register table. Every documented register bit is classified as
+configuration, runtime state, status, command, or reserved. Every configurable
+register has an explicit desired value, so omitted code cannot silently rely on
+a factory default.
+
+The component builds a masked configuration image from its typed settings. It
+compares the complete image every 10 seconds, writes only mismatched owned bits,
+preserves runtime and reserved bits, clears command bits on ordinary writes,
+and verifies the resulting configuration fingerprint.
+
+After three consecutive failed poll cycles, the component marks the charger
+disconnected and invalidates the current session. When communication returns,
+it runs the normal safe initialization, restores and verifies the complete
+configuration image, and only then reports the configuration as ready.
+
+Configure `status.configuration_status` to expose `configured`, `disconnected`,
+or `repair_failed` in Home Assistant.
