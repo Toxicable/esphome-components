@@ -1,0 +1,79 @@
+name: Publish Phase 6
+
+on:
+  push:
+    branches:
+      - agent/phase6-publisher
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.head_ref == 'agent/phase6-publisher' || github.ref_name == 'agent/phase6-publisher'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout publisher payload
+        uses: actions/checkout@v4
+        with:
+          path: payload
+
+      - name: Checkout Phase 5 base
+        uses: actions/checkout@v4
+        with:
+          ref: agent/mcf83xx-family
+          path: target
+          fetch-depth: 0
+
+      - name: Reconstruct Phase 6 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat payload/.phase6/patch.{00..11} > phase6.patch
+          printf '%s  %s\n' '1234192c6d93e009d6884a3076f24751dffaa927ca51a3e619092e2d3371f4b5' phase6.patch | sha256sum --check
+          test "$(wc -c < phase6.patch)" -eq 135239
+
+      - name: Apply programmable-load hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git apply --check ../phase6.patch
+          git apply --index ../phase6.patch
+          git diff --cached --check
+
+      - name: Check Python modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          bash ./check_py.bash
+
+      - name: Run host tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd target
+          bash ./check_host.bash 2>&1 | tee ../phase6-host.log
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-publisher-failure
+          path: |
+            phase6.patch
+            phase6-host.log
+          if-no-files-found: ignore
+
+      - name: Publish programmable-load branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git restore --source=HEAD --staged --worktree .github/workflows/compile.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Harden programmable-load orchestration and calibration'
+          git push origin HEAD:refs/heads/agent/programmable-load-orchestration
