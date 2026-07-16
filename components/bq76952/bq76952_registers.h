@@ -3,8 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace esphome {
-namespace bq76952 {
+namespace bq76952_core {
 namespace registers {
 
 // Direct-command register addresses from the BQ76952 command table.
@@ -275,5 +274,4 @@ inline constexpr uint16_t PRECHARGE_TIMEOUT_RESET_USER_AH = 2;
 }  // namespace policy
 
 }  // namespace registers
-}  // namespace bq76952
-}  // namespace esphome
+}  // namespace bq76952_core

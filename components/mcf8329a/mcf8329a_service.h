@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include "../mcf83xx_common/register_access.h"
 #include "mcf8329a_bus.h"
 #include "mcf8329a_protocol.h"
 
@@ -9,7 +10,7 @@ namespace mcf8329a_core {
 
 class MCF8329AService {
  public:
-  explicit MCF8329AService(RegisterBus *bus) : bus_(bus) {}
+  explicit MCF8329AService(RegisterBus *bus) : registers_(bus, 100U) {}
 
   bool read_reg32(uint16_t offset, uint32_t &value) const;
   bool read_reg16(uint16_t offset, uint16_t &value) const;
@@ -36,7 +37,7 @@ class MCF8329AService {
   bool clear_mpet_bits(bool *changed = nullptr, uint32_t *before = nullptr, uint32_t *after = nullptr) const;
 
  private:
-  RegisterBus *bus_{nullptr};
+  mcf83xx_common::RegisterAccess registers_;
 };
 
 }  // namespace mcf8329a_core

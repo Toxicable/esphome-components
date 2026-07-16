@@ -7,12 +7,13 @@
 #include "esphome/components/number/number.h"
 #include "esphome/components/output/float_output.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/core/automation.h"
 #include "esphome/core/component.h"
 #include "esphome/core/preferences.h"
 
-#include "calibration.h"
+#include "../component_common/charger.h"
+
 #include "load_types.h"
 #include "procedure.h"
 
@@ -35,8 +36,7 @@ class ProgrammableLoadComponent : public Component {
   void set_dac_output(output::FloatOutput *output) { this->dac_output_ = output; }
   void set_hardware_maximum_voltage(float voltage_v) {
     this->hardware_limits_.maximum_voltage_v =
-        voltage_v < ABSOLUTE_MAXIMUM_VOLTAGE_V ? voltage_v
-                                               : ABSOLUTE_MAXIMUM_VOLTAGE_V;
+        normalize_hardware_maximum_voltage(voltage_v);
   }
   void set_fan_output(output::FloatOutput *output) { this->fan_output_ = output; }
 
@@ -51,23 +51,10 @@ class ProgrammableLoadComponent : public Component {
     this->sample_timeout_ms_ = timeout_ms;
   }
 
-  // Charger_14 external-control boundary. These entities are supplied by the
-  // BQ25756 component and may be internal. The core owns charge-enable while a
-  // charger is attached, ensuring the load and charger are never active together.
-  void set_charger_enable_switch(switch_::Switch *sw) {
-    this->charger_enable_switch_ = sw;
-  }
-  void set_charger_current_sensor(sensor::Sensor *sensor) {
-    this->charger_current_sensor_ = sensor;
-  }
-  void set_charger_voltage_sensor(sensor::Sensor *sensor) {
-    this->charger_voltage_sensor_ = sensor;
-  }
-  void set_charger_status_sensor(text_sensor::TextSensor *sensor) {
-    this->charger_status_sensor_ = sensor;
-  }
-  void set_charger_flags_sensor(text_sensor::TextSensor *sensor) {
-    this->charger_flags_sensor_ = sensor;
+  // Typed charger capability. Home Assistant entities remain optional
+  // observers owned by the charger rather than an internal component API.
+  void set_charger(::component_common::ChargerInterface *charger) {
+    this->charger_ = charger;
   }
   void set_charger_sample_timeout_ms(uint32_t timeout_ms) {
     this->charger_sample_timeout_ms_ = timeout_ms;
@@ -93,9 +80,34 @@ class ProgrammableLoadComponent : public Component {
   void set_restore_calibration(bool restore) {
     this->restore_calibration_ = restore;
   }
-  bool apply_calibration(const Calibration &calibration, bool persist);
+  bool apply_calibration(const Calibration &calibration, bool persist,
+                         CalibrationSource source = CalibrationSource::APPLIED);
   bool reset_calibration(bool persist);
   const Calibration &calibration() const { return this->calibration_; }
+  CalibrationSource calibration_source() const {
+    return this->calibration_source_;
+  }
+  void set_calibration_status_sensor(text_sensor::TextSensor *sensor) {
+    this->calibration_status_sensor_ = sensor;
+  }
+  void set_current_scale_sensor(sensor::Sensor *sensor) {
+    this->current_scale_sensor_ = sensor;
+  }
+  void set_current_offset_sensor(sensor::Sensor *sensor) {
+    this->current_offset_sensor_ = sensor;
+  }
+  void set_voltage_scale_sensor(sensor::Sensor *sensor) {
+    this->voltage_scale_sensor_ = sensor;
+  }
+  void set_voltage_offset_sensor(sensor::Sensor *sensor) {
+    this->voltage_offset_sensor_ = sensor;
+  }
+  void set_output_zero_level_sensor(sensor::Sensor *sensor) {
+    this->output_zero_level_sensor_ = sensor;
+  }
+  void set_output_full_scale_current_sensor(sensor::Sensor *sensor) {
+    this->output_full_scale_current_sensor_ = sensor;
+  }
 
   // Configurable operating limits. Runtime always checks both the operating
   // ceiling and the independent hardware ceiling.
@@ -167,9 +179,10 @@ class ProgrammableLoadComponent : public Component {
   bool stop_procedure(Procedure *procedure);
   void stop();
 
-  // Fault API.
+  // Fault API. The public fault text is the deterministic comma-delimited
+  // list of every latched cause.
   bool clear_fault();
-  Fault fault() const { return this->fault_; }
+  FaultFlags faults() const { return this->faults_; }
   State state() const { return this->state_; }
 
   const Measurement &measurement() const { return this->measurement_; }
@@ -182,12 +195,6 @@ class ProgrammableLoadComponent : public Component {
   const Limits &limits() const { return this->limits_; }
 
  protected:
-  enum class Owner : uint8_t {
-    NONE = 0,
-    MANUAL,
-    PROCEDURE,
-  };
-
   void update_measurement_();
   void update_charger_measurement_();
   void update_faults_();
@@ -197,8 +204,8 @@ class ProgrammableLoadComponent : public Component {
   void reset_control_history_();
   void update_fan_();
 
-  Fault detect_running_fault_() const;
-  bool fault_condition_active_(Fault fault) const;
+  FaultFlags detect_running_faults_() const;
+  bool fault_conditions_active_(FaultFlags faults) const;
   bool required_temperature_unavailable_() const;
   void apply_procedure_result_(const ProcedureResult &result);
   bool apply_charger_command_(ChargerCommand command);
@@ -206,12 +213,13 @@ class ProgrammableLoadComponent : public Component {
   void release_owner_(StopReason reason);
   void set_state_(State state);
   void trip_fault_(Fault fault);
+  void trip_faults_(FaultFlags faults);
   void publish_status_();
+  void publish_calibration_();
   float effective_current_limit_() const;
   void drive_output_(float current_a);
   void force_output_off_();
 
-  bool calibration_valid_(const Calibration &calibration) const;
   bool save_calibration_();
 
   output::FloatOutput *dac_output_{nullptr};
@@ -220,18 +228,21 @@ class ProgrammableLoadComponent : public Component {
   sensor::Sensor *voltage_sensor_{nullptr};
   std::vector<TemperatureInput> temperature_inputs_;
 
-  switch_::Switch *charger_enable_switch_{nullptr};
-  sensor::Sensor *charger_current_sensor_{nullptr};
-  sensor::Sensor *charger_voltage_sensor_{nullptr};
-  text_sensor::TextSensor *charger_status_sensor_{nullptr};
-  text_sensor::TextSensor *charger_flags_sensor_{nullptr};
+  ::component_common::ChargerInterface *charger_{nullptr};
 
   number::Number *manual_current_number_{nullptr};
   text_sensor::TextSensor *state_sensor_{nullptr};
   text_sensor::TextSensor *fault_sensor_{nullptr};
+  text_sensor::TextSensor *calibration_status_sensor_{nullptr};
+  sensor::Sensor *current_scale_sensor_{nullptr};
+  sensor::Sensor *current_offset_sensor_{nullptr};
+  sensor::Sensor *voltage_scale_sensor_{nullptr};
+  sensor::Sensor *voltage_offset_sensor_{nullptr};
+  sensor::Sensor *output_zero_level_sensor_{nullptr};
+  sensor::Sensor *output_full_scale_current_sensor_{nullptr};
 
   Procedure *active_procedure_{nullptr};
-  Owner owner_{Owner::NONE};
+  OperationLock operation_lock_{};
 
   Measurement measurement_{};
   ChargerMeasurement charger_measurement_{};
@@ -242,7 +253,8 @@ class ProgrammableLoadComponent : public Component {
   Calibration calibration_{};
 
   State state_{State::IDLE};
-  Fault fault_{Fault::NONE};
+  FaultFlags faults_{0u};
+  CalibrationSource calibration_source_{CalibrationSource::CONFIGURED};
 
   float requested_current_a_{0.0f};
   float commanded_current_a_{0.0f};
@@ -264,15 +276,6 @@ class ProgrammableLoadComponent : public Component {
 
   uint32_t charger_sample_timeout_ms_{3000};
   uint32_t charger_control_timeout_ms_{5000};
-  uint32_t charger_current_updated_ms_{0};
-  uint32_t charger_voltage_updated_ms_{0};
-  uint32_t charger_status_updated_ms_{0};
-  uint32_t charger_flags_updated_ms_{0};
-  uint32_t charger_sequence_{0};
-  bool charger_current_seen_{false};
-  bool charger_voltage_seen_{false};
-  bool charger_status_seen_{false};
-  bool charger_flags_seen_{false};
   bool charger_command_known_{false};
   bool charger_commanded_enabled_{false};
   uint32_t charger_command_changed_ms_{0};
@@ -314,8 +317,18 @@ class ClearFaultButton : public button::Button {
   ProgrammableLoadComponent *parent_{nullptr};
 };
 
+class ResetCalibrationButton : public button::Button {
+ public:
+  void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
+
+ protected:
+  void press_action() override;
+  ProgrammableLoadComponent *parent_{nullptr};
+};
+
 }  // namespace programmable_load
 }  // namespace esphome
 
 #include "battery_cycle.h"
 #include "dcr_test.h"
+#include "calibration_actions.h"

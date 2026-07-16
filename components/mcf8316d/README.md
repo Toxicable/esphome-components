@@ -2,9 +2,9 @@
 
 Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
 This component now follows the shared layout in `../../ARCHITECTURE.md`:
-- `mcf8316d_bus.h` defines the reusable register-bus interface.
-- `mcf8316d_protocol.*` owns register/bitfield constants, control-word encoding, and pure string/decode helpers.
-- `mcf8316d_service.*` owns reusable register access and chip command helpers on top of the bus interface.
+- `../mcf83xx_common` owns the shared MCx83xx register-bus, I2C frame and read-modify-write mechanics; `mcf8316d_bus.h` is a compatibility alias.
+- `mcf8316d_protocol.*` owns chip register/bitfield constants and pure string/decode helpers.
+- `mcf8316d_service.*` owns chip command helpers on top of the shared register-access layer.
 - `mcf8316d_tuning.*` owns startup-tune profiles plus sweep/probe debug workflows.
 - `mcf8316d.h` / `mcf8316d.cpp` own ESPHome entities, logging, high-level runtime orchestration, and the ESPHome I2C bus adapter.
 `inter_byte_delay_us` is currently informational and not applied when using standard ESPHome I2C transactions.
@@ -34,7 +34,7 @@ logger:
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ mcf8316d ]
+    components: [ component_common, mcf83xx_common, mcf8316d ]
 
 i2c:
   sda: GPIO21

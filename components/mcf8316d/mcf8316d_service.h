@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 
+#include "../mcf83xx_common/register_access.h"
 #include "mcf8316d_bus.h"
 #include "mcf8316d_protocol.h"
 
@@ -10,7 +11,7 @@ namespace mcf8316d_core {
 
 class MCF8316DService {
  public:
-  explicit MCF8316DService(RegisterBus *bus) : bus_(bus) {}
+  explicit MCF8316DService(RegisterBus *bus) : registers_(bus) {}
 
   bool read_reg32(uint16_t offset, uint32_t &value) const;
   bool read_reg16(uint16_t offset, uint16_t &value) const;
@@ -26,7 +27,7 @@ class MCF8316DService {
   bool pulse_watchdog_tickle() const;
 
  private:
-  RegisterBus *bus_{nullptr};
+  mcf83xx_common::RegisterAccess registers_;
 };
 
 }  // namespace mcf8316d_core

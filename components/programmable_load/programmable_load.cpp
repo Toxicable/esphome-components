@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <string>
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
@@ -23,102 +22,20 @@ float clampf(float value, float minimum, float maximum) {
   return std::max(minimum, std::min(maximum, value));
 }
 
-bool contains_token(const std::string &flags, const char *token) {
-  size_t start = 0;
-  while (start < flags.size()) {
-    const size_t end = flags.find(',', start);
-    const size_t length =
-        end == std::string::npos ? flags.size() - start : end - start;
-    if (flags.compare(start, length, token) == 0) {
-      return true;
-    }
-    if (end == std::string::npos) {
-      break;
-    }
-    start = end + 1;
-  }
-  return false;
-}
 
-ChargerState charger_state_from_string(const std::string &state) {
-  if (state == "not_charging") return ChargerState::NOT_CHARGING;
-  if (state == "trickle") return ChargerState::TRICKLE;
-  if (state == "precharge") return ChargerState::PRECHARGE;
-  if (state == "fast_cc") return ChargerState::FAST_CC;
-  if (state == "taper_cv") return ChargerState::TAPER_CV;
-  if (state == "topoff") return ChargerState::TOPOFF;
-  if (state == "termination_done") return ChargerState::TERMINATION_DONE;
-  return ChargerState::UNKNOWN;
-}
 
-bool charger_flags_fault_active(const std::string &flags) {
-  return contains_token(flags, "wd_expired") ||
-         contains_token(flags, "reverse") ||
-         contains_token(flags, "cv_timer") ||
-         contains_token(flags, "charge_timer") ||
-         contains_token(flags, "vac_uv") ||
-         contains_token(flags, "vac_ov") ||
-         contains_token(flags, "ibat_ocp") ||
-         contains_token(flags, "vbat_ov") ||
-         contains_token(flags, "tshut") ||
-         contains_token(flags, "drv_sup");
-}
+
+
+
+
 }  // namespace
-
-const char *state_to_string(State state) {
-  switch (state) {
-    case State::IDLE: return "idle";
-    case State::RUNNING: return "running";
-    case State::FAULT: return "fault";
-    default: return "unknown";
-  }
-}
-
-const char *fault_to_string(Fault fault) {
-  switch (fault) {
-    case Fault::NONE: return "none";
-    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
-      return "current_measurement_unavailable";
-    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
-      return "voltage_measurement_unavailable";
-    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
-      return "required_temperature_unavailable";
-    case Fault::INPUT_UNDERVOLTAGE: return "input_undervoltage";
-    case Fault::INPUT_OVERVOLTAGE: return "input_overvoltage";
-    case Fault::HARDWARE_OVERVOLTAGE: return "hardware_overvoltage";
-    case Fault::OVERCURRENT: return "overcurrent";
-    case Fault::OVERPOWER: return "overpower";
-    case Fault::OVERTEMPERATURE: return "overtemperature";
-    case Fault::CHARGER_UNAVAILABLE: return "charger_unavailable";
-    case Fault::CHARGER_FAULT: return "charger_fault";
-    case Fault::CHARGER_CONTROL_ERROR: return "charger_control_error";
-    case Fault::CHARGE_TIMEOUT: return "charge_timeout";
-    case Fault::CONTROL_ERROR: return "control_error";
-    case Fault::PROCEDURE_ERROR: return "procedure_error";
-    default: return "unknown";
-  }
-}
-
-const char *charger_state_to_string(ChargerState state) {
-  switch (state) {
-    case ChargerState::NOT_CHARGING: return "not_charging";
-    case ChargerState::TRICKLE: return "trickle";
-    case ChargerState::PRECHARGE: return "precharge";
-    case ChargerState::FAST_CC: return "fast_cc";
-    case ChargerState::TAPER_CV: return "taper_cv";
-    case ChargerState::TOPOFF: return "topoff";
-    case ChargerState::TERMINATION_DONE: return "termination_done";
-    default: return "unknown";
-  }
-}
 
 void ProgrammableLoadComponent::setup() {
   this->control_period_ms_ =
       std::max<uint32_t>(10, std::min<uint32_t>(1000, this->control_period_ms_));
-  if (!finite_positive(this->hardware_limits_.maximum_voltage_v) ||
-      this->hardware_limits_.maximum_voltage_v > ABSOLUTE_MAXIMUM_VOLTAGE_V) {
-    this->hardware_limits_.maximum_voltage_v = ABSOLUTE_MAXIMUM_VOLTAGE_V;
-  }
+  this->hardware_limits_.maximum_voltage_v =
+      normalize_hardware_maximum_voltage(
+          this->hardware_limits_.maximum_voltage_v);
 
   this->configured_calibration_.version = CALIBRATION_VERSION;
   this->calibration_.version = CALIBRATION_VERSION;
@@ -129,8 +46,9 @@ void ProgrammableLoadComponent::setup() {
     if (this->restore_calibration_) {
       Calibration persisted{};
       if (this->calibration_preference_.load(&persisted) &&
-          this->calibration_valid_(persisted)) {
+          ::programmable_load_core::calibration_valid(persisted)) {
         this->calibration_ = persisted;
+        this->calibration_source_ = CalibrationSource::RESTORED;
         ESP_LOGI(TAG, "Restored programmable-load calibration");
       }
     }
@@ -160,56 +78,13 @@ void ProgrammableLoadComponent::setup() {
       this->voltage_seen_ = true;
     }
   }
-  if (this->charger_current_sensor_ != nullptr) {
-    this->charger_current_sensor_->add_on_state_callback([this](float) {
-      this->charger_current_updated_ms_ = millis();
-      this->charger_current_seen_ = true;
-      this->charger_sequence_++;
-    });
-    if (this->charger_current_sensor_->has_state()) {
-      this->charger_current_updated_ms_ = now;
-      this->charger_current_seen_ = true;
-    }
-  }
-  if (this->charger_voltage_sensor_ != nullptr) {
-    this->charger_voltage_sensor_->add_on_state_callback([this](float) {
-      this->charger_voltage_updated_ms_ = millis();
-      this->charger_voltage_seen_ = true;
-    });
-    if (this->charger_voltage_sensor_->has_state()) {
-      this->charger_voltage_updated_ms_ = now;
-      this->charger_voltage_seen_ = true;
-    }
-  }
-  if (this->charger_status_sensor_ != nullptr) {
-    this->charger_status_sensor_->add_on_state_callback(
-        [this](const std::string &) {
-          this->charger_status_updated_ms_ = millis();
-          this->charger_status_seen_ = true;
-        });
-    if (!this->charger_status_sensor_->state.empty()) {
-      this->charger_status_updated_ms_ = now;
-      this->charger_status_seen_ = true;
-    }
-  }
-  if (this->charger_flags_sensor_ != nullptr) {
-    this->charger_flags_sensor_->add_on_state_callback(
-        [this](const std::string &) {
-          this->charger_flags_updated_ms_ = millis();
-          this->charger_flags_seen_ = true;
-        });
-    if (!this->charger_flags_sensor_->state.empty()) {
-      this->charger_flags_updated_ms_ = now;
-      this->charger_flags_seen_ = true;
-    }
-  }
-
   this->force_output_off_();
   if (this->fan_output_ != nullptr) this->fan_output_->set_level(0.0f);
   this->apply_charger_command_(ChargerCommand::DISABLE);
   this->update_measurement_();
   this->update_charger_measurement_();
   this->publish_status_();
+  this->publish_calibration_();
   if (this->manual_current_number_ != nullptr) {
     this->manual_current_number_->publish_state(0.0f);
   }
@@ -221,16 +96,28 @@ void ProgrammableLoadComponent::setup() {
 void ProgrammableLoadComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "Programmable Load:");
   ESP_LOGCONFIG(TAG, "  State: %s", state_to_string(this->state_));
-  ESP_LOGCONFIG(TAG, "  Fault: %s", fault_to_string(this->fault_));
+  char faults[256];
+  format_faults(this->faults_, faults, sizeof(faults));
+  ESP_LOGCONFIG(TAG, "  Fault: %s", faults);
+  ESP_LOGCONFIG(TAG, "  Calibration: %s",
+                calibration_source_to_string(this->calibration_source_));
+  ESP_LOGCONFIG(TAG, "    Current: raw * %.7g + %.7g A",
+                this->calibration_.current.scale,
+                this->calibration_.current.offset);
+  ESP_LOGCONFIG(TAG, "    Voltage: raw * %.7g + %.7g V",
+                this->calibration_.voltage.scale,
+                this->calibration_.voltage.offset);
+  ESP_LOGCONFIG(TAG, "    Output: zero=%.7g full-scale=%.7g A",
+                this->calibration_.output.zero_level,
+                this->calibration_.output.full_scale_current_a);
   ESP_LOGCONFIG(TAG, "  Hardware maximum voltage: %.2f V",
                 this->hardware_limits_.maximum_voltage_v);
   ESP_LOGCONFIG(TAG, "  Operating voltage: %.2f to %.2f V",
                 this->limits_.minimum_voltage_v, this->limits_.maximum_voltage_v);
   ESP_LOGCONFIG(TAG, "  Maximum current/power: %.3f A / %.1f W",
                 this->limits_.maximum_current_a, this->limits_.maximum_power_w);
-  ESP_LOGCONFIG(TAG, "  Charger_14 adapter: %s",
-                this->charger_enable_switch_ != nullptr ? "configured"
-                                                        : "not configured");
+  ESP_LOGCONFIG(TAG, "  Charger capability: %s",
+                this->charger_ != nullptr ? "configured" : "not configured");
   if (this->dac_output_ == nullptr) ESP_LOGE(TAG, "  DAC output is not configured");
   if (this->current_sensor_ == nullptr) ESP_LOGE(TAG, "  Current sensor is not configured");
   if (this->voltage_sensor_ == nullptr) ESP_LOGE(TAG, "  Voltage sensor is not configured");
@@ -258,17 +145,16 @@ void ProgrammableLoadComponent::loop() {
 }
 
 bool ProgrammableLoadComponent::start_manual(float current_a) {
-  if (this->state_ != State::IDLE || this->owner_ != Owner::NONE ||
-      !finite_positive(current_a)) return false;
+  if (this->state_ != State::IDLE || !finite_positive(current_a) ||
+      !this->operation_lock_.acquire_manual()) return false;
   this->update_measurement_();
   this->update_charger_measurement_();
-  const Fault fault = this->detect_running_fault_();
-  if (fault != Fault::NONE) {
-    this->trip_fault_(fault);
+  const FaultFlags faults = this->detect_running_faults_();
+  if (faults != 0u) {
+    this->trip_faults_(faults);
     return false;
   }
   this->apply_charger_command_(ChargerCommand::DISABLE);
-  this->owner_ = Owner::MANUAL;
   this->requested_current_a_ =
       clampf(current_a, 0.0f, this->limits_.maximum_current_a);
   this->reset_control_();
@@ -280,14 +166,16 @@ bool ProgrammableLoadComponent::start_manual(float current_a) {
 }
 
 bool ProgrammableLoadComponent::update_manual(float current_a) {
-  if (this->state_ != State::RUNNING || this->owner_ != Owner::MANUAL ||
-      !std::isfinite(current_a)) return false;
+  if (this->state_ != State::RUNNING ||
+      !this->operation_lock_.owns_manual() || !std::isfinite(current_a))
+    return false;
   if (current_a <= 0.0f) {
     this->stop();
     return true;
   }
   this->requested_current_a_ =
       clampf(current_a, 0.0f, this->limits_.maximum_current_a);
+  this->reset_control_integrator_();
   this->apply_charger_command_(ChargerCommand::DISABLE);
   if (this->manual_current_number_ != nullptr) {
     this->manual_current_number_->publish_state(this->requested_current_a_);
@@ -297,12 +185,12 @@ bool ProgrammableLoadComponent::update_manual(float current_a) {
 
 bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
   if (procedure == nullptr || this->state_ != State::IDLE ||
-      this->owner_ != Owner::NONE) return false;
+      !this->operation_lock_.acquire_procedure(procedure)) return false;
   this->update_measurement_();
   this->update_charger_measurement_();
-  const Fault fault = this->detect_running_fault_();
-  if (fault != Fault::NONE) {
-    this->trip_fault_(fault);
+  const FaultFlags faults = this->detect_running_faults_();
+  if (faults != 0u) {
+    this->trip_faults_(faults);
     return false;
   }
   this->apply_charger_command_(ChargerCommand::DISABLE);
@@ -314,10 +202,10 @@ bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
     return false;
   }
   if (result.status == ProcedureStatus::COMPLETE) {
+    this->operation_lock_.release_procedure(procedure);
     procedure->stop(StopReason::COMPLETED);
     return true;
   }
-  this->owner_ = Owner::PROCEDURE;
   this->active_procedure_ = procedure;
   this->reset_control_();
   this->set_state_(State::RUNNING);
@@ -327,7 +215,8 @@ bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
 
 bool ProgrammableLoadComponent::stop_procedure(Procedure *procedure) {
   if (procedure == nullptr || this->state_ != State::RUNNING ||
-      this->owner_ != Owner::PROCEDURE || this->active_procedure_ != procedure) {
+      !this->operation_lock_.owns_procedure(procedure) ||
+      this->active_procedure_ != procedure) {
     return false;
   }
   this->release_owner_(StopReason::USER_REQUEST);
@@ -344,15 +233,14 @@ void ProgrammableLoadComponent::stop() {
 }
 
 bool ProgrammableLoadComponent::clear_fault() {
-  if (this->state_ != State::FAULT) return this->fault_ == Fault::NONE;
+  if (this->state_ != State::FAULT) return this->faults_ == 0u;
   this->update_measurement_();
   this->update_charger_measurement_();
   this->apply_charger_command_(ChargerCommand::DISABLE);
-  if (this->fault_condition_active_(this->fault_)) return false;
-  this->fault_ = Fault::NONE;
+  if (this->fault_conditions_active_(this->faults_)) return false;
+  this->faults_ = 0u;
   this->fault_clear_candidate_since_ms_ = 0;
   this->set_state_(State::IDLE);
-  this->publish_status_();
   return true;
 }
 
@@ -401,58 +289,31 @@ void ProgrammableLoadComponent::update_measurement_() {
 }
 
 void ProgrammableLoadComponent::update_charger_measurement_() {
-  const uint32_t now = millis();
-  this->charger_measurement_.sequence = this->charger_sequence_;
-  this->charger_measurement_.timestamp_ms = this->charger_current_updated_ms_;
-  this->charger_measurement_.enabled =
-      this->charger_enable_switch_ != nullptr &&
-      this->charger_enable_switch_->state;
-  const bool configured =
-      this->charger_enable_switch_ != nullptr &&
-      this->charger_current_sensor_ != nullptr &&
-      this->charger_voltage_sensor_ != nullptr &&
-      this->charger_status_sensor_ != nullptr &&
-      this->charger_flags_sensor_ != nullptr;
-  const bool fresh =
-      this->charger_current_seen_ && this->charger_voltage_seen_ &&
-      this->charger_status_seen_ && this->charger_flags_seen_ &&
-      (uint32_t) (now - this->charger_current_updated_ms_) <=
-          this->charger_sample_timeout_ms_ &&
-      (uint32_t) (now - this->charger_voltage_updated_ms_) <=
-          this->charger_sample_timeout_ms_ &&
-      (uint32_t) (now - this->charger_status_updated_ms_) <=
-          this->charger_sample_timeout_ms_ &&
-      (uint32_t) (now - this->charger_flags_updated_ms_) <=
-          this->charger_sample_timeout_ms_;
-  this->charger_measurement_.valid =
-      configured && fresh && this->charger_current_sensor_->has_state() &&
-      this->charger_voltage_sensor_->has_state() &&
-      std::isfinite(this->charger_current_sensor_->state) &&
-      std::isfinite(this->charger_voltage_sensor_->state);
-  if (!this->charger_measurement_.valid) {
-    this->charger_measurement_.current_a = 0.0f;
-    this->charger_measurement_.voltage_v = 0.0f;
-    this->charger_measurement_.state = ChargerState::UNKNOWN;
-    this->charger_measurement_.power_good = false;
-    this->charger_measurement_.fault_active = false;
+  this->charger_measurement_ = {};
+  if (this->charger_ == nullptr) return;
+
+  const auto capabilities = this->charger_->capabilities();
+  if (!capabilities.enable_control || !capabilities.battery_current ||
+      !capabilities.battery_voltage || !capabilities.charge_state ||
+      !capabilities.power_good || !capabilities.fault_status) {
     return;
   }
-  this->charger_measurement_.current_a =
-      this->charger_current_sensor_->state / 1000.0f;
-  this->charger_measurement_.voltage_v =
-      this->charger_voltage_sensor_->state / 1000.0f;
-  this->charger_measurement_.state =
-      charger_state_from_string(this->charger_status_sensor_->state);
-  this->charger_measurement_.power_good =
-      !contains_token(this->charger_flags_sensor_->state, "pg_low");
-  this->charger_measurement_.fault_active =
-      charger_flags_fault_active(this->charger_flags_sensor_->state);
+
+  this->charger_measurement_ = this->charger_->snapshot();
+  const uint32_t now = millis();
+  const bool fresh = this->charger_measurement_.timestamp_ms != 0 &&
+                     (uint32_t) (now - this->charger_measurement_.timestamp_ms) <=
+                         this->charger_sample_timeout_ms_;
+  this->charger_measurement_.valid =
+      this->charger_measurement_.valid && fresh &&
+      std::isfinite(this->charger_measurement_.current_a) &&
+      std::isfinite(this->charger_measurement_.voltage_v);
 }
 
 void ProgrammableLoadComponent::update_faults_() {
   if (this->state_ == State::RUNNING) {
-    const Fault fault = this->detect_running_fault_();
-    if (fault != Fault::NONE) this->trip_fault_(fault);
+    const FaultFlags faults = this->detect_running_faults_();
+    if (faults != 0u) this->trip_faults_(faults);
     return;
   }
   if (this->state_ == State::IDLE) {
@@ -464,7 +325,7 @@ void ProgrammableLoadComponent::update_faults_() {
     return;
   }
   if (this->state_ != State::FAULT || !this->fault_policy_.auto_clear) return;
-  if (this->fault_condition_active_(this->fault_)) {
+  if (this->fault_conditions_active_(this->faults_)) {
     this->fault_clear_candidate_since_ms_ = 0;
     return;
   }
@@ -478,8 +339,11 @@ void ProgrammableLoadComponent::update_faults_() {
 }
 
 void ProgrammableLoadComponent::update_operation_() {
-  if (this->owner_ != Owner::PROCEDURE) return;
   if (this->active_procedure_ == nullptr) {
+    this->trip_fault_(Fault::PROCEDURE_ERROR);
+    return;
+  }
+  if (!this->operation_lock_.owns_procedure(this->active_procedure_)) {
     this->trip_fault_(Fault::PROCEDURE_ERROR);
     return;
   }
@@ -489,8 +353,7 @@ void ProgrammableLoadComponent::update_operation_() {
 
 void ProgrammableLoadComponent::update_control_() {
   const bool charger_enabled =
-      this->charger_enable_switch_ != nullptr &&
-      this->charger_enable_switch_->state;
+      this->charger_measurement_.valid && this->charger_measurement_.enabled;
   if (this->charger_commanded_enabled_ || charger_enabled) {
     this->reset_control_();
     this->force_output_off_();
@@ -530,25 +393,23 @@ void ProgrammableLoadComponent::update_control_() {
   const float error = target - this->measurement_.current_a;
   const float bounded_error = std::fabs(error) <= this->deadband_a_ ? 0.0f : error;
   if (!std::isfinite(this->commanded_current_a_) ||
-      !std::isfinite(this->previous_control_error_a_)) {
+      !std::isfinite(this->control_integrator_a_)) {
     this->trip_fault_(Fault::CONTROL_ERROR);
     return;
   }
 
-  // Incremental PI: the existing command is the operating-point estimate.
-  // Do not recreate it from the target, because DAC/load nonlinearity would
-  // turn an ordinary setpoint adjustment into a large open-loop step.
-  const float proportional_step = this->proportional_gain_ *
-                                  (bounded_error - this->previous_control_error_a_);
-  const float integral_step = this->integral_gain_per_s_ * bounded_error * dt_s;
-  float desired = this->commanded_current_a_ + proportional_step + integral_step;
+  const float proportional = this->proportional_gain_ * bounded_error;
+  float desired = target + proportional + this->control_integrator_a_;
   const bool saturated_low = desired < 0.0f;
   const bool saturated_high = desired > current_limit;
-  if ((saturated_low && bounded_error < 0.0f) ||
-      (saturated_high && bounded_error > 0.0f)) {
-    // Anti-windup: reject the integral contribution that drives farther into
-    // a physical output limit. The command itself holds all PI state.
-    desired = this->commanded_current_a_ + proportional_step;
+  if ((!saturated_low && !saturated_high) ||
+      (saturated_low && bounded_error > 0.0f) ||
+      (saturated_high && bounded_error < 0.0f)) {
+    this->control_integrator_a_ = clampf(
+        this->control_integrator_a_ +
+            this->integral_gain_per_s_ * bounded_error * dt_s,
+        -current_limit, current_limit);
+    desired = target + proportional + this->control_integrator_a_;
   }
   desired = clampf(desired, 0.0f, current_limit);
   const float maximum_rise = this->rise_rate_a_per_s_ * dt_s;
@@ -557,26 +418,25 @@ void ProgrammableLoadComponent::update_control_() {
                             this->commanded_current_a_ - maximum_fall,
                             this->commanded_current_a_ + maximum_rise);
   this->commanded_current_a_ = clampf(next, 0.0f, current_limit);
-  this->previous_control_error_a_ = bounded_error;
   this->drive_output_(this->commanded_current_a_);
   if (this->log_control_samples_) {
     ESP_LOGI(TAG,
-             "incremental PI sample=%u dt=%.3fs target=%.3fA measured=%.3fA "
-             "error=%.3fA dp=%.3fA di=%.3fA desired=%.3fA command=%.3fA",
+             "PI sample=%u dt=%.3fs target=%.3fA measured=%.3fA error=%.3fA "
+             "p=%.3fA i=%.3fA desired=%.3fA command=%.3fA",
              this->current_sequence_, dt_s, target,
-             this->measurement_.current_a, error, proportional_step,
-             integral_step, desired, this->commanded_current_a_);
+             this->measurement_.current_a, error, proportional,
+             this->control_integrator_a_, desired, this->commanded_current_a_);
   }
 }
 
 void ProgrammableLoadComponent::reset_control_() {
   this->commanded_current_a_ = 0.0f;
-  this->reset_control_history_();
+  this->reset_control_integrator_();
 }
 
-void ProgrammableLoadComponent::reset_control_history_() {
-  this->previous_control_error_a_ = 0.0f;
-  // Do not reuse the sample that preceded an ownership change.
+void ProgrammableLoadComponent::reset_control_integrator_() {
+  this->control_integrator_a_ = 0.0f;
+  // Do not reuse the sample that preceded a target or ownership change.
   // The next command is produced only after the current sensor publishes again.
   this->control_has_current_sample_ = true;
   this->last_control_current_sequence_ = this->current_sequence_;
@@ -600,83 +460,21 @@ void ProgrammableLoadComponent::update_fan_() {
   }
 }
 
-Fault ProgrammableLoadComponent::detect_running_fault_() const {
-  if (!this->measurement_.current_valid)
-    return Fault::CURRENT_MEASUREMENT_UNAVAILABLE;
-  if (!this->measurement_.voltage_valid)
-    return Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE;
-  if (this->required_temperature_unavailable_())
-    return Fault::REQUIRED_TEMPERATURE_UNAVAILABLE;
-  if (this->measurement_.voltage_v >
-      this->hardware_limits_.maximum_voltage_v)
-    return Fault::HARDWARE_OVERVOLTAGE;
-  if (this->measurement_.voltage_v < this->limits_.minimum_voltage_v)
-    return Fault::INPUT_UNDERVOLTAGE;
-  if (this->measurement_.voltage_v > this->limits_.maximum_voltage_v)
-    return Fault::INPUT_OVERVOLTAGE;
-  if (std::fabs(this->measurement_.current_a) >
-      this->limits_.maximum_current_a + this->deadband_a_)
-    return Fault::OVERCURRENT;
-  if (std::fabs(this->measurement_.power_w) > this->limits_.maximum_power_w)
-    return Fault::OVERPOWER;
-  if (std::isfinite(this->measurement_.maximum_temperature_c) &&
-      this->measurement_.maximum_temperature_c >
-          this->limits_.maximum_temperature_c)
-    return Fault::OVERTEMPERATURE;
-  if (this->charger_control_mismatch_())
-    return Fault::CHARGER_CONTROL_ERROR;
-  return Fault::NONE;
+FaultFlags ProgrammableLoadComponent::detect_running_faults_() const {
+  return ::programmable_load_core::detect_safety_faults(
+      this->measurement_, this->hardware_limits_, this->limits_,
+      this->deadband_a_, this->required_temperature_unavailable_(),
+      this->charger_control_mismatch_());
 }
 
-bool ProgrammableLoadComponent::fault_condition_active_(Fault fault) const {
-  switch (fault) {
-    case Fault::NONE:
-      return false;
-    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
-      return !this->measurement_.current_valid;
-    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
-      return !this->measurement_.voltage_valid;
-    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
-      return this->required_temperature_unavailable_();
-    case Fault::INPUT_UNDERVOLTAGE:
-      return !this->measurement_.voltage_valid ||
-             this->measurement_.voltage_v < this->limits_.minimum_voltage_v;
-    case Fault::INPUT_OVERVOLTAGE:
-      return !this->measurement_.voltage_valid ||
-             this->measurement_.voltage_v > this->limits_.maximum_voltage_v;
-    case Fault::HARDWARE_OVERVOLTAGE:
-      return !this->measurement_.voltage_valid ||
-             this->measurement_.voltage_v >
-                 this->hardware_limits_.maximum_voltage_v;
-    case Fault::OVERCURRENT:
-      return !this->measurement_.current_valid ||
-             std::fabs(this->measurement_.current_a) >
-                 this->limits_.maximum_current_a + this->deadband_a_;
-    case Fault::OVERPOWER:
-      return !this->measurement_.current_valid ||
-             !this->measurement_.voltage_valid ||
-             std::fabs(this->measurement_.power_w) >
-                 this->limits_.maximum_power_w;
-    case Fault::OVERTEMPERATURE:
-      return this->required_temperature_unavailable_() ||
-             (std::isfinite(this->measurement_.maximum_temperature_c) &&
-              this->measurement_.maximum_temperature_c >
-                  this->limits_.maximum_temperature_c);
-    case Fault::CHARGER_UNAVAILABLE:
-      return this->charger_enable_switch_ != nullptr &&
-             !this->charger_measurement_.valid;
-    case Fault::CHARGER_FAULT:
-      return this->charger_measurement_.valid &&
-             this->charger_measurement_.fault_active;
-    case Fault::CHARGER_CONTROL_ERROR:
-      return this->charger_control_mismatch_();
-    case Fault::CHARGE_TIMEOUT:
-    case Fault::CONTROL_ERROR:
-    case Fault::PROCEDURE_ERROR:
-      return false;
-    default:
-      return true;
-  }
+bool ProgrammableLoadComponent::fault_conditions_active_(
+    FaultFlags faults) const {
+  return ::programmable_load_core::fault_conditions_active(
+      faults, this->measurement_, this->hardware_limits_, this->limits_,
+      this->deadband_a_, this->required_temperature_unavailable_(),
+      this->charger_control_mismatch_(), this->charger_ != nullptr,
+      this->charger_measurement_.valid,
+      this->charger_measurement_.fault_active);
 }
 
 bool ProgrammableLoadComponent::required_temperature_unavailable_() const {
@@ -710,6 +508,9 @@ void ProgrammableLoadComponent::apply_procedure_result_(
     this->trip_fault_(Fault::CHARGER_CONTROL_ERROR);
     return;
   }
+  if (this->requested_current_a_ != result.requested_current_a) {
+    this->reset_control_integrator_();
+  }
   this->requested_current_a_ = result.requested_current_a;
   if (result.charger_command == ChargerCommand::ENABLE) {
     this->reset_control_();
@@ -720,7 +521,9 @@ void ProgrammableLoadComponent::apply_procedure_result_(
 bool ProgrammableLoadComponent::apply_charger_command_(
     ChargerCommand command) {
   const bool enabled = command == ChargerCommand::ENABLE;
-  if (this->charger_enable_switch_ == nullptr) return !enabled;
+  if (this->charger_ == nullptr) return !enabled;
+  if (!this->charger_->capabilities().enable_control) return false;
+
   const uint32_t now = millis();
   if (!this->charger_command_known_ ||
       this->charger_commanded_enabled_ != enabled) {
@@ -729,21 +532,23 @@ bool ProgrammableLoadComponent::apply_charger_command_(
     this->charger_command_changed_ms_ = now == 0 ? 1 : now;
     this->last_charger_command_attempt_ms_ = 0;
   }
-  if (this->charger_enable_switch_->state != enabled &&
+  if ((!this->charger_measurement_.valid ||
+       this->charger_measurement_.enabled != enabled) &&
       (this->last_charger_command_attempt_ms_ == 0 ||
        (uint32_t) (now - this->last_charger_command_attempt_ms_) >=
            CHARGER_COMMAND_RETRY_MS)) {
     this->last_charger_command_attempt_ms_ = now == 0 ? 1 : now;
-    if (enabled) this->charger_enable_switch_->turn_on();
-    else this->charger_enable_switch_->turn_off();
+    if (!this->charger_->request_enabled(enabled)) return false;
   }
   return true;
 }
 
 bool ProgrammableLoadComponent::charger_control_mismatch_() const {
-  if (!this->charger_command_known_ || this->charger_enable_switch_ == nullptr ||
-      this->charger_enable_switch_->state == this->charger_commanded_enabled_)
+  if (!this->charger_command_known_ || this->charger_ == nullptr ||
+      !this->charger_measurement_.valid ||
+      this->charger_measurement_.enabled == this->charger_commanded_enabled_) {
     return false;
+  }
   return this->charger_command_changed_ms_ != 0 &&
          (uint32_t) (millis() - this->charger_command_changed_ms_) >=
              this->charger_control_timeout_ms_;
@@ -752,7 +557,7 @@ bool ProgrammableLoadComponent::charger_control_mismatch_() const {
 void ProgrammableLoadComponent::release_owner_(StopReason reason) {
   Procedure *procedure = this->active_procedure_;
   this->active_procedure_ = nullptr;
-  this->owner_ = Owner::NONE;
+  this->operation_lock_.force_release();
   this->requested_current_a_ = 0.0f;
   this->reset_control_();
   this->force_output_off_();
@@ -770,10 +575,14 @@ void ProgrammableLoadComponent::set_state_(State state) {
 }
 
 void ProgrammableLoadComponent::trip_fault_(Fault fault) {
-  if (fault == Fault::NONE) return;
+  this->trip_faults_(fault_flag(fault));
+}
+
+void ProgrammableLoadComponent::trip_faults_(FaultFlags faults) {
+  if (faults == 0u) return;
   Procedure *procedure = this->active_procedure_;
   this->active_procedure_ = nullptr;
-  this->owner_ = Owner::NONE;
+  this->operation_lock_.force_release();
   this->requested_current_a_ = 0.0f;
   this->reset_control_();
   this->force_output_off_();
@@ -781,35 +590,53 @@ void ProgrammableLoadComponent::trip_fault_(Fault fault) {
   if (procedure != nullptr) procedure->stop(StopReason::FAULTED);
   if (this->manual_current_number_ != nullptr)
     this->manual_current_number_->publish_state(0.0f);
-  this->fault_ = fault;
+  this->faults_ |= faults;
   this->state_ = State::FAULT;
   this->fault_clear_candidate_since_ms_ = 0;
   this->publish_status_();
-  ESP_LOGE(TAG, "Load fault: %s", fault_to_string(fault));
+  char formatted[256];
+  format_faults(this->faults_, formatted, sizeof(formatted));
+  ESP_LOGE(TAG, "Load fault: %s", formatted);
 }
 
 void ProgrammableLoadComponent::publish_status_() {
   if (this->state_sensor_ != nullptr)
     this->state_sensor_->publish_state(state_to_string(this->state_));
-  if (this->fault_sensor_ != nullptr)
-    this->fault_sensor_->publish_state(fault_to_string(this->fault_));
+  if (this->fault_sensor_ != nullptr) {
+    char faults[256];
+    format_faults(this->faults_, faults, sizeof(faults));
+    this->fault_sensor_->publish_state(faults);
+  }
+}
+
+void ProgrammableLoadComponent::publish_calibration_() {
+  if (this->calibration_status_sensor_ != nullptr)
+    this->calibration_status_sensor_->publish_state(
+        calibration_source_to_string(this->calibration_source_));
+  if (this->current_scale_sensor_ != nullptr)
+    this->current_scale_sensor_->publish_state(this->calibration_.current.scale);
+  if (this->current_offset_sensor_ != nullptr)
+    this->current_offset_sensor_->publish_state(this->calibration_.current.offset);
+  if (this->voltage_scale_sensor_ != nullptr)
+    this->voltage_scale_sensor_->publish_state(this->calibration_.voltage.scale);
+  if (this->voltage_offset_sensor_ != nullptr)
+    this->voltage_offset_sensor_->publish_state(this->calibration_.voltage.offset);
+  if (this->output_zero_level_sensor_ != nullptr)
+    this->output_zero_level_sensor_->publish_state(
+        this->calibration_.output.zero_level);
+  if (this->output_full_scale_current_sensor_ != nullptr)
+    this->output_full_scale_current_sensor_->publish_state(
+        this->calibration_.output.full_scale_current_a);
 }
 
 float ProgrammableLoadComponent::effective_current_limit_() const {
-  if (!this->measurement_.voltage_valid || this->measurement_.voltage_v <= 0.0f)
-    return 0.0f;
-  float limit = std::min(this->limits_.maximum_current_a,
-                         this->calibration_.output.full_scale_current_a);
-  if (this->limits_.maximum_power_w > 0.0f) {
-    limit = std::min(limit, this->limits_.maximum_power_w /
-                                std::fabs(this->measurement_.voltage_v));
-  }
-  return std::max(0.0f, limit);
+  return ::programmable_load_core::effective_current_limit(
+      this->measurement_, this->limits_, this->calibration_);
 }
 
 void ProgrammableLoadComponent::drive_output_(float current_a) {
   if (this->dac_output_ == nullptr ||
-      !this->calibration_valid_(this->calibration_)) {
+      !::programmable_load_core::calibration_valid(this->calibration_)) {
     if (this->dac_output_ != nullptr) this->dac_output_->set_level(0.0f);
     return;
   }
@@ -823,23 +650,10 @@ void ProgrammableLoadComponent::drive_output_(float current_a) {
 
 void ProgrammableLoadComponent::force_output_off_() {
   if (this->dac_output_ == nullptr) return;
-  const float zero = this->calibration_valid_(this->calibration_)
+  const float zero = ::programmable_load_core::calibration_valid(this->calibration_)
                          ? this->calibration_.output.zero_level
                          : 0.0f;
   this->dac_output_->set_level(clampf(zero, 0.0f, 1.0f));
-}
-
-bool ProgrammableLoadComponent::calibration_valid_(
-    const Calibration &calibration) const {
-  return calibration.version == CALIBRATION_VERSION &&
-         finite_positive(calibration.current.scale) &&
-         std::isfinite(calibration.current.offset) &&
-         finite_positive(calibration.voltage.scale) &&
-         std::isfinite(calibration.voltage.offset) &&
-         std::isfinite(calibration.output.zero_level) &&
-         calibration.output.zero_level >= 0.0f &&
-         calibration.output.zero_level < 1.0f &&
-         finite_positive(calibration.output.full_scale_current_a);
 }
 
 bool ProgrammableLoadComponent::save_calibration_() {
@@ -848,22 +662,33 @@ bool ProgrammableLoadComponent::save_calibration_() {
 }
 
 bool ProgrammableLoadComponent::apply_calibration(
-    const Calibration &calibration, bool persist) {
+    const Calibration &calibration, bool persist, CalibrationSource source) {
   if (this->state_ != State::IDLE ||
-      !this->calibration_valid_(calibration)) return false;
+      !::programmable_load_core::calibration_valid(calibration)) {
+    ESP_LOGW(TAG, "Rejected calibration while busy or with invalid values");
+    return false;
+  }
   const Calibration previous = this->calibration_;
+  const CalibrationSource previous_source = this->calibration_source_;
   this->calibration_ = calibration;
+  this->calibration_source_ = source;
   this->force_output_off_();
   if (persist && !this->save_calibration_()) {
     this->calibration_ = previous;
+    this->calibration_source_ = previous_source;
     this->force_output_off_();
+    ESP_LOGW(TAG, "Failed to persist calibration; active values were restored");
     return false;
   }
+  this->publish_calibration_();
+  ESP_LOGI(TAG, "Applied programmable-load calibration (%s)",
+           calibration_source_to_string(source));
   return true;
 }
 
 bool ProgrammableLoadComponent::reset_calibration(bool persist) {
-  return this->apply_calibration(this->configured_calibration_, persist);
+  return this->apply_calibration(this->configured_calibration_, persist,
+                                 CalibrationSource::CONFIGURED);
 }
 
 void ManualCurrentNumber::control(float value) {
@@ -883,6 +708,10 @@ void ManualCurrentNumber::control(float value) {
 
 void ClearFaultButton::press_action() {
   if (this->parent_ != nullptr) this->parent_->clear_fault();
+}
+
+void ResetCalibrationButton::press_action() {
+  if (this->parent_ != nullptr) this->parent_->reset_calibration(true);
 }
 
 }  // namespace programmable_load

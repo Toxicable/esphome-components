@@ -1,0 +1,205 @@
+esphome:
+  name: pl-invalid-voltage
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+substitutions:
+  wifi_ssid: "compile-placeholder"
+  wifi_password: "compile-placeholder"
+  api_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  ota_password: "compile-placeholder"
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ component_common, programmable_load, bq25756 ]
+
+wifi:
+  ssid: "${wifi_ssid}"
+  password: "${wifi_password}"
+
+api:
+  encryption:
+    key: "${api_encryption_key}"
+
+ota:
+  - platform: esphome
+    password: "${ota_password}"
+
+i2c:
+  id: i2c_ext
+  sda: GPIO35
+  scl: GPIO36
+  scan: true
+  frequency: 400kHz
+
+output:
+  - platform: ledc
+    id: load_dac
+    pin: GPIO8
+  - platform: ledc
+    id: load_fan
+    pin: GPIO9
+
+button:
+  - platform: template
+    name: "Apply Test Load Calibration"
+    on_press:
+      - programmable_load.apply_calibration:
+          id: load_controller
+          current_scale: 1.0
+          current_offset: 0.0
+          voltage_scale: 1.0
+          voltage_offset: 0.0
+          output_zero_level: 0.0
+          output_full_scale_current: 80.1
+          persist: false
+  - platform: template
+    name: "Reset Test Load Calibration"
+    on_press:
+      - programmable_load.reset_calibration:
+          id: load_controller
+          persist: false
+
+sensor:
+  - platform: template
+    id: load_current
+    internal: true
+    update_interval: 100ms
+    lambda: return 0.0f;
+  - platform: template
+    id: load_voltage
+    internal: true
+    update_interval: 100ms
+    lambda: return 52.0f;
+  - platform: template
+    id: heatsink_temperature
+    internal: true
+    update_interval: 1s
+    lambda: return 25.0f;
+
+bq25756:
+  id: charger14_bq
+  i2c_id: i2c_ext
+  address: 0x6B
+  update_interval: 1s
+  battery:
+    cell_count: 4
+    cell_chemistry: lithium_ion
+  charging:
+    battery_current_limit: 5A
+    input_current_limit: 3A
+
+
+programmable_load:
+  id: load_controller
+  hardware:
+    dac: load_dac
+    maximum_voltage: 76
+  measurements:
+    current: load_current
+    voltage: load_voltage
+    sample_timeout: 250ms
+    temperatures:
+      - sensor: heatsink_temperature
+        required: true
+  calibration:
+    restore: true
+    current:
+      scale: 1.0
+      offset: 0.0
+    voltage:
+      scale: 1.0
+      offset: 0.0
+    output:
+      zero_level: 0.0
+      full_scale_current: 80.1
+    status:
+      name: "Load Calibration Status"
+    current_scale:
+      name: "Load Current Calibration Scale"
+    current_offset:
+      name: "Load Current Calibration Offset"
+    voltage_scale:
+      name: "Load Voltage Calibration Scale"
+    voltage_offset:
+      name: "Load Voltage Calibration Offset"
+    output_zero_level:
+      name: "Load Output Zero Level"
+    output_full_scale_current:
+      name: "Load Output Full Scale Current"
+    reset:
+      name: "Reset Load Calibration"
+  limits:
+    maximum_current: 40
+    minimum_voltage: 40
+    maximum_voltage: 60
+    maximum_power: 500
+    maximum_temperature: 100
+  control:
+    period: 50ms
+    deadband: 0.01
+    rise_rate: 2
+    fall_rate: 4
+  cooling:
+    fan_output: load_fan
+    fan_start_temperature: 35
+    fan_full_temperature: 70
+  fault_policy:
+    auto_clear: false
+    clear_delay: 2s
+  manual_current:
+    name: "Load Current Setpoint"
+  state:
+    name: "Load State"
+  fault:
+    name: "Load Fault"
+  clear_fault:
+    name: "Clear Load Fault"
+  procedures:
+    dcr:
+      baseline_current: 0
+      pulse_current: 5
+      settle_time: 100ms
+      sample_time: 500ms
+      recovery_time: 1s
+      repeats: 3
+      start:
+        name: "Run Battery DCR Test"
+      resistance:
+        name: "Battery DCR"
+    battery_cycle:
+      charger: charger14_bq
+      charger_sample_timeout: 3s
+      charger_control_timeout: 5s
+      discharge_current: 10
+      discharge_cutoff_voltage: 42
+      discharge_cutoff_hysteresis: 0.5
+      discharge_cutoff_hold_time: 10s
+      rest_time: 5min
+      charge_start_timeout: 1min
+      charge_stall_timeout: 2min
+      charge_timeout: 24h
+      termination_hold_time: 10s
+      start:
+        name: "Run Battery Drain and Charge Cycle"
+      stop:
+        name: "Stop Battery Drain and Charge Cycle"
+      phase:
+        name: "Battery Cycle Phase"
+      result:
+        name: "Battery Cycle Result"
+      discharged_capacity:
+        name: "Discharged Capacity"
+      discharged_energy:
+        name: "Discharged Energy"
+      charged_capacity:
+        name: "Charged Capacity"
+      charged_energy:
+        name: "Charged Energy"

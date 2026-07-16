@@ -18,7 +18,7 @@ external_components:
       type: local
       path: ..
     refresh: 0s
-    components: [ programmable_load, bq25756 ]
+    components: [ component_common, programmable_load, bq25756 ]
 
 wifi:
   ssid: "${wifi_ssid}"
@@ -47,6 +47,26 @@ output:
     id: load_fan
     pin: GPIO9
 
+button:
+  - platform: template
+    name: "Apply Test Load Calibration"
+    on_press:
+      - programmable_load.apply_calibration:
+          id: load_controller
+          current_scale: 1.0
+          current_offset: 0.0
+          voltage_scale: 1.0
+          voltage_offset: 0.0
+          output_zero_level: 0.0
+          output_full_scale_current: 80.1
+          persist: false
+  - platform: template
+    name: "Reset Test Load Calibration"
+    on_press:
+      - programmable_load.reset_calibration:
+          id: load_controller
+          persist: false
+
 sensor:
   - platform: template
     id: load_current
@@ -69,33 +89,13 @@ bq25756:
   i2c_id: i2c_ext
   address: 0x6B
   update_interval: 1s
-  disable_watchdog: true
   battery:
     cell_count: 4
     cell_chemistry: lithium_ion
   charging:
     battery_current_limit: 5A
     input_current_limit: 3A
-    input_voltage_dpm_threshold: 12V
-    control: i2c
-  measurements:
-    battery_current:
-      id: charger14_ibat
-      internal: true
-    battery_voltage:
-      id: charger14_vbat
-      internal: true
-  status:
-    charging:
-      id: charger14_charge_status
-      internal: true
-    faults:
-      id: charger14_status_flags
-      internal: true
-  controls:
-    charge_enable:
-      id: charger14_charge_enable
-      internal: true
+
 
 programmable_load:
   id: load_controller
@@ -120,6 +120,22 @@ programmable_load:
     output:
       zero_level: 0.0
       full_scale_current: 80.1
+    status:
+      name: "Load Calibration Status"
+    current_scale:
+      name: "Load Current Calibration Scale"
+    current_offset:
+      name: "Load Current Calibration Offset"
+    voltage_scale:
+      name: "Load Voltage Calibration Scale"
+    voltage_offset:
+      name: "Load Voltage Calibration Offset"
+    output_zero_level:
+      name: "Load Output Zero Level"
+    output_full_scale_current:
+      name: "Load Output Full Scale Current"
+    reset:
+      name: "Reset Load Calibration"
   limits:
     maximum_current: 40
     minimum_voltage: 40
@@ -159,14 +175,9 @@ programmable_load:
       resistance:
         name: "Battery DCR"
     battery_cycle:
-      charger14:
-        charge_enable: charger14_charge_enable
-        ibat_current: charger14_ibat
-        vbat_voltage: charger14_vbat
-        charge_status: charger14_charge_status
-        status_flags: charger14_status_flags
-        sample_timeout: 3s
-        control_timeout: 5s
+      charger: charger14_bq
+      charger_sample_timeout: 3s
+      charger_control_timeout: 5s
       discharge_current: 10
       discharge_cutoff_voltage: 42
       discharge_cutoff_hysteresis: 0.5

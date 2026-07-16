@@ -233,7 +233,6 @@ enum class DirectionInputMode : uint8_t {
   CCW = 2,
 };
 
-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit);
 const char *algorithm_state_to_string(uint16_t state);
 const char *brake_input_to_string(uint32_t brake_input_value);
 const char *direction_input_to_string(uint32_t direction_input_value);

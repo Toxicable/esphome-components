@@ -2,10 +2,15 @@
 
 #include <cstdint>
 
-namespace esphome {
-namespace programmable_load {
+namespace programmable_load_core {
 
 static constexpr uint16_t CALIBRATION_VERSION = 1;
+
+enum class CalibrationSource : uint8_t {
+  CONFIGURED = 0,
+  RESTORED,
+  APPLIED,
+};
 
 struct LinearCalibration {
   float scale{1.0f};
@@ -31,5 +36,4 @@ struct Calibration {
   OutputCalibration output{};
 };
 
-}  // namespace programmable_load
-}  // namespace esphome
+}  // namespace programmable_load_core

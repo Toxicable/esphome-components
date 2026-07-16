@@ -9,16 +9,16 @@
 #include "esphome/core/component.h"
 
 #include "bq76952_config.h"
-#include "bq76952_protocol.h"
+#include "bq76952_i2c_transport.h"
 #include "bq76952_service.h"
 
 namespace esphome {
 namespace bq76952 {
 
-// ESPHome-facing facade only. Device protocol, desired-state synchronization,
+// ESPHome-facing facade only. Device transport, desired-state synchronization,
 // and ancillary SoC estimation live behind BQ76952Service. Method bodies live
 // in implementation files, not in this header.
-class BQ76952Component : public PollingComponent, public BQ76952Protocol {
+class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
  public:
   BQ76952Component();
 
@@ -37,6 +37,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   void set_ts2_temperature_sensor(sensor::Sensor *sensor);
   void set_ts3_temperature_sensor(sensor::Sensor *sensor);
 
+  void set_connection_state_sensor(text_sensor::TextSensor *sensor);
   void set_state_sensor(text_sensor::TextSensor *sensor);
   void set_fault_sensor(text_sensor::TextSensor *sensor);
   void set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor);
@@ -52,8 +53,9 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   bool program_factory_otp();
 
  private:
-  void publish_snapshot(const BQ76952Snapshot &snapshot);
-  void publish_faults(const BQ76952Snapshot &snapshot);
+  void publish_connection_state(component_common::ConnectionState connection_state);
+  void publish_snapshot(const ::bq76952_core::Snapshot &snapshot);
+  void publish_faults(const ::bq76952_core::Snapshot &snapshot);
 
   BQ76952Service service_;
 
@@ -68,6 +70,7 @@ class BQ76952Component : public PollingComponent, public BQ76952Protocol {
   sensor::Sensor *die_temperature_sensor_{nullptr};
   std::array<sensor::Sensor *, 3> thermistor_temperature_sensors_{};
 
+  text_sensor::TextSensor *connection_state_sensor_{nullptr};
   text_sensor::TextSensor *state_sensor_{nullptr};
   text_sensor::TextSensor *fault_sensor_{nullptr};
   text_sensor::TextSensor *capacity_calibration_status_sensor_{nullptr};

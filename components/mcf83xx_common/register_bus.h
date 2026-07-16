@@ -1,0 +1,17 @@
+#pragma once
+
+#include <cstdint>
+
+namespace mcf83xx_common {
+
+class RegisterBus {
+ public:
+  virtual ~RegisterBus() = default;
+
+  virtual bool read_register32(uint16_t offset, uint32_t *value) = 0;
+  virtual bool read_register16(uint16_t offset, uint16_t *value) = 0;
+  virtual bool write_register32(uint16_t offset, uint32_t value) = 0;
+  virtual void delay_microseconds(uint32_t delay_us) = 0;
+};
+
+}  // namespace mcf83xx_common

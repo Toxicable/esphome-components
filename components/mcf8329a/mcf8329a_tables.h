@@ -2,8 +2,7 @@
 
 #include <cstdint>
 
-namespace esphome {
-namespace mcf8329a {
+namespace mcf8329a_core {
 namespace tables {
 
 // Key: FAULT_CONFIG1.ILIMIT field code [0..15]
@@ -225,5 +224,4 @@ static constexpr float MPET_OPEN_LOOP_SLEW_HZ_PER_S[8] = {
 };
 
 }  // namespace tables
-}  // namespace mcf8329a
-}  // namespace esphome
+}  // namespace mcf8329a_core

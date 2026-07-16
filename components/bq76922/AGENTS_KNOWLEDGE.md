@@ -2,6 +2,10 @@
 
 Component-scoped notes for `components/bq76922`.
 
+- Lifecycle classification is `experimental`: no deployed consumer or compile fixture is known.
+- Do not copy BQ76952 architecture changes into this monolith speculatively. Promotion requires a real board, committed YAML, and a deliberate decision whether to share a BQ769x2 family core.
+- Without an owner and real hardware use, the next lifecycle step is retirement rather than indefinite parity work.
+
 - Use `components/bq76922/sluucg7.pdf` (TRM) as the command source of truth; the datasheet alone does not include full command/subcommand behavior.
 - Direct commands used by this component come from TRM Table 12-1 and use little-endian values (`I2`/`U2`):
   - `0x12` Battery Status, `0x14..0x1D` cell voltages, `0x34/0x36/0x38` stack/PACK/LD, `0x3A` CC2 current, `0x62` Alarm Status, `0x68` internal temperature, `0x70` TS1 temperature, `0x7F` FET Status.

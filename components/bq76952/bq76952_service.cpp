@@ -16,7 +16,7 @@ namespace bq76952 {
 
 namespace {
 static const char *const TAG = "bq76952.service";
-namespace hw = registers;
+namespace hw = ::bq76952_core::registers;
 
 uint8_t clamp_u8(int value, int minimum, int maximum, const char *label) {
   const int clamped = std::max(minimum, std::min(maximum, value));
@@ -105,12 +105,12 @@ uint32_t read_u32_le(const uint8_t *data) {
 
 }  // namespace
 
-BQ76952Service::BQ76952Service(BQ76952Protocol &protocol) : protocol_(protocol) {}
+BQ76952Service::BQ76952Service(BQ76952I2CTransport &transport) : transport_(transport) {}
 
 void BQ76952Service::set_config(const BQ76952Config &config) {
   this->config_ = config;
   this->config_set_ = true;
-  this->protocol_.set_crc_enabled(config.i2c_crc_enabled);
+  this->transport_.set_crc_enabled(config.i2c_crc_enabled);
 }
 
 const BQ76952Config &BQ76952Service::config() const {
@@ -123,9 +123,11 @@ const char *BQ76952Service::capacity_calibration_status() const {
 
 void BQ76952Service::setup() {
   if (!this->config_set_) {
+    this->connection_state_ = component_common::ConnectionState::FAILED;
     ESP_LOGE(TAG, "No BQ76952 configuration was supplied");
     return;
   }
+  this->connection_state_ = component_common::ConnectionState::CONNECTING;
   this->soc_.setup(this->config_.cell_chemistry);
   this->next_configuration_retry_ms_ = 0;
   this->next_configuration_audit_ms_ = 0;
@@ -135,9 +137,9 @@ bool BQ76952Service::establish_connection() {
   uint16_t control_status = 0;
   uint16_t battery_status = 0;
   uint8_t fet_status = 0;
-  if (!this->protocol_.read_u16(hw::direct::CONTROL_STATUS, control_status) ||
-      !this->protocol_.read_u16(hw::direct::BATTERY_STATUS, battery_status) ||
-      !this->protocol_.read_u8(hw::direct::FET_STATUS, fet_status)) {
+  if (!this->transport_.read_u16(hw::direct::CONTROL_STATUS, control_status) ||
+      !this->transport_.read_u16(hw::direct::BATTERY_STATUS, battery_status) ||
+      !this->transport_.read_u8(hw::direct::FET_STATUS, fet_status)) {
     this->note_communication_failure();
     return false;
   }
@@ -147,6 +149,7 @@ bool BQ76952Service::establish_connection() {
     this->load_unit_scaling();
   }
   this->online_ = true;
+  this->connection_state_ = component_common::ConnectionState::CONNECTED;
   return true;
 }
 
@@ -156,11 +159,24 @@ void BQ76952Service::note_communication_failure() {
   }
   this->online_ = false;
   this->configured_ = false;
+  this->connection_state_ = component_common::ConnectionState::DISCONNECTED;
 }
 
-bool BQ76952Service::poll(BQ76952Snapshot &snapshot) {
-  if (!this->config_set_ || !this->establish_connection()) {
-    snapshot = {};
+bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
+  snapshot = {};
+  snapshot.cell_count = this->config_.cell_count;
+  snapshot.connection_state = this->connection_state_;
+  snapshot.configuration_ready = this->configured_;
+
+  if (!this->config_set_) {
+    this->connection_state_ = component_common::ConnectionState::FAILED;
+    snapshot.connection_state = this->connection_state_;
+    snapshot.configuration_ready = false;
+    return false;
+  }
+  if (!this->establish_connection()) {
+    snapshot.connection_state = this->connection_state_;
+    snapshot.configuration_ready = false;
     return false;
   }
 
@@ -182,12 +198,15 @@ bool BQ76952Service::poll(BQ76952Snapshot &snapshot) {
   if (!this->read_snapshot(snapshot)) {
     this->note_communication_failure();
     snapshot = {};
+    snapshot.cell_count = this->config_.cell_count;
+    snapshot.connection_state = this->connection_state_;
+    snapshot.configuration_ready = false;
     return false;
   }
-  snapshot.online = true;
+  snapshot.connection_state = this->connection_state_;
+  snapshot.configuration_ready = this->configured_;
   return true;
 }
-
 bool BQ76952Service::configuration_matches(bool &matches) {
   matches = true;
   bool ok = true;
@@ -227,12 +246,12 @@ bool BQ76952Service::synchronize_configuration(ConfigurationSyncMode mode) {
       return false;
     }
     ESP_LOGW(TAG, "Applying BQ76952 configuration; CONFIG_UPDATE briefly disables protection FETs");
-    if (!this->protocol_.set_config_update(true)) {
+    if (!this->transport_.set_config_update(true)) {
       return false;
     }
 
     const bool write_ok = this->write_configuration();
-    const bool exit_ok = this->protocol_.set_config_update(false);
+    const bool exit_ok = this->transport_.set_config_update(false);
     if (!write_ok || !exit_ok) {
       return false;
     }
@@ -255,7 +274,7 @@ bool BQ76952Service::sync_data(uint16_t address, const uint8_t *desired, const u
   if (length == 0 || length > current.size()) {
     return false;
   }
-  if (!this->protocol_.read_data_memory(address, current.data(), length)) {
+  if (!this->transport_.read_data_memory(address, current.data(), length)) {
     ESP_LOGW(TAG, "Failed reading %s at 0x%04X", label, address);
     return false;
   }
@@ -274,7 +293,7 @@ bool BQ76952Service::sync_data(uint16_t address, const uint8_t *desired, const u
   if (!write) {
     return true;
   }
-  if (!this->protocol_.write_data_memory(address, target.data(), length)) {
+  if (!this->transport_.write_data_memory(address, target.data(), length)) {
     ESP_LOGW(TAG, "Failed writing %s at 0x%04X", label, address);
     return false;
   }
@@ -307,7 +326,7 @@ bool BQ76952Service::apply_regulators(bool write, bool &matches) {
   }
 
   uint8_t current_reg12 = 0;
-  if (!this->protocol_.read_data_memory_u8(hw::data_memory::REG12_CONFIG, current_reg12)) {
+  if (!this->transport_.read_data_memory_u8(hw::data_memory::REG12_CONFIG, current_reg12)) {
     return false;
   }
   if (current_reg12 != desired_reg12) {
@@ -328,12 +347,12 @@ bool BQ76952Service::apply_regulators(bool write, bool &matches) {
         // Disable an enabled LDO before changing its voltage code. Apply the
         // live disable as well as the data-memory change so the regulator is
         // never driven at the old enable state with the new voltage selection.
-        if (!this->protocol_.write_subcommand(hw::subcommand::REG12_CONTROL, &staged, 1) ||
-            !this->protocol_.write_data_memory_u8(hw::data_memory::REG12_CONFIG, staged)) {
+        if (!this->transport_.write_subcommand(hw::subcommand::REG12_CONTROL, &staged, 1) ||
+            !this->transport_.write_data_memory_u8(hw::data_memory::REG12_CONFIG, staged)) {
           return false;
         }
       }
-      if (!this->protocol_.write_data_memory_u8(hw::data_memory::REG12_CONFIG, desired_reg12)) {
+      if (!this->transport_.write_data_memory_u8(hw::data_memory::REG12_CONFIG, desired_reg12)) {
         return false;
       }
     }
@@ -626,14 +645,14 @@ bool BQ76952Service::apply_current_calibration(bool write, bool &matches) {
 
 bool BQ76952Service::require_full_access() {
   uint16_t battery_status = 0;
-  if (!this->protocol_.read_u16(hw::direct::BATTERY_STATUS, battery_status)) {
+  if (!this->transport_.read_u16(hw::direct::BATTERY_STATUS, battery_status)) {
     return false;
   }
   return (battery_status & hw::bits::battery_status::SECURITY_MASK) == hw::bits::battery_status::FULL_ACCESS;
 }
 
 bool BQ76952Service::restore_runtime_state() {
-  if (!this->protocol_.send_subcommand(hw::subcommand::SLEEP_ENABLE)) {
+  if (!this->transport_.send_subcommand(hw::subcommand::SLEEP_ENABLE)) {
     ESP_LOGW(TAG, "Failed enabling sleep");
     return false;
   }
@@ -648,13 +667,13 @@ bool BQ76952Service::restore_runtime_state() {
   if (this->config_.regulators.reg2_enabled) {
     desired_reg12 |= hw::bits::reg12::REG2_ENABLE;
   }
-  if (!this->protocol_.write_subcommand(hw::subcommand::REG12_CONTROL, &desired_reg12, 1)) {
+  if (!this->transport_.write_subcommand(hw::subcommand::REG12_CONTROL, &desired_reg12, 1)) {
     ESP_LOGW(TAG, "Failed applying live REG1/REG2 state");
     return false;
   }
 
   uint8_t manufacturing_raw[2]{};
-  if (!this->protocol_.read_subcommand(hw::subcommand::MANUFACTURING_STATUS, manufacturing_raw,
+  if (!this->transport_.read_subcommand(hw::subcommand::MANUFACTURING_STATUS, manufacturing_raw,
                                        sizeof(manufacturing_raw))) {
     return false;
   }
@@ -662,7 +681,7 @@ bool BQ76952Service::restore_runtime_state() {
       static_cast<uint16_t>(manufacturing_raw[0]) | (static_cast<uint16_t>(manufacturing_raw[1]) << 8);
   const bool currently_autonomous = (manufacturing_status & hw::bits::manufacturing_status::FET_ENABLE) != 0;
   if (currently_autonomous != this->config_.fet.autonomous &&
-      !this->protocol_.send_subcommand(hw::subcommand::FET_ENABLE)) {
+      !this->transport_.send_subcommand(hw::subcommand::FET_ENABLE)) {
     ESP_LOGW(TAG, "Failed applying autonomous FET runtime policy");
     return false;
   }
@@ -673,7 +692,7 @@ bool BQ76952Service::restore_runtime_state() {
 
 bool BQ76952Service::load_unit_scaling() {
   uint8_t da_config = 0;
-  if (!this->protocol_.read_subcommand(hw::subcommand::DA_CONFIGURATION, &da_config, 1)) {
+  if (!this->transport_.read_subcommand(hw::subcommand::DA_CONFIGURATION, &da_config, 1)) {
     ESP_LOGW(TAG, "Failed reading device measurement scaling; using defaults");
     this->current_lsb_ua_ = 1000;
     this->direct_voltage_centivolts_ = true;
@@ -698,27 +717,9 @@ uint8_t BQ76952Service::raw_cell_channel(uint8_t logical_cell) const {
   return logical_cell == this->config_.cell_count - 1 ? 15 : logical_cell;
 }
 
-bool BQ76952Service::read_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b,
-                                      uint8_t safety_c, uint32_t &fault_flags) {
-  fault_flags = BQ76952_FAULT_NONE;
-  if ((safety_a & hw::bits::protection_a::CUV) != 0) fault_flags |= BQ76952_FAULT_CELL_UNDERVOLTAGE;
-  if ((safety_a & hw::bits::protection_a::COV) != 0) fault_flags |= BQ76952_FAULT_CELL_OVERVOLTAGE;
-  if ((safety_a & hw::bits::protection_a::OCC) != 0) fault_flags |= BQ76952_FAULT_CHARGE_OVERCURRENT;
-  if ((safety_a & hw::bits::protection_a::OCD1) != 0) fault_flags |= BQ76952_FAULT_DISCHARGE_OVERCURRENT;
-  if ((safety_a & hw::bits::protection_a::OCD2) != 0) fault_flags |= BQ76952_FAULT_DISCHARGE_SEVERE_OVERCURRENT;
-  if ((safety_a & hw::bits::protection_a::SCD) != 0) fault_flags |= BQ76952_FAULT_DISCHARGE_SHORT_CIRCUIT;
-  if ((safety_c & hw::bits::protection_c::OCD3) != 0) fault_flags |= BQ76952_FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
-  if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) fault_flags |= BQ76952_FAULT_PRECHARGE_TIMEOUT;
-  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) {
-    fault_flags |= BQ76952_FAULT_TEMPERATURE;
-  }
-  if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) fault_flags |= BQ76952_FAULT_PERMANENT_FAILURE;
-  return true;
-}
-
 bool BQ76952Service::read_coulomb_counter(float &charge_ah) {
   uint8_t data[12]{};
-  if (!this->protocol_.read_subcommand(hw::subcommand::DASTATUS6, data, sizeof(data))) {
+  if (!this->transport_.read_subcommand(hw::subcommand::DASTATUS6, data, sizeof(data))) {
     return false;
   }
   const int32_t integer = read_i32_le(data);
@@ -728,7 +729,7 @@ bool BQ76952Service::read_coulomb_counter(float &charge_ah) {
   return true;
 }
 
-bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
+bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   snapshot = {};
   snapshot.cell_count = this->config_.cell_count;
 
@@ -738,33 +739,24 @@ bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
   uint8_t safety_a = 0;
   uint8_t safety_b = 0;
   uint8_t safety_c = 0;
-  if (!this->protocol_.read_u16(hw::direct::CONTROL_STATUS, control_status) ||
-      !this->protocol_.read_u16(hw::direct::BATTERY_STATUS, battery_status) ||
-      !this->protocol_.read_u8(hw::direct::FET_STATUS, fet_status) ||
-      !this->protocol_.read_u8(hw::direct::SAFETY_STATUS_A, safety_a) ||
-      !this->protocol_.read_u8(hw::direct::SAFETY_STATUS_B, safety_b) ||
-      !this->protocol_.read_u8(hw::direct::SAFETY_STATUS_C, safety_c)) {
+  if (!this->transport_.read_u16(hw::direct::CONTROL_STATUS, control_status) ||
+      !this->transport_.read_u16(hw::direct::BATTERY_STATUS, battery_status) ||
+      !this->transport_.read_u8(hw::direct::FET_STATUS, fet_status) ||
+      !this->transport_.read_u8(hw::direct::SAFETY_STATUS_A, safety_a) ||
+      !this->transport_.read_u8(hw::direct::SAFETY_STATUS_B, safety_b) ||
+      !this->transport_.read_u8(hw::direct::SAFETY_STATUS_C, safety_c)) {
     return false;
   }
 
-  if ((battery_status & hw::bits::battery_status::CONFIG_UPDATE) != 0) {
-    snapshot.state = BQ76952OperatingState::CONFIG_UPDATE;
-  } else if ((control_status & hw::bits::control_status::DEEP_SLEEP) != 0) {
-    snapshot.state = BQ76952OperatingState::DEEP_SLEEP;
-  } else if ((battery_status & hw::bits::battery_status::SHUTDOWN_COMMAND) != 0) {
-    snapshot.state = BQ76952OperatingState::SHUTDOWN_PENDING;
-  } else if ((battery_status & hw::bits::battery_status::SLEEP) != 0) {
-    snapshot.state = BQ76952OperatingState::SLEEP;
-  } else {
-    snapshot.state = BQ76952OperatingState::NORMAL;
-  }
-
-  snapshot.output_enabled = (fet_status & hw::bits::fet_status::CHARGE) != 0 && (fet_status & hw::bits::fet_status::DISCHARGE) != 0;
-  this->read_fault_flags(battery_status, safety_a, safety_b, safety_c, snapshot.fault_flags);
+  snapshot.operating_state = ::bq76952_core::decode_operating_state(control_status, battery_status);
+  snapshot.output_enabled = (fet_status & hw::bits::fet_status::CHARGE) != 0 &&
+                            (fet_status & hw::bits::fet_status::DISCHARGE) != 0;
+  snapshot.active_faults =
+      ::bq76952_core::decode_faults(battery_status, safety_a, safety_b, safety_c);
 
   std::array<int16_t, 16> raw_cells{};
   for (uint8_t raw = 0; raw < raw_cells.size(); raw++) {
-    if (!this->protocol_.read_i16(static_cast<uint8_t>(hw::direct::CELL1_VOLTAGE +
+    if (!this->transport_.read_i16(static_cast<uint8_t>(hw::direct::CELL1_VOLTAGE +
                                                raw * hw::encoding::CELL_VOLTAGE_REGISTER_STRIDE), raw_cells[raw])) {
       return false;
     }
@@ -787,11 +779,11 @@ bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
   int16_t raw_ld = 0;
   int16_t raw_current = 0;
   int16_t raw_die_temperature = 0;
-  if (!this->protocol_.read_i16(hw::direct::STACK_VOLTAGE, raw_stack) ||
-      !this->protocol_.read_i16(hw::direct::PACK_VOLTAGE, raw_pack) ||
-      !this->protocol_.read_i16(hw::direct::LD_VOLTAGE, raw_ld) ||
-      !this->protocol_.read_i16(hw::direct::CC2_CURRENT, raw_current) ||
-      !this->protocol_.read_i16(hw::direct::INTERNAL_TEMPERATURE, raw_die_temperature)) {
+  if (!this->transport_.read_i16(hw::direct::STACK_VOLTAGE, raw_stack) ||
+      !this->transport_.read_i16(hw::direct::PACK_VOLTAGE, raw_pack) ||
+      !this->transport_.read_i16(hw::direct::LD_VOLTAGE, raw_ld) ||
+      !this->transport_.read_i16(hw::direct::CC2_CURRENT, raw_current) ||
+      !this->transport_.read_i16(hw::direct::INTERNAL_TEMPERATURE, raw_die_temperature)) {
     return false;
   }
 
@@ -814,7 +806,7 @@ bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
       continue;
     }
     int16_t raw_temperature = 0;
-    if (!this->protocol_.read_i16(temperature_registers[i], raw_temperature)) {
+    if (!this->transport_.read_i16(temperature_registers[i], raw_temperature)) {
       return false;
     }
     snapshot.thermistor_temperature_c[i] = static_cast<float>(raw_temperature) / hw::encoding::TENTHS_KELVIN_PER_KELVIN -
@@ -831,8 +823,8 @@ bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
   soc_sample.minimum_cell_voltage_mv = min_cell;
   soc_sample.maximum_cell_voltage_mv = max_cell;
   soc_sample.average_cell_voltage_mv = average_cell;
-  soc_sample.cell_undervoltage_active = (snapshot.fault_flags & BQ76952_FAULT_CELL_UNDERVOLTAGE) != 0;
-  soc_sample.cell_overvoltage_active = (snapshot.fault_flags & BQ76952_FAULT_CELL_OVERVOLTAGE) != 0;
+  soc_sample.cell_undervoltage_active = (snapshot.active_faults & ::bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0;
+  soc_sample.cell_overvoltage_active = (snapshot.active_faults & ::bq76952_core::FAULT_CELL_OVERVOLTAGE) != 0;
   soc_sample.empty_cell_voltage_mv = this->config_.soc.empty_cell_voltage_mv;
   soc_sample.full_cell_voltage_mv = this->config_.soc.full_cell_voltage_mv;
   snapshot.state_of_charge_percent = this->soc_.update(soc_sample);
@@ -857,7 +849,7 @@ bool BQ76952Service::read_snapshot(BQ76952Snapshot &snapshot) {
 
 bool BQ76952Service::set_output_enabled(bool enabled) {
   uint8_t manufacturing_raw[2]{};
-  if (!this->protocol_.read_subcommand(hw::subcommand::MANUFACTURING_STATUS, manufacturing_raw,
+  if (!this->transport_.read_subcommand(hw::subcommand::MANUFACTURING_STATUS, manufacturing_raw,
                                        sizeof(manufacturing_raw))) {
     return false;
   }
@@ -868,7 +860,7 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
     return false;
   }
 
-  if (!this->protocol_.send_subcommand(enabled ? hw::subcommand::ALL_FETS_ON : hw::subcommand::ALL_FETS_OFF)) {
+  if (!this->transport_.send_subcommand(enabled ? hw::subcommand::ALL_FETS_ON : hw::subcommand::ALL_FETS_OFF)) {
     return false;
   }
   this->output_request_pending_ = true;
@@ -879,27 +871,27 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
 
 bool BQ76952Service::clear_alarm_latches() {
   uint16_t alarm_status = 0;
-  return this->protocol_.read_u16(hw::direct::ALARM_STATUS, alarm_status) &&
-         (alarm_status == 0 || this->protocol_.write_u16(hw::direct::ALARM_STATUS, alarm_status));
+  return this->transport_.read_u16(hw::direct::ALARM_STATUS, alarm_status) &&
+         (alarm_status == 0 || this->transport_.write_u16(hw::direct::ALARM_STATUS, alarm_status));
 }
 
 bool BQ76952Service::program_factory_otp() {
   ESP_LOGE(TAG, "DANGER: starting irreversible one-time BQ76952 OTP programming");
   if (!this->synchronize_configuration(ConfigurationSyncMode::RESTORE_RUNTIME_STATE) ||
-      !this->require_full_access() || !this->protocol_.set_config_update(true)) {
+      !this->require_full_access() || !this->transport_.set_config_update(true)) {
     ESP_LOGE(TAG, "OTP programming aborted before OTP_WRITE");
     return false;
   }
 
   bool ok = true;
   uint8_t result[3]{};
-  if (!this->protocol_.send_subcommand(hw::subcommand::OTP_WRITE_CHECK)) {
+  if (!this->transport_.send_subcommand(hw::subcommand::OTP_WRITE_CHECK)) {
     ok = false;
   } else {
     delay(1000);
   }
-  if (ok && (!this->protocol_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, 1000) ||
-      !this->protocol_.read_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, result, sizeof(result)) ||
+  if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, 1000) ||
+      !this->transport_.read_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, result, sizeof(result)) ||
       (result[0] & 0x80U) == 0)) {
     ESP_LOGE(TAG, "OTP_WR_CHECK rejected programming");
     ok = false;
@@ -907,20 +899,20 @@ bool BQ76952Service::program_factory_otp() {
 
   if (ok) {
     std::fill_n(result, sizeof(result), 0);
-    if (!this->protocol_.send_subcommand(hw::subcommand::OTP_WRITE)) {
+    if (!this->transport_.send_subcommand(hw::subcommand::OTP_WRITE)) {
       ok = false;
     } else {
       delay(1000);
     }
-    if (ok && (!this->protocol_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE, 1000) ||
-        !this->protocol_.read_transfer_buffer(hw::subcommand::OTP_WRITE, result, sizeof(result)) ||
+    if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE, 1000) ||
+        !this->transport_.read_transfer_buffer(hw::subcommand::OTP_WRITE, result, sizeof(result)) ||
         (result[0] & 0x80U) == 0)) {
       ESP_LOGE(TAG, "OTP_WRITE failed");
       ok = false;
     }
   }
 
-  if (!this->protocol_.set_config_update(false)) {
+  if (!this->transport_.set_config_update(false)) {
     ok = false;
   }
   if (ok) {

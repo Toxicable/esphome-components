@@ -1,0 +1,64 @@
+esphome:
+  name: mcf8316d-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ component_common, mcf83xx_common, mcf8316d ]
+
+i2c:
+  id: i2c_ext
+  sda: GPIO35
+  scl: GPIO36
+  scan: true
+  frequency: 50kHz
+
+mcf8316d:
+  id: mcf
+  address: 0x01
+  i2c_id: i2c_ext
+  update_interval: 250ms
+  inter_byte_delay_us: 100
+  auto_tickle_watchdog: false
+
+  brake:
+    name: Brake
+  direction:
+    name: Direction
+  speed_percent:
+    name: Speed
+  clear_faults:
+    name: Clear Faults
+  watchdog_tickle:
+    name: Watchdog Tickle
+  apply_startup_tune:
+    name: Apply Startup Tune
+  apply_hw_lock_report_only:
+    name: Apply Lock Report Only
+  run_startup_sweep:
+    name: Run Startup Sweep
+  run_scope_probe_test:
+    name: Run Scope Probe Test
+
+  fault_active:
+    name: Fault Active
+  sys_enable:
+    name: System Enable
+  vm_voltage:
+    name: VM Voltage
+  duty_cmd_percent:
+    name: Duty Command
+  volt_mag_percent:
+    name: Voltage Magnitude
+  fault_summary:
+    name: Fault Summary
+  algorithm_state:
+    name: Algorithm State

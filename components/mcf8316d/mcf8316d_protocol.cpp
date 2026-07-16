@@ -2,10 +2,6 @@
 
 namespace mcf8316d_core {
 
-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit) {
-  const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
-  return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
-}
 
 const char *algorithm_state_to_string(uint16_t state) {
   switch (state) {

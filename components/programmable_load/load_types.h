@@ -1,127 +1,39 @@
 #pragma once
 
-#include <cstdint>
+#include "programmable_load_core.h"
 
 namespace esphome {
 namespace programmable_load {
 
-static constexpr float ABSOLUTE_MAXIMUM_VOLTAGE_V = 75.0f;
-
-enum class State : uint8_t {
-  IDLE = 0,
-  RUNNING,
-  FAULT,
-};
-
-enum class Fault : uint8_t {
-  NONE = 0,
-  CURRENT_MEASUREMENT_UNAVAILABLE,
-  VOLTAGE_MEASUREMENT_UNAVAILABLE,
-  REQUIRED_TEMPERATURE_UNAVAILABLE,
-  INPUT_UNDERVOLTAGE,
-  INPUT_OVERVOLTAGE,
-  HARDWARE_OVERVOLTAGE,
-  OVERCURRENT,
-  OVERPOWER,
-  OVERTEMPERATURE,
-  CHARGER_UNAVAILABLE,
-  CHARGER_FAULT,
-  CHARGER_CONTROL_ERROR,
-  CHARGE_TIMEOUT,
-  CONTROL_ERROR,
-  PROCEDURE_ERROR,
-};
-
-enum class StopReason : uint8_t {
-  USER_REQUEST = 0,
-  COMPLETED,
-  FAULTED,
-};
-
-enum class ProcedureStatus : uint8_t {
-  RUNNING = 0,
-  COMPLETE,
-  FAILED,
-};
-
-enum class ChargerCommand : uint8_t {
-  DISABLE = 0,
-  ENABLE,
-};
-
-enum class ChargerState : uint8_t {
-  UNKNOWN = 0,
-  NOT_CHARGING,
-  TRICKLE,
-  PRECHARGE,
-  FAST_CC,
-  TAPER_CV,
-  TOPOFF,
-  TERMINATION_DONE,
-};
-
-struct Measurement {
-  // Incremented whenever either electrical measurement publishes a new sample.
-  // Procedures can use this to avoid counting the same conversion repeatedly.
-  uint32_t sequence{0};
-  uint32_t timestamp_ms{0};
-  float current_a{0.0f};
-  float voltage_v{0.0f};
-  float power_w{0.0f};
-  float maximum_temperature_c{0.0f};
-  bool current_valid{false};
-  bool voltage_valid{false};
-  bool temperature_valid{false};
-};
-
-struct ChargerMeasurement {
-  // Incremented from the Charger_14/BQ25756 battery-current entity. This keeps
-  // energy integration tied to charger ADC frames rather than load-loop ticks.
-  uint32_t sequence{0};
-  uint32_t timestamp_ms{0};
-  float current_a{0.0f};
-  float voltage_v{0.0f};
-  ChargerState state{ChargerState::UNKNOWN};
-  bool enabled{false};
-  bool power_good{false};
-  bool fault_active{false};
-  bool valid{false};
-};
-
-struct ProcedureContext {
-  Measurement load{};
-  ChargerMeasurement charger{};
-};
-
-struct HardwareLimits {
-  // Board-specific limit, additionally capped by
-  // ABSOLUTE_MAXIMUM_VOLTAGE_V inside the core.
-  float maximum_voltage_v{ABSOLUTE_MAXIMUM_VOLTAGE_V};
-};
-
-struct Limits {
-  float maximum_current_a{0.0f};
-  float minimum_voltage_v{0.0f};
-  float maximum_voltage_v{0.0f};
-  float maximum_power_w{0.0f};
-  float maximum_temperature_c{0.0f};
-};
-
-struct FaultPolicy {
-  bool auto_clear{false};
-  uint32_t clear_delay_ms{2000};
-};
-
-struct ProcedureResult {
-  ProcedureStatus status{ProcedureStatus::RUNNING};
-  float requested_current_a{0.0f};
-  Fault fault{Fault::NONE};
-  ChargerCommand charger_command{ChargerCommand::DISABLE};
-};
-
-const char *state_to_string(State state);
-const char *fault_to_string(Fault fault);
-const char *charger_state_to_string(ChargerState state);
+using ::programmable_load_core::ABSOLUTE_MAXIMUM_VOLTAGE_V;
+using ::programmable_load_core::CALIBRATION_VERSION;
+using ::programmable_load_core::Calibration;
+using ::programmable_load_core::CalibrationSource;
+using ::programmable_load_core::ChargerCommand;
+using ::programmable_load_core::ChargerMeasurement;
+using ::programmable_load_core::ChargerState;
+using ::programmable_load_core::Fault;
+using ::programmable_load_core::FaultFlags;
+using ::programmable_load_core::FaultPolicy;
+using ::programmable_load_core::HardwareLimits;
+using ::programmable_load_core::Limits;
+using ::programmable_load_core::LinearCalibration;
+using ::programmable_load_core::Measurement;
+using ::programmable_load_core::OperationLock;
+using ::programmable_load_core::OperationOwner;
+using ::programmable_load_core::OutputCalibration;
+using ::programmable_load_core::ProcedureContext;
+using ::programmable_load_core::ProcedureResult;
+using ::programmable_load_core::ProcedureStatus;
+using ::programmable_load_core::State;
+using ::programmable_load_core::StopReason;
+using ::programmable_load_core::calibration_source_to_string;
+using ::programmable_load_core::fault_flag;
+using ::programmable_load_core::fault_to_string;
+using ::programmable_load_core::format_faults;
+using ::programmable_load_core::has_fault;
+using ::programmable_load_core::normalize_hardware_maximum_voltage;
+using ::programmable_load_core::state_to_string;
 
 }  // namespace programmable_load
 }  // namespace esphome
