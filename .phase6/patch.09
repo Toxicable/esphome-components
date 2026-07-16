@@ -1,0 +1,345 @@
++void OperationLock::force_release() {
++  this->owner_ = OperationOwner::NONE;
++  this->procedure_ = nullptr;
++}
++
++const char *state_to_string(State state) {
++  switch (state) {
++    case State::IDLE: return "idle";
++    case State::RUNNING: return "running";
++    case State::FAULT: return "fault";
++    default: return "unknown";
++  }
++}
++
++const char *fault_to_string(Fault fault) {
++  switch (fault) {
++    case Fault::NONE: return "none";
++    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
++      return "current_measurement_unavailable";
++    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
++      return "voltage_measurement_unavailable";
++    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
++      return "required_temperature_unavailable";
++    case Fault::INPUT_UNDERVOLTAGE: return "input_undervoltage";
++    case Fault::INPUT_OVERVOLTAGE: return "input_overvoltage";
++    case Fault::HARDWARE_OVERVOLTAGE: return "hardware_overvoltage";
++    case Fault::OVERCURRENT: return "overcurrent";
++    case Fault::OVERPOWER: return "overpower";
++    case Fault::OVERTEMPERATURE: return "overtemperature";
++    case Fault::CHARGER_UNAVAILABLE: return "charger_unavailable";
++    case Fault::CHARGER_FAULT: return "charger_fault";
++    case Fault::CHARGER_CONTROL_ERROR: return "charger_control_error";
++    case Fault::CHARGE_TIMEOUT: return "charge_timeout";
++    case Fault::CONTROL_ERROR: return "control_error";
++    case Fault::PROCEDURE_ERROR: return "procedure_error";
++    default: return "unknown";
++  }
++}
++
++const char *calibration_source_to_string(CalibrationSource source) {
++  switch (source) {
++    case CalibrationSource::CONFIGURED: return "configured";
++    case CalibrationSource::RESTORED: return "restored";
++    case CalibrationSource::APPLIED: return "applied";
++    default: return "unknown";
++  }
++}
++
++std::size_t format_faults(FaultFlags flags, char *buffer, std::size_t size) {
++  if (size == 0) return 0;
++  buffer[0] = '\0';
++  if (flags == 0u) {
++    const int written = std::snprintf(buffer, size, "none");
++    return written <= 0 ? 0u : std::min(static_cast<std::size_t>(written), size - 1);
++  }
++
++  std::size_t used = 0;
++  bool first = true;
++  for (uint8_t value = static_cast<uint8_t>(Fault::CURRENT_MEASUREMENT_UNAVAILABLE);
++       value <= static_cast<uint8_t>(Fault::PROCEDURE_ERROR); value++) {
++    const auto fault = static_cast<Fault>(value);
++    if (has_fault(flags, fault)) {
++      append_fault(fault_to_string(fault), buffer, size, used, first);
++    }
++  }
++  return used;
++}
++
++float normalize_hardware_maximum_voltage(float voltage_v) {
++  if (!finite_positive(voltage_v) ||
++      voltage_v > ABSOLUTE_MAXIMUM_VOLTAGE_V) {
++    return ABSOLUTE_MAXIMUM_VOLTAGE_V;
++  }
++  return voltage_v;
++}
++
++bool calibration_valid(const Calibration &calibration) {
++  return calibration.version == CALIBRATION_VERSION &&
++         finite_positive(calibration.current.scale) &&
++         std::isfinite(calibration.current.offset) &&
++         finite_positive(calibration.voltage.scale) &&
++         std::isfinite(calibration.voltage.offset) &&
++         std::isfinite(calibration.output.zero_level) &&
++         calibration.output.zero_level >= 0.0f &&
++         calibration.output.zero_level < 1.0f &&
++         finite_positive(calibration.output.full_scale_current_a);
++}
++
++float effective_current_limit(const Measurement &measurement,
++                              const Limits &limits,
++                              const Calibration &calibration) {
++  if (!measurement.voltage_valid || measurement.voltage_v <= 0.0f ||
++      !calibration_valid(calibration)) {
++    return 0.0f;
++  }
++  float limit = std::min(limits.maximum_current_a,
++                         calibration.output.full_scale_current_a);
++  if (limits.maximum_power_w > 0.0f) {
++    limit = std::min(limit,
++                     limits.maximum_power_w / std::fabs(measurement.voltage_v));
++  }
++  return std::max(0.0f, limit);
++}
++
++FaultFlags detect_safety_faults(const Measurement &measurement,
++                                const HardwareLimits &hardware_limits,
++                                const Limits &limits, float current_deadband_a,
++                                bool required_temperature_unavailable,
++                                bool charger_control_mismatch) {
++  FaultFlags faults = 0u;
++  if (!measurement.current_valid)
++    faults |= fault_flag(Fault::CURRENT_MEASUREMENT_UNAVAILABLE);
++  if (!measurement.voltage_valid)
++    faults |= fault_flag(Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE);
++  if (required_temperature_unavailable)
++    faults |= fault_flag(Fault::REQUIRED_TEMPERATURE_UNAVAILABLE);
++
++  if (measurement.voltage_valid) {
++    if (measurement.voltage_v > hardware_limits.maximum_voltage_v)
++      faults |= fault_flag(Fault::HARDWARE_OVERVOLTAGE);
++    if (measurement.voltage_v < limits.minimum_voltage_v)
++      faults |= fault_flag(Fault::INPUT_UNDERVOLTAGE);
++    if (measurement.voltage_v > limits.maximum_voltage_v)
++      faults |= fault_flag(Fault::INPUT_OVERVOLTAGE);
++  }
++  if (measurement.current_valid &&
++      std::fabs(measurement.current_a) >
++          limits.maximum_current_a + current_deadband_a) {
++    faults |= fault_flag(Fault::OVERCURRENT);
++  }
++  if (measurement.current_valid && measurement.voltage_valid &&
++      std::fabs(measurement.power_w) > limits.maximum_power_w) {
++    faults |= fault_flag(Fault::OVERPOWER);
++  }
++  if (std::isfinite(measurement.maximum_temperature_c) &&
++      measurement.maximum_temperature_c > limits.maximum_temperature_c) {
++    faults |= fault_flag(Fault::OVERTEMPERATURE);
++  }
++  if (charger_control_mismatch)
++    faults |= fault_flag(Fault::CHARGER_CONTROL_ERROR);
++  return faults;
++}
++
++bool fault_conditions_active(FaultFlags flags, const Measurement &measurement,
++                             const HardwareLimits &hardware_limits,
++                             const Limits &limits, float current_deadband_a,
++                             bool required_temperature_unavailable,
++                             bool charger_control_mismatch,
++                             bool charger_configured,
++                             bool charger_measurement_valid,
++                             bool charger_fault_active) {
++  if (flags == 0u) return false;
++  if (has_fault(flags, Fault::CURRENT_MEASUREMENT_UNAVAILABLE) &&
++      !measurement.current_valid)
++    return true;
++  if (has_fault(flags, Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE) &&
++      !measurement.voltage_valid)
++    return true;
++  if (has_fault(flags, Fault::REQUIRED_TEMPERATURE_UNAVAILABLE) &&
++      required_temperature_unavailable)
++    return true;
++  if (has_fault(flags, Fault::INPUT_UNDERVOLTAGE) &&
++      (!measurement.voltage_valid ||
++       measurement.voltage_v < limits.minimum_voltage_v))
++    return true;
++  if (has_fault(flags, Fault::INPUT_OVERVOLTAGE) &&
++      (!measurement.voltage_valid ||
++       measurement.voltage_v > limits.maximum_voltage_v))
++    return true;
++  if (has_fault(flags, Fault::HARDWARE_OVERVOLTAGE) &&
++      (!measurement.voltage_valid ||
++       measurement.voltage_v > hardware_limits.maximum_voltage_v))
++    return true;
++  if (has_fault(flags, Fault::OVERCURRENT) &&
++      (!measurement.current_valid ||
++       std::fabs(measurement.current_a) >
++           limits.maximum_current_a + current_deadband_a))
++    return true;
++  if (has_fault(flags, Fault::OVERPOWER) &&
++      (!measurement.current_valid || !measurement.voltage_valid ||
++       std::fabs(measurement.power_w) > limits.maximum_power_w))
++    return true;
++  if (has_fault(flags, Fault::OVERTEMPERATURE) &&
++      (required_temperature_unavailable ||
++       (std::isfinite(measurement.maximum_temperature_c) &&
++        measurement.maximum_temperature_c > limits.maximum_temperature_c)))
++    return true;
++  if (has_fault(flags, Fault::CHARGER_UNAVAILABLE) && charger_configured &&
++      !charger_measurement_valid)
++    return true;
++  if (has_fault(flags, Fault::CHARGER_FAULT) && charger_measurement_valid &&
++      charger_fault_active)
++    return true;
++  if (has_fault(flags, Fault::CHARGER_CONTROL_ERROR) &&
++      charger_control_mismatch)
++    return true;
++
++  // Timeout, control and procedure failures are latched root causes without a
++  // continuously observable condition. Once the output and charger are safe,
++  // they may be cleared explicitly or by the configured auto-clear delay.
++  return false;
++}
++
++}  // namespace programmable_load_core
+diff --git a/components/programmable_load/programmable_load_core.h b/components/programmable_load/programmable_load_core.h
+new file mode 100644
+index 0000000..388b713
+--- /dev/null
++++ b/components/programmable_load/programmable_load_core.h
+@@ -0,0 +1,160 @@
++#pragma once
++
++#include <cstddef>
++#include <cstdint>
++
++#include "../component_common/charger.h"
++#include "calibration.h"
++
++namespace programmable_load_core {
++
++static constexpr float ABSOLUTE_MAXIMUM_VOLTAGE_V = 75.0f;
++
++enum class State : uint8_t {
++  IDLE = 0,
++  RUNNING,
++  FAULT,
++};
++
++enum class Fault : uint8_t {
++  NONE = 0,
++  CURRENT_MEASUREMENT_UNAVAILABLE,
++  VOLTAGE_MEASUREMENT_UNAVAILABLE,
++  REQUIRED_TEMPERATURE_UNAVAILABLE,
++  INPUT_UNDERVOLTAGE,
++  INPUT_OVERVOLTAGE,
++  HARDWARE_OVERVOLTAGE,
++  OVERCURRENT,
++  OVERPOWER,
++  OVERTEMPERATURE,
++  CHARGER_UNAVAILABLE,
++  CHARGER_FAULT,
++  CHARGER_CONTROL_ERROR,
++  CHARGE_TIMEOUT,
++  CONTROL_ERROR,
++  PROCEDURE_ERROR,
++};
++
++using FaultFlags = uint32_t;
++
++constexpr FaultFlags fault_flag(Fault fault) {
++  return fault == Fault::NONE ? 0u : (1u << (static_cast<uint8_t>(fault) - 1u));
++}
++
++constexpr bool has_fault(FaultFlags flags, Fault fault) {
++  return (flags & fault_flag(fault)) != 0u;
++}
++
++enum class StopReason : uint8_t {
++  USER_REQUEST = 0,
++  COMPLETED,
++  FAULTED,
++};
++
++enum class ProcedureStatus : uint8_t {
++  RUNNING = 0,
++  COMPLETE,
++  FAILED,
++};
++
++enum class ChargerCommand : uint8_t {
++  DISABLE = 0,
++  ENABLE,
++};
++
++enum class OperationOwner : uint8_t {
++  NONE = 0,
++  MANUAL,
++  PROCEDURE,
++};
++
++class OperationLock {
++ public:
++  bool acquire_manual();
++  bool acquire_procedure(const void *procedure);
++  bool owns_manual() const { return this->owner_ == OperationOwner::MANUAL; }
++  bool owns_procedure(const void *procedure) const;
++  bool release_manual();
++  bool release_procedure(const void *procedure);
++  void force_release();
++  OperationOwner owner() const { return this->owner_; }
++  const void *procedure() const { return this->procedure_; }
++
++ protected:
++  OperationOwner owner_{OperationOwner::NONE};
++  const void *procedure_{nullptr};
++};
++
++struct Measurement {
++  // Incremented whenever either electrical measurement publishes a new sample.
++  // Procedures can use this to avoid counting the same conversion repeatedly.
++  uint32_t sequence{0};
++  uint32_t timestamp_ms{0};
++  float current_a{0.0f};
++  float voltage_v{0.0f};
++  float power_w{0.0f};
++  float maximum_temperature_c{0.0f};
++  bool current_valid{false};
++  bool voltage_valid{false};
++  bool temperature_valid{false};
++};
++
++using ChargerState = ::component_common::ChargerState;
++using ChargerMeasurement = ::component_common::ChargerSnapshot;
++
++struct ProcedureContext {
++  Measurement load{};
++  ChargerMeasurement charger{};
++};
++
++struct HardwareLimits {
++  // Board-specific limit, additionally capped by
++  // ABSOLUTE_MAXIMUM_VOLTAGE_V inside the core.
++  float maximum_voltage_v{ABSOLUTE_MAXIMUM_VOLTAGE_V};
++};
++
++struct Limits {
++  float maximum_current_a{0.0f};
++  float minimum_voltage_v{0.0f};
++  float maximum_voltage_v{0.0f};
++  float maximum_power_w{0.0f};
++  float maximum_temperature_c{0.0f};
++};
++
++struct FaultPolicy {
++  bool auto_clear{false};
++  uint32_t clear_delay_ms{2000};
++};
++
++struct ProcedureResult {
++  ProcedureStatus status{ProcedureStatus::RUNNING};
++  float requested_current_a{0.0f};
++  Fault fault{Fault::NONE};
++  ChargerCommand charger_command{ChargerCommand::DISABLE};
++};
++
