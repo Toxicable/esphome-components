@@ -1,0 +1,31 @@
+esphome:
+  name: lps25hb-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ lps25hb ]
+
+i2c:
+  id: i2c_bus
+  sda: GPIO35
+  scl: GPIO36
+  scan: false
+
+lps25hb:
+  id: barometric_sensor
+  i2c_id: i2c_bus
+  address: 0x5C
+  update_interval: 10s
+  temperature:
+    name: Temperature
+  pressure:
+    name: Pressure

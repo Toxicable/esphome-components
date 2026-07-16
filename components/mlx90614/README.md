@@ -3,10 +3,12 @@
 Datasheet: https://www.melexis.com/-/media/files/documents/datasheets/mlx90614-datasheet-melexis.pdf
 
 ## What it does
-Reads ambient and object temperatures from a Melexis MLX90614 infrared thermometer over I2C.
+
+Reads ambient and object temperatures from a Melexis MLX90614 infrared thermometer over I2C/SMBus and verifies each read with SMBus PEC.
+
+ESPHome already includes an upstream `mlx90614` component for normal ambient/object measurements. Prefer upstream unless the hardware requires the second object-temperature register. This local package intentionally shadows upstream only when it is explicitly included in the external-component allowlist.
 
 ## How to use it
-Minimal configuration:
 
 ```yaml
 external_components:
@@ -33,4 +35,6 @@ mlx90614:
 ```
 
 Notes:
-- `object2` is available on dual-zone variants.
+
+- `object2` is available only on dual-zone variants.
+- Read failures set the normal ESPHome component warning state and clear it after a successful update.

@@ -4,14 +4,17 @@
 namespace esphome {
 namespace mlx90614 {
 
-static const char* const TAG = "mlx90614";
+static const char *const TAG = "mlx90614";
 
 void MLX90614Component::setup() {
   ESP_LOGCONFIG(TAG, "Setting up MLX90614...");
-  float ta_c;
-  if (!this->read_temp_c_(RAM_TA_, &ta_c)) {
+  float ambient_c;
+  if (!this->read_temp_c_(RAM_TA_, &ambient_c)) {
     ESP_LOGW(TAG, "Initial read failed (check wiring/address, and that device is in SMBus mode).");
+    this->status_set_warning();
+    return;
   }
+  this->status_clear_warning();
 }
 
 void MLX90614Component::dump_config() {
@@ -20,63 +23,72 @@ void MLX90614Component::dump_config() {
   ESP_LOGCONFIG(TAG, "  PEC/CRC: enabled (always verified)");
   LOG_UPDATE_INTERVAL(this);
 
-  if (ambient_sensor_ != nullptr)
-    LOG_SENSOR("  ", "Ambient", ambient_sensor_);
-  if (object_sensor_ != nullptr)
-    LOG_SENSOR("  ", "Object", object_sensor_);
-  if (object2_sensor_ != nullptr)
-    LOG_SENSOR("  ", "Object2", object2_sensor_);
+  if (this->ambient_sensor_ != nullptr)
+    LOG_SENSOR("  ", "Ambient", this->ambient_sensor_);
+  if (this->object_sensor_ != nullptr)
+    LOG_SENSOR("  ", "Object", this->object_sensor_);
+  if (this->object2_sensor_ != nullptr)
+    LOG_SENSOR("  ", "Object2", this->object2_sensor_);
 }
 
 void MLX90614Component::update() {
-  float v;
+  bool success = true;
+  float value_c;
 
-  if (ambient_sensor_ != nullptr) {
-    if (this->read_temp_c_(RAM_TA_, &v))
-      ambient_sensor_->publish_state(v);
-    else
+  if (this->ambient_sensor_ != nullptr) {
+    if (this->read_temp_c_(RAM_TA_, &value_c)) {
+      this->ambient_sensor_->publish_state(value_c);
+    } else {
       ESP_LOGW(TAG, "Failed reading Ta (0x%02X)", RAM_TA_);
+      success = false;
+    }
   }
 
-  if (object_sensor_ != nullptr) {
-    if (this->read_temp_c_(RAM_TOBJ1_, &v))
-      object_sensor_->publish_state(v);
-    else
+  if (this->object_sensor_ != nullptr) {
+    if (this->read_temp_c_(RAM_TOBJ1_, &value_c)) {
+      this->object_sensor_->publish_state(value_c);
+    } else {
       ESP_LOGW(TAG, "Failed reading Tobj1 (0x%02X)", RAM_TOBJ1_);
+      success = false;
+    }
   }
 
-  if (object2_sensor_ != nullptr) {
-    if (this->read_temp_c_(RAM_TOBJ2_, &v))
-      object2_sensor_->publish_state(v);
-    else
+  if (this->object2_sensor_ != nullptr) {
+    if (this->read_temp_c_(RAM_TOBJ2_, &value_c)) {
+      this->object2_sensor_->publish_state(value_c);
+    } else {
       ESP_LOGW(TAG, "Failed reading Tobj2 (0x%02X)", RAM_TOBJ2_);
+      success = false;
+    }
+  }
+
+  if (success) {
+    this->status_clear_warning();
+  } else {
+    this->status_set_warning();
   }
 }
 
-bool MLX90614Component::read_temp_c_(uint8_t ram_addr, float* out_c) {
+bool MLX90614Component::read_temp_c_(uint8_t ram_addr, float *out_c) {
   uint16_t word = 0;
   if (!this->read_word_with_pec_(ram_addr, &word))
     return false;
 
-  // Datasheet notes MSB may be error flag for linearized temps.
+  // The most-significant bit is an error flag for linearized temperatures.
   if (word & 0x8000) {
     ESP_LOGW(TAG, "Error flag set for RAM 0x%02X: 0x%04X", ram_addr, word);
     return false;
   }
 
-  // 0.02 K/LSB, then °C = K - 273.15
+  // 0.02 K/LSB, then °C = K - 273.15.
   const float temp_k = static_cast<float>(word) * 0.02f;
   *out_c = temp_k - 273.15f;
   return true;
 }
 
-bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t* out_word) {
-  // SMBus Read Word: low, high, PEC
+bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t *out_word) {
+  // SMBus Read Word: low, high, PEC.
   uint8_t data[3]{0, 0, 0};
-
-  // ESPHome I2CDevice usually supports read_bytes(reg, buf, len).
-  // If your build errors here, replace with:
-  //   return this->write_read(&command, 1, data, 3) && ...pec check...
   if (!this->read_bytes(command, data, 3)) {
     ESP_LOGW(TAG, "I2C read failed for cmd 0x%02X", command);
     return false;
@@ -86,14 +98,14 @@ bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t* out_word)
   const uint8_t high = data[1];
   const uint8_t pec = data[2];
 
-  // PEC covers: (addr<<1|W), command, (addr<<1|R), low, high
-  const uint8_t addr_w = (slave_address_ << 1) | 0;
-  const uint8_t addr_r = (slave_address_ << 1) | 1;
-  const uint8_t msg[] = {addr_w, command, addr_r, low, high};
-  const uint8_t calc = this->crc8_smbus_(msg, sizeof(msg));
+  // PEC covers: (addr<<1|W), command, (addr<<1|R), low, high.
+  const uint8_t addr_w = (this->slave_address_ << 1) | 0;
+  const uint8_t addr_r = (this->slave_address_ << 1) | 1;
+  const uint8_t message[] = {addr_w, command, addr_r, low, high};
+  const uint8_t calculated = this->crc8_smbus_(message, sizeof(message));
 
-  if (calc != pec) {
-    ESP_LOGW(TAG, "PEC mismatch cmd 0x%02X: got 0x%02X expected 0x%02X", command, pec, calc);
+  if (calculated != pec) {
+    ESP_LOGW(TAG, "PEC mismatch cmd 0x%02X: got 0x%02X expected 0x%02X", command, pec, calculated);
     return false;
   }
 
@@ -101,8 +113,8 @@ bool MLX90614Component::read_word_with_pec_(uint8_t command, uint16_t* out_word)
   return true;
 }
 
-uint8_t MLX90614Component::crc8_smbus_(const uint8_t* data, size_t len) const {
-  // SMBus PEC: CRC-8 poly 0x07, MSB-first.
+uint8_t MLX90614Component::crc8_smbus_(const uint8_t *data, size_t len) const {
+  // SMBus PEC: CRC-8 polynomial 0x07, most-significant bit first.
   uint8_t crc = 0x00;
   for (size_t i = 0; i < len; i++) {
     crc ^= data[i];

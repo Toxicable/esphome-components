@@ -40,10 +40,14 @@ jobs:
             config: components/drv8243/test_config.yaml
           - name: esc-higher
             config: components/esc_higher/test_config.yaml
+          - name: lps25hb
+            config: components/lps25hb/test_config.yaml
           - name: mcf8316d
             config: components/mcf8316d/test_config.yaml
           - name: mcf8329a
             config: components/mcf8329a/test_config.yaml
+          - name: mlx90614
+            config: components/mlx90614/test_config.yaml
           - name: programmable-load
             config: components/programmable_load/test_config.yaml
           - name: programmable-load-invalid-hardware-voltage

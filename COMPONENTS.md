@@ -23,22 +23,27 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `bq25798` | legacy | Pool-cleaner configuration | Freeze feature development; migrate the consumer to `bq25756`, then remove this monolithic driver. |
 | `bq76922` | experimental | No deployed configuration or compile fixture found | Require an owner, real board YAML, and tests before promotion; otherwise retire instead of maintaining parallel BQ769x2 implementations. |
 | `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
-| `bq769x0` | candidate-removal | No current consumer found | Confirm external use before removal. |
 | `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
 | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
 | `esc_higher` | active | ESC Higher board and boat configuration | Maintain as the board-facing ESC integration. |
-| `fdc1004` | candidate-removal | No current consumer found | Confirm external use before removal. |
 | `husb238` | active | Programmable-load configurations | Maintain as the USB-PD sink integration. |
 | `l04xmtw` | active | Pool-cleaner configuration | Maintain while the current sensor hardware remains in use. |
-| `lps25hb` | experimental | Present in current hardware work, but no deployed YAML consumer was found | Keep lightweight; promote when a real configuration is committed. |
+| `lps25hb` | experimental | Present in current RoomSensor hardware work, but no deployed YAML consumer was found | Keep lightweight and compile-covered; promote when a real configuration is committed. |
 | `makita_xgt` | active | Project and hardware references | Maintain while the battery-interface project remains current. |
 | `mcf8316d` | active | ESC Low hardware | Public MCF8316D integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
 | `mcf8329a` | active | Boat and pool-cleaner configurations | Public MCF8329A integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
 | `mcf83xx_common` | internal | Shared by active MCF8316D and MCF8329A components | Keep limited to the register-bus contract, family framing, read-modify-write and pulse mechanics. |
 | `mcp4726` | active | Programmable-load configuration | Maintain as the DAC integration used by the load controller. |
-| `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not yet accounted for in the upstream migration | Migrate the required behavior upstream or consciously drop it, then remove the local shadow. |
+| `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not available in the upstream component | Keep compile-covered and explicitly allowlisted only when `object2` is required; otherwise use upstream ESPHome. |
 | `programmable_load` | active | Programmable-load board/project | Typed orchestrator with exclusive manual/procedure ownership, hard hardware limits, aggregate faults and explicit calibration diagnostics/actions. |
-| `web_dial` | candidate-removal | No current consumer found | Confirm external use before removal. |
+
+## Removed components
+
+The following packages were removed in July 2026 after code searches found no consumers on the default branches of `esphome-components` or `toxic-boards`. Git history remains the source for recovery if an unindexed configuration is later found.
+
+- `bq769x0` — superseded by the actively maintained BQ76952 path.
+- `fdc1004` — no current firmware or board consumer found.
+- `web_dial` — no current firmware or board consumer found.
 
 ## Removal checklist
 
@@ -49,6 +54,7 @@ A component may move from `candidate-removal` to deletion only after all of the 
 3. Check whether the component contains behavior not available in the proposed replacement.
 4. Document any required consumer migration in the removal pull request.
 5. Remove or update examples, test configurations, documentation, and external-component allowlists at the same time.
+6. Record the removal and recovery rationale above instead of leaving a stale inventory row.
 
 Repository code search is evidence, not proof, that a component is unused.
 

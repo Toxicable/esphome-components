@@ -4,6 +4,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
+python3 tools/check_component_inventory.py
+
 python3 tools/check_core_purity.py \
   components/component_common \
   components/bq25756 \
