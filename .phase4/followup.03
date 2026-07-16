@@ -1,0 +1,157 @@
+-- `status.h`: lifecycle states and a generic typed fault snapshot for stateful components.
++- `status.h`: a small generic connection-state enum for components with recoverable transports.
+ 
+ Keep this package small and policy-free. Chip addresses, reset values, scaling, faults, and configuration defaults remain in the owning component or chip family.
+diff --git a/components/component_common/status.h b/components/component_common/status.h
+index b4e397e..720cfae 100644
+--- a/components/component_common/status.h
++++ b/components/component_common/status.h
+@@ -4,32 +4,26 @@
+ 
+ namespace component_common {
+ 
+-enum class LifecycleState : uint8_t {
++enum class ConnectionState : uint8_t {
+   DISCONNECTED = 0,
+-  CONFIGURING,
+-  READY,
++  CONNECTING,
++  CONNECTED,
+   FAILED,
+ };
+ 
+-inline const char *lifecycle_state_to_string(LifecycleState state) {
++inline const char *connection_state_to_string(ConnectionState state) {
+   switch (state) {
+-    case LifecycleState::DISCONNECTED:
++    case ConnectionState::DISCONNECTED:
+       return "disconnected";
+-    case LifecycleState::CONFIGURING:
+-      return "configuring";
+-    case LifecycleState::READY:
+-      return "ready";
+-    case LifecycleState::FAILED:
++    case ConnectionState::CONNECTING:
++      return "connecting";
++    case ConnectionState::CONNECTED:
++      return "connected";
++    case ConnectionState::FAILED:
+       return "failed";
+     default:
+       return "unknown";
+   }
+ }
+ 
+-template<typename PrimaryFault, typename Flags = uint32_t> struct FaultSnapshot {
+-  PrimaryFault primary{};
+-  Flags active_flags{};
+-  Flags latched_flags{};
+-};
+-
+ }  // namespace component_common
+diff --git a/tests/bq76952_status_test.cpp b/tests/bq76952_status_test.cpp
+index a3546f5..9a133b8 100644
+--- a/tests/bq76952_status_test.cpp
++++ b/tests/bq76952_status_test.cpp
+@@ -10,10 +10,13 @@ namespace {
+ 
+ namespace hw = bq76952_core::registers;
+ 
+-void test_lifecycle_and_operating_state() {
+-  assert(component_common::lifecycle_state_to_string(
+-             component_common::LifecycleState::DISCONNECTED) ==
++void test_connection_and_operating_state() {
++  assert(component_common::connection_state_to_string(
++             component_common::ConnectionState::DISCONNECTED) ==
+          std::string_view("disconnected"));
++  assert(component_common::connection_state_to_string(
++             component_common::ConnectionState::CONNECTED) ==
++         std::string_view("connected"));
+   assert(bq76952_core::decode_operating_state(0, 0) ==
+          bq76952_core::OperatingState::NORMAL);
+   assert(bq76952_core::decode_operating_state(
+@@ -27,44 +30,34 @@ void test_lifecycle_and_operating_state() {
+          std::string_view("sleep"));
+ }
+ 
+-void test_fault_decode_and_priority() {
++void test_fault_decode_and_formatting() {
+   const uint8_t safety_a = static_cast<uint8_t>(
+       hw::bits::protection_a::CUV | hw::bits::protection_a::SCD);
+   const uint8_t safety_b = hw::bits::protection_b::ANY_TEMPERATURE;
+-  const uint32_t flags = bq76952_core::decode_fault_flags(
++  const uint32_t faults = bq76952_core::decode_faults(
+       hw::bits::battery_status::PERMANENT_FAILURE, safety_a, safety_b, 0);
+ 
+-  assert((flags & bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0);
+-  assert((flags & bq76952_core::FAULT_DISCHARGE_SHORT_CIRCUIT) != 0);
+-  assert((flags & bq76952_core::FAULT_TEMPERATURE) != 0);
+-  assert((flags & bq76952_core::FAULT_PERMANENT_FAILURE) != 0);
++  assert((faults & bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0);
++  assert((faults & bq76952_core::FAULT_DISCHARGE_SHORT_CIRCUIT) != 0);
++  assert((faults & bq76952_core::FAULT_TEMPERATURE) != 0);
++  assert((faults & bq76952_core::FAULT_PERMANENT_FAILURE) != 0);
+ 
+-  const auto snapshot = bq76952_core::make_fault_snapshot(flags);
+-  assert(snapshot.primary == bq76952_core::Fault::PERMANENT_FAILURE);
+-  assert(snapshot.active_flags == flags);
+-  assert(snapshot.latched_flags == 0);
+-  assert(bq76952_core::fault_to_string(snapshot.primary) ==
+-         std::string_view("permanent_failure"));
+-}
+-
+-void test_fault_flag_formatting() {
+-  char buffer[128]{};
+-  const uint32_t flags = bq76952_core::FAULT_CELL_OVERVOLTAGE |
+-                         bq76952_core::FAULT_TEMPERATURE;
++  char buffer[256]{};
+   const size_t length =
+-      bq76952_core::format_fault_flags(flags, buffer, sizeof(buffer));
+-  assert(length == std::strlen("cell_overvoltage,temperature"));
+-  assert(std::string_view(buffer) == "cell_overvoltage,temperature");
++      bq76952_core::format_faults(faults, buffer, sizeof(buffer));
++  constexpr std::string_view expected =
++      "permanent_failure,discharge_short_circuit,cell_undervoltage,temperature";
++  assert(length == expected.size());
++  assert(std::string_view(buffer) == expected);
+ 
+-  bq76952_core::format_fault_flags(0, buffer, sizeof(buffer));
++  bq76952_core::format_faults(0, buffer, sizeof(buffer));
+   assert(std::string_view(buffer) == "none");
+ }
+ 
+ }  // namespace
+ 
+ int main() {
+-  test_lifecycle_and_operating_state();
+-  test_fault_decode_and_priority();
+-  test_fault_flag_formatting();
++  test_connection_and_operating_state();
++  test_fault_decode_and_formatting();
+   return 0;
+ }
+diff --git a/tests/component_common_test.cpp b/tests/component_common_test.cpp
+index f2150de..3896e59 100644
+--- a/tests/component_common_test.cpp
++++ b/tests/component_common_test.cpp
+@@ -56,14 +56,12 @@ void test_charger_interface() {
+ }
+ 
+ void test_status_contract() {
+-  using Snapshot = component_common::FaultSnapshot<uint8_t>;
+-  const Snapshot snapshot{2, 0x03, 0x01};
+-  assert(snapshot.primary == 2);
+-  assert(snapshot.active_flags == 0x03);
+-  assert(snapshot.latched_flags == 0x01);
+-  assert(component_common::lifecycle_state_to_string(
+-             component_common::LifecycleState::READY) ==
+-         std::string_view("ready"));
++  assert(component_common::connection_state_to_string(
++             component_common::ConnectionState::CONNECTING) ==
++         std::string_view("connecting"));
++  assert(component_common::connection_state_to_string(
++             component_common::ConnectionState::CONNECTED) ==
++         std::string_view("connected"));
+ }
+ 
+ void test_byte_order() {
