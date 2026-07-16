@@ -1,0 +1,234 @@
+index 5f944b7..a150b82 100644
+--- a/components/bq76952/bq76952_service.h
++++ b/components/bq76952/bq76952_service.h
+@@ -67,7 +67,7 @@ class BQ76952Service {
+   BQ76952Soc soc_;
+   BQ76952Config config_{};
+   bool config_set_{false};
+-  component_common::LifecycleState lifecycle_{component_common::LifecycleState::DISCONNECTED};
++  component_common::ConnectionState connection_state_{component_common::ConnectionState::DISCONNECTED};
+   bool online_{false};
+   bool configured_{false};
+   int32_t current_lsb_ua_{1000};
+diff --git a/components/bq76952/bq76952_status.cpp b/components/bq76952/bq76952_status.cpp
+index 66066c6..ee1129f 100644
+--- a/components/bq76952/bq76952_status.cpp
++++ b/components/bq76952/bq76952_status.cpp
+@@ -46,37 +46,19 @@ OperatingState decode_operating_state(uint16_t control_status, uint16_t battery_
+   return OperatingState::NORMAL;
+ }
+ 
+-uint32_t decode_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c) {
+-  uint32_t flags = FAULT_NONE;
+-  if ((safety_a & hw::bits::protection_a::CUV) != 0) flags |= FAULT_CELL_UNDERVOLTAGE;
+-  if ((safety_a & hw::bits::protection_a::COV) != 0) flags |= FAULT_CELL_OVERVOLTAGE;
+-  if ((safety_a & hw::bits::protection_a::OCC) != 0) flags |= FAULT_CHARGE_OVERCURRENT;
+-  if ((safety_a & hw::bits::protection_a::OCD1) != 0) flags |= FAULT_DISCHARGE_OVERCURRENT;
+-  if ((safety_a & hw::bits::protection_a::OCD2) != 0) flags |= FAULT_DISCHARGE_SEVERE_OVERCURRENT;
+-  if ((safety_a & hw::bits::protection_a::SCD) != 0) flags |= FAULT_DISCHARGE_SHORT_CIRCUIT;
+-  if ((safety_c & hw::bits::protection_c::OCD3) != 0) flags |= FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
+-  if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) flags |= FAULT_PRECHARGE_TIMEOUT;
+-  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) flags |= FAULT_TEMPERATURE;
+-  if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) flags |= FAULT_PERMANENT_FAILURE;
+-  return flags;
+-}
+-
+-Fault primary_fault(uint32_t active_flags) {
+-  if ((active_flags & FAULT_PERMANENT_FAILURE) != 0) return Fault::PERMANENT_FAILURE;
+-  if ((active_flags & FAULT_DISCHARGE_SHORT_CIRCUIT) != 0) return Fault::DISCHARGE_SHORT_CIRCUIT;
+-  if ((active_flags & FAULT_CELL_OVERVOLTAGE) != 0) return Fault::CELL_OVERVOLTAGE;
+-  if ((active_flags & FAULT_CELL_UNDERVOLTAGE) != 0) return Fault::CELL_UNDERVOLTAGE;
+-  if ((active_flags & FAULT_DISCHARGE_SEVERE_OVERCURRENT) != 0) return Fault::DISCHARGE_SEVERE_OVERCURRENT;
+-  if ((active_flags & FAULT_CHARGE_OVERCURRENT) != 0) return Fault::CHARGE_OVERCURRENT;
+-  if ((active_flags & FAULT_DISCHARGE_OVERCURRENT) != 0) return Fault::DISCHARGE_OVERCURRENT;
+-  if ((active_flags & FAULT_DISCHARGE_SUSTAINED_OVERCURRENT) != 0) return Fault::DISCHARGE_SUSTAINED_OVERCURRENT;
+-  if ((active_flags & FAULT_TEMPERATURE) != 0) return Fault::TEMPERATURE;
+-  if ((active_flags & FAULT_PRECHARGE_TIMEOUT) != 0) return Fault::PRECHARGE_TIMEOUT;
+-  return Fault::NONE;
+-}
+-
+-FaultSnapshot make_fault_snapshot(uint32_t active_flags, uint32_t latched_flags) {
+-  return {primary_fault(active_flags), active_flags, latched_flags};
++uint32_t decode_faults(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c) {
++  uint32_t faults = FAULT_NONE;
++  if ((safety_a & hw::bits::protection_a::CUV) != 0) faults |= FAULT_CELL_UNDERVOLTAGE;
++  if ((safety_a & hw::bits::protection_a::COV) != 0) faults |= FAULT_CELL_OVERVOLTAGE;
++  if ((safety_a & hw::bits::protection_a::OCC) != 0) faults |= FAULT_CHARGE_OVERCURRENT;
++  if ((safety_a & hw::bits::protection_a::OCD1) != 0) faults |= FAULT_DISCHARGE_OVERCURRENT;
++  if ((safety_a & hw::bits::protection_a::OCD2) != 0) faults |= FAULT_DISCHARGE_SEVERE_OVERCURRENT;
++  if ((safety_a & hw::bits::protection_a::SCD) != 0) faults |= FAULT_DISCHARGE_SHORT_CIRCUIT;
++  if ((safety_c & hw::bits::protection_c::OCD3) != 0) faults |= FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
++  if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) faults |= FAULT_PRECHARGE_TIMEOUT;
++  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) faults |= FAULT_TEMPERATURE;
++  if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) faults |= FAULT_PERMANENT_FAILURE;
++  return faults;
+ }
+ 
+ const char *operating_state_to_string(OperatingState state) {
+@@ -96,34 +78,7 @@ const char *operating_state_to_string(OperatingState state) {
+   }
+ }
+ 
+-const char *fault_to_string(Fault fault) {
+-  switch (fault) {
+-    case Fault::PERMANENT_FAILURE:
+-      return "permanent_failure";
+-    case Fault::DISCHARGE_SHORT_CIRCUIT:
+-      return "discharge_short_circuit";
+-    case Fault::CELL_OVERVOLTAGE:
+-      return "cell_overvoltage";
+-    case Fault::CELL_UNDERVOLTAGE:
+-      return "cell_undervoltage";
+-    case Fault::DISCHARGE_SEVERE_OVERCURRENT:
+-      return "discharge_severe_overcurrent";
+-    case Fault::CHARGE_OVERCURRENT:
+-      return "charge_overcurrent";
+-    case Fault::DISCHARGE_OVERCURRENT:
+-      return "discharge_overcurrent";
+-    case Fault::DISCHARGE_SUSTAINED_OVERCURRENT:
+-      return "discharge_sustained_overcurrent";
+-    case Fault::TEMPERATURE:
+-      return "temperature";
+-    case Fault::PRECHARGE_TIMEOUT:
+-      return "precharge_timeout";
+-    default:
+-      return "none";
+-  }
+-}
+-
+-size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_size) {
++size_t format_faults(uint32_t active_faults, char *buffer, size_t buffer_size) {
+   if (buffer == nullptr || buffer_size == 0) {
+     return 0;
+   }
+@@ -133,19 +88,19 @@ size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_siz
+     uint32_t flag;
+     const char *name;
+   } entries[] = {
+-      {FAULT_CELL_UNDERVOLTAGE, "cell_undervoltage"},
++      {FAULT_PERMANENT_FAILURE, "permanent_failure"},
++      {FAULT_DISCHARGE_SHORT_CIRCUIT, "discharge_short_circuit"},
+       {FAULT_CELL_OVERVOLTAGE, "cell_overvoltage"},
++      {FAULT_CELL_UNDERVOLTAGE, "cell_undervoltage"},
++      {FAULT_DISCHARGE_SEVERE_OVERCURRENT, "discharge_severe_overcurrent"},
+       {FAULT_CHARGE_OVERCURRENT, "charge_overcurrent"},
+       {FAULT_DISCHARGE_OVERCURRENT, "discharge_overcurrent"},
+-      {FAULT_DISCHARGE_SEVERE_OVERCURRENT, "discharge_severe_overcurrent"},
+       {FAULT_DISCHARGE_SUSTAINED_OVERCURRENT, "discharge_sustained_overcurrent"},
+-      {FAULT_DISCHARGE_SHORT_CIRCUIT, "discharge_short_circuit"},
+       {FAULT_TEMPERATURE, "temperature"},
+       {FAULT_PRECHARGE_TIMEOUT, "precharge_timeout"},
+-      {FAULT_PERMANENT_FAILURE, "permanent_failure"},
+   };
+   for (const auto &entry : entries) {
+-    if ((active_flags & entry.flag) != 0 && !append_text(buffer, buffer_size, length, entry.name)) {
++    if ((active_faults & entry.flag) != 0 && !append_text(buffer, buffer_size, length, entry.name)) {
+       return length;
+     }
+   }
+diff --git a/components/bq76952/bq76952_status.h b/components/bq76952/bq76952_status.h
+index 8d1898b..e2be47f 100644
+--- a/components/bq76952/bq76952_status.h
++++ b/components/bq76952/bq76952_status.h
+@@ -18,20 +18,6 @@ enum class OperatingState : uint8_t {
+   SHUTDOWN_PENDING,
+ };
+ 
+-enum class Fault : uint8_t {
+-  NONE = 0,
+-  PERMANENT_FAILURE,
+-  DISCHARGE_SHORT_CIRCUIT,
+-  CELL_OVERVOLTAGE,
+-  CELL_UNDERVOLTAGE,
+-  DISCHARGE_SEVERE_OVERCURRENT,
+-  CHARGE_OVERCURRENT,
+-  DISCHARGE_OVERCURRENT,
+-  DISCHARGE_SUSTAINED_OVERCURRENT,
+-  TEMPERATURE,
+-  PRECHARGE_TIMEOUT,
+-};
+-
+ enum FaultFlags : uint32_t {
+   FAULT_NONE = 0,
+   FAULT_CELL_UNDERVOLTAGE = 1U << 0,
+@@ -46,12 +32,11 @@ enum FaultFlags : uint32_t {
+   FAULT_PERMANENT_FAILURE = 1U << 9,
+ };
+ 
+-using FaultSnapshot = component_common::FaultSnapshot<Fault, uint32_t>;
+-
+ struct Snapshot {
+-  component_common::LifecycleState lifecycle{component_common::LifecycleState::DISCONNECTED};
++  component_common::ConnectionState connection_state{component_common::ConnectionState::DISCONNECTED};
+   OperatingState operating_state{OperatingState::UNKNOWN};
+-  FaultSnapshot faults{};
++  uint32_t active_faults{FAULT_NONE};
++  bool configuration_ready{false};
+   bool output_enabled{false};
+ 
+   std::array<int16_t, 16> cell_voltage_mv{};
+@@ -67,11 +52,8 @@ struct Snapshot {
+ };
+ 
+ OperatingState decode_operating_state(uint16_t control_status, uint16_t battery_status);
+-uint32_t decode_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c);
+-Fault primary_fault(uint32_t active_flags);
+-FaultSnapshot make_fault_snapshot(uint32_t active_flags, uint32_t latched_flags = 0);
++uint32_t decode_faults(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c);
+ const char *operating_state_to_string(OperatingState state);
+-const char *fault_to_string(Fault fault);
+-size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_size);
++size_t format_faults(uint32_t active_faults, char *buffer, size_t buffer_size);
+ 
+ }  // namespace bq76952_core
+diff --git a/components/bq76952/test_config.yaml b/components/bq76952/test_config.yaml
+index 1bd62e1..9e18fab 100644
+--- a/components/bq76952/test_config.yaml
++++ b/components/bq76952/test_config.yaml
+@@ -103,14 +103,12 @@ bq76952:
+     empty_cell_voltage_mv: 3000
+     full_cell_voltage_mv: 4200
+ 
+-  lifecycle:
+-    name: "BMS Lifecycle"
++  connection_state:
++    name: "BMS Connection State"
+   state:
+     name: "BMS State"
+   fault:
+     name: "BMS Fault"
+-  fault_flags:
+-    name: "BMS Fault Flags"
+   pack_voltage:
+     name: "BMS Pack Voltage"
+   current:
+diff --git a/components/component_common/AGENTS_KNOWLEDGE.md b/components/component_common/AGENTS_KNOWLEDGE.md
+index 4d2748c..8ac06d3 100644
+--- a/components/component_common/AGENTS_KNOWLEDGE.md
++++ b/components/component_common/AGENTS_KNOWLEDGE.md
+@@ -6,4 +6,4 @@
+ - Helpers must remain C++17, host-independent, allocation-free, and free of ESPHome headers, logging, entities, chip policy, and register addresses.
+ - Host-independent consumers use sibling-relative includes so the same core builds from the repository and from ESPHome's generated source tree.
+ - `charger.h` is the generic machine-to-machine charger boundary. Keep transport, chip faults, entity types, and product policy in the implementing component.
+-- `status.h` provides only generic lifecycle and fault-snapshot structure; component-specific operating states, fault enums, priorities, and raw status stay with the component.
++- `status.h` provides only a generic connection-state enum; component-specific operating states, fault bitsets, formatting, and raw status stay with the component.
+diff --git a/components/component_common/CONTEXT_INDEX.md b/components/component_common/CONTEXT_INDEX.md
+index a5f46e9..ae42d38 100644
+--- a/components/component_common/CONTEXT_INDEX.md
++++ b/components/component_common/CONTEXT_INDEX.md
+@@ -13,6 +13,6 @@
+ - `bit_field.h`: generic contiguous field and masked-bit operations.
+ - `byte_order.h`: unsigned fixed-width endian load/store.
+ - `charger.h`: typed charger capabilities, snapshots, states, and enable command.
+-- `status.h`: generic lifecycle and typed fault-snapshot contract.
++- `status.h`: generic connection-state contract for recoverable transports.
+ - `README.md`: ESPHome loading, allowlist, and include-path contract.
+ - `tests/component_common_test.cpp`: host-side helper behaviour and compile-time checks.
+diff --git a/components/component_common/README.md b/components/component_common/README.md
+index 5845f18..bdd0367 100644
+--- a/components/component_common/README.md
++++ b/components/component_common/README.md
+@@ -30,6 +30,6 @@ That form resolves both in this source tree and after ESPHome copies the loaded
+ - `bit_field.h`: contiguous register-field encode/decode/replace and masked updates.
+ - `byte_order.h`: fixed-width unsigned little-endian and big-endian load/store.
+ - `charger.h`: typed charger capabilities, snapshots, and control boundary for component composition.
