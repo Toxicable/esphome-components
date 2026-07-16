@@ -1,0 +1,91 @@
++  calibration = valid_calibration();
++  core::Measurement measurement{};
++  measurement.voltage_valid = true;
++  measurement.voltage_v = 20.0f;
++  core::Limits limits{};
++  limits.maximum_current_a = 40.0f;
++  limits.maximum_power_w = 500.0f;
++
++  const float limit = core::effective_current_limit(measurement, limits,
++                                                    calibration);
++  assert(std::fabs(limit - 25.0f) < 0.0001f);
++
++  measurement.voltage_valid = false;
++  assert(core::effective_current_limit(measurement, limits, calibration) ==
++         0.0f);
++}
++
++void test_multi_fault_detection_and_clear_conditions() {
++  core::Measurement measurement{};
++  measurement.current_valid = true;
++  measurement.voltage_valid = true;
++  measurement.temperature_valid = true;
++  measurement.current_a = 12.0f;
++  measurement.voltage_v = 80.0f;
++  measurement.power_w = 960.0f;
++  measurement.maximum_temperature_c = 110.0f;
++
++  core::HardwareLimits hardware{};
++  hardware.maximum_voltage_v = 75.0f;
++  core::Limits limits{};
++  limits.maximum_current_a = 10.0f;
++  limits.minimum_voltage_v = 10.0f;
++  limits.maximum_voltage_v = 60.0f;
++  limits.maximum_power_w = 500.0f;
++  limits.maximum_temperature_c = 100.0f;
++
++  const core::FaultFlags faults = core::detect_safety_faults(
++      measurement, hardware, limits, 0.01f, false, true);
++  assert(core::has_fault(faults, core::Fault::HARDWARE_OVERVOLTAGE));
++  assert(core::has_fault(faults, core::Fault::INPUT_OVERVOLTAGE));
++  assert(core::has_fault(faults, core::Fault::OVERCURRENT));
++  assert(core::has_fault(faults, core::Fault::OVERPOWER));
++  assert(core::has_fault(faults, core::Fault::OVERTEMPERATURE));
++  assert(core::has_fault(faults, core::Fault::CHARGER_CONTROL_ERROR));
++  assert(!core::has_fault(faults, core::Fault::INPUT_UNDERVOLTAGE));
++
++  assert(core::fault_conditions_active(
++      faults, measurement, hardware, limits, 0.01f, false, true, true, true,
++      false));
++
++  measurement.current_a = 0.0f;
++  measurement.voltage_v = 50.0f;
++  measurement.power_w = 0.0f;
++  measurement.maximum_temperature_c = 25.0f;
++  assert(!core::fault_conditions_active(
++      faults, measurement, hardware, limits, 0.01f, false, false, true, true,
++      false));
++
++  const core::FaultFlags unavailable =
++      core::fault_flag(core::Fault::CURRENT_MEASUREMENT_UNAVAILABLE) |
++      core::fault_flag(core::Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE);
++  measurement.current_valid = false;
++  measurement.voltage_valid = false;
++  assert(core::fault_conditions_active(
++      unavailable, measurement, hardware, limits, 0.01f, false, false, false,
++      false, false));
++}
++
++}  // namespace
++
++int main() {
++  test_operation_lock();
++  test_fault_formatting();
++  test_hardware_voltage_normalization();
++  test_calibration_and_current_limit();
++  test_multi_fault_detection_and_clear_conditions();
++  return 0;
++}
+diff --git a/tools/check_core_purity.py b/tools/check_core_purity.py
+index 0c83f08..3781fdc 100644
+--- a/tools/check_core_purity.py
++++ b/tools/check_core_purity.py
+@@ -8,7 +8,7 @@ import re
+ import sys
+ 
+ SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp"}
+-CORE_FILE_RE = re.compile(r".*_(?:bus|protocol|service|status)\.(?:c|cc|cpp|cxx|h|hh|hpp)$")
++CORE_FILE_RE = re.compile(r"(?:.*_(?:bus|protocol|service|status|core)|calibration)\.(?:c|cc|cpp|cxx|h|hh|hpp)$")
+ INCLUDE_RE = re.compile(r'^\s*#\s*include\s*[<"]([^>"]+)[>"]')
+ FORBIDDEN_TOKENS = ("ESP_LOG", "esphome::")
+ 
