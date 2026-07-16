@@ -1,6 +1,9 @@
-name: Publish Phase 4
+name: Publish BQ status follow-up
 
 on:
+  push:
+    branches:
+      - agent/phase4-publisher
   pull_request:
 
 permissions:
@@ -8,7 +11,7 @@ permissions:
 
 jobs:
   publish:
-    if: github.head_ref == 'agent/phase4-publisher'
+    if: github.head_ref == 'agent/phase4-publisher' || github.ref_name == 'agent/phase4-publisher'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout publisher payload
@@ -16,37 +19,28 @@ jobs:
         with:
           path: payload
 
-      - name: Checkout Phase 3 base
+      - name: Checkout BQ consistency branch
         uses: actions/checkout@v4
         with:
-          ref: agent/typed-charger-capability
+          ref: agent/bq-consistency
           path: target
           fetch-depth: 0
 
-      - name: Reconstruct BQ consistency patch
+      - name: Reconstruct status follow-up patch
         shell: bash
         run: |
           set -euo pipefail
-          cat payload/.phase4/plain.0{0..8} > phase4.raw.patch
-          python3 - <<'PY'
-          from pathlib import Path
-          raw = Path('phase4.raw.patch').read_bytes()
-          assert len(raw) == 156405, len(raw)
-          start = 55251
-          duplicate_length = 17447
-          fixed = raw[:start] + raw[start + duplicate_length:]
-          Path('phase4.patch').write_bytes(fixed)
-          PY
-          printf '%s  %s\n' '19fe6ebf8067056adc6ab283e00e4ea57955f31434f86c3310528872c874ad7b' phase4.patch | sha256sum --check
-          test "$(wc -c < phase4.patch)" -eq 138958
+          cat payload/.phase4/followup.0{0..3} > status-followup.patch
+          printf '%s  %s\n' '35816a37b60c0666f8da6cf2b20fd0a759fa98ac9a2c291e8e03f58cafb8a8f9' status-followup.patch | sha256sum --check
+          test "$(wc -c < status-followup.patch)" -eq 42056
 
-      - name: Apply BQ consistency patch
+      - name: Apply status follow-up patch
         shell: bash
         run: |
           set -euo pipefail
           cd target
-          git apply --check ../phase4.patch
-          git apply --index ../phase4.patch
+          git apply --check ../status-followup.patch
+          git apply --index ../status-followup.patch
           git diff --cached --check
 
       - name: Check Python modules
@@ -61,24 +55,22 @@ jobs:
         run: |
           set -o pipefail
           cd target
-          bash ./check_host.bash 2>&1 | tee ../phase4-host.log
+          bash ./check_host.bash 2>&1 | tee ../status-followup-host.log
 
-      - name: Upload host failure diagnostics
+      - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: phase4-host-failure
-          path: phase4-host.log
+          name: bq-status-followup-failure
+          path: status-followup-host.log
           if-no-files-found: ignore
 
-      - name: Publish BQ consistency branch
+      - name: Publish follow-up
         shell: bash
         run: |
           set -euo pipefail
           cd target
-          git restore --source=HEAD --staged --worktree .github/workflows/compile.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git checkout -b agent/bq-consistency
-          git commit -m 'Standardize BQ lifecycle and fault boundaries'
+          git commit -m 'Make BQ status ESPHome-facing'
           git push origin HEAD:refs/heads/agent/bq-consistency
