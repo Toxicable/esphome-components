@@ -1,0 +1,220 @@
+his->write(frame.data(), frame.size());
+   if (err != i2c::ERROR_OK) {
+     ESP_LOGW(
+       TAG, "write_reg32(0x%04X, 0x%08X) failed: i2c error %d", offset, value, static_cast<int>(err)
+diff --git a/components/mcf8316d/mcf8316d_bus.h b/components/mcf8316d/mcf8316d_bus.h
+index dd8186a..ccb1cad 100644
+--- a/components/mcf8316d/mcf8316d_bus.h
++++ b/components/mcf8316d/mcf8316d_bus.h
+@@ -1,17 +1,9 @@
+ #pragma once
+ 
+-#include <cstdint>
++#include "../mcf83xx_common/register_bus.h"
+ 
+ namespace mcf8316d_core {
+ 
+-class RegisterBus {
+- public:
+-  virtual ~RegisterBus() = default;
+-
+-  virtual bool read_register32(uint16_t offset, uint32_t *value) = 0;
+-  virtual bool read_register16(uint16_t offset, uint16_t *value) = 0;
+-  virtual bool write_register32(uint16_t offset, uint32_t value) = 0;
+-  virtual void delay_microseconds(uint32_t delay_us) = 0;
+-};
++using RegisterBus = mcf83xx_common::RegisterBus;
+ 
+ }  // namespace mcf8316d_core
+diff --git a/components/mcf8316d/mcf8316d_protocol.cpp b/components/mcf8316d/mcf8316d_protocol.cpp
+index ff0b5aa..6d63a50 100644
+--- a/components/mcf8316d/mcf8316d_protocol.cpp
++++ b/components/mcf8316d/mcf8316d_protocol.cpp
+@@ -2,10 +2,6 @@
+ 
+ namespace mcf8316d_core {
+ 
+-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit) {
+-  const uint32_t dlen = is_32bit ? 0x1u : 0x0u;
+-  return ((is_read ? 1u : 0u) << 23) | (dlen << 20) | (static_cast<uint32_t>(offset) & 0x0FFFu);
+-}
+ 
+ const char *algorithm_state_to_string(uint16_t state) {
+   switch (state) {
+diff --git a/components/mcf8316d/mcf8316d_protocol.h b/components/mcf8316d/mcf8316d_protocol.h
+index 81b48a2..3b0fc40 100644
+--- a/components/mcf8316d/mcf8316d_protocol.h
++++ b/components/mcf8316d/mcf8316d_protocol.h
+@@ -233,7 +233,6 @@ enum class DirectionInputMode : uint8_t {
+   CCW = 2,
+ };
+ 
+-uint32_t build_control_word(bool is_read, uint16_t offset, bool is_32bit);
+ const char *algorithm_state_to_string(uint16_t state);
+ const char *brake_input_to_string(uint32_t brake_input_value);
+ const char *direction_input_to_string(uint32_t direction_input_value);
+diff --git a/components/mcf8316d/mcf8316d_service.cpp b/components/mcf8316d/mcf8316d_service.cpp
+index 52d633e..2b569fa 100644
+--- a/components/mcf8316d/mcf8316d_service.cpp
++++ b/components/mcf8316d/mcf8316d_service.cpp
+@@ -7,27 +7,19 @@ namespace mcf8316d_core {
+ using namespace regs;
+ 
+ bool MCF8316DService::read_reg32(uint16_t offset, uint32_t &value) const {
+-  return this->bus_ != nullptr && this->bus_->read_register32(offset, &value);
++  return this->registers_.read32(offset, value);
+ }
+ 
+ bool MCF8316DService::read_reg16(uint16_t offset, uint16_t &value) const {
+-  return this->bus_ != nullptr && this->bus_->read_register16(offset, &value);
++  return this->registers_.read16(offset, value);
+ }
+ 
+ bool MCF8316DService::write_reg32(uint16_t offset, uint32_t value) const {
+-  return this->bus_ != nullptr && this->bus_->write_register32(offset, value);
++  return this->registers_.write32(offset, value);
+ }
+ 
+ bool MCF8316DService::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const {
+-  uint32_t current = 0;
+-  if (!this->read_reg32(offset, current)) {
+-    return false;
+-  }
+-  const uint32_t next = (current & ~mask) | (value & mask);
+-  if (next == current) {
+-    return true;
+-  }
+-  return this->write_reg32(offset, next);
++  return this->registers_.update_bits32(offset, mask, value);
+ }
+ 
+ bool MCF8316DService::set_brake_input(bool brake_on) const {
+@@ -84,22 +76,11 @@ bool MCF8316DService::write_speed_command_percent(float speed_percent) const {
+ }
+ 
+ bool MCF8316DService::pulse_clear_faults() const {
+-  if (!this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, ALGO_CTRL1_CLR_FLT_MASK)) {
+-    return false;
+-  }
+-  this->bus_->delay_microseconds(2000u);
+-  const bool ok = this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 0u);
+-  this->bus_->delay_microseconds(2000u);
+-  return ok;
++  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 2000U, 2000U);
+ }
+ 
+ bool MCF8316DService::pulse_watchdog_tickle() const {
+-  if (!this->update_bits32(
+-        REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, ALGO_CTRL1_WATCHDOG_TICKLE_MASK
+-      )) {
+-    return false;
+-  }
+-  return this->update_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK, 0u);
++  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK);
+ }
+ 
+ }  // namespace mcf8316d_core
+diff --git a/components/mcf8316d/mcf8316d_service.h b/components/mcf8316d/mcf8316d_service.h
+index 8421cc2..378d695 100644
+--- a/components/mcf8316d/mcf8316d_service.h
++++ b/components/mcf8316d/mcf8316d_service.h
+@@ -3,6 +3,7 @@
+ #include <cstdint>
+ #include <string>
+ 
++#include "../mcf83xx_common/register_access.h"
+ #include "mcf8316d_bus.h"
+ #include "mcf8316d_protocol.h"
+ 
+@@ -10,7 +11,7 @@ namespace mcf8316d_core {
+ 
+ class MCF8316DService {
+  public:
+-  explicit MCF8316DService(RegisterBus *bus) : bus_(bus) {}
++  explicit MCF8316DService(RegisterBus *bus) : registers_(bus) {}
+ 
+   bool read_reg32(uint16_t offset, uint32_t &value) const;
+   bool read_reg16(uint16_t offset, uint16_t &value) const;
+@@ -26,7 +27,7 @@ class MCF8316DService {
+   bool pulse_watchdog_tickle() const;
+ 
+  private:
+-  RegisterBus *bus_{nullptr};
++  mcf83xx_common::RegisterAccess registers_;
+ };
+ 
+ }  // namespace mcf8316d_core
+diff --git a/components/mcf8316d/test_config.yaml b/components/mcf8316d/test_config.yaml
+new file mode 100644
+index 0000000..3dbfebe
+--- /dev/null
++++ b/components/mcf8316d/test_config.yaml
+@@ -0,0 +1,64 @@
++esphome:
++  name: mcf8316d-test
++  min_version: 2026.5.3
++
++esp32:
++  board: esp32-s3-devkitc-1
++  framework:
++    type: esp-idf
++
++external_components:
++  - source:
++      type: local
++      path: ..
++    refresh: 0s
++    components: [ component_common, mcf83xx_common, mcf8316d ]
++
++i2c:
++  id: i2c_ext
++  sda: GPIO35
++  scl: GPIO36
++  scan: true
++  frequency: 50kHz
++
++mcf8316d:
++  id: mcf
++  address: 0x01
++  i2c_id: i2c_ext
++  update_interval: 250ms
++  inter_byte_delay_us: 100
++  auto_tickle_watchdog: false
++
++  brake:
++    name: Brake
++  direction:
++    name: Direction
++  speed_percent:
++    name: Speed
++  clear_faults:
++    name: Clear Faults
++  watchdog_tickle:
++    name: Watchdog Tickle
++  apply_startup_tune:
++    name: Apply Startup Tune
++  apply_hw_lock_report_only:
++    name: Apply Lock Report Only
++  run_startup_sweep:
++    name: Run Startup Sweep
++  run_scope_probe_test:
++    name: Run Scope Probe Test
++
++  fault_active:
++    name: Fault Active
++  sys_enable:
++    name: System Enable
++  vm_voltage:
++    name: VM Voltage
++  duty_cmd_percent:
++    name: Duty Command
++  volt_mag_percent:
++    name: Voltage Magnitude
++  fault_summary:
++    name: Fault Summary
++  algorithm_state:
++    name: Algorithm State
+diff --git a/components/mcf8329a/AGENTS_KNOWLEDGE.md b/components/mcf8329a/AGENTS_KNOWLEDGE.md
+index ec482eb..bc5c3ef 100644
+--- a/components/mcf8329a/AGENTS_KNOWLEDGE.md
++++ b/compo
