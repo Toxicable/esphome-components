@@ -1,0 +1,58 @@
+ frame.data() + 3U);
++  return frame;
++}
++
++inline uint16_t decode_read16(const uint8_t *data) {
++  return component_common::load_le<uint16_t>(data);
++}
++
++inline uint32_t decode_read32(const uint8_t *data) {
++  return component_common::load_le<uint32_t>(data);
++}
++
++}  // namespace mcf83xx_common
+diff --git a/components/mcf83xx_common/register_access.h b/components/mcf83xx_common/register_access.h
+new file mode 100644
+index 0000000..1d237f6
+--- /dev/null
++++ b/components/mcf83xx_common/register_access.h
+@@ -0,0 +1,64 @@
++#pragma once
++
++#include <cstdint>
++
++#include "../component_common/bit_field.h"
++#include "register_bus.h"
++
++namespace mcf83xx_common {
++
++class RegisterAccess {
++ public:
++  explicit RegisterAccess(RegisterBus *bus, uint32_t successful_write_delay_us = 0U)
++      : bus_(bus), successful_write_delay_us_(successful_write_delay_us) {}
++
++  bool available() const { return this->bus_ != nullptr; }
++
++  bool read32(uint16_t offset, uint32_t &value) const {
++    return this->bus_ != nullptr && this->bus_->read_register32(offset, &value);
++  }
++
++  bool read16(uint16_t offset, uint16_t &value) const {
++    return this->bus_ != nullptr && this->bus_->read_register16(offset, &value);
++  }
++
++  bool write32(uint16_t offset, uint32_t value) const {
++    if (this->bus_ == nullptr || !this->bus_->write_register32(offset, value)) {
++      return false;
++    }
++    this->delay(this->successful_write_delay_us_);
++    return true;
++  }
++
++  bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const {
++    uint32_t current = 0;
++    if (!this->read32(offset, current)) {
++      return false;
++    }
++    const uint32_t next = component_common::replace_masked(current, mask, value);
++    return next == curren
