@@ -1,0 +1,164 @@
+diff --git a/.github/workflows/compile.yml b/.github/workflows/compile.yml
+index bfbdc77..fe9488f 100644
+--- a/.github/workflows/compile.yml
++++ b/.github/workflows/compile.yml
+@@ -46,6 +46,8 @@ jobs:
+             config: components/mcf8329a/test_config.yaml
+           - name: programmable-load
+             config: components/programmable_load/test_config.yaml
++          - name: programmable-load-invalid-hardware-voltage
++            config: components/programmable_load/test_invalid_hardware_voltage.yaml
+     steps:
+       - name: Checkout
+         uses: actions/checkout@v4
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index f936247..90215a8 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -32,6 +32,8 @@ A component coordinating other devices or procedures should own a typed C++ stat
+ 
+ Entities are presentation and user-control surfaces. They are not the preferred machine-to-machine API inside one firmware image.
+ 
++An orchestrator must also have one explicit ownership authority. Manual control and procedures acquire the same lock; a procedure returns requested outputs to the core, and the core applies safety limits, hardware limits and cross-device interlocks. Procedures never directly drive hardware. Keep the public operational state small (`idle`, `running`, `fault`) and publish procedure-specific progress separately when useful.
++
+ ## ESPHome external-component constraints
+ 
+ These constraints are part of the architecture because they determine which source layouts ESPHome can discover and compile.
+@@ -362,7 +364,8 @@ struct DeviceSnapshot {
+ };
+ ```
+ 
+-The ESPHome-facing wrapper may publish the active bitset as one deterministic comma-delimited text sensor when users need the complete set.
++The ESPHome-facing wrapper may publish the active or latched bitset as one deterministic comma-delimited text sensor when users need the complete set. Multiple simultaneous safety causes should not be discarded merely to choose one primary fault.
++
+ - `raw_status` is diagnostic and optional.
+ 
+ The ESPHome wrapper decides which parts become entities.
+@@ -417,7 +420,7 @@ Raw register dumps, manual internal modes, verbose telemetry, and implementation
+ 
+ ### Manufacturing and irreversible actions
+ 
+-Calibration writes, OTP programming, destructive resets, and other irreversible or manufacturing-only operations require an explicit manufacturing/advanced configuration section and prominent documentation. Marking an irreversible button as diagnostic is not sufficient protection.
++Irreversible calibration-memory writes, OTP programming, destructive resets, and manufacturing-only operations require an explicit manufacturing/advanced configuration section and prominent documentation. Reversible runtime calibration may live in a dedicated `calibration:` section, but must be atomic, validated, idle-only, and expose persistence/reset behavior clearly. Marking an irreversible button as diagnostic is not sufficient protection.
+ 
+ ## Python organisation
+ 
+diff --git a/COMPONENTS.md b/COMPONENTS.md
+index 359b21a..7924322 100644
+--- a/COMPONENTS.md
++++ b/COMPONENTS.md
+@@ -37,7 +37,7 @@ Status describes maintenance intent only. It does not imply that an active compo
+ | `mcf83xx_common` | internal | Shared by active MCF8316D and MCF8329A components | Keep limited to the register-bus contract, family framing, read-modify-write and pulse mechanics. |
+ | `mcp4726` | active | Programmable-load configuration | Maintain as the DAC integration used by the load controller. |
+ | `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not yet accounted for in the upstream migration | Migrate the required behavior upstream or consciously drop it, then remove the local shadow. |
+-| `programmable_load` | active | Programmable-load board/project | Primary orchestrator component; replace entity-to-entity control with typed C++ capabilities. |
++| `programmable_load` | active | Programmable-load board/project | Typed orchestrator with exclusive manual/procedure ownership, hard hardware limits, aggregate faults and explicit calibration diagnostics/actions. |
+ | `web_dial` | candidate-removal | No current consumer found | Confirm external use before removal. |
+ 
+ ## Removal checklist
+diff --git a/check_host.bash b/check_host.bash
+index cb3efbf..dcd79af 100644
+--- a/check_host.bash
++++ b/check_host.bash
+@@ -21,7 +21,10 @@ python3 tools/check_core_purity.py \
+   components/mcf8329a/mcf8329a_protocol.cpp \
+   components/mcf8329a/mcf8329a_service.h \
+   components/mcf8329a/mcf8329a_service.cpp \
+-  components/mcf8329a/mcf8329a_tables.h
++  components/mcf8329a/mcf8329a_tables.h \
++  components/programmable_load/calibration.h \
++  components/programmable_load/programmable_load_core.h \
++  components/programmable_load/programmable_load_core.cpp
+ 
+ if [[ -n "${CXX:-}" ]]; then
+   cxx="$CXX"
+@@ -80,4 +83,10 @@ common_flags=(
+   -o "$build_dir/mcf83xx_services_test"
+ "$build_dir/mcf83xx_services_test"
+ 
++"$cxx" "${common_flags[@]}" \
++  tests/programmable_load_core_test.cpp \
++  components/programmable_load/programmable_load_core.cpp \
++  -o "$build_dir/programmable_load_core_test"
++"$build_dir/programmable_load_core_test"
++
+ echo "host tests: passed ($cxx)"
+diff --git a/components/programmable_load/AGENTS_KNOWLEDGE.md b/components/programmable_load/AGENTS_KNOWLEDGE.md
+index 132bcb2..8d18ab0 100644
+--- a/components/programmable_load/AGENTS_KNOWLEDGE.md
++++ b/components/programmable_load/AGENTS_KNOWLEDGE.md
+@@ -1,9 +1,12 @@
+ # AGENTS_KNOWLEDGE: programmable_load
+ 
+ - The component owns measurement calibration, safety limits, DAC control, cooling, manual control, typed charger control, and exclusive procedure ownership. Procedures return load-current and charger-enable requests only; they do not access hardware or the core directly.
+-- The public state is `idle`, `running`, or `fault`; faults stop and release the active owner. The optional clear-fault button only clears a fault after its condition has gone away.
+-- The core has a non-configurable 75 V absolute input ceiling. `hardware.maximum_voltage` must be board-specific and `limits.maximum_voltage` cannot exceed it.
++- `programmable_load_core.*` and `calibration.h` are host-independent. Keep ESPHome entities, logging, preferences, and timing APIs in the facade.
++- `OperationLock` is the single ownership authority. Manual control and every procedure must acquire it before changing requests; mismatched or missing procedure ownership is a `procedure_error`.
++- The public state is `idle`, `running`, or `fault`; faults stop and release the active owner. `fault` is one deterministic comma-delimited list of every latched cause. The optional clear-fault button clears the set only after all measurable conditions have gone away.
++- The core has a non-configurable 75 V absolute input ceiling. Schema validation rejects a higher `hardware.maximum_voltage`; runtime clamps defensively; and `limits.maximum_voltage` cannot exceed the board-specific value.
+ - Required temperature entries must remain valid for a run; optional temperature entries participate in fan control when valid. Fan PWM uses the hottest valid temperature.
++- Calibration is configured under `calibration:` and may expose optional diagnostic coefficients/status plus a reset button. Apply/reset actions are idle-only; apply requires the complete coefficient set and rolls back if persistence fails.
+ - DCR is an explicit exclusive procedure. It uses only distinct measurement frames and publishes the mean resistance after its configured repeats.
+ - The battery-cycle procedure discharges through the load, rests, then charges through a `component_common::ChargerInterface` until the charger reports `termination_done`.
+ - The charger component supplies a typed capability snapshot and charge-enable command directly in C++. Home Assistant entities are optional observers and must never be used as the machine-to-machine interface.
+diff --git a/components/programmable_load/CONTEXT_INDEX.md b/components/programmable_load/CONTEXT_INDEX.md
+index df671ff..a31f092 100644
+--- a/components/programmable_load/CONTEXT_INDEX.md
++++ b/components/programmable_load/CONTEXT_INDEX.md
+@@ -4,20 +4,25 @@
+ 1. `components/programmable_load/AGENTS_KNOWLEDGE.md`
+ 2. `components/programmable_load/README.md`
+ 3. `components/programmable_load/__init__.py`
+-4. `components/programmable_load/load_types.h`
+-5. `components/programmable_load/calibration.h`
+-6. `components/programmable_load/procedure.h`
+-7. `components/programmable_load/dcr_test.h`
+-8. `components/programmable_load/battery_cycle.h`
+-9. `components/programmable_load/programmable_load.h`
+-10. `components/programmable_load/dcr_test.cpp`
+-11. `components/programmable_load/battery_cycle.cpp`
+-12. `components/programmable_load/programmable_load.cpp`
++4. `components/programmable_load/_schema.py`
++5. `components/programmable_load/_codegen.py`
++6. `components/programmable_load/_actions.py`
++7. `components/programmable_load/programmable_load_core.h`
++8. `components/programmable_load/calibration.h`
++9. `components/programmable_load/procedure.h`
++10. `components/programmable_load/dcr_test.h`
++11. `components/programmable_load/battery_cycle.h`
++12. `components/programmable_load/programmable_load.h`
++13. `components/programmable_load/programmable_load.cpp`
+ 
+ ## Edit Map
+-- `__init__.py`: ESPHome schema, typed charger-component wiring, entity creation, and codegen bindings.
+-- `load_types.h`: Core state, fault, load measurements, shared charger aliases, procedure context, and procedure result types.
+-- `calibration.h`: Persisted calibration record and version.
++- `__init__.py`: Small public ESPHome facade; imports the private schema, codegen and action modules.
++- `_schema.py` / `_types.py`: YAML validation, entity schemas, and codegen type declarations.
++- `_codegen.py`: Component/entity/procedure construction and typed charger wiring.
++- `_actions.py` / `calibration_actions.h`: Atomic calibration apply/reset automation actions.
++- `programmable_load_core.h` / `.cpp`: Host-independent state, ownership lock, fault aggregation, calibration validation and safety calculations.
++- `load_types.h`: Compatibility aliases used by the ESPHome facade and existing procedures.
++- `calibration.h`: Host-independent persisted calibration record, source and version.
+ - `procedure.h`: Pure procedure boundary between the core and optional tests.
+ - `dcr_test.h` / `dcr_test.cpp`: Explicit DCR procedure and start-button entity.
+ - `battery_cycle.h` / `battery_cycle.cpp`: Full discharge/rest/Charger_14 recharge procedure, integration, progress and results.
+@@ -28,7 +33,7 @@
+ - `test_config.yaml`: Full ESPHome compile fixture including BQ25756-backed Charger_14 cycle wiring.
+ 
+ ## Architecture
+-- Monolith component: one `programmable_load:` YAML block, no split platform modules.
++- One public `programmable_load:` YAML block with private Python implementation modules; there are no extra top-level component platforms.
+ - One configurable control loop owns measurement updates, limits, output control, cooling, typed charger enable, and status publishing.
+ - Procedures receive a `ProcedureContext` and return a `ProcedureResult`; they never call the core.
+ - Charger support uses `component_common::ChargerInterface`; BQ25756 entities are optional observers, not the internal API. The onboard STM32 firmware path remains separate.
+diff --git a/components/programmable_load/README.md b/components/programmable_load/README.md
+index 68c0d27..6161ed7 100644
+--- a/components/programmable_load/README.md
++++ b/components/programmable_load/README.md
+@@ -29,17 +29,11 @@ The battery-cycle procedure performs this sequence:
+ 
+ The cutoff must be above `limits.minimum_voltage`. This lets the procedure end normally before the core undervoltage protection trips.
+ 
+-Charger_14 is used in its **external ESPHome control mode**. The cycle references the entities published by the board's `bq25756` component:
