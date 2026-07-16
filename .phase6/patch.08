@@ -1,0 +1,317 @@
+-  if (this->limits_.maximum_power_w > 0.0f) {
+-    limit = std::min(limit, this->limits_.maximum_power_w /
+-                                std::fabs(this->measurement_.voltage_v));
+-  }
+-  return std::max(0.0f, limit);
++  return ::programmable_load_core::effective_current_limit(
++      this->measurement_, this->limits_, this->calibration_);
+ }
+ 
+ void ProgrammableLoadComponent::drive_output_(float current_a) {
+   if (this->dac_output_ == nullptr ||
+-      !this->calibration_valid_(this->calibration_)) {
++      !::programmable_load_core::calibration_valid(this->calibration_)) {
+     if (this->dac_output_ != nullptr) this->dac_output_->set_level(0.0f);
+     return;
+   }
+@@ -708,47 +650,45 @@ void ProgrammableLoadComponent::drive_output_(float current_a) {
+ 
+ void ProgrammableLoadComponent::force_output_off_() {
+   if (this->dac_output_ == nullptr) return;
+-  const float zero = this->calibration_valid_(this->calibration_)
++  const float zero = ::programmable_load_core::calibration_valid(this->calibration_)
+                          ? this->calibration_.output.zero_level
+                          : 0.0f;
+   this->dac_output_->set_level(clampf(zero, 0.0f, 1.0f));
+ }
+ 
+-bool ProgrammableLoadComponent::calibration_valid_(
+-    const Calibration &calibration) const {
+-  return calibration.version == CALIBRATION_VERSION &&
+-         finite_positive(calibration.current.scale) &&
+-         std::isfinite(calibration.current.offset) &&
+-         finite_positive(calibration.voltage.scale) &&
+-         std::isfinite(calibration.voltage.offset) &&
+-         std::isfinite(calibration.output.zero_level) &&
+-         calibration.output.zero_level >= 0.0f &&
+-         calibration.output.zero_level < 1.0f &&
+-         finite_positive(calibration.output.full_scale_current_a);
+-}
+-
+ bool ProgrammableLoadComponent::save_calibration_() {
+   return this->calibration_preference_valid_ &&
+          this->calibration_preference_.save(&this->calibration_);
+ }
+ 
+ bool ProgrammableLoadComponent::apply_calibration(
+-    const Calibration &calibration, bool persist) {
++    const Calibration &calibration, bool persist, CalibrationSource source) {
+   if (this->state_ != State::IDLE ||
+-      !this->calibration_valid_(calibration)) return false;
++      !::programmable_load_core::calibration_valid(calibration)) {
++    ESP_LOGW(TAG, "Rejected calibration while busy or with invalid values");
++    return false;
++  }
+   const Calibration previous = this->calibration_;
++  const CalibrationSource previous_source = this->calibration_source_;
+   this->calibration_ = calibration;
++  this->calibration_source_ = source;
+   this->force_output_off_();
+   if (persist && !this->save_calibration_()) {
+     this->calibration_ = previous;
++    this->calibration_source_ = previous_source;
+     this->force_output_off_();
++    ESP_LOGW(TAG, "Failed to persist calibration; active values were restored");
+     return false;
+   }
++  this->publish_calibration_();
++  ESP_LOGI(TAG, "Applied programmable-load calibration (%s)",
++           calibration_source_to_string(source));
+   return true;
+ }
+ 
+ bool ProgrammableLoadComponent::reset_calibration(bool persist) {
+-  return this->apply_calibration(this->configured_calibration_, persist);
++  return this->apply_calibration(this->configured_calibration_, persist,
++                                 CalibrationSource::CONFIGURED);
+ }
+ 
+ void ManualCurrentNumber::control(float value) {
+@@ -770,6 +710,10 @@ void ClearFaultButton::press_action() {
+   if (this->parent_ != nullptr) this->parent_->clear_fault();
+ }
+ 
++void ResetCalibrationButton::press_action() {
++  if (this->parent_ != nullptr) this->parent_->reset_calibration(true);
++}
++
+ }  // namespace programmable_load
+ }  // namespace esphome
+ 
+diff --git a/components/programmable_load/programmable_load.h b/components/programmable_load/programmable_load.h
+index 13031c8..edb8da2 100644
+--- a/components/programmable_load/programmable_load.h
++++ b/components/programmable_load/programmable_load.h
+@@ -8,12 +8,12 @@
+ #include "esphome/components/output/float_output.h"
+ #include "esphome/components/sensor/sensor.h"
+ #include "esphome/components/text_sensor/text_sensor.h"
++#include "esphome/core/automation.h"
+ #include "esphome/core/component.h"
+ #include "esphome/core/preferences.h"
+ 
+ #include "../component_common/charger.h"
+ 
+-#include "calibration.h"
+ #include "load_types.h"
+ #include "procedure.h"
+ 
+@@ -36,8 +36,7 @@ class ProgrammableLoadComponent : public Component {
+   void set_dac_output(output::FloatOutput *output) { this->dac_output_ = output; }
+   void set_hardware_maximum_voltage(float voltage_v) {
+     this->hardware_limits_.maximum_voltage_v =
+-        voltage_v < ABSOLUTE_MAXIMUM_VOLTAGE_V ? voltage_v
+-                                               : ABSOLUTE_MAXIMUM_VOLTAGE_V;
++        normalize_hardware_maximum_voltage(voltage_v);
+   }
+   void set_fan_output(output::FloatOutput *output) { this->fan_output_ = output; }
+ 
+@@ -81,9 +80,34 @@ class ProgrammableLoadComponent : public Component {
+   void set_restore_calibration(bool restore) {
+     this->restore_calibration_ = restore;
+   }
+-  bool apply_calibration(const Calibration &calibration, bool persist);
++  bool apply_calibration(const Calibration &calibration, bool persist,
++                         CalibrationSource source = CalibrationSource::APPLIED);
+   bool reset_calibration(bool persist);
+   const Calibration &calibration() const { return this->calibration_; }
++  CalibrationSource calibration_source() const {
++    return this->calibration_source_;
++  }
++  void set_calibration_status_sensor(text_sensor::TextSensor *sensor) {
++    this->calibration_status_sensor_ = sensor;
++  }
++  void set_current_scale_sensor(sensor::Sensor *sensor) {
++    this->current_scale_sensor_ = sensor;
++  }
++  void set_current_offset_sensor(sensor::Sensor *sensor) {
++    this->current_offset_sensor_ = sensor;
++  }
++  void set_voltage_scale_sensor(sensor::Sensor *sensor) {
++    this->voltage_scale_sensor_ = sensor;
++  }
++  void set_voltage_offset_sensor(sensor::Sensor *sensor) {
++    this->voltage_offset_sensor_ = sensor;
++  }
++  void set_output_zero_level_sensor(sensor::Sensor *sensor) {
++    this->output_zero_level_sensor_ = sensor;
++  }
++  void set_output_full_scale_current_sensor(sensor::Sensor *sensor) {
++    this->output_full_scale_current_sensor_ = sensor;
++  }
+ 
+   // Configurable operating limits. Runtime always checks both the operating
+   // ceiling and the independent hardware ceiling.
+@@ -155,9 +179,10 @@ class ProgrammableLoadComponent : public Component {
+   bool stop_procedure(Procedure *procedure);
+   void stop();
+ 
+-  // Fault API.
++  // Fault API. The public fault text is the deterministic comma-delimited
++  // list of every latched cause.
+   bool clear_fault();
+-  Fault fault() const { return this->fault_; }
++  FaultFlags faults() const { return this->faults_; }
+   State state() const { return this->state_; }
+ 
+   const Measurement &measurement() const { return this->measurement_; }
+@@ -170,12 +195,6 @@ class ProgrammableLoadComponent : public Component {
+   const Limits &limits() const { return this->limits_; }
+ 
+  protected:
+-  enum class Owner : uint8_t {
+-    NONE = 0,
+-    MANUAL,
+-    PROCEDURE,
+-  };
+-
+   void update_measurement_();
+   void update_charger_measurement_();
+   void update_faults_();
+@@ -185,8 +204,8 @@ class ProgrammableLoadComponent : public Component {
+   void reset_control_integrator_();
+   void update_fan_();
+ 
+-  Fault detect_running_fault_() const;
+-  bool fault_condition_active_(Fault fault) const;
++  FaultFlags detect_running_faults_() const;
++  bool fault_conditions_active_(FaultFlags faults) const;
+   bool required_temperature_unavailable_() const;
+   void apply_procedure_result_(const ProcedureResult &result);
+   bool apply_charger_command_(ChargerCommand command);
+@@ -194,12 +213,13 @@ class ProgrammableLoadComponent : public Component {
+   void release_owner_(StopReason reason);
+   void set_state_(State state);
+   void trip_fault_(Fault fault);
++  void trip_faults_(FaultFlags faults);
+   void publish_status_();
++  void publish_calibration_();
+   float effective_current_limit_() const;
+   void drive_output_(float current_a);
+   void force_output_off_();
+ 
+-  bool calibration_valid_(const Calibration &calibration) const;
+   bool save_calibration_();
+ 
+   output::FloatOutput *dac_output_{nullptr};
+@@ -213,9 +233,16 @@ class ProgrammableLoadComponent : public Component {
+   number::Number *manual_current_number_{nullptr};
+   text_sensor::TextSensor *state_sensor_{nullptr};
+   text_sensor::TextSensor *fault_sensor_{nullptr};
++  text_sensor::TextSensor *calibration_status_sensor_{nullptr};
++  sensor::Sensor *current_scale_sensor_{nullptr};
++  sensor::Sensor *current_offset_sensor_{nullptr};
++  sensor::Sensor *voltage_scale_sensor_{nullptr};
++  sensor::Sensor *voltage_offset_sensor_{nullptr};
++  sensor::Sensor *output_zero_level_sensor_{nullptr};
++  sensor::Sensor *output_full_scale_current_sensor_{nullptr};
+ 
+   Procedure *active_procedure_{nullptr};
+-  Owner owner_{Owner::NONE};
++  OperationLock operation_lock_{};
+ 
+   Measurement measurement_{};
+   ChargerMeasurement charger_measurement_{};
+@@ -226,7 +253,8 @@ class ProgrammableLoadComponent : public Component {
+   Calibration calibration_{};
+ 
+   State state_{State::IDLE};
+-  Fault fault_{Fault::NONE};
++  FaultFlags faults_{0u};
++  CalibrationSource calibration_source_{CalibrationSource::CONFIGURED};
+ 
+   float requested_current_a_{0.0f};
+   float commanded_current_a_{0.0f};
+@@ -289,8 +317,18 @@ class ClearFaultButton : public button::Button {
+   ProgrammableLoadComponent *parent_{nullptr};
+ };
+ 
++class ResetCalibrationButton : public button::Button {
++ public:
++  void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
++
++ protected:
++  void press_action() override;
++  ProgrammableLoadComponent *parent_{nullptr};
++};
++
+ }  // namespace programmable_load
+ }  // namespace esphome
+ 
+ #include "battery_cycle.h"
+ #include "dcr_test.h"
++#include "calibration_actions.h"
+diff --git a/components/programmable_load/programmable_load_core.cpp b/components/programmable_load/programmable_load_core.cpp
+new file mode 100644
+index 0000000..de90b7d
+--- /dev/null
++++ b/components/programmable_load/programmable_load_core.cpp
+@@ -0,0 +1,262 @@
++#include "programmable_load_core.h"
++
++#include <algorithm>
++#include <cmath>
++#include <cstdio>
++
++namespace programmable_load_core {
++
++namespace {
++
++bool finite_positive(float value) {
++  return std::isfinite(value) && value > 0.0f;
++}
++
++void append_fault(const char *name, char *buffer, std::size_t size,
++                  std::size_t &used, bool &first) {
++  if (size == 0 || used >= size - 1) return;
++  const int written = std::snprintf(buffer + used, size - used, "%s%s",
++                                    first ? "" : ",", name);
++  if (written <= 0) return;
++  const std::size_t count = static_cast<std::size_t>(written);
++  used += std::min(count, size - used - 1);
++  first = false;
++}
++
++}  // namespace
++
++bool OperationLock::acquire_manual() {
++  if (this->owner_ != OperationOwner::NONE) return false;
++  this->owner_ = OperationOwner::MANUAL;
++  this->procedure_ = nullptr;
++  return true;
++}
++
++bool OperationLock::acquire_procedure(const void *procedure) {
++  if (procedure == nullptr || this->owner_ != OperationOwner::NONE) return false;
++  this->owner_ = OperationOwner::PROCEDURE;
++  this->procedure_ = procedure;
++  return true;
++}
++
++bool OperationLock::owns_procedure(const void *procedure) const {
++  return procedure != nullptr && this->owner_ == OperationOwner::PROCEDURE &&
++         this->procedure_ == procedure;
++}
++
++bool OperationLock::release_manual() {
++  if (!this->owns_manual()) return false;
++  this->force_release();
++  return true;
++}
++
++bool OperationLock::release_procedure(const void *procedure) {
++  if (!this->owns_procedure(procedure)) return false;
++  this->force_release();
++  return true;
++}
++
