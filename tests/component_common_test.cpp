@@ -25,18 +25,32 @@ static_assert(component_common::any_set<uint8_t>(0x40, 0x60));
 static_assert(!component_common::any_set<uint8_t>(0x10, 0x60));
 
 constexpr std::array<component_common::RegisterManifestEntry, 2> VALID_MANIFEST{{
-    {"config", 0x10, 1, 0x0F, 0x30, 0, 0x40, 0x80},
-    {"status", 0x20, 2, 0, 0, 0x00FF, 0, 0xFF00},
+    component_common::make_register_manifest_entry(
+        "config", 0x10, 1,
+        component_common::configuration_bits(0x0F),
+        component_common::runtime_bits(0x30),
+        component_common::command_bits(0x40),
+        component_common::reserved_bits(0x80)),
+    component_common::make_register_manifest_entry(
+        "status", 0x20, 2,
+        component_common::status_bits(0x00FF),
+        component_common::reserved_bits(0xFF00)),
 }};
 constexpr std::array<component_common::RegisterImageEntry, 1> VALID_IMAGE{{
     {"config", 0x10, 1, 0x05, 0x0F, 0x40},
 }};
 constexpr std::array<component_common::RegisterManifestEntry, 1> UNCLASSIFIED_MANIFEST{{
-    {"broken", 0x10, 1, 0x01, 0, 0, 0, 0},
+    component_common::make_register_manifest_entry(
+        "broken", 0x10, 1,
+        component_common::configuration_bits(0x01)),
 }};
 constexpr std::array<component_common::RegisterManifestEntry, 2> OVERLAPPING_MANIFEST{{
-    {"wide", 0x10, 2, 0xFFFF, 0, 0, 0, 0},
-    {"overlap", 0x11, 1, 0xFF, 0, 0, 0, 0},
+    component_common::make_register_manifest_entry(
+        "wide", 0x10, 2,
+        component_common::configuration_bits(0xFFFF)),
+    component_common::make_register_manifest_entry(
+        "overlap", 0x11, 1,
+        component_common::configuration_bits(0xFF)),
 }};
 
 static_assert(component_common::register_manifest_valid(VALID_MANIFEST));
