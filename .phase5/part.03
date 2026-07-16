@@ -1,0 +1,138 @@
+nents/mcf8329a/AGENTS_KNOWLEDGE.md
+@@ -11,9 +11,9 @@ Component-scoped active guidance for `components/mcf8329a`.
+ 
+ ## Architecture
+ - Monolith ESPHome integration style: controls/telemetry/buttons are configured inline under `mcf8329a:`.
+-- `mcf8329a_bus.h` defines the host-agnostic register transport boundary used by the core service.
+-- Register/bitfield constants, control-word encoding, decode helpers, and state/label mappings live in `mcf8329a_protocol.cpp/.h` (`namespace mcf8329a_core`).
+-- Reusable register access and chip command helpers live in `mcf8329a_service.cpp/.h`; the ESPHome wrapper owns I2C transactions by implementing `mcf8329a_core::RegisterBus`.
++- `mcf83xx_common` defines the host-agnostic family register bus, framing and read-modify-write mechanics; `mcf8329a_bus.h` remains a compatibility alias.
++- Chip register/bitfield constants, decode helpers, and state/label mappings live in `mcf8329a_protocol.cpp/.h` (`namespace mcf8329a_core`).
++- Chip command helpers live in `mcf8329a_service.cpp/.h`; the ESPHome wrapper owns I2C transactions by implementing the `mcf83xx_common::RegisterBus` alias.
+ - Tuning logic is isolated in `mcf8329a_tuning.cpp/.h` (`MCF8329ATuningController`); component owns orchestration.
+ - Shared decode/lookup tables are centralized in `mcf8329a_tables.h`.
+ - `mcf8329a.cpp`, `mcf8329a_protocol.cpp`, `mcf8329a_service.cpp`, and `mcf8329a_tuning.cpp` compile as normal sibling translation units; do not include `.cpp` files into other `.cpp` files.
+diff --git a/components/mcf8329a/README.md b/components/mcf8329a/README.md
+index 44a940b..1ff3d38 100644
+--- a/components/mcf8329a/README.md
++++ b/components/mcf8329a/README.md
+@@ -17,7 +17,7 @@ Important I2C note:
+ external_components:
+   - source: github://Toxicable/esphome-components@main
+     refresh: 0s
+-    components: [ mcf8329a ]
++    components: [ component_common, mcf83xx_common, mcf8329a ]
+ 
+ 
+ i2c:
+@@ -175,9 +175,9 @@ Safety guardrails:
+ 
+ This component follows the shared layout in `../../ARCHITECTURE.md`.
+ 
+-- `mcf8329a_bus.h` defines the reusable register-bus interface.
+-- `mcf8329a_protocol.*` owns register/bitfield constants, control-word encoding, decode helpers, and state/label mappings.
+-- `mcf8329a_service.*` owns reusable register access and chip command helpers on top of the bus interface.
++- `../mcf83xx_common` owns the shared MCx83xx register-bus, I2C frame and read-modify-write mechanics; `mcf8329a_bus.h` is a compatibility alias.
++- `mcf8329a_protocol.*` owns chip register/bitfield constants, decode helpers, and state/label mappings.
++- `mcf8329a_service.*` owns chip command helpers on top of the shared register-access layer.
+ - `mcf8329a_tuning.*` owns the guarded initial-tune and MPET state machines.
+ - `mcf8329a_tables.h` owns shared lookup/decode tables.
+ - `mcf8329a.h` / `mcf8329a.cpp` own ESPHome entities, YAML-facing behavior, logging, runtime orchestration, and the I2C bus adapter.
+diff --git a/components/mcf8329a/__init__.py b/components/mcf8329a/__init__.py
+index f2f9828..9671566 100644
+--- a/components/mcf8329a/__init__.py
++++ b/components/mcf8329a/__init__.py
+@@ -11,7 +11,7 @@ from esphome.const import (
+ )
+ 
+ DEPENDENCIES = ["i2c"]
+-AUTO_LOAD = ["sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
++AUTO_LOAD = ["mcf83xx_common", "sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
+ 
+ mcf8329a_ns = cg.esphome_ns.namespace("mcf8329a")
+ MCF8329AComponent = mcf8329a_ns.class_("MCF8329AComponent", cg.PollingComponent, i2c.I2CDevice)
+diff --git a/components/mcf8329a/mcf8329a.cpp b/components/mcf8329a/mcf8329a.cpp
+index a6119b7..136d57a 100644
+--- a/components/mcf8329a/mcf8329a.cpp
++++ b/components/mcf8329a/mcf8329a.cpp
+@@ -1,4 +1,6 @@
+ #include "mcf8329a.h"
++
++#include "../mcf83xx_common/protocol.h"
+ #include "mcf8329a_tables.h"
+ #include "mcf8329a_tuning.h"
+ 
+@@ -15,6 +17,7 @@ namespace esphome {
+ namespace mcf8329a {
+ 
+ using namespace ::mcf8329a_core::regs;
++namespace tables = ::mcf8329a_core::tables;
+ 
+ static const char* const TAG = "mcf8329a";
+ static constexpr uint32_t FIXED_INTER_BYTE_DELAY_US = 100u;
+@@ -1653,48 +1656,35 @@ bool MCF8329AComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t v
+   return this->service_.update_bits32(offset, mask, value);
+ }
+ 
+-bool MCF8329AComponent::read_register32(uint16_t offset, uint32_t* value) {
++bool MCF8329AComponent::read_register32(uint16_t offset, uint32_t *value) {
+   if (value == nullptr || this->bus_ == nullptr) {
+     return false;
+   }
+-
+-  const uint32_t control_word = ::mcf8329a_core::build_control_word(true, offset, true);
+-  const uint8_t cw[3] = {
+-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+-    static_cast<uint8_t>(control_word & 0xFF),
+-  };
++  const auto command = ::mcf83xx_common::make_control_frame(
++      true, offset, ::mcf83xx_common::RegisterWidth::BITS_32);
+   uint8_t rx[4] = {0, 0, 0, 0};
+-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
++  const i2c::ErrorCode err = this->write_read(command.data(), command.size(), rx, sizeof(rx));
+   if (err != i2c::ERROR_OK) {
+     ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+     return false;
+   }
+-
+-  *value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) |
+-           (static_cast<uint32_t>(rx[2]) << 16) | (static_cast<uint32_t>(rx[3]) << 24);
++  *value = ::mcf83xx_common::decode_read32(rx);
+   return true;
+ }
+ 
+-bool MCF8329AComponent::read_register16(uint16_t offset, uint16_t* value) {
++bool MCF8329AComponent::read_register16(uint16_t offset, uint16_t *value) {
+   if (value == nullptr || this->bus_ == nullptr) {
+     return false;
+   }
+-
+-  const uint32_t control_word = ::mcf8329a_core::build_control_word(true, offset, false);
+-  const uint8_t cw[3] = {
+-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+-    static_cast<uint8_t>(control_word & 0xFF),
+-  };
++  const auto command = ::mcf83xx_common::make_control_frame(
++      true, offset, ::mcf83xx_common::RegisterWidth::BITS_16);
+   uint8_t rx[2] = {0, 0};
+-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
++  const i2c::ErrorCode err = this->write_read(command.data(), command.size(), rx, sizeof(rx));
+   if (err != i2c::ERROR_OK) {
+     ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+     return false;
+   }
+-
+-  *value = static_cast<uint16_t>(rx[0]) | (static_cast<uint16_t>(rx[1]) << 8);
++  *value = ::mcf83xx_common::decode_read16(rx);
+   return true;
+ }
+ 
+@@ -1703,17 +1693,8 @@ bool MCF8329AComponent::write_register32(uint16_t offset, uint32_t value) {
+     return false;
+   }
+ 
+-  const uint32_t control_word = ::mcf8329a_core::build_control_word(false, offset, true);
+-  const uint8_t tx[7] = {
+-    static_cast<uint8_t>((control_word >> 1
