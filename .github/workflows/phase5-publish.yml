@@ -1,0 +1,94 @@
+name: Publish Phase 5
+
+on:
+  push:
+    branches:
+      - agent/phase5-publisher
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.ref_name == 'agent/phase5-publisher' || github.head_ref == 'agent/phase5-publisher'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout publisher payload
+        uses: actions/checkout@v4
+        with:
+          path: payload
+
+      - name: Checkout Phase 4 base
+        uses: actions/checkout@v4
+        with:
+          ref: agent/bq-consistency
+          path: target
+          fetch-depth: 0
+
+      - name: Reconstruct Phase 5 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat \
+            payload/.phase5/part.00 \
+            payload/.phase5/part.01 \
+            payload/.phase5/part.02 \
+            payload/.phase5/part.03 \
+            payload/.phase5/part.04 \
+            payload/.phase5/part.050 \
+            payload/.phase5/part.051 \
+            payload/.phase5/part.052 \
+            payload/.phase5/part.053 \
+            payload/.phase5/part.06 \
+            payload/.phase5/part.07 \
+            > phase5.patch
+          printf '%s  %s\n' '1fc573982c517fdc2243065d97d6e8d916cd1adc6702a162e20665c96a3ea13d' phase5.patch | sha256sum --check
+          test "$(wc -c < phase5.patch)" -eq 50673
+
+      - name: Apply MCF family consolidation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git apply --check ../phase5.patch
+          git apply --index ../phase5.patch
+          git diff --cached --check
+
+      - name: Check Python modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          python3 -m py_compile \
+            components/mcf8316d/__init__.py \
+            components/mcf8329a/__init__.py \
+            components/mcf83xx_common/__init__.py
+
+      - name: Run host tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cd target
+          bash ./check_host.bash 2>&1 | tee ../phase5-host.log
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-host-failure
+          path: |
+            phase5.patch
+            phase5-host.log
+          if-no-files-found: ignore
+
+      - name: Publish MCF family branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target
+          git restore --source=HEAD --staged --worktree .github/workflows/compile.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Consolidate MCF83xx family mechanics'
+          git push origin HEAD:refs/heads/agent/mcf83xx-family
