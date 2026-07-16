@@ -2,32 +2,11 @@
 
 #include <cstdint>
 
+#include "bq25756_registers.h"
 #include "../component_common/bit_field.h"
 #include "../component_common/charger.h"
 
 namespace bq25756_core {
-
-static constexpr uint8_t REG00_CHARGE_VOLTAGE_LIMIT = 0x00;
-static constexpr uint8_t REG02_CHARGE_CURRENT_LIMIT = 0x02;
-static constexpr uint8_t REG06_INPUT_CURRENT_DPM_LIMIT = 0x06;
-static constexpr uint8_t REG08_INPUT_VOLTAGE_DPM_LIMIT = 0x08;
-static constexpr uint8_t REG15_TIMER_CONTROL = 0x15;
-static constexpr uint8_t REG17_CHARGER_CONTROL = 0x17;
-static constexpr uint8_t REG18_PIN_CONTROL = 0x18;
-static constexpr uint8_t REG19_POWER_PATH_CONTROL = 0x19;
-static constexpr uint8_t REG21_CHARGER_STATUS_1 = 0x21;
-static constexpr uint8_t REG22_CHARGER_STATUS_2 = 0x22;
-static constexpr uint8_t REG23_CHARGER_STATUS_3 = 0x23;
-static constexpr uint8_t REG24_FAULT_STATUS = 0x24;
-static constexpr uint8_t REG2B_ADC_CONTROL = 0x2B;
-static constexpr uint8_t REG2C_ADC_CHANNEL_CONTROL = 0x2C;
-static constexpr uint8_t REG2D_IAC_ADC = 0x2D;
-static constexpr uint8_t REG2F_IBAT_ADC = 0x2F;
-static constexpr uint8_t REG31_VAC_ADC = 0x31;
-static constexpr uint8_t REG33_VBAT_ADC = 0x33;
-static constexpr uint8_t REG37_TS_ADC = 0x37;
-static constexpr uint8_t REG39_VFB_ADC = 0x39;
-static constexpr uint8_t REG3D_PART_INFORMATION = 0x3D;
 
 static constexpr uint8_t REG15_WATCHDOG_MASK = 0x30;
 static constexpr uint8_t REG17_WD_RST_MASK = 0x20;
