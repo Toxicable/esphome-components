@@ -20,7 +20,6 @@ Status describes maintenance intent only. It does not imply that an active compo
 | Component | Status | Known use or reason retained | Direction |
 | --- | --- | --- | --- |
 | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
-| `bq25798` | legacy | Pool-cleaner configuration | Freeze feature development; migrate the consumer to `bq25756`, then remove this monolithic driver. |
 | `bq76922` | experimental | No deployed configuration or compile fixture found | Require an owner, real board YAML, and tests before promotion; otherwise retire instead of maintaining parallel BQ769x2 implementations. |
 | `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
 | `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
@@ -39,8 +38,9 @@ Status describes maintenance intent only. It does not imply that an active compo
 
 ## Removed components
 
-The following packages were removed in July 2026 after code searches found no consumers on the default branches of `esphome-components` or `toxic-boards`. Git history remains the source for recovery if an unindexed configuration is later found.
+The following packages were removed in July 2026 after code searches found no remaining default-branch consumers. Git history remains the source for recovery if an unindexed configuration is later found.
 
+- `bq25798` — PoolCleaner had already migrated to `bq25756`; only a stale external-component allowlist entry remained.
 - `bq769x0` — superseded by the actively maintained BQ76952 path.
 - `fdc1004` — no current firmware or board consumer found.
 - `web_dial` — no current firmware or board consumer found.
