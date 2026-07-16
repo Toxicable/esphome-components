@@ -46,6 +46,8 @@ jobs:
             config: components/mcf8329a/test_config.yaml
           - name: programmable-load
             config: components/programmable_load/test_config.yaml
+          - name: programmable-load-invalid-hardware-voltage
+            config: components/programmable_load/test_invalid_hardware_voltage.yaml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
