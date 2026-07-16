@@ -1,0 +1,303 @@
+-            )
+-        )
+-        cg.add(dcr.set_repeats(dcr_config[CONF_REPEATS]))
+-
+-        start = await button.new_button(dcr_config[CONF_START])
+-        cg.add(start.set_host(var))
+-        cg.add(start.set_procedure(dcr))
+-
+-        resistance = await sensor.new_sensor(dcr_config[CONF_RESISTANCE])
+-        cg.add(dcr.set_resistance_sensor(resistance))
+-
+-    cycle_config = procedures.get(CONF_BATTERY_CYCLE)
+-    if cycle_config is not None:
+-        charger = await cg.get_variable(cycle_config[CONF_CHARGER])
+-        cg.add(var.set_charger(charger))
+-        cg.add(
+-            var.set_charger_sample_timeout_ms(
+-                cycle_config[CONF_CHARGER_SAMPLE_TIMEOUT].total_milliseconds
+-            )
+-        )
+-        cg.add(
+-            var.set_charger_control_timeout_ms(
+-                cycle_config[CONF_CHARGER_CONTROL_TIMEOUT].total_milliseconds
+-            )
+-        )
+-
+-        cycle = cg.new_Pvariable(cycle_config[CONF_ID])
+-        cg.add(cycle.set_discharge_current(cycle_config[CONF_DISCHARGE_CURRENT]))
+-        cg.add(
+-            cycle.set_discharge_cutoff_voltage(
+-                cycle_config[CONF_DISCHARGE_CUTOFF_VOLTAGE]
+-            )
+-        )
+-        cg.add(
+-            cycle.set_discharge_cutoff_hysteresis(
+-                cycle_config[CONF_DISCHARGE_CUTOFF_HYSTERESIS]
+-            )
+-        )
+-        cg.add(
+-            cycle.set_discharge_cutoff_hold_time_ms(
+-                cycle_config[CONF_DISCHARGE_CUTOFF_HOLD_TIME].total_milliseconds
+-            )
+-        )
+-        cg.add(
+-            cycle.set_rest_time_ms(
+-                cycle_config[CONF_REST_TIME].total_milliseconds
+-            )
+-        )
+-        cg.add(
+-            cycle.set_charge_start_timeout_ms(
+-                cycle_config[CONF_CHARGE_START_TIMEOUT].total_milliseconds
+-            )
+-        )
+-        cg.add(
+-            cycle.set_charge_stall_timeout_ms(
+-                cycle_config[CONF_CHARGE_STALL_TIMEOUT].total_milliseconds
+-            )
+-        )
+-        cg.add(
+-            cycle.set_charge_timeout_ms(
+-                cycle_config[CONF_CHARGE_TIMEOUT].total_milliseconds
+-            )
+-        )
+-        cg.add(
+-            cycle.set_termination_hold_time_ms(
+-                cycle_config[CONF_TERMINATION_HOLD_TIME].total_milliseconds
+-            )
+-        )
+-
+-        cycle_start = await button.new_button(cycle_config[CONF_START])
+-        cg.add(cycle_start.set_host(var))
+-        cg.add(cycle_start.set_procedure(cycle))
+-        cycle_stop = await button.new_button(cycle_config[CONF_STOP])
+-        cg.add(cycle_stop.set_host(var))
+-        cg.add(cycle_stop.set_procedure(cycle))
+-
+-        if CONF_PHASE in cycle_config:
+-            phase = await text_sensor.new_text_sensor(cycle_config[CONF_PHASE])
+-            cg.add(cycle.set_phase_sensor(phase))
+-        if CONF_RESULT in cycle_config:
+-            result = await text_sensor.new_text_sensor(cycle_config[CONF_RESULT])
+-            cg.add(cycle.set_result_sensor(result))
+-        if CONF_DISCHARGED_CAPACITY in cycle_config:
+-            value = await sensor.new_sensor(cycle_config[CONF_DISCHARGED_CAPACITY])
+-            cg.add(cycle.set_discharged_capacity_sensor(value))
+-        if CONF_DISCHARGED_ENERGY in cycle_config:
+-            value = await sensor.new_sensor(cycle_config[CONF_DISCHARGED_ENERGY])
+-            cg.add(cycle.set_discharged_energy_sensor(value))
+-        if CONF_CHARGED_CAPACITY in cycle_config:
+-            value = await sensor.new_sensor(cycle_config[CONF_CHARGED_CAPACITY])
+-            cg.add(cycle.set_charged_capacity_sensor(value))
+-        if CONF_CHARGED_ENERGY in cycle_config:
+-            value = await sensor.new_sensor(cycle_config[CONF_CHARGED_ENERGY])
+-            cg.add(cycle.set_charged_energy_sensor(value))
++from ._schema import CONFIG_SCHEMA
++from ._codegen import to_code
++from . import _actions  # noqa: F401
+diff --git a/components/programmable_load/_actions.py b/components/programmable_load/_actions.py
+new file mode 100644
+index 0000000..2aed03e
+--- /dev/null
++++ b/components/programmable_load/_actions.py
+@@ -0,0 +1,82 @@
++from esphome import automation
++import esphome.codegen as cg
++import esphome.config_validation as cv
++from esphome.const import CONF_ID
++
++from ._schema import _normalized_level, _positive, _positive_scale
++from ._types import *
++
++APPLY_CALIBRATION_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_ID): cv.use_id(ProgrammableLoadComponent),
++        cv.Required(CONF_CURRENT_SCALE): cv.templatable(_positive_scale),
++        cv.Required(CONF_CURRENT_OFFSET): cv.templatable(cv.float_),
++        cv.Required(CONF_VOLTAGE_SCALE): cv.templatable(_positive_scale),
++        cv.Required(CONF_VOLTAGE_OFFSET): cv.templatable(cv.float_),
++        cv.Required(CONF_OUTPUT_ZERO_LEVEL): cv.templatable(_normalized_level),
++        cv.Required(CONF_OUTPUT_FULL_SCALE_CURRENT): cv.templatable(_positive),
++        cv.Optional(CONF_PERSIST, default=True): cv.templatable(cv.boolean),
++    }
++)
++
++
++@automation.register_action(
++    "programmable_load.apply_calibration",
++    ApplyCalibrationAction,
++    APPLY_CALIBRATION_SCHEMA,
++    synchronous=True,
++)
++async def apply_calibration_to_code(config, action_id, template_arg, args):
++    parent = await cg.get_variable(config[CONF_ID])
++    action = cg.new_Pvariable(action_id, template_arg, parent)
++
++    current_scale = await cg.templatable(
++        config[CONF_CURRENT_SCALE], args, cg.float_
++    )
++    current_offset = await cg.templatable(
++        config[CONF_CURRENT_OFFSET], args, cg.float_
++    )
++    voltage_scale = await cg.templatable(
++        config[CONF_VOLTAGE_SCALE], args, cg.float_
++    )
++    voltage_offset = await cg.templatable(
++        config[CONF_VOLTAGE_OFFSET], args, cg.float_
++    )
++    output_zero_level = await cg.templatable(
++        config[CONF_OUTPUT_ZERO_LEVEL], args, cg.float_
++    )
++    output_full_scale_current = await cg.templatable(
++        config[CONF_OUTPUT_FULL_SCALE_CURRENT], args, cg.float_
++    )
++    persist = await cg.templatable(config[CONF_PERSIST], args, cg.bool_)
++
++    cg.add(action.set_current_scale(current_scale))
++    cg.add(action.set_current_offset(current_offset))
++    cg.add(action.set_voltage_scale(voltage_scale))
++    cg.add(action.set_voltage_offset(voltage_offset))
++    cg.add(action.set_output_zero_level(output_zero_level))
++    cg.add(action.set_output_full_scale_current(output_full_scale_current))
++    cg.add(action.set_persist(persist))
++    return action
++
++
++RESET_CALIBRATION_SCHEMA = cv.Schema(
++    {
++        cv.Required(CONF_ID): cv.use_id(ProgrammableLoadComponent),
++        cv.Optional(CONF_PERSIST, default=True): cv.templatable(cv.boolean),
++    }
++)
++
++
++@automation.register_action(
++    "programmable_load.reset_calibration",
++    ResetCalibrationAction,
++    RESET_CALIBRATION_SCHEMA,
++    synchronous=True,
++)
++async def reset_calibration_to_code(config, action_id, template_arg, args):
++    parent = await cg.get_variable(config[CONF_ID])
++    action = cg.new_Pvariable(action_id, template_arg, parent)
++    persist = await cg.templatable(config[CONF_PERSIST], args, cg.bool_)
++    cg.add(action.set_persist(persist))
++    return action
+diff --git a/components/programmable_load/_codegen.py b/components/programmable_load/_codegen.py
+new file mode 100644
+index 0000000..b8282fd
+--- /dev/null
++++ b/components/programmable_load/_codegen.py
+@@ -0,0 +1,250 @@
++import esphome.codegen as cg
++from esphome.components import button, number, sensor, text_sensor
++from esphome.const import CONF_ID
++
++from ._types import *
++
++
++async def to_code(config):
++    var = cg.new_Pvariable(config[CONF_ID])
++    await cg.register_component(var, config)
++
++    hardware = config[CONF_HARDWARE]
++    dac = await cg.get_variable(hardware[CONF_DAC])
++    cg.add(var.set_dac_output(dac))
++    cg.add(
++        var.set_hardware_maximum_voltage(
++            hardware[CONF_HARDWARE_MAXIMUM_VOLTAGE]
++        )
++    )
++
++    measurements = config[CONF_MEASUREMENTS]
++    current = await cg.get_variable(measurements[CONF_CURRENT])
++    voltage = await cg.get_variable(measurements[CONF_VOLTAGE])
++    cg.add(var.set_current_sensor(current))
++    cg.add(var.set_voltage_sensor(voltage))
++    cg.add(
++        var.set_sample_timeout_ms(
++            measurements[CONF_SAMPLE_TIMEOUT].total_milliseconds
++        )
++    )
++    for temperature_config in measurements[CONF_TEMPERATURES]:
++        temperature = await cg.get_variable(temperature_config[CONF_SENSOR])
++        cg.add(
++            var.add_temperature_sensor(
++                temperature,
++                temperature_config[CONF_REQUIRED],
++            )
++        )
++
++    calibration = config[CONF_CALIBRATION]
++    current_calibration = calibration[CONF_CURRENT]
++    voltage_calibration = calibration[CONF_VOLTAGE]
++    output_calibration = calibration[CONF_OUTPUT]
++    cg.add(
++        var.set_current_calibration(
++            current_calibration[CONF_SCALE],
++            current_calibration[CONF_OFFSET],
++        )
++    )
++    cg.add(
++        var.set_voltage_calibration(
++            voltage_calibration[CONF_SCALE],
++            voltage_calibration[CONF_OFFSET],
++        )
++    )
++    cg.add(
++        var.set_output_calibration(
++            output_calibration[CONF_ZERO_LEVEL],
++            output_calibration[CONF_FULL_SCALE_CURRENT],
++        )
++    )
++    cg.add(var.set_restore_calibration(calibration[CONF_RESTORE]))
++
++    if CONF_CALIBRATION_STATUS in calibration:
++        value = await text_sensor.new_text_sensor(
++            calibration[CONF_CALIBRATION_STATUS]
++        )
++        cg.add(var.set_calibration_status_sensor(value))
++    if CONF_CURRENT_SCALE in calibration:
++        value = await sensor.new_sensor(calibration[CONF_CURRENT_SCALE])
++        cg.add(var.set_current_scale_sensor(value))
++    if CONF_CURRENT_OFFSET in calibration:
++        value = await sensor.new_sensor(calibration[CONF_CURRENT_OFFSET])
++        cg.add(var.set_current_offset_sensor(value))
++    if CONF_VOLTAGE_SCALE in calibration:
++        value = await sensor.new_sensor(calibration[CONF_VOLTAGE_SCALE])
++        cg.add(var.set_voltage_scale_sensor(value))
++    if CONF_VOLTAGE_OFFSET in calibration:
++        value = await sensor.new_sensor(calibration[CONF_VOLTAGE_OFFSET])
++        cg.add(var.set_voltage_offset_sensor(value))
++    if CONF_OUTPUT_ZERO_LEVEL in calibration:
++        value = await sensor.new_sensor(calibration[CONF_OUTPUT_ZERO_LEVEL])
++        cg.add(var.set_output_zero_level_sensor(value))
++    if CONF_OUTPUT_FULL_SCALE_CURRENT in calibration:
++        value = await sensor.new_sensor(
++            calibration[CONF_OUTPUT_FULL_SCALE_CURRENT]
++        )
++        cg.add(var.set_output_full_scale_current_sensor(value))
++    if CONF_RESET_CALIBRATION in calibration:
++        value = await button.new_button(calibration[CONF_RESET_CALIBRATION])
++        cg.add(value.set_parent(var))
++
++    limits = config[CONF_LIMITS]
++    cg.add(var.set_maximum_current(limits[CONF_MAXIMUM_CURRENT]))
++    cg.add(var.set_minimum_voltage(limits[CONF_MINIMUM_VOLTAGE]))
++    cg.add(var.set_maximum_voltage(limits[CONF_MAXIMUM_VOLTAGE]))
++    cg.add(var.set_maximum_power(limits[CONF_MAXIMUM_POWER]))
++    cg.add(var.set_maximum_temperature(limits[CONF_MAXIMUM_TEMPERATURE]))
++
++    control = config[CONF_CONTROL]
++    cg.add(var.set_control_period_ms(control[CONF_PERIOD].total_milliseconds))
++    cg.add(var.set_deadband(control[CONF_DEADBAND]))
++    cg.add(var.set_rise_rate(control[CONF_RISE_RATE]))
++    cg.add(var.set_fall_rate(control[CONF_FALL_RATE]))
++    cg.add(var.set_proportional_gain(control[CONF_PROPORTIONAL_GAIN]))
++    cg.add(var.set_integral_gain(control[CONF_INTEGRAL_GAIN]))
++    cg.add(var.set_log_control_samples(control[CONF_LOG_CONTROL_SAMPLES]))
++
++    cooling = config[CONF_COOLING]
++    fan = await cg.get_variable(cooling[CONF_FAN_OUTPUT])
++    cg.add(var.set_fan_output(fan))
++    cg.add(
