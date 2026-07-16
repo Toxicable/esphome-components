@@ -56,14 +56,12 @@ void test_charger_interface() {
 }
 
 void test_status_contract() {
-  using Snapshot = component_common::FaultSnapshot<uint8_t>;
-  const Snapshot snapshot{2, 0x03, 0x01};
-  assert(snapshot.primary == 2);
-  assert(snapshot.active_flags == 0x03);
-  assert(snapshot.latched_flags == 0x01);
-  assert(component_common::lifecycle_state_to_string(
-             component_common::LifecycleState::READY) ==
-         std::string_view("ready"));
+  assert(component_common::connection_state_to_string(
+             component_common::ConnectionState::CONNECTING) ==
+         std::string_view("connecting"));
+  assert(component_common::connection_state_to_string(
+             component_common::ConnectionState::CONNECTED) ==
+         std::string_view("connected"));
 }
 
 void test_byte_order() {

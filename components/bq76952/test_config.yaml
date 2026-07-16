@@ -103,14 +103,12 @@ bq76952:
     empty_cell_voltage_mv: 3000
     full_cell_voltage_mv: 4200
 
-  lifecycle:
-    name: "BMS Lifecycle"
+  connection_state:
+    name: "BMS Connection State"
   state:
     name: "BMS State"
   fault:
     name: "BMS Fault"
-  fault_flags:
-    name: "BMS Fault Flags"
   pack_voltage:
     name: "BMS Pack Voltage"
   current:

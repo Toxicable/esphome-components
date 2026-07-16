@@ -67,7 +67,7 @@ class BQ76952Service {
   BQ76952Soc soc_;
   BQ76952Config config_{};
   bool config_set_{false};
-  component_common::LifecycleState lifecycle_{component_common::LifecycleState::DISCONNECTED};
+  component_common::ConnectionState connection_state_{component_common::ConnectionState::DISCONNECTED};
   bool online_{false};
   bool configured_{false};
   int32_t current_lsb_ua_{1000};

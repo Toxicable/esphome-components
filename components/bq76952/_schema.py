@@ -112,10 +112,9 @@ CONF_DIE_TEMPERATURE = "die_temperature"
 CONF_TS1_TEMPERATURE = "ts1_temperature"
 CONF_TS2_TEMPERATURE = "ts2_temperature"
 CONF_TS3_TEMPERATURE = "ts3_temperature"
-CONF_LIFECYCLE = "lifecycle"
+CONF_CONNECTION_STATE = "connection_state"
 CONF_STATE = "state"
 CONF_FAULT = "fault"
-CONF_FAULT_FLAGS = "fault_flags"
 CONF_CAPACITY_CALIBRATION_STATUS = "capacity_calibration_status"
 CONF_OUTPUT_ENABLED_CONTROL = "output_enabled_control"
 CONF_CLEAR_ALARMS = "clear_alarms"
@@ -466,14 +465,11 @@ schema = {
         device_class=DEVICE_CLASS_TEMPERATURE,
         state_class=STATE_CLASS_MEASUREMENT,
     ),
-    cv.Optional(CONF_LIFECYCLE): text_sensor.text_sensor_schema(
+    cv.Optional(CONF_CONNECTION_STATE): text_sensor.text_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),
     cv.Optional(CONF_STATE): text_sensor.text_sensor_schema(),
     cv.Optional(CONF_FAULT): text_sensor.text_sensor_schema(),
-    cv.Optional(CONF_FAULT_FLAGS): text_sensor.text_sensor_schema(
-        entity_category=ENTITY_CATEGORY_DIAGNOSTIC
-    ),
     cv.Optional(CONF_CAPACITY_CALIBRATION_STATUS): text_sensor.text_sensor_schema(
         entity_category=ENTITY_CATEGORY_DIAGNOSTIC
     ),

@@ -300,18 +300,18 @@ Prefer named fields and physical units at the service boundary. Raw register acc
 
 ## State and fault contract
 
-Do not overload one text sensor with lifecycle, operating state, and hardware faults.
+Do not overload one text sensor with connection state, operating state, and hardware faults.
 
-### Lifecycle state
+### Connection state
 
-Lifecycle describes whether the component can communicate and provide valid data. A common conceptual set is:
+Connection state describes transport availability, not configuration readiness or device operation. A common conceptual set is:
 
-- disconnected/unavailable;
-- configuring;
-- ready;
+- disconnected;
+- connecting;
+- connected;
 - failed.
 
-A communication timeout normally changes availability/lifecycle. It is not automatically a hardware protection fault.
+A communication timeout changes connection state. It is not automatically a hardware protection fault. Configuration readiness should normally drive ESPHome component warning/error status rather than adding another public state entity.
 
 ### Operational state
 
@@ -323,26 +323,23 @@ Operational state is component-specific and user-relevant, for example:
 
 or charger-specific states such as charging, complete, or suspended.
 
-### Fault snapshot
+### Fault representation
 
-`component_common/status.h` provides the policy-free lifecycle enum and generic `FaultSnapshot<PrimaryFault, Flags>` structure. Components keep their own operating-state enum, fault enum, priority, raw status, and decoder.
+`component_common/status.h` provides only the policy-free connection-state enum. Each component keeps its own fault bitset, decoder, and formatter because fault meaning and ordering are device-specific.
 
-Stateful components should expose a typed snapshot containing enough information for policy and diagnostics:
+Stateful components should expose a typed internal snapshot containing enough information for policy and diagnostics:
 
 ```cpp
 struct DeviceSnapshot {
-  component_common::LifecycleState lifecycle;
+  component_common::ConnectionState connection_state;
   DeviceOperatingState state;
-  component_common::FaultSnapshot<DeviceFault> faults;
+  uint32_t active_faults;
+  bool configuration_ready;
   uint32_t raw_status;  // optional diagnostic data
 };
 ```
 
-Not every component needs every field, but the distinction should remain clear:
-
-- `primary` is the most actionable user-facing fault;
-- `active_flags` are conditions currently asserted;
-- `latched_flags` persist until an explicit clear/reset;
+The ESPHome-facing wrapper may publish the active bitset as one deterministic comma-delimited text sensor when users need the complete set.
 - `raw_status` is diagnostic and optional.
 
 The ESPHome wrapper decides which parts become entities.

@@ -37,10 +37,9 @@ class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
   void set_ts2_temperature_sensor(sensor::Sensor *sensor);
   void set_ts3_temperature_sensor(sensor::Sensor *sensor);
 
-  void set_lifecycle_sensor(text_sensor::TextSensor *sensor);
+  void set_connection_state_sensor(text_sensor::TextSensor *sensor);
   void set_state_sensor(text_sensor::TextSensor *sensor);
   void set_fault_sensor(text_sensor::TextSensor *sensor);
-  void set_fault_flags_sensor(text_sensor::TextSensor *sensor);
   void set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor);
 
   void set_output_enabled_switch(switch_::Switch *control);
@@ -54,7 +53,7 @@ class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
   bool program_factory_otp();
 
  private:
-  void publish_lifecycle(component_common::LifecycleState lifecycle);
+  void publish_connection_state(component_common::ConnectionState connection_state);
   void publish_snapshot(const ::bq76952_core::Snapshot &snapshot);
   void publish_faults(const ::bq76952_core::Snapshot &snapshot);
 
@@ -71,10 +70,9 @@ class BQ76952Component : public PollingComponent, public BQ76952I2CTransport {
   sensor::Sensor *die_temperature_sensor_{nullptr};
   std::array<sensor::Sensor *, 3> thermistor_temperature_sensors_{};
 
-  text_sensor::TextSensor *lifecycle_sensor_{nullptr};
+  text_sensor::TextSensor *connection_state_sensor_{nullptr};
   text_sensor::TextSensor *state_sensor_{nullptr};
   text_sensor::TextSensor *fault_sensor_{nullptr};
-  text_sensor::TextSensor *fault_flags_sensor_{nullptr};
   text_sensor::TextSensor *capacity_calibration_status_sensor_{nullptr};
 
   switch_::Switch *output_enabled_switch_{nullptr};

@@ -30,6 +30,6 @@ That form resolves both in this source tree and after ESPHome copies the loaded 
 - `bit_field.h`: contiguous register-field encode/decode/replace and masked updates.
 - `byte_order.h`: fixed-width unsigned little-endian and big-endian load/store.
 - `charger.h`: typed charger capabilities, snapshots, and control boundary for component composition.
-- `status.h`: lifecycle states and a generic typed fault snapshot for stateful components.
+- `status.h`: a small generic connection-state enum for components with recoverable transports.
 
 Keep this package small and policy-free. Chip addresses, reset values, scaling, faults, and configuration defaults remain in the owning component or chip family.

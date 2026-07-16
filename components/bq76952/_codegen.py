@@ -185,10 +185,9 @@ async def to_code(config):
             cg.add(var.set_cell_voltage_sensor(index, sens))
 
     text_sensor_setters = (
-        (schema.CONF_LIFECYCLE, var.set_lifecycle_sensor),
+        (schema.CONF_CONNECTION_STATE, var.set_connection_state_sensor),
         (schema.CONF_STATE, var.set_state_sensor),
         (schema.CONF_FAULT, var.set_fault_sensor),
-        (schema.CONF_FAULT_FLAGS, var.set_fault_flags_sensor),
         (
             schema.CONF_CAPACITY_CALIBRATION_STATUS,
             var.set_capacity_calibration_status_sensor,

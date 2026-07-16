@@ -13,6 +13,6 @@
 - `bit_field.h`: generic contiguous field and masked-bit operations.
 - `byte_order.h`: unsigned fixed-width endian load/store.
 - `charger.h`: typed charger capabilities, snapshots, states, and enable command.
-- `status.h`: generic lifecycle and typed fault-snapshot contract.
+- `status.h`: generic connection-state contract for recoverable transports.
 - `README.md`: ESPHome loading, allowlist, and include-path contract.
 - `tests/component_common_test.cpp`: host-side helper behaviour and compile-time checks.

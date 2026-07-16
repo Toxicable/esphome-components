@@ -46,37 +46,19 @@ OperatingState decode_operating_state(uint16_t control_status, uint16_t battery_
   return OperatingState::NORMAL;
 }
 
-uint32_t decode_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c) {
-  uint32_t flags = FAULT_NONE;
-  if ((safety_a & hw::bits::protection_a::CUV) != 0) flags |= FAULT_CELL_UNDERVOLTAGE;
-  if ((safety_a & hw::bits::protection_a::COV) != 0) flags |= FAULT_CELL_OVERVOLTAGE;
-  if ((safety_a & hw::bits::protection_a::OCC) != 0) flags |= FAULT_CHARGE_OVERCURRENT;
-  if ((safety_a & hw::bits::protection_a::OCD1) != 0) flags |= FAULT_DISCHARGE_OVERCURRENT;
-  if ((safety_a & hw::bits::protection_a::OCD2) != 0) flags |= FAULT_DISCHARGE_SEVERE_OVERCURRENT;
-  if ((safety_a & hw::bits::protection_a::SCD) != 0) flags |= FAULT_DISCHARGE_SHORT_CIRCUIT;
-  if ((safety_c & hw::bits::protection_c::OCD3) != 0) flags |= FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
-  if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) flags |= FAULT_PRECHARGE_TIMEOUT;
-  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) flags |= FAULT_TEMPERATURE;
-  if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) flags |= FAULT_PERMANENT_FAILURE;
-  return flags;
-}
-
-Fault primary_fault(uint32_t active_flags) {
-  if ((active_flags & FAULT_PERMANENT_FAILURE) != 0) return Fault::PERMANENT_FAILURE;
-  if ((active_flags & FAULT_DISCHARGE_SHORT_CIRCUIT) != 0) return Fault::DISCHARGE_SHORT_CIRCUIT;
-  if ((active_flags & FAULT_CELL_OVERVOLTAGE) != 0) return Fault::CELL_OVERVOLTAGE;
-  if ((active_flags & FAULT_CELL_UNDERVOLTAGE) != 0) return Fault::CELL_UNDERVOLTAGE;
-  if ((active_flags & FAULT_DISCHARGE_SEVERE_OVERCURRENT) != 0) return Fault::DISCHARGE_SEVERE_OVERCURRENT;
-  if ((active_flags & FAULT_CHARGE_OVERCURRENT) != 0) return Fault::CHARGE_OVERCURRENT;
-  if ((active_flags & FAULT_DISCHARGE_OVERCURRENT) != 0) return Fault::DISCHARGE_OVERCURRENT;
-  if ((active_flags & FAULT_DISCHARGE_SUSTAINED_OVERCURRENT) != 0) return Fault::DISCHARGE_SUSTAINED_OVERCURRENT;
-  if ((active_flags & FAULT_TEMPERATURE) != 0) return Fault::TEMPERATURE;
-  if ((active_flags & FAULT_PRECHARGE_TIMEOUT) != 0) return Fault::PRECHARGE_TIMEOUT;
-  return Fault::NONE;
-}
-
-FaultSnapshot make_fault_snapshot(uint32_t active_flags, uint32_t latched_flags) {
-  return {primary_fault(active_flags), active_flags, latched_flags};
+uint32_t decode_faults(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c) {
+  uint32_t faults = FAULT_NONE;
+  if ((safety_a & hw::bits::protection_a::CUV) != 0) faults |= FAULT_CELL_UNDERVOLTAGE;
+  if ((safety_a & hw::bits::protection_a::COV) != 0) faults |= FAULT_CELL_OVERVOLTAGE;
+  if ((safety_a & hw::bits::protection_a::OCC) != 0) faults |= FAULT_CHARGE_OVERCURRENT;
+  if ((safety_a & hw::bits::protection_a::OCD1) != 0) faults |= FAULT_DISCHARGE_OVERCURRENT;
+  if ((safety_a & hw::bits::protection_a::OCD2) != 0) faults |= FAULT_DISCHARGE_SEVERE_OVERCURRENT;
+  if ((safety_a & hw::bits::protection_a::SCD) != 0) faults |= FAULT_DISCHARGE_SHORT_CIRCUIT;
+  if ((safety_c & hw::bits::protection_c::OCD3) != 0) faults |= FAULT_DISCHARGE_SUSTAINED_OVERCURRENT;
+  if ((safety_c & hw::bits::protection_c::PRECHARGE_TIMEOUT) != 0) faults |= FAULT_PRECHARGE_TIMEOUT;
+  if ((safety_b & hw::bits::protection_b::ANY_TEMPERATURE) != 0) faults |= FAULT_TEMPERATURE;
+  if ((battery_status & hw::bits::battery_status::PERMANENT_FAILURE) != 0) faults |= FAULT_PERMANENT_FAILURE;
+  return faults;
 }
 
 const char *operating_state_to_string(OperatingState state) {
@@ -96,34 +78,7 @@ const char *operating_state_to_string(OperatingState state) {
   }
 }
 
-const char *fault_to_string(Fault fault) {
-  switch (fault) {
-    case Fault::PERMANENT_FAILURE:
-      return "permanent_failure";
-    case Fault::DISCHARGE_SHORT_CIRCUIT:
-      return "discharge_short_circuit";
-    case Fault::CELL_OVERVOLTAGE:
-      return "cell_overvoltage";
-    case Fault::CELL_UNDERVOLTAGE:
-      return "cell_undervoltage";
-    case Fault::DISCHARGE_SEVERE_OVERCURRENT:
-      return "discharge_severe_overcurrent";
-    case Fault::CHARGE_OVERCURRENT:
-      return "charge_overcurrent";
-    case Fault::DISCHARGE_OVERCURRENT:
-      return "discharge_overcurrent";
-    case Fault::DISCHARGE_SUSTAINED_OVERCURRENT:
-      return "discharge_sustained_overcurrent";
-    case Fault::TEMPERATURE:
-      return "temperature";
-    case Fault::PRECHARGE_TIMEOUT:
-      return "precharge_timeout";
-    default:
-      return "none";
-  }
-}
-
-size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_size) {
+size_t format_faults(uint32_t active_faults, char *buffer, size_t buffer_size) {
   if (buffer == nullptr || buffer_size == 0) {
     return 0;
   }
@@ -133,19 +88,19 @@ size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_siz
     uint32_t flag;
     const char *name;
   } entries[] = {
-      {FAULT_CELL_UNDERVOLTAGE, "cell_undervoltage"},
+      {FAULT_PERMANENT_FAILURE, "permanent_failure"},
+      {FAULT_DISCHARGE_SHORT_CIRCUIT, "discharge_short_circuit"},
       {FAULT_CELL_OVERVOLTAGE, "cell_overvoltage"},
+      {FAULT_CELL_UNDERVOLTAGE, "cell_undervoltage"},
+      {FAULT_DISCHARGE_SEVERE_OVERCURRENT, "discharge_severe_overcurrent"},
       {FAULT_CHARGE_OVERCURRENT, "charge_overcurrent"},
       {FAULT_DISCHARGE_OVERCURRENT, "discharge_overcurrent"},
-      {FAULT_DISCHARGE_SEVERE_OVERCURRENT, "discharge_severe_overcurrent"},
       {FAULT_DISCHARGE_SUSTAINED_OVERCURRENT, "discharge_sustained_overcurrent"},
-      {FAULT_DISCHARGE_SHORT_CIRCUIT, "discharge_short_circuit"},
       {FAULT_TEMPERATURE, "temperature"},
       {FAULT_PRECHARGE_TIMEOUT, "precharge_timeout"},
-      {FAULT_PERMANENT_FAILURE, "permanent_failure"},
   };
   for (const auto &entry : entries) {
-    if ((active_flags & entry.flag) != 0 && !append_text(buffer, buffer_size, length, entry.name)) {
+    if ((active_faults & entry.flag) != 0 && !append_text(buffer, buffer_size, length, entry.name)) {
       return length;
     }
   }

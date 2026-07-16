@@ -70,8 +70,8 @@ void BQ76952Component::set_ts3_temperature_sensor(sensor::Sensor *sensor) {
   this->thermistor_temperature_sensors_[2] = sensor;
 }
 
-void BQ76952Component::set_lifecycle_sensor(text_sensor::TextSensor *sensor) {
-  this->lifecycle_sensor_ = sensor;
+void BQ76952Component::set_connection_state_sensor(text_sensor::TextSensor *sensor) {
+  this->connection_state_sensor_ = sensor;
 }
 
 void BQ76952Component::set_state_sensor(text_sensor::TextSensor *sensor) {
@@ -82,9 +82,6 @@ void BQ76952Component::set_fault_sensor(text_sensor::TextSensor *sensor) {
   this->fault_sensor_ = sensor;
 }
 
-void BQ76952Component::set_fault_flags_sensor(text_sensor::TextSensor *sensor) {
-  this->fault_flags_sensor_ = sensor;
-}
 
 void BQ76952Component::set_capacity_calibration_status_sensor(text_sensor::TextSensor *sensor) {
   this->capacity_calibration_status_sensor_ = sensor;
@@ -101,7 +98,7 @@ void BQ76952Component::setup() {
 void BQ76952Component::update() {
   ::bq76952_core::Snapshot snapshot{};
   const bool valid = this->service_.poll(snapshot);
-  this->publish_lifecycle(snapshot.lifecycle);
+  this->publish_connection_state(snapshot.connection_state);
 
   if (!valid) {
     if (this->state_sensor_ != nullptr) {
@@ -110,24 +107,22 @@ void BQ76952Component::update() {
     if (this->fault_sensor_ != nullptr) {
       this->fault_sensor_->publish_state("unknown");
     }
-    if (this->fault_flags_sensor_ != nullptr) {
-      this->fault_flags_sensor_->publish_state("unknown");
-    }
     this->status_set_warning();
     return;
   }
 
   this->publish_snapshot(snapshot);
-  if (snapshot.lifecycle == component_common::LifecycleState::READY) {
+  if (snapshot.configuration_ready) {
     this->status_clear_warning();
   } else {
     this->status_set_warning();
   }
 }
 
-void BQ76952Component::publish_lifecycle(component_common::LifecycleState lifecycle) {
-  if (this->lifecycle_sensor_ != nullptr) {
-    this->lifecycle_sensor_->publish_state(component_common::lifecycle_state_to_string(lifecycle));
+void BQ76952Component::publish_connection_state(component_common::ConnectionState connection_state) {
+  if (this->connection_state_sensor_ != nullptr) {
+    this->connection_state_sensor_->publish_state(
+        component_common::connection_state_to_string(connection_state));
   }
 }
 
@@ -193,12 +188,9 @@ void BQ76952Component::publish_snapshot(const ::bq76952_core::Snapshot &snapshot
 
 void BQ76952Component::publish_faults(const ::bq76952_core::Snapshot &snapshot) {
   if (this->fault_sensor_ != nullptr) {
-    this->fault_sensor_->publish_state(::bq76952_core::fault_to_string(snapshot.faults.primary));
-  }
-  if (this->fault_flags_sensor_ != nullptr) {
     char faults[256];
-    ::bq76952_core::format_fault_flags(snapshot.faults.active_flags, faults, sizeof(faults));
-    this->fault_flags_sensor_->publish_state(faults);
+    ::bq76952_core::format_faults(snapshot.active_faults, faults, sizeof(faults));
+    this->fault_sensor_->publish_state(faults);
   }
 }
 
@@ -234,10 +226,9 @@ void BQ76952Component::dump_config() {
   LOG_SENSOR("  ", "TS1 Temperature", this->thermistor_temperature_sensors_[0]);
   LOG_SENSOR("  ", "TS2 Temperature", this->thermistor_temperature_sensors_[1]);
   LOG_SENSOR("  ", "TS3 Temperature", this->thermistor_temperature_sensors_[2]);
-  LOG_TEXT_SENSOR("  ", "Lifecycle", this->lifecycle_sensor_);
+  LOG_TEXT_SENSOR("  ", "Connection State", this->connection_state_sensor_);
   LOG_TEXT_SENSOR("  ", "State", this->state_sensor_);
   LOG_TEXT_SENSOR("  ", "Fault", this->fault_sensor_);
-  LOG_TEXT_SENSOR("  ", "Fault Flags", this->fault_flags_sensor_);
   LOG_TEXT_SENSOR("  ", "Capacity Calibration Status", this->capacity_calibration_status_sensor_);
   LOG_SWITCH("  ", "Output Enabled", this->output_enabled_switch_);
 }

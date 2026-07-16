@@ -121,23 +121,18 @@ bq76952:
     empty_cell_voltage_mv: 3000
     full_cell_voltage_mv: 4200
 
-  # Communication/configuration lifecycle: disconnected, configuring, ready,
-  # or failed. Diagnostic rather than a hardware fault.
-  lifecycle:
-    name: "BMS Lifecycle"
+  # Device communication only: disconnected, connecting, connected, or failed.
+  connection_state:
+    name: "BMS Connection State"
 
   # Device operating mode only: normal, sleep, deep_sleep, config_update,
   # shutdown_pending, or unknown.
   state:
     name: "BMS State"
 
-  # Highest-priority active protection cause, or none.
+  # Comma-delimited list of every active normalized protection cause, or none.
   fault:
     name: "BMS Fault"
-
-  # Optional diagnostic list of every active normalized protection cause.
-  fault_flags:
-    name: "BMS Fault Flags"
 
   pack_voltage:
     name: "BMS Pack Voltage"
@@ -170,18 +165,18 @@ bq76952:
 
 The service waits until the device answers its communication probe, then compares the complete desired configuration with data memory. It enters `CONFIG_UPDATE` only when drift is found. Failed synchronization remains pending and retries after communication recovery. Runtime-only sleep, regulator and autonomous-FET state is restored after reconnect or reset.
 
-## Lifecycle, state, and fault
+## Connection state, operating state, and fault
 
-- `lifecycle` reports whether communication and deterministic configuration are available: `disconnected`, `configuring`, `ready`, or `failed`.
+- `connection_state` reports transport availability only: `disconnected`, `connecting`, `connected`, or `failed`.
 - `state` reports only the BQ76952 operating mode: `normal`, `sleep`, `deep_sleep`, `config_update`, `shutdown_pending`, or `unknown`.
-- `fault` reports the highest-priority active protection cause. Priority is permanent failure, short circuit, cell over/undervoltage, severe/normal/sustained overcurrent, temperature, then precharge timeout.
-- `fault_flags` is an optional diagnostic comma-separated list of all active normalized causes.
-- Communication loss changes lifecycle and component warning status; `fault` and `fault_flags` become `unknown` because the hardware protection state cannot be read.
+- `fault` reports every active normalized protection cause as a deterministic comma-delimited list, or `none`.
+- Communication loss changes `connection_state` and ESPHome component warning status; `fault` becomes `unknown` because the hardware protection state cannot be read.
+- Configuration synchronization readiness remains internal and drives ESPHome warning status rather than adding another user-facing state entity.
 - Raw Safety Status A/B/C and FET status bits remain internal and are decoded before publication.
 
 ### Status migration
 
-Earlier revisions used `state: offline` for communication loss and published every active cause through `fault`. Use `lifecycle` for availability, `state` for device mode, `fault` for the primary actionable cause, and `fault_flags` only when the complete diagnostic set is useful.
+Use `connection_state` for communication availability, `state` for device mode, and `fault` for the complete active fault list. The former `lifecycle` and `fault_flags` keys are intentionally unsupported.
 
 ## Fixed product policy
 

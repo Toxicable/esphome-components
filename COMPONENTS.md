@@ -22,9 +22,9 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
 | `bq25798` | legacy | Pool-cleaner configuration | Freeze feature development; migrate the consumer to `bq25756`, then remove this monolithic driver. |
 | `bq76922` | experimental | No deployed configuration or compile fixture found | Require an owner, real board YAML, and tests before promotion; otherwise retire instead of maintaining parallel BQ769x2 implementations. |
-| `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed lifecycle/fault snapshots, and the explicit manufacturing boundary. |
+| `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
 | `bq769x0` | candidate-removal | No current consumer found | Confirm external use before removal. |
-| `component_common` | internal | Header-only register, charger, lifecycle, and fault-snapshot contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
+| `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
 | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
 | `esc_higher` | active | ESC Higher board and boat configuration | Maintain as the board-facing ESC integration. |
 | `fdc1004` | candidate-removal | No current consumer found | Confirm external use before removal. |

@@ -73,10 +73,11 @@ Component-scoped rules for `components/bq76952`.
 
 ## User-facing status
 
-- `lifecycle` is diagnostic availability/configuration state: disconnected, configuring, ready, or failed.
+- `connection_state` reports transport state only: disconnected, connecting, connected, or failed.
 - `state` is operating mode only: unknown, normal, sleep, deep_sleep, config_update, or shutdown_pending.
-- `fault` is the highest-priority actionable active cause; `fault_flags` is the optional aggregate diagnostic list.
-- Communication loss changes lifecycle and warning status; publish hardware fault entities as `unknown`, never as a synthetic communication fault or a known `none`.
+- `fault` is the deterministic comma-delimited list of every active normalized cause, or `none`.
+- Communication loss changes connection state and warning status; publish `fault` as `unknown`, never as a synthetic communication fault or a known `none`.
+- Configuration synchronization readiness stays internal and drives ESPHome component warning status.
 - Do not expose raw FET status or Safety Status A/B/C directly; decode them into typed status first.
 
 ## Configuration synchronization

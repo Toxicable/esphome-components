@@ -123,11 +123,11 @@ const char *BQ76952Service::capacity_calibration_status() const {
 
 void BQ76952Service::setup() {
   if (!this->config_set_) {
-    this->lifecycle_ = component_common::LifecycleState::FAILED;
+    this->connection_state_ = component_common::ConnectionState::FAILED;
     ESP_LOGE(TAG, "No BQ76952 configuration was supplied");
     return;
   }
-  this->lifecycle_ = component_common::LifecycleState::CONFIGURING;
+  this->connection_state_ = component_common::ConnectionState::CONNECTING;
   this->soc_.setup(this->config_.cell_chemistry);
   this->next_configuration_retry_ms_ = 0;
   this->next_configuration_audit_ms_ = 0;
@@ -149,9 +149,7 @@ bool BQ76952Service::establish_connection() {
     this->load_unit_scaling();
   }
   this->online_ = true;
-  if (!this->configured_) {
-    this->lifecycle_ = component_common::LifecycleState::CONFIGURING;
-  }
+  this->connection_state_ = component_common::ConnectionState::CONNECTED;
   return true;
 }
 
@@ -161,21 +159,24 @@ void BQ76952Service::note_communication_failure() {
   }
   this->online_ = false;
   this->configured_ = false;
-  this->lifecycle_ = component_common::LifecycleState::DISCONNECTED;
+  this->connection_state_ = component_common::ConnectionState::DISCONNECTED;
 }
 
 bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
   snapshot = {};
   snapshot.cell_count = this->config_.cell_count;
-  snapshot.lifecycle = this->lifecycle_;
+  snapshot.connection_state = this->connection_state_;
+  snapshot.configuration_ready = this->configured_;
 
   if (!this->config_set_) {
-    this->lifecycle_ = component_common::LifecycleState::FAILED;
-    snapshot.lifecycle = this->lifecycle_;
+    this->connection_state_ = component_common::ConnectionState::FAILED;
+    snapshot.connection_state = this->connection_state_;
+    snapshot.configuration_ready = false;
     return false;
   }
   if (!this->establish_connection()) {
-    snapshot.lifecycle = this->lifecycle_;
+    snapshot.connection_state = this->connection_state_;
+    snapshot.configuration_ready = false;
     return false;
   }
 
@@ -194,16 +195,16 @@ bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
     }
   }
 
-  this->lifecycle_ = this->configured_ ? component_common::LifecycleState::READY
-                                       : component_common::LifecycleState::CONFIGURING;
   if (!this->read_snapshot(snapshot)) {
     this->note_communication_failure();
     snapshot = {};
     snapshot.cell_count = this->config_.cell_count;
-    snapshot.lifecycle = this->lifecycle_;
+    snapshot.connection_state = this->connection_state_;
+    snapshot.configuration_ready = false;
     return false;
   }
-  snapshot.lifecycle = this->lifecycle_;
+  snapshot.connection_state = this->connection_state_;
+  snapshot.configuration_ready = this->configured_;
   return true;
 }
 bool BQ76952Service::configuration_matches(bool &matches) {
@@ -742,8 +743,8 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   snapshot.operating_state = ::bq76952_core::decode_operating_state(control_status, battery_status);
   snapshot.output_enabled = (fet_status & hw::bits::fet_status::CHARGE) != 0 &&
                             (fet_status & hw::bits::fet_status::DISCHARGE) != 0;
-  snapshot.faults = ::bq76952_core::make_fault_snapshot(
-      ::bq76952_core::decode_fault_flags(battery_status, safety_a, safety_b, safety_c));
+  snapshot.active_faults =
+      ::bq76952_core::decode_faults(battery_status, safety_a, safety_b, safety_c);
 
   std::array<int16_t, 16> raw_cells{};
   for (uint8_t raw = 0; raw < raw_cells.size(); raw++) {
@@ -814,8 +815,8 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   soc_sample.minimum_cell_voltage_mv = min_cell;
   soc_sample.maximum_cell_voltage_mv = max_cell;
   soc_sample.average_cell_voltage_mv = average_cell;
-  soc_sample.cell_undervoltage_active = (snapshot.faults.active_flags & ::bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0;
-  soc_sample.cell_overvoltage_active = (snapshot.faults.active_flags & ::bq76952_core::FAULT_CELL_OVERVOLTAGE) != 0;
+  soc_sample.cell_undervoltage_active = (snapshot.active_faults & ::bq76952_core::FAULT_CELL_UNDERVOLTAGE) != 0;
+  soc_sample.cell_overvoltage_active = (snapshot.active_faults & ::bq76952_core::FAULT_CELL_OVERVOLTAGE) != 0;
   soc_sample.empty_cell_voltage_mv = this->config_.soc.empty_cell_voltage_mv;
   soc_sample.full_cell_voltage_mv = this->config_.soc.full_cell_voltage_mv;
   snapshot.state_of_charge_percent = this->soc_.update(soc_sample);

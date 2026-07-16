@@ -18,20 +18,6 @@ enum class OperatingState : uint8_t {
   SHUTDOWN_PENDING,
 };
 
-enum class Fault : uint8_t {
-  NONE = 0,
-  PERMANENT_FAILURE,
-  DISCHARGE_SHORT_CIRCUIT,
-  CELL_OVERVOLTAGE,
-  CELL_UNDERVOLTAGE,
-  DISCHARGE_SEVERE_OVERCURRENT,
-  CHARGE_OVERCURRENT,
-  DISCHARGE_OVERCURRENT,
-  DISCHARGE_SUSTAINED_OVERCURRENT,
-  TEMPERATURE,
-  PRECHARGE_TIMEOUT,
-};
-
 enum FaultFlags : uint32_t {
   FAULT_NONE = 0,
   FAULT_CELL_UNDERVOLTAGE = 1U << 0,
@@ -46,12 +32,11 @@ enum FaultFlags : uint32_t {
   FAULT_PERMANENT_FAILURE = 1U << 9,
 };
 
-using FaultSnapshot = component_common::FaultSnapshot<Fault, uint32_t>;
-
 struct Snapshot {
-  component_common::LifecycleState lifecycle{component_common::LifecycleState::DISCONNECTED};
+  component_common::ConnectionState connection_state{component_common::ConnectionState::DISCONNECTED};
   OperatingState operating_state{OperatingState::UNKNOWN};
-  FaultSnapshot faults{};
+  uint32_t active_faults{FAULT_NONE};
+  bool configuration_ready{false};
   bool output_enabled{false};
 
   std::array<int16_t, 16> cell_voltage_mv{};
@@ -67,11 +52,8 @@ struct Snapshot {
 };
 
 OperatingState decode_operating_state(uint16_t control_status, uint16_t battery_status);
-uint32_t decode_fault_flags(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c);
-Fault primary_fault(uint32_t active_flags);
-FaultSnapshot make_fault_snapshot(uint32_t active_flags, uint32_t latched_flags = 0);
+uint32_t decode_faults(uint16_t battery_status, uint8_t safety_a, uint8_t safety_b, uint8_t safety_c);
 const char *operating_state_to_string(OperatingState state);
-const char *fault_to_string(Fault fault);
-size_t format_fault_flags(uint32_t active_flags, char *buffer, size_t buffer_size);
+size_t format_faults(uint32_t active_faults, char *buffer, size_t buffer_size);
 
 }  // namespace bq76952_core
