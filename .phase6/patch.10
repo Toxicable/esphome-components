@@ -1,0 +1,392 @@
++const char *state_to_string(State state);
++const char *fault_to_string(Fault fault);
++const char *calibration_source_to_string(CalibrationSource source);
++std::size_t format_faults(FaultFlags flags, char *buffer, std::size_t size);
++
++float normalize_hardware_maximum_voltage(float voltage_v);
++bool calibration_valid(const Calibration &calibration);
++float effective_current_limit(const Measurement &measurement,
++                              const Limits &limits,
++                              const Calibration &calibration);
++FaultFlags detect_safety_faults(const Measurement &measurement,
++                                const HardwareLimits &hardware_limits,
++                                const Limits &limits, float current_deadband_a,
++                                bool required_temperature_unavailable,
++                                bool charger_control_mismatch);
++bool fault_conditions_active(FaultFlags flags, const Measurement &measurement,
++                             const HardwareLimits &hardware_limits,
++                             const Limits &limits, float current_deadband_a,
++                             bool required_temperature_unavailable,
++                             bool charger_control_mismatch,
++                             bool charger_configured,
++                             bool charger_measurement_valid,
++                             bool charger_fault_active);
++
++}  // namespace programmable_load_core
+diff --git a/components/programmable_load/test_config.yaml b/components/programmable_load/test_config.yaml
+index 35f41e8..57711dc 100644
+--- a/components/programmable_load/test_config.yaml
++++ b/components/programmable_load/test_config.yaml
+@@ -47,6 +47,26 @@ output:
+     id: load_fan
+     pin: GPIO9
+ 
++button:
++  - platform: template
++    name: "Apply Test Load Calibration"
++    on_press:
++      - programmable_load.apply_calibration:
++          id: load_controller
++          current_scale: 1.0
++          current_offset: 0.0
++          voltage_scale: 1.0
++          voltage_offset: 0.0
++          output_zero_level: 0.0
++          output_full_scale_current: 80.1
++          persist: false
++  - platform: template
++    name: "Reset Test Load Calibration"
++    on_press:
++      - programmable_load.reset_calibration:
++          id: load_controller
++          persist: false
++
+ sensor:
+   - platform: template
+     id: load_current
+@@ -100,6 +120,22 @@ programmable_load:
+     output:
+       zero_level: 0.0
+       full_scale_current: 80.1
++    status:
++      name: "Load Calibration Status"
++    current_scale:
++      name: "Load Current Calibration Scale"
++    current_offset:
++      name: "Load Current Calibration Offset"
++    voltage_scale:
++      name: "Load Voltage Calibration Scale"
++    voltage_offset:
++      name: "Load Voltage Calibration Offset"
++    output_zero_level:
++      name: "Load Output Zero Level"
++    output_full_scale_current:
++      name: "Load Output Full Scale Current"
++    reset:
++      name: "Reset Load Calibration"
+   limits:
+     maximum_current: 40
+     minimum_voltage: 40
+diff --git a/components/programmable_load/test_invalid_hardware_voltage.expected b/components/programmable_load/test_invalid_hardware_voltage.expected
+new file mode 100644
+index 0000000..f293138
+--- /dev/null
++++ b/components/programmable_load/test_invalid_hardware_voltage.expected
+@@ -0,0 +1 @@
++hardware.maximum_voltage must not exceed the absolute 75 V component ceiling
+diff --git a/components/programmable_load/test_invalid_hardware_voltage.yaml b/components/programmable_load/test_invalid_hardware_voltage.yaml
+new file mode 100644
+index 0000000..d6a45c0
+--- /dev/null
++++ b/components/programmable_load/test_invalid_hardware_voltage.yaml
+@@ -0,0 +1,205 @@
++esphome:
++  name: programmable-load-invalid-voltage
++  min_version: 2026.5.3
++
++esp32:
++  board: esp32-s3-devkitc-1
++  framework:
++    type: esp-idf
++
++substitutions:
++  wifi_ssid: "compile-placeholder"
++  wifi_password: "compile-placeholder"
++  api_encryption_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
++  ota_password: "compile-placeholder"
++
++external_components:
++  - source:
++      type: local
++      path: ..
++    refresh: 0s
++    components: [ component_common, programmable_load, bq25756 ]
++
++wifi:
++  ssid: "${wifi_ssid}"
++  password: "${wifi_password}"
++
++api:
++  encryption:
++    key: "${api_encryption_key}"
++
++ota:
++  - platform: esphome
++    password: "${ota_password}"
++
++i2c:
++  id: i2c_ext
++  sda: GPIO35
++  scl: GPIO36
++  scan: true
++  frequency: 400kHz
++
++output:
++  - platform: ledc
++    id: load_dac
++    pin: GPIO8
++  - platform: ledc
++    id: load_fan
++    pin: GPIO9
++
++button:
++  - platform: template
++    name: "Apply Test Load Calibration"
++    on_press:
++      - programmable_load.apply_calibration:
++          id: load_controller
++          current_scale: 1.0
++          current_offset: 0.0
++          voltage_scale: 1.0
++          voltage_offset: 0.0
++          output_zero_level: 0.0
++          output_full_scale_current: 80.1
++          persist: false
++  - platform: template
++    name: "Reset Test Load Calibration"
++    on_press:
++      - programmable_load.reset_calibration:
++          id: load_controller
++          persist: false
++
++sensor:
++  - platform: template
++    id: load_current
++    internal: true
++    update_interval: 100ms
++    lambda: return 0.0f;
++  - platform: template
++    id: load_voltage
++    internal: true
++    update_interval: 100ms
++    lambda: return 52.0f;
++  - platform: template
++    id: heatsink_temperature
++    internal: true
++    update_interval: 1s
++    lambda: return 25.0f;
++
++bq25756:
++  id: charger14_bq
++  i2c_id: i2c_ext
++  address: 0x6B
++  update_interval: 1s
++  battery:
++    cell_count: 4
++    cell_chemistry: lithium_ion
++  charging:
++    battery_current_limit: 5A
++    input_current_limit: 3A
++
++
++programmable_load:
++  id: load_controller
++  hardware:
++    dac: load_dac
++    maximum_voltage: 76
++  measurements:
++    current: load_current
++    voltage: load_voltage
++    sample_timeout: 250ms
++    temperatures:
++      - sensor: heatsink_temperature
++        required: true
++  calibration:
++    restore: true
++    current:
++      scale: 1.0
++      offset: 0.0
++    voltage:
++      scale: 1.0
++      offset: 0.0
++    output:
++      zero_level: 0.0
++      full_scale_current: 80.1
++    status:
++      name: "Load Calibration Status"
++    current_scale:
++      name: "Load Current Calibration Scale"
++    current_offset:
++      name: "Load Current Calibration Offset"
++    voltage_scale:
++      name: "Load Voltage Calibration Scale"
++    voltage_offset:
++      name: "Load Voltage Calibration Offset"
++    output_zero_level:
++      name: "Load Output Zero Level"
++    output_full_scale_current:
++      name: "Load Output Full Scale Current"
++    reset:
++      name: "Reset Load Calibration"
++  limits:
++    maximum_current: 40
++    minimum_voltage: 40
++    maximum_voltage: 60
++    maximum_power: 500
++    maximum_temperature: 100
++  control:
++    period: 50ms
++    deadband: 0.01
++    rise_rate: 2
++    fall_rate: 4
++  cooling:
++    fan_output: load_fan
++    fan_start_temperature: 35
++    fan_full_temperature: 70
++  fault_policy:
++    auto_clear: false
++    clear_delay: 2s
++  manual_current:
++    name: "Load Current Setpoint"
++  state:
++    name: "Load State"
++  fault:
++    name: "Load Fault"
++  clear_fault:
++    name: "Clear Load Fault"
++  procedures:
++    dcr:
++      baseline_current: 0
++      pulse_current: 5
++      settle_time: 100ms
++      sample_time: 500ms
++      recovery_time: 1s
++      repeats: 3
++      start:
++        name: "Run Battery DCR Test"
++      resistance:
++        name: "Battery DCR"
++    battery_cycle:
++      charger: charger14_bq
++      charger_sample_timeout: 3s
++      charger_control_timeout: 5s
++      discharge_current: 10
++      discharge_cutoff_voltage: 42
++      discharge_cutoff_hysteresis: 0.5
++      discharge_cutoff_hold_time: 10s
++      rest_time: 5min
++      charge_start_timeout: 1min
++      charge_stall_timeout: 2min
++      charge_timeout: 24h
++      termination_hold_time: 10s
++      start:
++        name: "Run Battery Drain and Charge Cycle"
++      stop:
++        name: "Stop Battery Drain and Charge Cycle"
++      phase:
++        name: "Battery Cycle Phase"
++      result:
++        name: "Battery Cycle Result"
++      discharged_capacity:
++        name: "Discharged Capacity"
++      discharged_energy:
++        name: "Discharged Energy"
++      charged_capacity:
++        name: "Charged Capacity"
++      charged_energy:
++        name: "Charged Energy"
+diff --git a/tests/programmable_load_core_test.cpp b/tests/programmable_load_core_test.cpp
+new file mode 100644
+index 0000000..831f56b
+--- /dev/null
++++ b/tests/programmable_load_core_test.cpp
+@@ -0,0 +1,167 @@
++#include <cassert>
++#include <cmath>
++#include <cstring>
++
++#include "../components/programmable_load/programmable_load_core.h"
++
++namespace core = programmable_load_core;
++
++namespace {
++
++void test_operation_lock() {
++  core::OperationLock lock;
++  int procedure_a = 1;
++  int procedure_b = 2;
++
++  assert(lock.owner() == core::OperationOwner::NONE);
++  assert(lock.acquire_manual());
++  assert(lock.owns_manual());
++  assert(!lock.acquire_manual());
++  assert(!lock.acquire_procedure(&procedure_a));
++  assert(!lock.release_procedure(&procedure_a));
++  assert(lock.release_manual());
++  assert(lock.owner() == core::OperationOwner::NONE);
++
++  assert(lock.acquire_procedure(&procedure_a));
++  assert(lock.owns_procedure(&procedure_a));
++  assert(!lock.owns_procedure(&procedure_b));
++  assert(!lock.acquire_manual());
++  assert(!lock.release_procedure(&procedure_b));
++  assert(lock.release_procedure(&procedure_a));
++  assert(lock.owner() == core::OperationOwner::NONE);
++
++  assert(!lock.acquire_procedure(nullptr));
++  lock.force_release();
++  assert(lock.owner() == core::OperationOwner::NONE);
++}
++
++void test_fault_formatting() {
++  char buffer[256];
++  assert(core::format_faults(0u, buffer, sizeof(buffer)) == 4u);
++  assert(std::strcmp(buffer, "none") == 0);
++
++  core::FaultFlags flags = 0u;
++  flags |= core::fault_flag(core::Fault::INPUT_OVERVOLTAGE);
++  flags |= core::fault_flag(core::Fault::OVERCURRENT);
++  flags |= core::fault_flag(core::Fault::OVERTEMPERATURE);
++  core::format_faults(flags, buffer, sizeof(buffer));
++  assert(std::strcmp(buffer,
++                     "input_overvoltage,overcurrent,overtemperature") == 0);
++}
++
++core::Calibration valid_calibration() {
++  core::Calibration calibration{};
++  calibration.current.scale = 1.0f;
++  calibration.current.offset = 0.0f;
++  calibration.voltage.scale = 1.0f;
++  calibration.voltage.offset = 0.0f;
++  calibration.output.zero_level = 0.02f;
++  calibration.output.full_scale_current_a = 50.0f;
++  return calibration;
++}
++
++void test_hardware_voltage_normalization() {
++  assert(core::normalize_hardware_maximum_voltage(48.0f) == 48.0f);
++  assert(core::normalize_hardware_maximum_voltage(75.0f) == 75.0f);
++  assert(core::normalize_hardware_maximum_voltage(76.0f) == 75.0f);
++  assert(core::normalize_hardware_maximum_voltage(-1.0f) == 75.0f);
++  assert(core::normalize_hardware_maximum_voltage(NAN) == 75.0f);
++}
++
++void test_calibration_and_current_limit() {
++  auto calibration = valid_calibration();
++  assert(core::calibration_valid(calibration));
++  assert(std::strcmp(core::calibration_source_to_string(
++                         core::CalibrationSource::CONFIGURED),
++                     "configured") == 0);
++  assert(std::strcmp(core::calibration_source_to_string(
++                         core::CalibrationSource::RESTORED),
++                     "restored") == 0);
++  assert(std::strcmp(core::calibration_source_to_string(
++                         core::CalibrationSource::APPLIED),
++                     "applied") == 0);
++
++  calibration.output.zero_level = 1.0f;
++  assert(!core::calibration_valid(calibration));
++  calibration = valid_calibration();
++  calibration.output.full_scale_current_a = 0.0f;
++  assert(!core::calibration_valid(calibration));
++
