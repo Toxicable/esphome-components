@@ -1,0 +1,279 @@
+-  if (this->state_ != State::RUNNING || this->owner_ != Owner::MANUAL ||
+-      !std::isfinite(current_a)) return false;
++  if (this->state_ != State::RUNNING ||
++      !this->operation_lock_.owns_manual() || !std::isfinite(current_a))
++    return false;
+   if (current_a <= 0.0f) {
+     this->stop();
+     return true;
+@@ -206,12 +185,12 @@ bool ProgrammableLoadComponent::update_manual(float current_a) {
+ 
+ bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
+   if (procedure == nullptr || this->state_ != State::IDLE ||
+-      this->owner_ != Owner::NONE) return false;
++      !this->operation_lock_.acquire_procedure(procedure)) return false;
+   this->update_measurement_();
+   this->update_charger_measurement_();
+-  const Fault fault = this->detect_running_fault_();
+-  if (fault != Fault::NONE) {
+-    this->trip_fault_(fault);
++  const FaultFlags faults = this->detect_running_faults_();
++  if (faults != 0u) {
++    this->trip_faults_(faults);
+     return false;
+   }
+   this->apply_charger_command_(ChargerCommand::DISABLE);
+@@ -223,10 +202,10 @@ bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
+     return false;
+   }
+   if (result.status == ProcedureStatus::COMPLETE) {
++    this->operation_lock_.release_procedure(procedure);
+     procedure->stop(StopReason::COMPLETED);
+     return true;
+   }
+-  this->owner_ = Owner::PROCEDURE;
+   this->active_procedure_ = procedure;
+   this->reset_control_();
+   this->set_state_(State::RUNNING);
+@@ -236,7 +215,8 @@ bool ProgrammableLoadComponent::start_procedure(Procedure *procedure) {
+ 
+ bool ProgrammableLoadComponent::stop_procedure(Procedure *procedure) {
+   if (procedure == nullptr || this->state_ != State::RUNNING ||
+-      this->owner_ != Owner::PROCEDURE || this->active_procedure_ != procedure) {
++      !this->operation_lock_.owns_procedure(procedure) ||
++      this->active_procedure_ != procedure) {
+     return false;
+   }
+   this->release_owner_(StopReason::USER_REQUEST);
+@@ -253,15 +233,14 @@ void ProgrammableLoadComponent::stop() {
+ }
+ 
+ bool ProgrammableLoadComponent::clear_fault() {
+-  if (this->state_ != State::FAULT) return this->fault_ == Fault::NONE;
++  if (this->state_ != State::FAULT) return this->faults_ == 0u;
+   this->update_measurement_();
+   this->update_charger_measurement_();
+   this->apply_charger_command_(ChargerCommand::DISABLE);
+-  if (this->fault_condition_active_(this->fault_)) return false;
+-  this->fault_ = Fault::NONE;
++  if (this->fault_conditions_active_(this->faults_)) return false;
++  this->faults_ = 0u;
+   this->fault_clear_candidate_since_ms_ = 0;
+   this->set_state_(State::IDLE);
+-  this->publish_status_();
+   return true;
+ }
+ 
+@@ -333,8 +312,8 @@ void ProgrammableLoadComponent::update_charger_measurement_() {
+ 
+ void ProgrammableLoadComponent::update_faults_() {
+   if (this->state_ == State::RUNNING) {
+-    const Fault fault = this->detect_running_fault_();
+-    if (fault != Fault::NONE) this->trip_fault_(fault);
++    const FaultFlags faults = this->detect_running_faults_();
++    if (faults != 0u) this->trip_faults_(faults);
+     return;
+   }
+   if (this->state_ == State::IDLE) {
+@@ -346,7 +325,7 @@ void ProgrammableLoadComponent::update_faults_() {
+     return;
+   }
+   if (this->state_ != State::FAULT || !this->fault_policy_.auto_clear) return;
+-  if (this->fault_condition_active_(this->fault_)) {
++  if (this->fault_conditions_active_(this->faults_)) {
+     this->fault_clear_candidate_since_ms_ = 0;
+     return;
+   }
+@@ -360,11 +339,14 @@ void ProgrammableLoadComponent::update_faults_() {
+ }
+ 
+ void ProgrammableLoadComponent::update_operation_() {
+-  if (this->owner_ != Owner::PROCEDURE) return;
+   if (this->active_procedure_ == nullptr) {
+     this->trip_fault_(Fault::PROCEDURE_ERROR);
+     return;
+   }
++  if (!this->operation_lock_.owns_procedure(this->active_procedure_)) {
++    this->trip_fault_(Fault::PROCEDURE_ERROR);
++    return;
++  }
+   const ProcedureContext context{this->measurement_, this->charger_measurement_};
+   this->apply_procedure_result_(this->active_procedure_->update(context));
+ }
+@@ -478,83 +460,21 @@ void ProgrammableLoadComponent::update_fan_() {
+   }
+ }
+ 
+-Fault ProgrammableLoadComponent::detect_running_fault_() const {
+-  if (!this->measurement_.current_valid)
+-    return Fault::CURRENT_MEASUREMENT_UNAVAILABLE;
+-  if (!this->measurement_.voltage_valid)
+-    return Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE;
+-  if (this->required_temperature_unavailable_())
+-    return Fault::REQUIRED_TEMPERATURE_UNAVAILABLE;
+-  if (this->measurement_.voltage_v >
+-      this->hardware_limits_.maximum_voltage_v)
+-    return Fault::HARDWARE_OVERVOLTAGE;
+-  if (this->measurement_.voltage_v < this->limits_.minimum_voltage_v)
+-    return Fault::INPUT_UNDERVOLTAGE;
+-  if (this->measurement_.voltage_v > this->limits_.maximum_voltage_v)
+-    return Fault::INPUT_OVERVOLTAGE;
+-  if (std::fabs(this->measurement_.current_a) >
+-      this->limits_.maximum_current_a + this->deadband_a_)
+-    return Fault::OVERCURRENT;
+-  if (std::fabs(this->measurement_.power_w) > this->limits_.maximum_power_w)
+-    return Fault::OVERPOWER;
+-  if (std::isfinite(this->measurement_.maximum_temperature_c) &&
+-      this->measurement_.maximum_temperature_c >
+-          this->limits_.maximum_temperature_c)
+-    return Fault::OVERTEMPERATURE;
+-  if (this->charger_control_mismatch_())
+-    return Fault::CHARGER_CONTROL_ERROR;
+-  return Fault::NONE;
+-}
+-
+-bool ProgrammableLoadComponent::fault_condition_active_(Fault fault) const {
+-  switch (fault) {
+-    case Fault::NONE:
+-      return false;
+-    case Fault::CURRENT_MEASUREMENT_UNAVAILABLE:
+-      return !this->measurement_.current_valid;
+-    case Fault::VOLTAGE_MEASUREMENT_UNAVAILABLE:
+-      return !this->measurement_.voltage_valid;
+-    case Fault::REQUIRED_TEMPERATURE_UNAVAILABLE:
+-      return this->required_temperature_unavailable_();
+-    case Fault::INPUT_UNDERVOLTAGE:
+-      return !this->measurement_.voltage_valid ||
+-             this->measurement_.voltage_v < this->limits_.minimum_voltage_v;
+-    case Fault::INPUT_OVERVOLTAGE:
+-      return !this->measurement_.voltage_valid ||
+-             this->measurement_.voltage_v > this->limits_.maximum_voltage_v;
+-    case Fault::HARDWARE_OVERVOLTAGE:
+-      return !this->measurement_.voltage_valid ||
+-             this->measurement_.voltage_v >
+-                 this->hardware_limits_.maximum_voltage_v;
+-    case Fault::OVERCURRENT:
+-      return !this->measurement_.current_valid ||
+-             std::fabs(this->measurement_.current_a) >
+-                 this->limits_.maximum_current_a + this->deadband_a_;
+-    case Fault::OVERPOWER:
+-      return !this->measurement_.current_valid ||
+-             !this->measurement_.voltage_valid ||
+-             std::fabs(this->measurement_.power_w) >
+-                 this->limits_.maximum_power_w;
+-    case Fault::OVERTEMPERATURE:
+-      return this->required_temperature_unavailable_() ||
+-             (std::isfinite(this->measurement_.maximum_temperature_c) &&
+-              this->measurement_.maximum_temperature_c >
+-                  this->limits_.maximum_temperature_c);
+-    case Fault::CHARGER_UNAVAILABLE:
+-      return this->charger_ != nullptr &&
+-             !this->charger_measurement_.valid;
+-    case Fault::CHARGER_FAULT:
+-      return this->charger_measurement_.valid &&
+-             this->charger_measurement_.fault_active;
+-    case Fault::CHARGER_CONTROL_ERROR:
+-      return this->charger_control_mismatch_();
+-    case Fault::CHARGE_TIMEOUT:
+-    case Fault::CONTROL_ERROR:
+-    case Fault::PROCEDURE_ERROR:
+-      return false;
+-    default:
+-      return true;
+-  }
++FaultFlags ProgrammableLoadComponent::detect_running_faults_() const {
++  return ::programmable_load_core::detect_safety_faults(
++      this->measurement_, this->hardware_limits_, this->limits_,
++      this->deadband_a_, this->required_temperature_unavailable_(),
++      this->charger_control_mismatch_());
++}
++
++bool ProgrammableLoadComponent::fault_conditions_active_(
++    FaultFlags faults) const {
++  return ::programmable_load_core::fault_conditions_active(
++      faults, this->measurement_, this->hardware_limits_, this->limits_,
++      this->deadband_a_, this->required_temperature_unavailable_(),
++      this->charger_control_mismatch_(), this->charger_ != nullptr,
++      this->charger_measurement_.valid,
++      this->charger_measurement_.fault_active);
+ }
+ 
+ bool ProgrammableLoadComponent::required_temperature_unavailable_() const {
+@@ -637,7 +557,7 @@ bool ProgrammableLoadComponent::charger_control_mismatch_() const {
+ void ProgrammableLoadComponent::release_owner_(StopReason reason) {
+   Procedure *procedure = this->active_procedure_;
+   this->active_procedure_ = nullptr;
+-  this->owner_ = Owner::NONE;
++  this->operation_lock_.force_release();
+   this->requested_current_a_ = 0.0f;
+   this->reset_control_();
+   this->force_output_off_();
+@@ -655,10 +575,14 @@ void ProgrammableLoadComponent::set_state_(State state) {
+ }
+ 
+ void ProgrammableLoadComponent::trip_fault_(Fault fault) {
+-  if (fault == Fault::NONE) return;
++  this->trip_faults_(fault_flag(fault));
++}
++
++void ProgrammableLoadComponent::trip_faults_(FaultFlags faults) {
++  if (faults == 0u) return;
+   Procedure *procedure = this->active_procedure_;
+   this->active_procedure_ = nullptr;
+-  this->owner_ = Owner::NONE;
++  this->operation_lock_.force_release();
+   this->requested_current_a_ = 0.0f;
+   this->reset_control_();
+   this->force_output_off_();
+@@ -666,35 +590,53 @@ void ProgrammableLoadComponent::trip_fault_(Fault fault) {
+   if (procedure != nullptr) procedure->stop(StopReason::FAULTED);
+   if (this->manual_current_number_ != nullptr)
+     this->manual_current_number_->publish_state(0.0f);
+-  this->fault_ = fault;
++  this->faults_ |= faults;
+   this->state_ = State::FAULT;
+   this->fault_clear_candidate_since_ms_ = 0;
+   this->publish_status_();
+-  ESP_LOGE(TAG, "Load fault: %s", fault_to_string(fault));
++  char formatted[256];
++  format_faults(this->faults_, formatted, sizeof(formatted));
++  ESP_LOGE(TAG, "Load fault: %s", formatted);
+ }
+ 
+ void ProgrammableLoadComponent::publish_status_() {
+   if (this->state_sensor_ != nullptr)
+     this->state_sensor_->publish_state(state_to_string(this->state_));
+-  if (this->fault_sensor_ != nullptr)
+-    this->fault_sensor_->publish_state(fault_to_string(this->fault_));
++  if (this->fault_sensor_ != nullptr) {
++    char faults[256];
++    format_faults(this->faults_, faults, sizeof(faults));
++    this->fault_sensor_->publish_state(faults);
++  }
++}
++
++void ProgrammableLoadComponent::publish_calibration_() {
++  if (this->calibration_status_sensor_ != nullptr)
++    this->calibration_status_sensor_->publish_state(
++        calibration_source_to_string(this->calibration_source_));
++  if (this->current_scale_sensor_ != nullptr)
++    this->current_scale_sensor_->publish_state(this->calibration_.current.scale);
++  if (this->current_offset_sensor_ != nullptr)
++    this->current_offset_sensor_->publish_state(this->calibration_.current.offset);
++  if (this->voltage_scale_sensor_ != nullptr)
++    this->voltage_scale_sensor_->publish_state(this->calibration_.voltage.scale);
++  if (this->voltage_offset_sensor_ != nullptr)
++    this->voltage_offset_sensor_->publish_state(this->calibration_.voltage.offset);
++  if (this->output_zero_level_sensor_ != nullptr)
++    this->output_zero_level_sensor_->publish_state(
++        this->calibration_.output.zero_level);
++  if (this->output_full_scale_current_sensor_ != nullptr)
++    this->output_full_scale_current_sensor_->publish_state(
++        this->calibration_.output.full_scale_current_a);
+ }
+ 
+ float ProgrammableLoadComponent::effective_current_limit_() const {
+-  if (!this->measurement_.voltage_valid || this->measurement_.voltage_v <= 0.0f)
+-    return 0.0f;
+-  float limit = std::min(this->limits_.maximum_current_a,
+-                         this->calibration_.output.full_scale_current_a);
