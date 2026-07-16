@@ -1,0 +1,325 @@
++Charger_14 is used in its **external ESPHome control mode**. The cycle receives the `bq25756` component ID and talks to its typed `component_common::ChargerInterface` directly in C++. Charger entities are optional observers; the procedure does not depend on Home Assistant entity IDs or entity publication.
+ 
+-- `charge_enable`;
+-- `ibat_current` in mA;
+-- `vbat_voltage` in mV;
+-- `charge_status`;
+-- `status_flags`.
++Charge voltage, charge current, input-current and input-voltage limits remain owned by the `bq25756` configuration for the stuffed Charger_14 variant. The cycle only enables or disables an already configured charger. It does not write raw charger registers or duplicate board policy. A visible charger enable entity may still be provided for manual use while the programmable load is idle.
+ 
+-Charge voltage, charge current, input-current and input-voltage limits remain owned by the `bq25756` configuration for the stuffed Charger_14 variant. The cycle only enables or disables an already configured charger. It does not write raw charger registers or duplicate board policy. The Charger_14 enable control may also be used for manual charging while the programmable load is idle; the load output remains forced off in that state.
+-
+-When a Charger_14 adapter is configured, the programmable-load core owns its charge-enable switch and keeps it off outside the charging phase. The core also guarantees that a non-zero load request and charger enable cannot be active together.
++When a charger capability is configured, the programmable-load core owns charge-enable requests during a procedure and keeps charging off outside the charging phase. The core guarantees that a non-zero load request and charger enable cannot be active together.
+ 
+ The onboard Charger_14 STM32 firmware is a separate autonomous mode and currently has no host command protocol. This procedure therefore does not target the onboard STM32.
+ 
+@@ -62,6 +56,35 @@ Input-current and input-voltage DPM states are not treated as faults because the
+ 
+ Current and voltage scale/offset are applied before limits or procedures see measurements. DAC zero level and full-scale current map a requested current to the output. Calibration can be restored from preferences, replaced atomically, persisted, or reset to configured defaults.
+ 
++Calibration changes are accepted only while the load is `idle`. A complete six-value calibration is validated and applied as one transaction; a persistence failure restores the previous active values. Optional diagnostic entities expose the active coefficients and a `status` value of `configured`, `restored`, or `applied`.
++
++The reset button restores the values written under `calibration:` and persists them. Automations can apply or reset calibration explicitly:
++
++```yaml
++button:
++  - platform: template
++    name: "Apply Load Calibration"
++    on_press:
++      - programmable_load.apply_calibration:
++          id: load_controller
++          current_scale: 1.0012
++          current_offset: -0.006
++          voltage_scale: 0.9997
++          voltage_offset: 0.014
++          output_zero_level: 0.002
++          output_full_scale_current: 80.1
++          persist: true
++
++  - platform: template
++    name: "Reset Load Calibration"
++    on_press:
++      - programmable_load.reset_calibration:
++          id: load_controller
++          persist: true
++```
++
++The apply action intentionally requires every coefficient so an automation cannot leave the calibration half-updated.
++
+ ## Configuration
+ 
+ ```yaml
+@@ -110,6 +133,22 @@ programmable_load:
+     output:
+       zero_level: 0.0
+       full_scale_current: 80.1
++    status:
++      name: "Load Calibration Source"
++    current_scale:
++      name: "Load Current Calibration Scale"
++    current_offset:
++      name: "Load Current Calibration Offset"
++    voltage_scale:
++      name: "Load Voltage Calibration Scale"
++    voltage_offset:
++      name: "Load Voltage Calibration Offset"
++    output_zero_level:
++      name: "Load Output Zero Level"
++    output_full_scale_current:
++      name: "Load Output Full-scale Current"
++    reset:
++      name: "Reset Load Calibration"
+ 
+   limits:
+     maximum_current: 40
+diff --git a/components/programmable_load/__init__.py b/components/programmable_load/__init__.py
+index 786799b..7a3c0ad 100644
+--- a/components/programmable_load/__init__.py
++++ b/components/programmable_load/__init__.py
+@@ -1,644 +1,9 @@
+-import esphome.codegen as cg
+-import esphome.config_validation as cv
+-from esphome.components import button, number, output, sensor, text_sensor
+-from esphome.const import (
+-    CONF_ID,
+-    DEVICE_CLASS_CURRENT,
+-    UNIT_AMPERE,
+-)
+-
+ AUTO_LOAD = ["button", "component_common", "number", "sensor", "text_sensor"]
+ 
+-component_common_ns = cg.global_ns.namespace("component_common")
+-ChargerInterface = component_common_ns.class_("ChargerInterface")
+-
+-programmable_load_ns = cg.esphome_ns.namespace("programmable_load")
+-
+-ProgrammableLoadComponent = programmable_load_ns.class_(
+-    "ProgrammableLoadComponent", cg.Component
+-)
+-ManualCurrentNumber = programmable_load_ns.class_(
+-    "ManualCurrentNumber", number.Number
+-)
+-ClearFaultButton = programmable_load_ns.class_(
+-    "ClearFaultButton", button.Button
+-)
+-DcrTest = programmable_load_ns.class_("DcrTest")
+-DcrStartButton = programmable_load_ns.class_(
+-    "DcrStartButton", button.Button
+-)
+-BatteryCycle = programmable_load_ns.class_("BatteryCycle")
+-BatteryCycleStartButton = programmable_load_ns.class_(
+-    "BatteryCycleStartButton", button.Button
+-)
+-BatteryCycleStopButton = programmable_load_ns.class_(
+-    "BatteryCycleStopButton", button.Button
+-)
+-
+-CONF_HARDWARE = "hardware"
+-CONF_DAC = "dac"
+-CONF_HARDWARE_MAXIMUM_VOLTAGE = "maximum_voltage"
+-
+-CONF_MEASUREMENTS = "measurements"
+-CONF_CURRENT = "current"
+-CONF_VOLTAGE = "voltage"
+-CONF_TEMPERATURES = "temperatures"
+-CONF_SENSOR = "sensor"
+-CONF_REQUIRED = "required"
+-CONF_SAMPLE_TIMEOUT = "sample_timeout"
+-
+-CONF_CALIBRATION = "calibration"
+-CONF_RESTORE = "restore"
+-CONF_SCALE = "scale"
+-CONF_OFFSET = "offset"
+-CONF_OUTPUT = "output"
+-CONF_ZERO_LEVEL = "zero_level"
+-CONF_FULL_SCALE_CURRENT = "full_scale_current"
+-
+-CONF_LIMITS = "limits"
+-CONF_MAXIMUM_CURRENT = "maximum_current"
+-CONF_MINIMUM_VOLTAGE = "minimum_voltage"
+-CONF_MAXIMUM_VOLTAGE = "maximum_voltage"
+-CONF_MAXIMUM_POWER = "maximum_power"
+-CONF_MAXIMUM_TEMPERATURE = "maximum_temperature"
+-
+-CONF_CONTROL = "control"
+-CONF_PERIOD = "period"
+-CONF_DEADBAND = "deadband"
+-CONF_RISE_RATE = "rise_rate"
+-CONF_FALL_RATE = "fall_rate"
+-CONF_PROPORTIONAL_GAIN = "proportional_gain"
+-CONF_INTEGRAL_GAIN = "integral_gain"
+-CONF_LOG_CONTROL_SAMPLES = "log_control_samples"
+-
+-CONF_COOLING = "cooling"
+-CONF_FAN_OUTPUT = "fan_output"
+-CONF_FAN_START_TEMPERATURE = "fan_start_temperature"
+-CONF_FAN_FULL_TEMPERATURE = "fan_full_temperature"
+-
+-CONF_FAULT_POLICY = "fault_policy"
+-CONF_AUTO_CLEAR = "auto_clear"
+-CONF_CLEAR_DELAY = "clear_delay"
+-
+-CONF_MANUAL_CURRENT = "manual_current"
+-CONF_STATE = "state"
+-CONF_FAULT = "fault"
+-CONF_CLEAR_FAULT = "clear_fault"
+-
+-CONF_PROCEDURES = "procedures"
+-CONF_DCR = "dcr"
+-CONF_BASELINE_CURRENT = "baseline_current"
+-CONF_PULSE_CURRENT = "pulse_current"
+-CONF_SETTLE_TIME = "settle_time"
+-CONF_SAMPLE_TIME = "sample_time"
+-CONF_RECOVERY_TIME = "recovery_time"
+-CONF_REPEATS = "repeats"
+-CONF_START = "start"
+-CONF_STOP = "stop"
+-CONF_RESISTANCE = "resistance"
+-
+-CONF_BATTERY_CYCLE = "battery_cycle"
+-CONF_CHARGER = "charger"
+-CONF_CHARGER_SAMPLE_TIMEOUT = "charger_sample_timeout"
+-CONF_CHARGER_CONTROL_TIMEOUT = "charger_control_timeout"
+-CONF_DISCHARGE_CURRENT = "discharge_current"
+-CONF_DISCHARGE_CUTOFF_VOLTAGE = "discharge_cutoff_voltage"
+-CONF_DISCHARGE_CUTOFF_HYSTERESIS = "discharge_cutoff_hysteresis"
+-CONF_DISCHARGE_CUTOFF_HOLD_TIME = "discharge_cutoff_hold_time"
+-CONF_REST_TIME = "rest_time"
+-CONF_CHARGE_START_TIMEOUT = "charge_start_timeout"
+-CONF_CHARGE_STALL_TIMEOUT = "charge_stall_timeout"
+-CONF_CHARGE_TIMEOUT = "charge_timeout"
+-CONF_TERMINATION_HOLD_TIME = "termination_hold_time"
+-CONF_PHASE = "phase"
+-CONF_RESULT = "result"
+-CONF_DISCHARGED_CAPACITY = "discharged_capacity"
+-CONF_DISCHARGED_ENERGY = "discharged_energy"
+-CONF_CHARGED_CAPACITY = "charged_capacity"
+-CONF_CHARGED_ENERGY = "charged_energy"
+-
+-
+-def _positive(value):
+-    value = cv.float_(value)
+-    if value <= 0:
+-        raise cv.Invalid("value must be greater than zero")
+-    return value
+-
+-
+-def _positive_scale(value):
+-    value = cv.float_(value)
+-    if value <= 0:
+-        raise cv.Invalid("calibration scale must be greater than zero")
+-    return value
+-
+-
+-def _non_negative(value):
+-    value = cv.float_(value)
+-    if value < 0:
+-        raise cv.Invalid("value must not be negative")
+-    return value
+-
+-
+-def _normalized_level(value):
+-    value = cv.float_(value)
+-    if value < 0 or value >= 1:
+-        raise cv.Invalid("zero_level must be in the range 0 <= value < 1")
+-    return value
+-
+-
+-TEMPERATURE_INPUT_SCHEMA = cv.Schema(
+-    {
+-        cv.Required(CONF_SENSOR): cv.use_id(sensor.Sensor),
+-        cv.Optional(CONF_REQUIRED, default=False): cv.boolean,
+-    }
+-)
+-
+-HARDWARE_SCHEMA = cv.Schema(
+-    {
+-        cv.Required(CONF_DAC): cv.use_id(output.FloatOutput),
+-        cv.Required(CONF_HARDWARE_MAXIMUM_VOLTAGE): _positive,
+-    }
+-)
+-
+-MEASUREMENTS_SCHEMA = cv.Schema(
+-    {
+-        cv.Required(CONF_CURRENT): cv.use_id(sensor.Sensor),
+-        cv.Required(CONF_VOLTAGE): cv.use_id(sensor.Sensor),
+-        cv.Optional(CONF_TEMPERATURES, default=[]): cv.ensure_list(
+-            TEMPERATURE_INPUT_SCHEMA
+-        ),
+-        cv.Optional(CONF_SAMPLE_TIMEOUT, default="250ms"):
+-            cv.positive_time_period_milliseconds,
+-    }
+-)
+-
+-LINEAR_CALIBRATION_SCHEMA = cv.Schema(
+-    {
+-        cv.Optional(CONF_SCALE, default=1.0): _positive_scale,
+-        cv.Optional(CONF_OFFSET, default=0.0): cv.float_,
+-    }
+-)
+-
+-OUTPUT_CALIBRATION_SCHEMA = cv.Schema(
+-    {
+-        cv.Optional(CONF_ZERO_LEVEL, default=0.0): _normalized_level,
+-        cv.Required(CONF_FULL_SCALE_CURRENT): _positive,
+-    }
+-)
+-
+-CALIBRATION_SCHEMA = cv.Schema(
+-    {
+-        cv.Optional(CONF_RESTORE, default=True): cv.boolean,
+-        cv.Optional(CONF_CURRENT, default={}): LINEAR_CALIBRATION_SCHEMA,
+-        cv.Optional(CONF_VOLTAGE, default={}): LINEAR_CALIBRATION_SCHEMA,
+-        cv.Required(CONF_OUTPUT): OUTPUT_CALIBRATION_SCHEMA,
+-    }
+-)
+-
+-
+-def _validate_limits(config):
+-    if config[CONF_MAXIMUM_VOLTAGE] <= config[CONF_MINIMUM_VOLTAGE]:
+-        raise cv.Invalid(
+-            "maximum_voltage must be greater than minimum_voltage"
+-        )
+-    return config
+-
+-
+-LIMITS_SCHEMA = cv.All(
+-    cv.Schema(
+-        {
+-            cv.Required(CONF_MAXIMUM_CURRENT): _positive,
+-            cv.Required(CONF_MINIMUM_VOLTAGE): _non_negative,
+-            cv.Required(CONF_MAXIMUM_VOLTAGE): _positive,
+-            cv.Required(CONF_MAXIMUM_POWER): _positive,
+-            cv.Required(CONF_MAXIMUM_TEMPERATURE): cv.float_,
+-        }
+-    ),
+-    _validate_limits,
++from ._types import (  # noqa: F401
++    ChargerInterface,
++    ProgrammableLoadComponent,
+ )
+-
+-CONTROL_SCHEMA = cv.Schema(
+-    {
+-        cv.Optional(CONF_PERIOD, default="50ms"):
+-            cv.positive_time_period_milliseconds,
+-        cv.Optional(CONF_DEADBAND, default=0.01): _non_negative,
+-        cv.Optional(CONF_RISE_RATE, default=2.0): _positive,
+-        cv.Optional(CONF_FALL_RATE, default=4.0): _positive,
+-        cv.Optional(CONF_PROPORTIONAL_GAIN, default=0.2): _positive,
+-        cv.Optional(CONF_INTEGRAL_GAIN, default=0.4): _non_negative,
+-        cv.Optional(CONF_LOG_CONTROL_SAMPLES, default=False): cv.boolean,
+-    }
+-)
+-
+-
+-def _validate_cooling(config):
+-    if (
+-        config[CONF_FAN_FULL_TEMPERATURE]
+-        <= config[CONF_FAN_START_TEMPERATURE]
+-    ):
+-        raise cv.Invalid(
+-            "fan_full_temperature must be greater than "
+-            "fan_start_temperature"
+-        )
