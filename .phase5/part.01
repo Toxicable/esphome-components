@@ -1,0 +1,127 @@
+nts/mcf8316d/AGENTS_KNOWLEDGE.md
+index 69d3536..80219e7 100644
+--- a/components/mcf8316d/AGENTS_KNOWLEDGE.md
++++ b/components/mcf8316d/AGENTS_KNOWLEDGE.md
+@@ -3,7 +3,7 @@
+ Component-scoped notes for `components/mcf8316d`.
+ 
+ - Adds an ESP-IDF I2C manual validation flow for MCF8316D with ALGO_DEBUG1 override speed control, default-safe boot state (speed 0 + brake on + hardware direction), and fault-triggered speed shutdown that defers lock-family handling to configured lock modes.
+-- Shared architecture split: `mcf8316d_bus.h` defines the reusable bus boundary, `mcf8316d_protocol.*` owns register/bitfield facts plus pure helpers, `mcf8316d_service.*` owns reusable transport/command helpers, `mcf8316d_tuning.*` owns startup/debug tuning workflows, and `mcf8316d.cpp/.h` keep ESPHome integration plus top-level orchestration.
++- Shared architecture split: `mcf83xx_common` owns the family bus/framing/register mechanics; `mcf8316d_protocol.*` owns chip register/bitfield facts plus pure helpers; `mcf8316d_service.*` owns chip commands; `mcf8316d_tuning.*` owns startup/debug tuning; and `mcf8316d.cpp/.h` keep ESPHome integration plus top-level orchestration.
+ - Use monolith integration style: configure controls/telemetry/buttons inline under `mcf8316d:` (for example
+   `brake`, `direction`, `speed_percent`, `clear_faults`, `fault_summary`) rather than separate platform blocks.
+ - Should follow repo pattern and use ESPHome `i2c::I2CDevice` APIs (`write`, `read`, `write_read`) instead of direct `driver/i2c.h` calls; `inter_byte_delay_us` is currently informational-only.
+diff --git a/components/mcf8316d/README.md b/components/mcf8316d/README.md
+index 4f46973..1ef0040 100644
+--- a/components/mcf8316d/README.md
++++ b/components/mcf8316d/README.md
+@@ -2,9 +2,9 @@
+ 
+ Manual validation component for TI MCF8316D over ESPHome I2C (ESP32 + esp-idf).
+ This component now follows the shared layout in `../../ARCHITECTURE.md`:
+-- `mcf8316d_bus.h` defines the reusable register-bus interface.
+-- `mcf8316d_protocol.*` owns register/bitfield constants, control-word encoding, and pure string/decode helpers.
+-- `mcf8316d_service.*` owns reusable register access and chip command helpers on top of the bus interface.
++- `../mcf83xx_common` owns the shared MCx83xx register-bus, I2C frame and read-modify-write mechanics; `mcf8316d_bus.h` is a compatibility alias.
++- `mcf8316d_protocol.*` owns chip register/bitfield constants and pure string/decode helpers.
++- `mcf8316d_service.*` owns chip command helpers on top of the shared register-access layer.
+ - `mcf8316d_tuning.*` owns startup-tune profiles plus sweep/probe debug workflows.
+ - `mcf8316d.h` / `mcf8316d.cpp` own ESPHome entities, logging, high-level runtime orchestration, and the ESPHome I2C bus adapter.
+ `inter_byte_delay_us` is currently informational and not applied when using standard ESPHome I2C transactions.
+@@ -34,7 +34,7 @@ logger:
+ external_components:
+   - source: github://Toxicable/esphome-components@main
+     refresh: 0s
+-    components: [ mcf8316d ]
++    components: [ component_common, mcf83xx_common, mcf8316d ]
+ 
+ i2c:
+   sda: GPIO21
+diff --git a/components/mcf8316d/__init__.py b/components/mcf8316d/__init__.py
+index 58858f5..d9fab01 100644
+--- a/components/mcf8316d/__init__.py
++++ b/components/mcf8316d/__init__.py
+@@ -11,7 +11,7 @@ from esphome.const import (
+ )
+ 
+ DEPENDENCIES = ["i2c"]
+-AUTO_LOAD = ["sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
++AUTO_LOAD = ["mcf83xx_common", "sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
+ 
+ mcf8316d_ns = cg.esphome_ns.namespace("mcf8316d")
+ MCF8316DComponent = mcf8316d_ns.class_("MCF8316DComponent", cg.PollingComponent, i2c.I2CDevice)
+diff --git a/components/mcf8316d/mcf8316d.cpp b/components/mcf8316d/mcf8316d.cpp
+index 6e1638e..d3016d7 100644
+--- a/components/mcf8316d/mcf8316d.cpp
++++ b/components/mcf8316d/mcf8316d.cpp
+@@ -1,5 +1,7 @@
+ #include "mcf8316d.h"
+ 
++#include "../mcf83xx_common/protocol.h"
++
+ #include <cmath>
+ #include <cstdio>
+ #include <vector>
+@@ -522,20 +524,15 @@ bool MCF8316DComponent::read_register32(uint16_t offset, uint32_t *value) {
+   if (value == nullptr) {
+     return false;
+   }
+-  const uint32_t control_word = ::mcf8316d_core::build_control_word(true, offset, true);
+-  const uint8_t cw[3] = {
+-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+-    static_cast<uint8_t>(control_word & 0xFF),
+-  };
++  const auto command = ::mcf83xx_common::make_control_frame(
++      true, offset, ::mcf83xx_common::RegisterWidth::BITS_32);
+   uint8_t rx[4] = {0, 0, 0, 0};
+-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
++  const i2c::ErrorCode err = this->write_read(command.data(), command.size(), rx, sizeof(rx));
+   if (err != i2c::ERROR_OK) {
+     ESP_LOGW(TAG, "read_reg32(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+     return false;
+   }
+-  *value = static_cast<uint32_t>(rx[0]) | (static_cast<uint32_t>(rx[1]) << 8) |
+-           (static_cast<uint32_t>(rx[2]) << 16) | (static_cast<uint32_t>(rx[3]) << 24);
++  *value = ::mcf83xx_common::decode_read32(rx);
+   return true;
+ }
+ 
+@@ -543,34 +540,21 @@ bool MCF8316DComponent::read_register16(uint16_t offset, uint16_t *value) {
+   if (value == nullptr) {
+     return false;
+   }
+-  const uint32_t control_word = ::mcf8316d_core::build_control_word(true, offset, false);
+-  const uint8_t cw[3] = {
+-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+-    static_cast<uint8_t>(control_word & 0xFF),
+-  };
++  const auto command = ::mcf83xx_common::make_control_frame(
++      true, offset, ::mcf83xx_common::RegisterWidth::BITS_16);
+   uint8_t rx[2] = {0, 0};
+-  const i2c::ErrorCode err = this->write_read(cw, sizeof(cw), rx, sizeof(rx));
++  const i2c::ErrorCode err = this->write_read(command.data(), command.size(), rx, sizeof(rx));
+   if (err != i2c::ERROR_OK) {
+     ESP_LOGW(TAG, "read_reg16(0x%04X) failed: i2c error %d", offset, static_cast<int>(err));
+     return false;
+   }
+-  *value = static_cast<uint16_t>(rx[0]) | (static_cast<uint16_t>(rx[1]) << 8);
++  *value = ::mcf83xx_common::decode_read16(rx);
+   return true;
+ }
+ 
+ bool MCF8316DComponent::write_register32(uint16_t offset, uint32_t value) {
+-  const uint32_t control_word = ::mcf8316d_core::build_control_word(false, offset, true);
+-  const uint8_t tx[7] = {
+-    static_cast<uint8_t>((control_word >> 16) & 0xFF),
+-    static_cast<uint8_t>((control_word >> 8) & 0xFF),
+-    static_cast<uint8_t>(control_word & 0xFF),
+-    static_cast<uint8_t>(value & 0xFF),
+-    static_cast<uint8_t>((value >> 8) & 0xFF),
+-    static_cast<uint8_t>((value >> 16) & 0xFF),
+-    static_cast<uint8_t>((value >> 24) & 0xFF),
+-  };
+-  const i2c::ErrorCode err = this->write(tx, sizeof(tx));
++  const auto frame = ::mcf83xx_common::make_write32_frame(offset, value);
++  const i2c::ErrorCode err = t
