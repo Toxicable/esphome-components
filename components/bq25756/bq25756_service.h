@@ -4,8 +4,8 @@
 #include <cstdint>
 
 #include "bq25756_bus.h"
+#include "bq25756_configuration.h"
 #include "bq25756_protocol.h"
-#include "bq25756_register_manifest.h"
 
 namespace bq25756_core {
 
@@ -63,15 +63,17 @@ class Bq25756Service {
   bool reset_watchdog();
   bool read_status(Status &status);
   MeasurementReadResult read_measurements(Measurements &measurements, bool include_vfb,
-                                           uint8_t requested_adc_config, AdcConfigurationState &adc_state);
+                                           uint8_t requested_adc_config,
+                                           AdcConfigurationState &adc_state);
   bool read_control_states(ControlStates &states);
   AdcEnsureResult ensure_adc_enabled(bool include_vfb, uint8_t requested_adc_config,
-                                      AdcConfigurationState &adc_state);
+                                     AdcConfigurationState &adc_state);
   bool apply_limits(bool has_charge_voltage_limit_mv, uint16_t charge_voltage_limit_mv,
                     bool has_charge_current_limit_ma, uint16_t charge_current_limit_ma,
                     bool has_input_current_dpm_limit_ma, uint16_t input_current_dpm_limit_ma,
                     bool has_input_voltage_dpm_limit_mv, uint16_t input_voltage_dpm_limit_mv);
-  bool apply_pin_overrides(bool disable_ce_pin, bool disable_ilim_hiz_pin, bool disable_ichg_pin);
+  bool apply_pin_overrides(bool disable_ce_pin, bool disable_ilim_hiz_pin,
+                           bool disable_ichg_pin);
   bool read_charge_precheck(ChargePrecheckSnapshot &snapshot);
   bool reconcile_configuration(const Bq25756ConfigurationImage &image, bool repair,
                                ConfigurationReconcileResult &result);
