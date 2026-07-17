@@ -53,42 +53,38 @@ common_flags=(
   -I.
 )
 
-"$cxx" "${common_flags[@]}" \
-  tests/component_common_test.cpp \
-  -o "$build_dir/component_common_test"
-"$build_dir/component_common_test"
+run_test() {
+  local name="$1"
+  shift
+  echo "host test: $name"
+  "$cxx" "${common_flags[@]}" "$@" -o "$build_dir/$name"
+  "$build_dir/$name"
+}
 
-"$cxx" "${common_flags[@]}" \
+run_test component_common_test \
+  tests/component_common_test.cpp
+
+run_test bq25756_service_test \
   tests/bq25756_service_test.cpp \
   components/bq25756/bq25756_protocol.cpp \
-  components/bq25756/bq25756_service.cpp \
-  -o "$build_dir/bq25756_service_test"
-"$build_dir/bq25756_service_test"
+  components/bq25756/bq25756_service.cpp
 
-"$cxx" "${common_flags[@]}" \
+run_test bq76952_status_test \
   tests/bq76952_status_test.cpp \
-  components/bq76952/bq76952_status.cpp \
-  -o "$build_dir/bq76952_status_test"
-"$build_dir/bq76952_status_test"
+  components/bq76952/bq76952_status.cpp
 
-"$cxx" "${common_flags[@]}" \
-  tests/mcf83xx_common_test.cpp \
-  -o "$build_dir/mcf83xx_common_test"
-"$build_dir/mcf83xx_common_test"
+run_test mcf83xx_common_test \
+  tests/mcf83xx_common_test.cpp
 
-"$cxx" "${common_flags[@]}" \
+run_test mcf83xx_services_test \
   tests/mcf83xx_services_test.cpp \
   components/mcf8316d/mcf8316d_protocol.cpp \
   components/mcf8316d/mcf8316d_service.cpp \
   components/mcf8329a/mcf8329a_protocol.cpp \
-  components/mcf8329a/mcf8329a_service.cpp \
-  -o "$build_dir/mcf83xx_services_test"
-"$build_dir/mcf83xx_services_test"
+  components/mcf8329a/mcf8329a_service.cpp
 
-"$cxx" "${common_flags[@]}" \
+run_test programmable_load_core_test \
   tests/programmable_load_core_test.cpp \
-  components/programmable_load/programmable_load_core.cpp \
-  -o "$build_dir/programmable_load_core_test"
-"$build_dir/programmable_load_core_test"
+  components/programmable_load/programmable_load_core.cpp
 
 echo "host tests: passed ($cxx)"
