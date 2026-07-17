@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 #include "bq25756_registers.h"
@@ -100,5 +101,16 @@ static constexpr auto DEFAULT_REGISTER_CONFIG_IMAGE =
 static_assert(component_common::configuration_image_layout_complete(
                   REGISTER_MANIFEST, DEFAULT_REGISTER_CONFIG_IMAGE),
               "BQ25756 register config must own every configurable register");
+
+// Temporary internal aliases while the service and tests move to the clearer
+// register-config terminology.
+using Bq25756Configuration = Bq25756RegisterConfig;
+using Bq25756ConfigurationImage = Bq25756RegisterConfigImage;
+constexpr Bq25756RegisterConfigImage make_configuration_image(
+    const Bq25756RegisterConfig &config) {
+  return make_register_config_image(config);
+}
+static constexpr auto DEFAULT_CONFIGURATION_IMAGE =
+    DEFAULT_REGISTER_CONFIG_IMAGE;
 
 }  // namespace bq25756_core
