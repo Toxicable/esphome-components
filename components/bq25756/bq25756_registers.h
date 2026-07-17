@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "../component_common/bit_field.h"
+
 namespace bq25756_core {
 
 enum class RegisterId : uint8_t {
@@ -107,5 +109,76 @@ static constexpr uint8_t REG3B_GATE_DRIVER_STRENGTH_CONTROL = register_address(R
 static constexpr uint8_t REG3C_GATE_DRIVER_DEAD_TIME_CONTROL = register_address(RegisterId::GATE_DRIVER_DEAD_TIME_CONTROL);
 static constexpr uint8_t REG3D_PART_INFORMATION = register_address(RegisterId::PART_INFORMATION);
 static constexpr uint8_t REG62_REVERSE_BATTERY_DISCHARGE_CURRENT = register_address(RegisterId::REVERSE_BATTERY_DISCHARGE_CURRENT);
+
+static constexpr uint16_t REG00_VFB_REG_MASK = 0x001F;
+static constexpr uint16_t REG02_ICHG_REG_MASK = 0x07FC;
+static constexpr uint16_t REG06_IAC_DPM_MASK = 0x07FC;
+static constexpr uint16_t REG08_VAC_DPM_MASK = 0x3FFC;
+
+static constexpr uint8_t REG15_WATCHDOG_MASK = 0x30;
+static constexpr uint8_t REG17_WD_RST_MASK = 0x20;
+static constexpr uint8_t REG17_DIS_CE_PIN_MASK = 0x10;
+static constexpr uint8_t REG17_EN_HIZ_MASK = 0x04;
+static constexpr uint8_t REG17_EN_CHG_MASK = 0x01;
+static constexpr uint8_t REG18_EN_ICHG_PIN_MASK = 0x80;
+static constexpr uint8_t REG18_EN_ILIM_HIZ_PIN_MASK = 0x40;
+static constexpr uint8_t REG19_EN_PFM_MASK = 0x20;
+static constexpr uint8_t REG19_EN_REV_MASK = 0x01;
+
+static constexpr uint8_t REG21_IAC_DPM_STAT_MASK = 0x40;
+static constexpr uint8_t REG21_VAC_DPM_STAT_MASK = 0x20;
+static constexpr uint8_t REG21_WATCHDOG_STAT_MASK = 0x08;
+static constexpr uint8_t REG21_CHARGE_STAT_MASK = 0x07;
+static constexpr uint8_t REG22_POWER_GOOD_STAT_MASK = 0x80;
+static constexpr uint8_t REG22_TS_STAT_MASK = 0x70;
+static constexpr uint8_t REG22_MPPT_STAT_MASK = 0x03;
+static constexpr uint8_t REG23_CV_TIMER_STAT_MASK = 0x08;
+static constexpr uint8_t REG23_REVERSE_STAT_MASK = 0x04;
+static constexpr uint8_t REG24_VAC_UV_FAULT_MASK = 0x80;
+static constexpr uint8_t REG24_VAC_OV_FAULT_MASK = 0x40;
+static constexpr uint8_t REG24_IBAT_OCP_FAULT_MASK = 0x20;
+static constexpr uint8_t REG24_VBAT_OV_FAULT_MASK = 0x10;
+static constexpr uint8_t REG24_THERMAL_SHUTDOWN_FAULT_MASK = 0x08;
+static constexpr uint8_t REG24_CHARGE_TIMER_FAULT_MASK = 0x04;
+static constexpr uint8_t REG24_DRIVER_SUPPLY_FAULT_MASK = 0x02;
+static constexpr uint8_t REG24_ACTIVE_FAULT_MASK =
+    REG24_VAC_UV_FAULT_MASK | REG24_VAC_OV_FAULT_MASK |
+    REG24_IBAT_OCP_FAULT_MASK | REG24_VBAT_OV_FAULT_MASK |
+    REG24_THERMAL_SHUTDOWN_FAULT_MASK |
+    REG24_CHARGE_TIMER_FAULT_MASK | REG24_DRIVER_SUPPLY_FAULT_MASK;
+
+static constexpr uint8_t REG2B_ADC_EN_MASK = 0x80;
+static constexpr uint8_t REG2B_ADC_RATE_MASK = 0x40;
+static constexpr uint8_t REG2B_ADC_SAMPLE_MASK = 0x30;
+static constexpr uint8_t REG2B_ADC_AVG_MASK = 0x08;
+static constexpr uint8_t REG2B_ADC_AVG_INIT_MASK = 0x04;
+static constexpr uint8_t REG2B_ADC_OWNED_MASK =
+    REG2B_ADC_EN_MASK | REG2B_ADC_RATE_MASK | REG2B_ADC_SAMPLE_MASK |
+    REG2B_ADC_AVG_MASK | REG2B_ADC_AVG_INIT_MASK;
+static constexpr uint8_t REG2B_ADC_CONTINUOUS_15_BIT = REG2B_ADC_EN_MASK;
+static constexpr uint8_t REG2B_ADC_PERSISTENT_MASK =
+    REG2B_ADC_OWNED_MASK & static_cast<uint8_t>(~REG2B_ADC_AVG_INIT_MASK);
+static constexpr uint8_t REG2C_IAC_ADC_DIS_MASK = 0x80;
+static constexpr uint8_t REG2C_IBAT_ADC_DIS_MASK = 0x40;
+static constexpr uint8_t REG2C_VAC_ADC_DIS_MASK = 0x20;
+static constexpr uint8_t REG2C_VBAT_ADC_DIS_MASK = 0x10;
+static constexpr uint8_t REG2C_TS_ADC_DIS_MASK = 0x04;
+static constexpr uint8_t REG2C_VFB_ADC_DIS_MASK = 0x02;
+static constexpr uint8_t REG2C_ADC_CHANNEL_OWNED_MASK =
+    REG2C_IAC_ADC_DIS_MASK | REG2C_IBAT_ADC_DIS_MASK |
+    REG2C_VAC_ADC_DIS_MASK | REG2C_VBAT_ADC_DIS_MASK |
+    REG2C_TS_ADC_DIS_MASK | REG2C_VFB_ADC_DIS_MASK;
+
+static constexpr uint8_t PART_NUM_MASK = 0x78;
+static constexpr uint8_t BQ25756_PART_NUM_BITS = 0x10;
+
+namespace fields {
+using Watchdog = component_common::RegisterField<uint8_t, REG15_WATCHDOG_MASK>;
+using PartNumber = component_common::RegisterField<uint8_t, PART_NUM_MASK>;
+using ChargeVoltageLimit = component_common::RegisterField<uint16_t, REG00_VFB_REG_MASK>;
+using ChargeCurrentLimit = component_common::RegisterField<uint16_t, REG02_ICHG_REG_MASK>;
+using InputCurrentLimit = component_common::RegisterField<uint16_t, REG06_IAC_DPM_MASK>;
+using InputVoltageLimit = component_common::RegisterField<uint16_t, REG08_VAC_DPM_MASK>;
+}  // namespace fields
 
 }  // namespace bq25756_core
