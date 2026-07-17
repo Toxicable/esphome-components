@@ -23,11 +23,15 @@ namespace bq25756 {
   ::bq25756_core::ControlStates controls{};
   ::bq25756_core::AdcConfigurationState adc_state{};
 
+  if (!self->service_.read_status(status)) {
+    auto unavailable = self->charger_snapshot_;
+    unavailable.valid = false;
+    return unavailable;
+  }
   const auto measurement_result = self->service_.read_measurements(
       measurements, false, ::bq25756_core::REG2B_ADC_CONTINUOUS_15_BIT,
       adc_state);
-  if (!self->service_.read_status(status) ||
-      measurement_result != ::bq25756_core::MeasurementReadResult::OK ||
+  if (measurement_result != ::bq25756_core::MeasurementReadResult::OK ||
       !self->service_.read_control_states(controls)) {
     auto unavailable = self->charger_snapshot_;
     unavailable.valid = false;
