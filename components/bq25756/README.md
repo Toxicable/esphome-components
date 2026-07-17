@@ -72,7 +72,7 @@ the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
 
 ## Core layout
 
-- `bq25756_registers.h` owns the register catalog, widths, masks, fields and complete bit-ownership manifest.
+- `bq25756_registers.h` owns one explicit `RegisterInfo` definition per register, including its ID, name, address, width and bit ownership.
 - `bq25756_register_config.h` owns desired register values and builds the complete register configuration image.
 - `bq25756_protocol.h/.cpp` owns physical-unit conversion, decoding and typed snapshots.
 - `bq25756_service.h/.cpp` performs bus operations and masked register reconciliation.
@@ -87,7 +87,7 @@ ESPHome implementation selected by code generation.
 Every documented register bit is classified as configuration, runtime state,
 status, command, or reserved. Every register with configuration-owned bits has
 an explicit desired value, so omitted code cannot silently rely on a factory
-default. The configuration image size is derived from the register manifest.
+default. The configuration image size is derived from the `RegisterInfo` table.
 
 Register synchronisation is driven by connection state rather than a periodic
 audit. When a new device session becomes connected, the component disables
