@@ -2,38 +2,11 @@
 
 #include <cstdint>
 
+#include "mcf8316d_registers.h"
+
 namespace mcf8316d_core {
 
 namespace regs {
-
-inline constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
-inline constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
-inline constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
-inline constexpr uint16_t REG_MTR_PARAMS = 0x00E6;
-inline constexpr uint16_t REG_ALGO_STATUS_MPET = 0x00E8;
-inline constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
-inline constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
-inline constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
-inline constexpr uint16_t REG_ALGORITHM_STATE = 0x018E;
-inline constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
-inline constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
-inline constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
-inline constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
-inline constexpr uint16_t REG_CLOSED_LOOP1 = 0x0088;
-inline constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
-inline constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
-inline constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
-inline constexpr uint16_t REG_GD_CONFIG1 = 0x00AC;
-inline constexpr uint16_t REG_GD_CONFIG2 = 0x00AE;
-inline constexpr uint16_t REG_ISD_CONFIG = 0x0080;
-inline constexpr uint16_t REG_REV_DRIVE_CONFIG = 0x0082;
-inline constexpr uint16_t REG_DEVICE_CONFIG1 = 0x00A6;
-inline constexpr uint16_t REG_DEVICE_CONFIG2 = 0x00A8;
-inline constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
-inline constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
-inline constexpr uint16_t REG_CSA_GAIN_FEEDBACK = 0x046C;
-inline constexpr uint16_t REG_VOLTAGE_GAIN_FEEDBACK = 0x0477;
-inline constexpr uint16_t REG_VM_VOLTAGE = 0x047C;
 
 inline constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 10);
 inline constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_BRAKE = (0x1u << 10);
