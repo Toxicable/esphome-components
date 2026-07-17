@@ -80,8 +80,8 @@ the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
 - `bq25756_recovery.cpp` integrates disconnect detection and reinitialisation with ESPHome.
 
 There is no separate user-facing or device-facing "managed" mode. ESPHome
-instantiates one BQ25756 component; the implementation class name is only an
-internal code-generation detail.
+instantiates one BQ25756 component; `BQ25756ComponentImpl` is only the concrete
+ESPHome implementation selected by code generation.
 
 ## Register ownership and recovery
 
