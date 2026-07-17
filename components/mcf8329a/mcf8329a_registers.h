@@ -49,7 +49,7 @@ inline constexpr std::array<RegisterInfo, REGISTER_COUNT> REGISTER_DEFINITIONS{{
     {.id = RegisterId::GATE_DRIVER_FAULT_STATUS, .name = "gate_driver_fault_status", .address = 0x00E0, .width = RegisterWidth::U32, .masks = {.status = 0xFFFFFFFF}},
     {.id = RegisterId::ALGO_STATUS, .name = "algo_status", .address = 0x00E4, .width = RegisterWidth::U32, .masks = {.status = 0xFFFFFFFF}},
     {.id = RegisterId::ALGO_STATUS_MPET, .name = "algo_status_mpet", .address = 0x00E8, .width = RegisterWidth::U32, .masks = {.status = 0xFFFFFFFF}},
-    {.id = RegisterId::ALGORITHM_STATE, .name = "algorithm_state", .address = 0x0196, .width = RegisterWidth::U32, .masks = {.status = 0xFFFFFFFF}},
+    {.id = RegisterId::ALGORITHM_STATE, .name = "algorithm_state", .address = 0x0196, .width = RegisterWidth::U16, .masks = {.status = 0xFFFF}},
     {.id = RegisterId::MTR_PARAMS, .name = "motor_parameters", .address = 0x00E6, .width = RegisterWidth::U32, .masks = {.status = 0xFFFFFFFF}},
     {.id = RegisterId::ALGO_CTRL1, .name = "algorithm_control_1", .address = 0x00EA, .width = RegisterWidth::U32},
     {.id = RegisterId::ALGO_DEBUG1, .name = "algorithm_debug_1", .address = 0x00EC, .width = RegisterWidth::U32},
