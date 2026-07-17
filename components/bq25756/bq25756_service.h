@@ -4,8 +4,8 @@
 #include <cstdint>
 
 #include "bq25756_bus.h"
-#include "bq25756_configuration.h"
 #include "bq25756_protocol.h"
+#include "bq25756_register_config.h"
 
 namespace bq25756_core {
 
