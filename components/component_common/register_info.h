@@ -53,6 +53,24 @@ constexpr bool register_definitions_have_all_ids_once(
 }
 
 template<typename RegisterId, size_t N>
+constexpr bool register_definitions_have_unique_addresses(
+    const std::array<RegisterInfo<RegisterId>, N> &definitions) {
+  for (size_t index = 0; index < N; index++) {
+    const auto &candidate = definitions[index];
+    if (candidate.name == nullptr || candidate.name[0] == '\0' ||
+        register_width_bytes(candidate.width) == 0) {
+      return false;
+    }
+    for (size_t other = index + 1; other < N; other++) {
+      if (candidate.address == definitions[other].address) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+template<typename RegisterId, size_t N>
 constexpr std::array<RegisterInfo<RegisterId>, N> index_register_info_by_id(
     const std::array<RegisterInfo<RegisterId>, N> &definitions) {
   std::array<RegisterInfo<RegisterId>, N> indexed{};
