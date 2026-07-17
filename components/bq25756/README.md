@@ -72,34 +72,34 @@ the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
 
 ## Core layout
 
-- `bq25756_registers.h` owns register addresses, masks and typed bit fields.
-- `bq25756_register_manifest.h` classifies every documented register bit.
-- `bq25756_configuration.h` owns desired values and builds the configuration image.
+- `bq25756_registers.h` owns the register catalog, widths, masks, fields and complete bit-ownership manifest.
+- `bq25756_register_config.h` owns desired register values and builds the complete register configuration image.
 - `bq25756_protocol.h/.cpp` owns physical-unit conversion, decoding and typed snapshots.
-- `bq25756_service.h/.cpp` performs bus operations and configuration reconciliation.
-- `bq25756_recovery.cpp` integrates disconnect detection and reinitialisation with ESPHome.
+- `bq25756_service.h/.cpp` performs bus operations and masked register reconciliation.
+- `bq25756_connection.cpp` integrates connection-state transitions with ESPHome.
 
 There is no separate user-facing or device-facing "managed" mode. ESPHome
 instantiates one BQ25756 component; `BQ25756ComponentImpl` is only the concrete
 ESPHome implementation selected by code generation.
 
-## Register ownership and recovery
+## Register ownership and connection handling
 
-The host-independent library contains a complete register manifest for the
-current BQ25756 register table. Every documented register bit is classified as
-configuration, runtime state, status, command, or reserved. Every configurable
-register has an explicit desired value, so omitted code cannot silently rely on
-a factory default.
+Every documented register bit is classified as configuration, runtime state,
+status, command, or reserved. Every register with configuration-owned bits has
+an explicit desired value, so omitted code cannot silently rely on a factory
+default. The configuration image size is derived from the register manifest.
 
-The component builds a masked configuration image from its typed settings. It
-compares the complete image every 10 seconds, writes only mismatched owned bits,
-preserves runtime and reserved bits, clears command bits on ordinary writes,
-and verifies the resulting configuration fingerprint.
+Register synchronisation is driven by connection state rather than a periodic
+audit. When a new device session becomes connected, the component disables
+charging, writes only mismatched configuration-owned bits, preserves runtime and
+reserved bits, clears command bits on ordinary writes, and verifies the complete
+configuration fingerprint. Normal telemetry polling does not repeatedly read the
+complete configuration image.
 
-After three consecutive failed poll cycles, the component marks the charger
-disconnected and invalidates the current session. When communication returns,
-it runs the normal safe initialization, restores and verifies the complete
-configuration image, and only then reports the configuration as ready.
+After three consecutive failed poll cycles, the session is marked disconnected.
+When communication returns, a new connected session is established and the
+complete register configuration is synchronised once before configuration is
+reported ready.
 
-Configure `status.configuration_status` to expose `configured`, `disconnected`,
-or `repair_failed` in Home Assistant.
+Configure `status.configuration_status` to expose `connecting`, `configured`,
+`disconnected`, or `sync_failed` in Home Assistant.
