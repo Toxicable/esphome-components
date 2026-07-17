@@ -9,7 +9,7 @@
 namespace bq25756_core {
 
 // Complete desired values for every register with configuration-owned bits.
-// The register catalog and ownership masks live in bq25756_registers.h.
+// Register metadata and ownership masks live in bq25756_registers.h.
 struct Bq25756RegisterConfig {
   uint16_t charge_voltage_limit{0x0010};
   uint16_t charge_current_limit{0x0640};
@@ -44,32 +44,16 @@ using Bq25756RegisterConfigImage =
     std::array<component_common::RegisterImageEntry,
                CONFIGURATION_REGISTER_COUNT>;
 
-constexpr bool register_manifest_matches_catalog() {
-  for (size_t index = 0; index < REGISTER_COUNT; index++) {
-    const auto id = static_cast<RegisterId>(index);
-    if (REGISTER_MANIFEST[index].address != register_address(id) ||
-        REGISTER_MANIFEST[index].width != register_width(id)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-constexpr const component_common::RegisterManifestEntry &manifest_entry(
-    RegisterId id) {
-  return REGISTER_MANIFEST[static_cast<size_t>(id)];
-}
-
 constexpr component_common::RegisterImageEntry config_image_entry(
     RegisterId id, uint32_t value) {
-  const auto &definition = manifest_entry(id);
+  const auto &info = register_info(id);
   return {
-      .name = definition.name,
-      .address = definition.address,
-      .width = definition.width,
+      .name = info.name,
+      .address = info.address,
+      .width = static_cast<uint8_t>(info.width),
       .value = value,
-      .mask = definition.configuration_mask,
-      .command_mask = definition.command_mask,
+      .mask = info.masks.configuration,
+      .command_mask = info.masks.command,
   };
 }
 
@@ -109,8 +93,6 @@ constexpr Bq25756RegisterConfigImage make_register_config_image(
 static constexpr auto DEFAULT_REGISTER_CONFIG_IMAGE =
     make_register_config_image(Bq25756RegisterConfig{});
 
-static_assert(register_manifest_matches_catalog(),
-              "BQ25756 register manifest must match the register catalog");
 static_assert(component_common::configuration_image_layout_complete(
                   REGISTER_MANIFEST, DEFAULT_REGISTER_CONFIG_IMAGE),
               "BQ25756 register config must own every configurable register");
