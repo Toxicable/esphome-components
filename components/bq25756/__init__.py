@@ -40,7 +40,7 @@ ChargerInterface = component_common_ns.class_("ChargerInterface")
 
 bq25756_ns = cg.esphome_ns.namespace("bq25756")
 BQ25756Component = bq25756_ns.class_(
-    "BQ25756ManagedComponent", cg.PollingComponent, i2c.I2CDevice, ChargerInterface
+    "BQ25756ComponentImpl", cg.PollingComponent, i2c.I2CDevice, ChargerInterface
 )
 BQ25756ChargeEnableSwitch = bq25756_ns.class_("BQ25756ChargeEnableSwitch", switch_.Switch)
 BQ25756DumpRegistersButton = bq25756_ns.class_("BQ25756DumpRegistersButton", button.Button)
