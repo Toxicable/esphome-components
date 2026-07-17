@@ -35,7 +35,7 @@ elif command -v g++ >/dev/null 2>&1; then
 elif command -v clang++ >/dev/null 2>&1; then
   cxx="clang++"
 else
-  echo "a C++17 compiler is required (set CXX, or install g++/clang++)" >&2
+  echo "a C++20 compiler is required (set CXX, or install g++/clang++)" >&2
   exit 1
 fi
 
@@ -43,7 +43,7 @@ build_dir="$(mktemp -d "${TMPDIR:-/tmp}/esphome-components-host-tests.XXXXXX")"
 trap 'rm -rf "$build_dir"' EXIT
 
 common_flags=(
-  -std=c++17
+  -std=gnu++20
   -Wall
   -Wextra
   -Werror
