@@ -14,11 +14,13 @@ python3 tools/check_core_purity.py \
   components/bq76952/bq76952_status.cpp \
   components/mcf83xx_common \
   components/mcf8316d/mcf8316d_bus.h \
+  components/mcf8316d/mcf8316d_registers.h \
   components/mcf8316d/mcf8316d_protocol.h \
   components/mcf8316d/mcf8316d_protocol.cpp \
   components/mcf8316d/mcf8316d_service.h \
   components/mcf8316d/mcf8316d_service.cpp \
   components/mcf8329a/mcf8329a_bus.h \
+  components/mcf8329a/mcf8329a_registers.h \
   components/mcf8329a/mcf8329a_protocol.h \
   components/mcf8329a/mcf8329a_protocol.cpp \
   components/mcf8329a/mcf8329a_service.h \
