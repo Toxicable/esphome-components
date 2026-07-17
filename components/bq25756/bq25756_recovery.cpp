@@ -1,6 +1,6 @@
 #include "bq25756.h"
 
-#include "bq25756_register_manifest.h"
+#include "bq25756_configuration.h"
 
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
