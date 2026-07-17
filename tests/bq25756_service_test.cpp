@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string_view>
 
 #include "components/bq25756/bq25756_service.h"
 
@@ -50,14 +51,29 @@ uint32_t read_value(const FakeBus &bus, uint16_t address, uint8_t width) {
   return value;
 }
 
-void test_manifest_and_complete_image() {
+void test_register_info_and_complete_image() {
   static_assert(bq25756_core::REGISTER_COUNT == 42);
-  static_assert(bq25756_core::register_manifest_matches_catalog());
-  static_assert(component_common::register_manifest_valid(bq25756_core::REGISTER_MANIFEST));
+  static_assert(bq25756_core::register_definitions_have_all_ids_once());
+  static_assert(component_common::register_manifest_valid(
+      bq25756_core::REGISTER_MANIFEST));
   static_assert(component_common::configuration_image_layout_complete(
-      bq25756_core::REGISTER_MANIFEST, bq25756_core::DEFAULT_CONFIGURATION_IMAGE));
-  assert(bq25756_core::REGISTER_MANIFEST.front().address == 0x00);
-  assert(bq25756_core::REGISTER_MANIFEST.back().address == 0x62);
+      bq25756_core::REGISTER_MANIFEST,
+      bq25756_core::DEFAULT_CONFIGURATION_IMAGE));
+
+  constexpr const auto &charge_voltage = bq25756_core::register_info(
+      bq25756_core::RegisterId::CHARGE_VOLTAGE_LIMIT);
+  static_assert(charge_voltage.id ==
+                bq25756_core::RegisterId::CHARGE_VOLTAGE_LIMIT);
+  static_assert(std::string_view(charge_voltage.name) ==
+                "charge_voltage_limit");
+  static_assert(charge_voltage.address == 0x00);
+  static_assert(charge_voltage.width == bq25756_core::RegisterWidth::U16);
+  static_assert(charge_voltage.masks.configuration == 0x001F);
+
+  constexpr const auto &reverse_discharge = bq25756_core::register_info(
+      bq25756_core::RegisterId::REVERSE_BATTERY_DISCHARGE_CURRENT);
+  static_assert(reverse_discharge.address == 0x62);
+  static_assert(reverse_discharge.width == bq25756_core::RegisterWidth::U8);
 }
 
 void test_configuration_reconciliation() {
@@ -229,7 +245,7 @@ void test_adc_reconciliation() {
 }  // namespace
 
 int main() {
-  test_manifest_and_complete_image();
+  test_register_info_and_complete_image();
   test_configuration_reconciliation();
   test_configuration_reconciliation_io_failure();
   test_little_endian_register_io();
