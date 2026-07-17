@@ -201,6 +201,7 @@ class ProgrammableLoadComponent : public Component {
   void update_operation_();
   void update_control_();
   void reset_control_();
+  void reset_control_integrator_();
   void reset_control_history_();
   void update_fan_();
 
@@ -259,6 +260,7 @@ class ProgrammableLoadComponent : public Component {
   float requested_current_a_{0.0f};
   float commanded_current_a_{0.0f};
   float previous_control_error_a_{0.0f};
+  float control_integrator_a_{0.0f};
 
   bool restore_calibration_{true};
   uint32_t sample_timeout_ms_{250};
@@ -326,9 +328,47 @@ class ResetCalibrationButton : public button::Button {
   ProgrammableLoadComponent *parent_{nullptr};
 };
 
+template<typename... Ts> class ApplyCalibrationAction : public Action<Ts...> {
+ public:
+  TEMPLATABLE_VALUE(float, current_scale)
+  TEMPLATABLE_VALUE(float, current_offset)
+  TEMPLATABLE_VALUE(float, voltage_scale)
+  TEMPLATABLE_VALUE(float, voltage_offset)
+  TEMPLATABLE_VALUE(float, output_zero_level)
+  TEMPLATABLE_VALUE(float, output_full_scale_current)
+  TEMPLATABLE_VALUE(bool, persist)
+
+  void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
+
+  void play(Ts... x) override {
+    Calibration calibration = this->parent_->calibration();
+    calibration.current.scale = this->current_scale_.value(x...);
+    calibration.current.offset = this->current_offset_.value(x...);
+    calibration.voltage.scale = this->voltage_scale_.value(x...);
+    calibration.voltage.offset = this->voltage_offset_.value(x...);
+    calibration.output.zero_level = this->output_zero_level_.value(x...);
+    calibration.output.full_scale_current =
+        this->output_full_scale_current_.value(x...);
+    this->parent_->apply_calibration(calibration, this->persist_.value(x...));
+  }
+
+ protected:
+  ProgrammableLoadComponent *parent_{nullptr};
+};
+
+template<typename... Ts> class ResetCalibrationAction : public Action<Ts...> {
+ public:
+  TEMPLATABLE_VALUE(bool, persist)
+
+  void set_parent(ProgrammableLoadComponent *parent) { this->parent_ = parent; }
+
+  void play(Ts... x) override {
+    this->parent_->reset_calibration(this->persist_.value(x...));
+  }
+
+ protected:
+  ProgrammableLoadComponent *parent_{nullptr};
+};
+
 }  // namespace programmable_load
 }  // namespace esphome
-
-#include "battery_cycle.h"
-#include "dcr_test.h"
-#include "calibration_actions.h"

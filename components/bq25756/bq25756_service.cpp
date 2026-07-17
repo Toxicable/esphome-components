@@ -202,16 +202,20 @@ bool Bq25756Service::apply_limits(
   bool has_input_voltage_dpm_limit_mv,
   uint16_t input_voltage_dpm_limit_mv
 ) {
-  if (has_charge_voltage_limit_mv && !this->write_u16_le(REG00_CHARGE_VOLTAGE_LIMIT, encode_charge_voltage_limit_mv(charge_voltage_limit_mv))) {
+  if (has_charge_voltage_limit_mv &&
+      !this->write_u16_le(REG00_CHARGE_VOLTAGE_LIMIT, encode_charge_voltage_limit_mv(charge_voltage_limit_mv))) {
     return false;
   }
-  if (has_charge_current_limit_ma && !this->write_u16_le(REG02_CHARGE_CURRENT_LIMIT, encode_charge_current_limit_ma(charge_current_limit_ma))) {
+  if (has_charge_current_limit_ma &&
+      !this->write_u16_le(REG02_CHARGE_CURRENT_LIMIT, encode_charge_current_limit_ma(charge_current_limit_ma))) {
     return false;
   }
-  if (has_input_current_dpm_limit_ma && !this->write_u16_le(REG06_INPUT_CURRENT_DPM_LIMIT, encode_input_current_dpm_limit_ma(input_current_dpm_limit_ma))) {
+  if (has_input_current_dpm_limit_ma &&
+      !this->write_u16_le(REG06_INPUT_CURRENT_DPM_LIMIT, encode_input_current_dpm_limit_ma(input_current_dpm_limit_ma))) {
     return false;
   }
-  if (has_input_voltage_dpm_limit_mv && !this->write_u16_le(REG08_INPUT_VOLTAGE_DPM_LIMIT, encode_input_voltage_dpm_limit_mv(input_voltage_dpm_limit_mv))) {
+  if (has_input_voltage_dpm_limit_mv &&
+      !this->write_u16_le(REG08_INPUT_VOLTAGE_DPM_LIMIT, encode_input_voltage_dpm_limit_mv(input_voltage_dpm_limit_mv))) {
     return false;
   }
   return true;
@@ -220,13 +224,16 @@ bool Bq25756Service::apply_limits(
 bool Bq25756Service::apply_pin_overrides(
   bool disable_ce_pin, bool disable_ilim_hiz_pin, bool disable_ichg_pin
 ) {
-  if (disable_ce_pin && !this->update_register_bits(REG17_CHARGER_CONTROL, REG17_DIS_CE_PIN_MASK, REG17_DIS_CE_PIN_MASK)) {
+  if (disable_ce_pin &&
+      !this->update_register_bits(REG17_CHARGER_CONTROL, REG17_DIS_CE_PIN_MASK, REG17_DIS_CE_PIN_MASK)) {
     return false;
   }
-  if (disable_ilim_hiz_pin && !this->update_register_bits(REG18_PIN_CONTROL, REG18_EN_ILIM_HIZ_PIN_MASK, 0x00)) {
+  if (disable_ilim_hiz_pin &&
+      !this->update_register_bits(REG18_PIN_CONTROL, REG18_EN_ILIM_HIZ_PIN_MASK, 0x00)) {
     return false;
   }
-  if (disable_ichg_pin && !this->update_register_bits(REG18_PIN_CONTROL, REG18_EN_ICHG_PIN_MASK, 0x00)) {
+  if (disable_ichg_pin &&
+      !this->update_register_bits(REG18_PIN_CONTROL, REG18_EN_ICHG_PIN_MASK, 0x00)) {
     return false;
   }
   return true;
@@ -246,6 +253,95 @@ bool Bq25756Service::read_charge_precheck(ChargePrecheckSnapshot& snapshot) {
   snapshot.dis_ce_pin = (snapshot.reg17 & REG17_DIS_CE_PIN_MASK) != 0;
   snapshot.en_rev = (snapshot.reg19 & REG19_EN_REV_MASK) != 0;
   return true;
+}
+
+bool Bq25756Service::read_register_value_(
+    const component_common::RegisterImageEntry &entry, uint32_t &value) {
+  uint8_t raw[4] = {0, 0, 0, 0};
+  if (!this->read_bytes(static_cast<uint8_t>(entry.address), raw, entry.width)) {
+    return false;
+  }
+
+  value = 0;
+  for (uint8_t index = 0; index < entry.width; index++) {
+    value |= static_cast<uint32_t>(raw[index]) << (index * 8U);
+  }
+  return true;
+}
+
+bool Bq25756Service::write_register_value_(
+    const component_common::RegisterImageEntry &entry, uint32_t value) {
+  uint8_t raw[4] = {0, 0, 0, 0};
+  for (uint8_t index = 0; index < entry.width; index++) {
+    raw[index] = static_cast<uint8_t>((value >> (index * 8U)) & 0xFFU);
+  }
+  return this->write_bytes(static_cast<uint8_t>(entry.address), raw, entry.width);
+}
+
+bool Bq25756Service::reconcile_configuration(
+    const Bq25756ConfigurationImage &image, bool repair,
+    ConfigurationReconcileResult &result) {
+  result = {};
+  result.desired_fingerprint = component_common::configuration_fingerprint(image);
+  result.observed_fingerprint = component_common::FNV1A_OFFSET_BASIS;
+
+  for (const auto &entry : image) {
+    uint32_t actual = 0;
+    if (!this->read_register_value_(entry, actual)) {
+      result.io_ok = false;
+      result.matches = false;
+      return false;
+    }
+
+    result.observed_fingerprint = component_common::fingerprint_register_value(
+        result.observed_fingerprint, entry, actual);
+    if (component_common::register_value_matches(actual, entry.value, entry.mask)) {
+      continue;
+    }
+
+    if (result.mismatch_count == 0) {
+      result.first_mismatch_address = entry.address;
+    }
+    result.mismatch_count++;
+    result.matches = false;
+    if (!repair) {
+      continue;
+    }
+
+    uint32_t updated = component_common::merge_register_value(actual, entry.value, entry.mask);
+    updated &= ~entry.command_mask;
+    updated &= component_common::register_width_mask(entry.width);
+    if (!this->write_register_value_(entry, updated)) {
+      result.io_ok = false;
+      return false;
+    }
+    result.repaired = true;
+    result.repaired_count++;
+  }
+
+  if (!repair || result.mismatch_count == 0) {
+    return result.io_ok && result.matches;
+  }
+
+  result.matches = true;
+  result.remaining_mismatch_count = 0;
+  result.observed_fingerprint = component_common::FNV1A_OFFSET_BASIS;
+  for (const auto &entry : image) {
+    uint32_t actual = 0;
+    if (!this->read_register_value_(entry, actual)) {
+      result.io_ok = false;
+      result.matches = false;
+      return false;
+    }
+
+    result.observed_fingerprint = component_common::fingerprint_register_value(
+        result.observed_fingerprint, entry, actual);
+    if (!component_common::register_value_matches(actual, entry.value, entry.mask)) {
+      result.matches = false;
+      result.remaining_mismatch_count++;
+    }
+  }
+  return result.io_ok && result.matches;
 }
 
 }  // namespace bq25756_core

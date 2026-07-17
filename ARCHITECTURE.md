@@ -6,6 +6,10 @@ Use this document for new components and when substantially refactoring an exist
 
 See `COMPONENTS.md` for the lifecycle status and known consumers of each component.
 
+## Language baseline
+
+The repository host checks use GNU C++20, matching the pinned ESPHome 2026.5.3 build configuration. C++20 features are acceptable when they materially improve clarity, including designated initializers for register manifests and typed configuration aggregates.
+
 ## Component classes
 
 Choose the lightest structure that fits the component.

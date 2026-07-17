@@ -5,6 +5,7 @@
 
 #include "bq25756_bus.h"
 #include "bq25756_protocol.h"
+#include "bq25756_register_config.h"
 
 namespace bq25756_core {
 
@@ -30,6 +31,18 @@ struct AdcConfigurationState {
   uint8_t requested_reg2c{0};
 };
 
+struct ConfigurationReconcileResult {
+  bool io_ok{true};
+  bool matches{true};
+  bool repaired{false};
+  size_t mismatch_count{0};
+  size_t repaired_count{0};
+  size_t remaining_mismatch_count{0};
+  uint16_t first_mismatch_address{0};
+  uint32_t desired_fingerprint{0};
+  uint32_t observed_fingerprint{0};
+};
+
 class Bq25756Service {
  public:
   explicit Bq25756Service(RegisterBus *bus) : bus_(bus) {}
@@ -50,7 +63,8 @@ class Bq25756Service {
   bool reset_watchdog();
   bool read_status(Status &status);
   MeasurementReadResult read_measurements(Measurements &measurements, bool include_vfb,
-                                          uint8_t requested_adc_config, AdcConfigurationState &adc_state);
+                                           uint8_t requested_adc_config,
+                                           AdcConfigurationState &adc_state);
   bool read_control_states(ControlStates &states);
   AdcEnsureResult ensure_adc_enabled(bool include_vfb, uint8_t requested_adc_config,
                                      AdcConfigurationState &adc_state);
@@ -58,10 +72,16 @@ class Bq25756Service {
                     bool has_charge_current_limit_ma, uint16_t charge_current_limit_ma,
                     bool has_input_current_dpm_limit_ma, uint16_t input_current_dpm_limit_ma,
                     bool has_input_voltage_dpm_limit_mv, uint16_t input_voltage_dpm_limit_mv);
-  bool apply_pin_overrides(bool disable_ce_pin, bool disable_ilim_hiz_pin, bool disable_ichg_pin);
+  bool apply_pin_overrides(bool disable_ce_pin, bool disable_ilim_hiz_pin,
+                           bool disable_ichg_pin);
   bool read_charge_precheck(ChargePrecheckSnapshot &snapshot);
+  bool reconcile_configuration(const Bq25756ConfigurationImage &image, bool repair,
+                               ConfigurationReconcileResult &result);
 
  private:
+  bool read_register_value_(const component_common::RegisterImageEntry &entry, uint32_t &value);
+  bool write_register_value_(const component_common::RegisterImageEntry &entry, uint32_t value);
+
   RegisterBus *bus_{nullptr};
 };
 

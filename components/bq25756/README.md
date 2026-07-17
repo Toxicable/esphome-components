@@ -7,7 +7,7 @@ startup, manages charger limits, and publishes telemetry, status, and controls.
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ bq25756 ]
+    components: [ component_common, bq25756 ]
 
 bq25756:
   id: charger
@@ -70,11 +70,36 @@ The component disables the charger watchdog internally, so it does not need
 periodic host resets. I2C always owns charge enable and both current limits;
 the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
 
-## Configuration health
+## Core layout
 
-The component audits charger-owned configuration registers every 10 seconds.
-If the charger resets or a configured register drifts, it restores the
-configured voltage/current limits, pin overrides, watchdog state, ADC setup,
-and PFM setting without changing the charge-enable state. Configure
-`status.configuration_status` to expose `configured` or `repair_failed` in
-Home Assistant.
+- `bq25756_registers.h` owns one explicit `RegisterInfo` definition per register, including its ID, name, address, width and bit ownership.
+- `bq25756_register_config.h` owns desired register values and builds the complete register configuration image.
+- `bq25756_protocol.h/.cpp` owns physical-unit conversion, decoding and typed snapshots.
+- `bq25756_service.h/.cpp` performs bus operations and masked register reconciliation.
+- `bq25756_connection.cpp` integrates connection-state transitions with ESPHome.
+
+There is no separate user-facing or device-facing "managed" mode. ESPHome
+instantiates one BQ25756 component; `BQ25756ComponentImpl` is only the concrete
+ESPHome implementation selected by code generation.
+
+## Register ownership and connection handling
+
+Every documented register bit is classified as configuration, runtime state,
+status, command, or reserved. Every register with configuration-owned bits has
+an explicit desired value, so omitted code cannot silently rely on a factory
+default. The configuration image size is derived from the `RegisterInfo` table.
+
+Register synchronisation is driven by connection state rather than a periodic
+audit. When a new device session becomes connected, the component disables
+charging, writes only mismatched configuration-owned bits, preserves runtime and
+reserved bits, clears command bits on ordinary writes, and verifies the complete
+configuration fingerprint. Normal telemetry polling does not repeatedly read the
+complete configuration image.
+
+After three consecutive failed poll cycles, the session is marked disconnected.
+When communication returns, a new connected session is established and the
+complete register configuration is synchronised once before configuration is
+reported ready.
+
+Configure `status.configuration_status` to expose `connecting`, `configured`,
+`disconnected`, or `sync_failed` in Home Assistant.

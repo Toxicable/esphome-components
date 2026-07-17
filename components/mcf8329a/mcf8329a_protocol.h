@@ -2,38 +2,13 @@
 
 #include <cstdint>
 
+#include "mcf8329a_registers.h"
+
 namespace mcf8329a_core {
 
 namespace regs {
 
-inline constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = 0x00E2;
-inline constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = 0x00E0;
-inline constexpr uint16_t REG_ALGO_STATUS = 0x00E4;
-inline constexpr uint16_t REG_ALGO_STATUS_MPET = 0x00E8;
-inline constexpr uint16_t REG_ALGORITHM_STATE = 0x0196;
-inline constexpr uint16_t REG_MTR_PARAMS = 0x00E6;
-inline constexpr uint16_t REG_ALGO_CTRL1 = 0x00EA;
-inline constexpr uint16_t REG_ALGO_DEBUG1 = 0x00EC;
-inline constexpr uint16_t REG_ALGO_DEBUG2 = 0x00EE;
-inline constexpr uint16_t REG_PIN_CONFIG = 0x00A4;
 inline constexpr uint32_t PIN_CONFIG_VDC_FILTER_DISABLE_MASK = (1u << 27);
-inline constexpr uint16_t REG_PERI_CONFIG1 = 0x00AA;
-inline constexpr uint16_t REG_MOTOR_STARTUP1 = 0x0084;
-inline constexpr uint16_t REG_MOTOR_STARTUP2 = 0x0086;
-inline constexpr uint16_t REG_CLOSED_LOOP3 = 0x008C;
-inline constexpr uint16_t REG_CLOSED_LOOP4 = 0x008E;
-inline constexpr uint16_t REG_CLOSED_LOOP2 = 0x008A;
-inline constexpr uint16_t REG_GD_CONFIG1 = 0x00AC;
-inline constexpr uint16_t REG_GD_CONFIG2 = 0x00AE;
-inline constexpr uint16_t REG_FAULT_CONFIG1 = 0x0090;
-inline constexpr uint16_t REG_FAULT_CONFIG2 = 0x0092;
-inline constexpr uint16_t REG_INT_ALGO_1 = 0x00A0;
-inline constexpr uint16_t REG_INT_ALGO_2 = 0x00A2;
-inline constexpr uint16_t REG_VM_VOLTAGE = 0x045C;
-inline constexpr uint16_t REG_FG_SPEED_FDBK = 0x019C;
-inline constexpr uint16_t REG_SPEED_REF_OPEN_LOOP = 0x0532;
-inline constexpr uint16_t REG_SPEED_FDBK = 0x076E;
-
 inline constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_MASK = (0x3u << 2);
 inline constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_BRAKE = (0x1u << 2);
 inline constexpr uint32_t PIN_CONFIG_BRAKE_INPUT_NO_BRAKE = (0x2u << 2);
@@ -109,7 +84,6 @@ inline constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_MASK = (0x3FFu << 14);
 inline constexpr uint32_t CLOSED_LOOP4_SPD_LOOP_KI_SHIFT = 14;
 inline constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_MASK = 0x3FFFu;
 inline constexpr uint32_t CLOSED_LOOP4_MAX_SPEED_SHIFT = 0;
-
 
 inline constexpr uint32_t GD_CONFIG1_CSA_GAIN_MASK = 0x3u;
 inline constexpr uint32_t GD_CONFIG1_CSA_GAIN_SHIFT = 0;
