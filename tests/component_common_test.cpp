@@ -6,6 +6,7 @@
 #include "components/component_common/bit_field.h"
 #include "components/component_common/byte_order.h"
 #include "components/component_common/charger.h"
+#include "components/component_common/register_info.h"
 #include "components/component_common/register_manifest.h"
 #include "components/component_common/status.h"
 
@@ -56,6 +57,40 @@ static_assert(!component_common::register_manifest_valid(UNCLASSIFIED_MANIFEST))
 static_assert(!component_common::register_manifest_valid(OVERLAPPING_MANIFEST));
 static_assert(component_common::register_value_matches(0xA5, 0x05, 0x0F));
 static_assert(component_common::merge_register_value(0xA0, 0x05, 0x0F) == 0xA5);
+
+enum class TestRegisterId : uint8_t {
+  CONTROL,
+  STATUS,
+  COUNT,
+};
+
+using TestRegisterInfo = component_common::RegisterInfo<TestRegisterId>;
+constexpr std::array<TestRegisterInfo, 2> TEST_REGISTER_DEFINITIONS{{
+    {
+        .id = TestRegisterId::STATUS,
+        .name = "status",
+        .address = 0x20,
+        .width = component_common::RegisterWidth::U16,
+        .masks = {.status = 0xFFFF},
+    },
+    {
+        .id = TestRegisterId::CONTROL,
+        .name = "control",
+        .address = 0x10,
+        .width = component_common::RegisterWidth::U8,
+        .masks = {.configuration = 0x0F, .runtime = 0x30, .command = 0x40, .reserved = 0x80},
+    },
+}};
+
+static_assert(component_common::register_definitions_have_all_ids_once(TEST_REGISTER_DEFINITIONS));
+static_assert(component_common::register_definitions_have_unique_addresses(TEST_REGISTER_DEFINITIONS));
+constexpr auto TEST_REGISTER_INFO = component_common::index_register_info_by_id(TEST_REGISTER_DEFINITIONS);
+static_assert(component_common::register_info(TEST_REGISTER_INFO, TestRegisterId::CONTROL).address == 0x10);
+static_assert(component_common::register_info(TEST_REGISTER_INFO, TestRegisterId::STATUS).width ==
+              component_common::RegisterWidth::U16);
+constexpr auto TEST_REGISTER_MANIFEST = component_common::make_register_manifest(TEST_REGISTER_INFO);
+static_assert(component_common::register_manifest_valid(TEST_REGISTER_MANIFEST));
+static_assert(component_common::configuration_register_count(TEST_REGISTER_INFO) == 1);
 
 class FakeCharger final : public component_common::ChargerInterface {
  public:
