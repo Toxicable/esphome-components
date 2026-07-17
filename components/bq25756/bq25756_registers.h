@@ -8,6 +8,10 @@
 
 namespace bq25756_core {
 
+// This file is the single source of truth for register-level device facts:
+// addresses, widths represented by the catalog/manifest, bit masks, and fields.
+// Encoding, decoding, physical scaling, and snapshots remain in protocol.h/.cpp.
+
 enum class RegisterId : uint8_t {
   CHARGE_VOLTAGE_LIMIT,
   CHARGE_CURRENT_LIMIT,
