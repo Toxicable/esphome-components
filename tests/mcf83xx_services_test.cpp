@@ -56,6 +56,7 @@ void test_mcf8329a_register_metadata() {
   static_assert(component_common::register_definitions_have_unique_addresses(REGISTER_DEFINITIONS));
   static_assert(register_info(RegisterId::ALGO_STATUS).address == 0x00E4);
   static_assert(register_info(RegisterId::ALGO_STATUS).width == component_common::RegisterWidth::U32);
+  static_assert(register_info(RegisterId::ALGORITHM_STATE).width == component_common::RegisterWidth::U16);
   static_assert(REG_CLOSED_LOOP4 == register_info(RegisterId::CLOSED_LOOP4).address);
 
   assert(std::string_view(register_info(RegisterId::SPEED_FDBK).name) == "speed_feedback");
