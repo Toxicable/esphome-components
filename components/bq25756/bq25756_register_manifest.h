@@ -9,6 +9,9 @@
 
 namespace bq25756_core {
 
+// The manifest classifies every bit from the complete register catalog. It does
+// not contain desired settings; those live in bq25756_configuration.h.
+
 using component_common::RegisterManifestEntry;
 using component_common::RegisterMasks;
 
