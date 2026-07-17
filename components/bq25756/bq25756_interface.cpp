@@ -34,7 +34,7 @@ namespace bq25756 {
   }
 
   self->charger_snapshot_ = ::bq25756_core::make_charger_snapshot(
-      status, measurements, controls, ++self->charger_snapshot_sequence_, millis());
+      status, measurements, controls, self->charger_snapshot_.sequence + 1U, millis());
   return self->charger_snapshot_;
 }
 
