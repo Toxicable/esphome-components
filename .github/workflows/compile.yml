@@ -20,7 +20,15 @@ jobs:
         run: ./check_py.bash
 
       - name: Run host core tests
-        run: bash ./check_host.bash
+        run: bash ./check_host.bash 2>&1 | tee host-check-failure.log
+
+      - name: Upload host failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-check-failure
+          path: host-check-failure.log
+          if-no-files-found: error
 
   esphome-checks:
     name: ESPHome ${{ matrix.name }}
