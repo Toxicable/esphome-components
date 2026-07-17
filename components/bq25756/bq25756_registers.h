@@ -9,9 +9,9 @@
 
 namespace bq25756_core {
 
-// Single source of truth for register-level device facts: addresses, widths,
-// bit ownership, masks, and fields. Encoding, decoding, physical scaling, and
-// typed snapshots remain in protocol.h/.cpp.
+// Single source of truth for register-level device facts: identifiers, names,
+// addresses, widths, bit ownership, masks, and fields. Encoding, decoding,
+// physical scaling, and typed snapshots remain in protocol.h/.cpp.
 
 enum class RegisterId : uint8_t {
   CHARGE_VOLTAGE_LIMIT,
@@ -64,48 +64,389 @@ enum class RegisterWidth : uint8_t {
   U16 = 2,
 };
 
-struct RegisterCatalogEntry {
-  uint8_t address;
-  RegisterWidth width;
+using component_common::RegisterManifestEntry;
+using component_common::RegisterMasks;
+
+struct RegisterInfo {
+  RegisterId id{RegisterId::COUNT};
+  const char *name{nullptr};
+  uint8_t address{0};
+  RegisterWidth width{RegisterWidth::U8};
+  RegisterMasks masks{};
 };
 
 static constexpr size_t REGISTER_COUNT = static_cast<size_t>(RegisterId::COUNT);
 
-static constexpr std::array<RegisterCatalogEntry, REGISTER_COUNT> REGISTER_CATALOG{{
-    {0x00, RegisterWidth::U16}, {0x02, RegisterWidth::U16},
-    {0x06, RegisterWidth::U16}, {0x08, RegisterWidth::U16},
-    {0x0A, RegisterWidth::U16}, {0x0C, RegisterWidth::U16},
-    {0x10, RegisterWidth::U16}, {0x12, RegisterWidth::U16},
-    {0x14, RegisterWidth::U8},  {0x15, RegisterWidth::U8},
-    {0x16, RegisterWidth::U8},  {0x17, RegisterWidth::U8},
-    {0x18, RegisterWidth::U8},  {0x19, RegisterWidth::U8},
-    {0x1A, RegisterWidth::U8},  {0x1B, RegisterWidth::U8},
-    {0x1C, RegisterWidth::U8},  {0x1D, RegisterWidth::U8},
-    {0x1E, RegisterWidth::U8},  {0x1F, RegisterWidth::U16},
-    {0x21, RegisterWidth::U8},  {0x22, RegisterWidth::U8},
-    {0x23, RegisterWidth::U8},  {0x24, RegisterWidth::U8},
-    {0x25, RegisterWidth::U8},  {0x26, RegisterWidth::U8},
-    {0x27, RegisterWidth::U8},  {0x28, RegisterWidth::U8},
-    {0x29, RegisterWidth::U8},  {0x2A, RegisterWidth::U8},
-    {0x2B, RegisterWidth::U8},  {0x2C, RegisterWidth::U8},
-    {0x2D, RegisterWidth::U16}, {0x2F, RegisterWidth::U16},
-    {0x31, RegisterWidth::U16}, {0x33, RegisterWidth::U16},
-    {0x37, RegisterWidth::U16}, {0x39, RegisterWidth::U16},
-    {0x3B, RegisterWidth::U8},  {0x3C, RegisterWidth::U8},
-    {0x3D, RegisterWidth::U8},  {0x62, RegisterWidth::U8},
+// These definitions may be reordered without changing RegisterId lookup.
+static constexpr std::array<RegisterInfo, REGISTER_COUNT> REGISTER_DEFINITIONS{{
+    {
+        .id = RegisterId::CHARGE_VOLTAGE_LIMIT,
+        .name = "charge_voltage_limit",
+        .address = 0x00,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x001F, .reserved = 0xFFE0},
+    },
+    {
+        .id = RegisterId::CHARGE_CURRENT_LIMIT,
+        .name = "charge_current_limit",
+        .address = 0x02,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x07FC, .reserved = 0xF803},
+    },
+    {
+        .id = RegisterId::INPUT_CURRENT_DPM_LIMIT,
+        .name = "input_current_dpm_limit",
+        .address = 0x06,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x07FC, .reserved = 0xF803},
+    },
+    {
+        .id = RegisterId::INPUT_VOLTAGE_DPM_LIMIT,
+        .name = "input_voltage_dpm_limit",
+        .address = 0x08,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x3FFC, .reserved = 0xC003},
+    },
+    {
+        .id = RegisterId::REVERSE_INPUT_CURRENT_LIMIT,
+        .name = "reverse_input_current_limit",
+        .address = 0x0A,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x07FC, .reserved = 0xF803},
+    },
+    {
+        .id = RegisterId::REVERSE_INPUT_VOLTAGE_LIMIT,
+        .name = "reverse_input_voltage_limit",
+        .address = 0x0C,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x3FFC, .reserved = 0xC003},
+    },
+    {
+        .id = RegisterId::PRECHARGE_CURRENT_LIMIT,
+        .name = "precharge_current_limit",
+        .address = 0x10,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x03FC, .reserved = 0xFC03},
+    },
+    {
+        .id = RegisterId::TERMINATION_CURRENT_LIMIT,
+        .name = "termination_current_limit",
+        .address = 0x12,
+        .width = RegisterWidth::U16,
+        .masks = {.configuration = 0x03FC, .reserved = 0xFC03},
+    },
+    {
+        .id = RegisterId::PRECHARGE_TERMINATION_CONTROL,
+        .name = "precharge_termination_control",
+        .address = 0x14,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x0F, .reserved = 0xF0},
+    },
+    {
+        .id = RegisterId::TIMER_CONTROL,
+        .name = "timer_control",
+        .address = 0x15,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xFF},
+    },
+    {
+        .id = RegisterId::THREE_STAGE_CHARGE_CONTROL,
+        .name = "three_stage_charge_control",
+        .address = 0x16,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x0F, .reserved = 0xF0},
+    },
+    {
+        .id = RegisterId::CHARGER_CONTROL,
+        .name = "charger_control",
+        .address = 0x17,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xD8, .runtime = 0x07, .command = 0x20},
+    },
+    {
+        .id = RegisterId::PIN_CONTROL,
+        .name = "pin_control",
+        .address = 0x18,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xFF},
+    },
+    {
+        .id = RegisterId::POWER_PATH_CONTROL,
+        .name = "power_path_control",
+        .address = 0x19,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x20, .runtime = 0x41, .command = 0x80, .reserved = 0x1E},
+    },
+    {
+        .id = RegisterId::MPPT_CONTROL,
+        .name = "mppt_control",
+        .address = 0x1A,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x67, .command = 0x80, .reserved = 0x18},
+    },
+    {
+        .id = RegisterId::TS_CHARGING_THRESHOLD_CONTROL,
+        .name = "ts_charging_threshold_control",
+        .address = 0x1B,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xFF},
+    },
+    {
+        .id = RegisterId::TS_CHARGING_REGION_CONTROL,
+        .name = "ts_charging_region_control",
+        .address = 0x1C,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x7F, .reserved = 0x80},
+    },
+    {
+        .id = RegisterId::TS_REVERSE_THRESHOLD_CONTROL,
+        .name = "ts_reverse_threshold_control",
+        .address = 0x1D,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xE0, .reserved = 0x1F},
+    },
+    {
+        .id = RegisterId::REVERSE_UNDERVOLTAGE_CONTROL,
+        .name = "reverse_undervoltage_control",
+        .address = 0x1E,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x20, .reserved = 0xDF},
+    },
+    {
+        .id = RegisterId::VAC_MPP_DETECTED,
+        .name = "vac_mpp_detected",
+        .address = 0x1F,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0x3FFC, .reserved = 0xC003},
+    },
+    {
+        .id = RegisterId::CHARGER_STATUS_1,
+        .name = "charger_status_1",
+        .address = 0x21,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0xEF, .reserved = 0x10},
+    },
+    {
+        .id = RegisterId::CHARGER_STATUS_2,
+        .name = "charger_status_2",
+        .address = 0x22,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0xF3, .reserved = 0x0C},
+    },
+    {
+        .id = RegisterId::CHARGER_STATUS_3,
+        .name = "charger_status_3",
+        .address = 0x23,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0x3C, .reserved = 0xC3},
+    },
+    {
+        .id = RegisterId::FAULT_STATUS,
+        .name = "fault_status",
+        .address = 0x24,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0xFE, .reserved = 0x01},
+    },
+    {
+        .id = RegisterId::CHARGER_FLAG_1,
+        .name = "charger_flag_1",
+        .address = 0x25,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0xFF},
+    },
+    {
+        .id = RegisterId::CHARGER_FLAG_2,
+        .name = "charger_flag_2",
+        .address = 0x26,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0xFF},
+    },
+    {
+        .id = RegisterId::FAULT_FLAG,
+        .name = "fault_flag",
+        .address = 0x27,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0xFF},
+    },
+    {
+        .id = RegisterId::CHARGER_MASK_1,
+        .name = "charger_mask_1",
+        .address = 0x28,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xEB, .reserved = 0x14},
+    },
+    {
+        .id = RegisterId::CHARGER_MASK_2,
+        .name = "charger_mask_2",
+        .address = 0x29,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x9B, .reserved = 0x64},
+    },
+    {
+        .id = RegisterId::FAULT_MASK,
+        .name = "fault_mask",
+        .address = 0x2A,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xFE, .reserved = 0x01},
+    },
+    {
+        .id = RegisterId::ADC_CONTROL,
+        .name = "adc_control",
+        .address = 0x2B,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xF8, .command = 0x04, .reserved = 0x03},
+    },
+    {
+        .id = RegisterId::ADC_CHANNEL_CONTROL,
+        .name = "adc_channel_control",
+        .address = 0x2C,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xF6, .reserved = 0x09},
+    },
+    {
+        .id = RegisterId::IAC_ADC,
+        .name = "iac_adc",
+        .address = 0x2D,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0xFFFF},
+    },
+    {
+        .id = RegisterId::IBAT_ADC,
+        .name = "ibat_adc",
+        .address = 0x2F,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0xFFFF},
+    },
+    {
+        .id = RegisterId::VAC_ADC,
+        .name = "vac_adc",
+        .address = 0x31,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0xFFFF},
+    },
+    {
+        .id = RegisterId::VBAT_ADC,
+        .name = "vbat_adc",
+        .address = 0x33,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0xFFFF},
+    },
+    {
+        .id = RegisterId::TS_ADC,
+        .name = "ts_adc",
+        .address = 0x37,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0x03FF, .reserved = 0xFC00},
+    },
+    {
+        .id = RegisterId::VFB_ADC,
+        .name = "vfb_adc",
+        .address = 0x39,
+        .width = RegisterWidth::U16,
+        .masks = {.status = 0x07FF, .reserved = 0xF800},
+    },
+    {
+        .id = RegisterId::GATE_DRIVER_STRENGTH_CONTROL,
+        .name = "gate_driver_strength_control",
+        .address = 0x3B,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xFF},
+    },
+    {
+        .id = RegisterId::GATE_DRIVER_DEAD_TIME_CONTROL,
+        .name = "gate_driver_dead_time_control",
+        .address = 0x3C,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0x0F, .reserved = 0xF0},
+    },
+    {
+        .id = RegisterId::PART_INFORMATION,
+        .name = "part_information",
+        .address = 0x3D,
+        .width = RegisterWidth::U8,
+        .masks = {.status = 0x7F, .reserved = 0x80},
+    },
+    {
+        .id = RegisterId::REVERSE_BATTERY_DISCHARGE_CURRENT,
+        .name = "reverse_battery_discharge_current",
+        .address = 0x62,
+        .width = RegisterWidth::U8,
+        .masks = {.configuration = 0xC2, .reserved = 0x3D},
+    },
 }};
 
-constexpr const RegisterCatalogEntry &register_catalog_entry(RegisterId id) {
-  return REGISTER_CATALOG[static_cast<size_t>(id)];
+constexpr bool register_definitions_have_all_ids_once() {
+  for (size_t expected = 0; expected < REGISTER_COUNT; expected++) {
+    size_t matches = 0;
+    for (const auto &info : REGISTER_DEFINITIONS) {
+      if (static_cast<size_t>(info.id) >= REGISTER_COUNT) {
+        return false;
+      }
+      if (static_cast<size_t>(info.id) == expected) {
+        matches++;
+      }
+    }
+    if (matches != 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+constexpr std::array<RegisterInfo, REGISTER_COUNT> make_register_info_by_id() {
+  std::array<RegisterInfo, REGISTER_COUNT> result{};
+  for (const auto &info : REGISTER_DEFINITIONS) {
+    result[static_cast<size_t>(info.id)] = info;
+  }
+  return result;
+}
+
+static constexpr auto REGISTER_INFO = make_register_info_by_id();
+
+constexpr const RegisterInfo &register_info(RegisterId id) {
+  return REGISTER_INFO[static_cast<size_t>(id)];
 }
 
 constexpr uint8_t register_address(RegisterId id) {
-  return register_catalog_entry(id).address;
+  return register_info(id).address;
 }
 
 constexpr uint8_t register_width(RegisterId id) {
-  return static_cast<uint8_t>(register_catalog_entry(id).width);
+  return static_cast<uint8_t>(register_info(id).width);
 }
+
+constexpr RegisterManifestEntry make_manifest_entry(const RegisterInfo &info) {
+  return component_common::make_register_manifest_entry(
+      info.name, info.address, static_cast<uint8_t>(info.width), info.masks);
+}
+
+constexpr std::array<RegisterManifestEntry, REGISTER_COUNT> make_register_manifest() {
+  std::array<RegisterManifestEntry, REGISTER_COUNT> manifest{};
+  for (size_t index = 0; index < REGISTER_COUNT; index++) {
+    manifest[index] = make_manifest_entry(REGISTER_INFO[index]);
+  }
+  return manifest;
+}
+
+static constexpr auto REGISTER_MANIFEST = make_register_manifest();
+
+constexpr size_t configuration_register_count() {
+  size_t count = 0;
+  for (const auto &info : REGISTER_INFO) {
+    if (info.masks.configuration != 0) {
+      count++;
+    }
+  }
+  return count;
+}
+
+static constexpr size_t CONFIGURATION_REGISTER_COUNT =
+    configuration_register_count();
+
+static_assert(register_definitions_have_all_ids_once(),
+              "BQ25756 register definitions must contain every RegisterId exactly once");
+static_assert(component_common::register_manifest_valid(REGISTER_MANIFEST),
+              "BQ25756 register definitions must classify every bit exactly once and not overlap");
 
 static constexpr uint8_t REG00_CHARGE_VOLTAGE_LIMIT = register_address(RegisterId::CHARGE_VOLTAGE_LIMIT);
 static constexpr uint8_t REG02_CHARGE_CURRENT_LIMIT = register_address(RegisterId::CHARGE_CURRENT_LIMIT);
@@ -220,117 +561,5 @@ using ChargeCurrentLimit = component_common::RegisterField<uint16_t, REG02_ICHG_
 using InputCurrentLimit = component_common::RegisterField<uint16_t, REG06_IAC_DPM_MASK>;
 using InputVoltageLimit = component_common::RegisterField<uint16_t, REG08_VAC_DPM_MASK>;
 }  // namespace fields
-
-using component_common::RegisterManifestEntry;
-using component_common::RegisterMasks;
-
-constexpr RegisterManifestEntry reg(const char *name, RegisterId id,
-                                    RegisterMasks masks) {
-  return component_common::make_register_manifest_entry(
-      name, register_address(id), register_width(id), masks);
-}
-
-static constexpr std::array<RegisterManifestEntry, REGISTER_COUNT> REGISTER_MANIFEST{{
-    reg("charge_voltage_limit", RegisterId::CHARGE_VOLTAGE_LIMIT,
-        {.configuration = 0x001F, .reserved = 0xFFE0}),
-    reg("charge_current_limit", RegisterId::CHARGE_CURRENT_LIMIT,
-        {.configuration = 0x07FC, .reserved = 0xF803}),
-    reg("input_current_dpm_limit", RegisterId::INPUT_CURRENT_DPM_LIMIT,
-        {.configuration = 0x07FC, .reserved = 0xF803}),
-    reg("input_voltage_dpm_limit", RegisterId::INPUT_VOLTAGE_DPM_LIMIT,
-        {.configuration = 0x3FFC, .reserved = 0xC003}),
-    reg("reverse_input_current_limit", RegisterId::REVERSE_INPUT_CURRENT_LIMIT,
-        {.configuration = 0x07FC, .reserved = 0xF803}),
-    reg("reverse_input_voltage_limit", RegisterId::REVERSE_INPUT_VOLTAGE_LIMIT,
-        {.configuration = 0x3FFC, .reserved = 0xC003}),
-    reg("precharge_current_limit", RegisterId::PRECHARGE_CURRENT_LIMIT,
-        {.configuration = 0x03FC, .reserved = 0xFC03}),
-    reg("termination_current_limit", RegisterId::TERMINATION_CURRENT_LIMIT,
-        {.configuration = 0x03FC, .reserved = 0xFC03}),
-    reg("precharge_termination_control", RegisterId::PRECHARGE_TERMINATION_CONTROL,
-        {.configuration = 0x0F, .reserved = 0xF0}),
-    reg("timer_control", RegisterId::TIMER_CONTROL,
-        {.configuration = 0xFF}),
-    reg("three_stage_charge_control", RegisterId::THREE_STAGE_CHARGE_CONTROL,
-        {.configuration = 0x0F, .reserved = 0xF0}),
-    reg("charger_control", RegisterId::CHARGER_CONTROL,
-        {.configuration = 0xD8, .runtime = 0x07, .command = 0x20}),
-    reg("pin_control", RegisterId::PIN_CONTROL,
-        {.configuration = 0xFF}),
-    reg("power_path_control", RegisterId::POWER_PATH_CONTROL,
-        {.configuration = 0x20, .runtime = 0x41, .command = 0x80, .reserved = 0x1E}),
-    reg("mppt_control", RegisterId::MPPT_CONTROL,
-        {.configuration = 0x67, .command = 0x80, .reserved = 0x18}),
-    reg("ts_charging_threshold_control", RegisterId::TS_CHARGING_THRESHOLD_CONTROL,
-        {.configuration = 0xFF}),
-    reg("ts_charging_region_control", RegisterId::TS_CHARGING_REGION_CONTROL,
-        {.configuration = 0x7F, .reserved = 0x80}),
-    reg("ts_reverse_threshold_control", RegisterId::TS_REVERSE_THRESHOLD_CONTROL,
-        {.configuration = 0xE0, .reserved = 0x1F}),
-    reg("reverse_undervoltage_control", RegisterId::REVERSE_UNDERVOLTAGE_CONTROL,
-        {.configuration = 0x20, .reserved = 0xDF}),
-    reg("vac_mpp_detected", RegisterId::VAC_MPP_DETECTED,
-        {.status = 0x3FFC, .reserved = 0xC003}),
-    reg("charger_status_1", RegisterId::CHARGER_STATUS_1,
-        {.status = 0xEF, .reserved = 0x10}),
-    reg("charger_status_2", RegisterId::CHARGER_STATUS_2,
-        {.status = 0xF3, .reserved = 0x0C}),
-    reg("charger_status_3", RegisterId::CHARGER_STATUS_3,
-        {.status = 0x3C, .reserved = 0xC3}),
-    reg("fault_status", RegisterId::FAULT_STATUS,
-        {.status = 0xFE, .reserved = 0x01}),
-    reg("charger_flag_1", RegisterId::CHARGER_FLAG_1,
-        {.status = 0xFF}),
-    reg("charger_flag_2", RegisterId::CHARGER_FLAG_2,
-        {.status = 0xFF}),
-    reg("fault_flag", RegisterId::FAULT_FLAG,
-        {.status = 0xFF}),
-    reg("charger_mask_1", RegisterId::CHARGER_MASK_1,
-        {.configuration = 0xEB, .reserved = 0x14}),
-    reg("charger_mask_2", RegisterId::CHARGER_MASK_2,
-        {.configuration = 0x9B, .reserved = 0x64}),
-    reg("fault_mask", RegisterId::FAULT_MASK,
-        {.configuration = 0xFE, .reserved = 0x01}),
-    reg("adc_control", RegisterId::ADC_CONTROL,
-        {.configuration = 0xF8, .command = 0x04, .reserved = 0x03}),
-    reg("adc_channel_control", RegisterId::ADC_CHANNEL_CONTROL,
-        {.configuration = 0xF6, .reserved = 0x09}),
-    reg("iac_adc", RegisterId::IAC_ADC,
-        {.status = 0xFFFF}),
-    reg("ibat_adc", RegisterId::IBAT_ADC,
-        {.status = 0xFFFF}),
-    reg("vac_adc", RegisterId::VAC_ADC,
-        {.status = 0xFFFF}),
-    reg("vbat_adc", RegisterId::VBAT_ADC,
-        {.status = 0xFFFF}),
-    reg("ts_adc", RegisterId::TS_ADC,
-        {.status = 0x03FF, .reserved = 0xFC00}),
-    reg("vfb_adc", RegisterId::VFB_ADC,
-        {.status = 0x07FF, .reserved = 0xF800}),
-    reg("gate_driver_strength_control", RegisterId::GATE_DRIVER_STRENGTH_CONTROL,
-        {.configuration = 0xFF}),
-    reg("gate_driver_dead_time_control", RegisterId::GATE_DRIVER_DEAD_TIME_CONTROL,
-        {.configuration = 0x0F, .reserved = 0xF0}),
-    reg("part_information", RegisterId::PART_INFORMATION,
-        {.status = 0x7F, .reserved = 0x80}),
-    reg("reverse_battery_discharge_current", RegisterId::REVERSE_BATTERY_DISCHARGE_CURRENT,
-        {.configuration = 0xC2, .reserved = 0x3D}),
-}};
-
-constexpr size_t configuration_register_count() {
-  size_t count = 0;
-  for (const auto &entry : REGISTER_MANIFEST) {
-    if (entry.configuration_mask != 0) {
-      count++;
-    }
-  }
-  return count;
-}
-
-static constexpr size_t CONFIGURATION_REGISTER_COUNT =
-    configuration_register_count();
-
-static_assert(component_common::register_manifest_valid(REGISTER_MANIFEST),
-              "BQ25756 register manifest must classify every bit exactly once");
 
 }  // namespace bq25756_core
