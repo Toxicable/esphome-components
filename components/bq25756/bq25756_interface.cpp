@@ -17,6 +17,9 @@ namespace bq25756 {
 }
 
 ::component_common::ChargerSnapshot BQ25756Component::snapshot() const {
+  // Snapshot callers are internal firmware consumers. Refresh directly from
+  // the service so the typed interface remains useful even when HA entities
+  // are hidden. A failed refresh returns the previous values marked invalid.
   auto *self = const_cast<BQ25756Component *>(this);
   ::bq25756_core::Status status{};
   ::bq25756_core::Measurements measurements{};
