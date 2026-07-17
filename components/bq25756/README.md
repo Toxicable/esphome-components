@@ -70,6 +70,19 @@ The component disables the charger watchdog internally, so it does not need
 periodic host resets. I2C always owns charge enable and both current limits;
 the CE, ILIM/HIZ, and ICHG pin functions are disabled during initialization.
 
+## Core layout
+
+- `bq25756_registers.h` owns register addresses, masks and typed bit fields.
+- `bq25756_register_manifest.h` classifies every documented register bit.
+- `bq25756_configuration.h` owns desired values and builds the configuration image.
+- `bq25756_protocol.h/.cpp` owns physical-unit conversion, decoding and typed snapshots.
+- `bq25756_service.h/.cpp` performs bus operations and configuration reconciliation.
+- `bq25756_recovery.cpp` integrates disconnect detection and reinitialisation with ESPHome.
+
+There is no separate user-facing or device-facing "managed" mode. ESPHome
+instantiates one BQ25756 component; the implementation class name is only an
+internal code-generation detail.
+
 ## Register ownership and recovery
 
 The host-independent library contains a complete register manifest for the
