@@ -7,6 +7,7 @@
 #include "bq25756_bus.h"
 #include "bq25756_service.h"
 #include "../component_common/charger.h"
+#include "../component_common/status.h"
 
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
@@ -26,9 +27,9 @@ struct FeedbackCalibration {
 };
 
 class BQ25756Component : public PollingComponent,
-                          public i2c::I2CDevice,
-                          public ::bq25756_core::RegisterBus,
-                          public ::component_common::ChargerInterface {
+                           public i2c::I2CDevice,
+                           public ::bq25756_core::RegisterBus,
+                           public ::component_common::ChargerInterface {
  public:
   BQ25756Component();
 
@@ -155,7 +156,7 @@ class BQ25756Component : public PollingComponent,
   bool apply_configured_limits_();
   bool apply_configured_pin_overrides_();
   bool configured_state_matches_();
-  bool audit_configured_state_();
+  virtual bool audit_configured_state_();
   bool ensure_adc_enabled_();
   void log_adc_configuration_(const ::bq25756_core::AdcConfigurationState &state,
                               ::bq25756_core::AdcEnsureResult result);
@@ -170,6 +171,7 @@ class BQ25756Component : public PollingComponent,
 
   ::bq25756_core::Bq25756Service service_;
   ::component_common::ChargerSnapshot charger_snapshot_{};
+  uint32_t charger_snapshot_sequence_{0};
 
   sensor::Sensor *iac_current_sensor_{nullptr};
   sensor::Sensor *ibat_current_sensor_{nullptr};
@@ -227,9 +229,8 @@ class BQ25756Component : public PollingComponent,
   uint8_t last_fault_{0};
 };
 
-// ESPHome code generation instantiates this implementation class. It layers
-// configuration reconciliation and reconnect recovery over the established
-// public BQ25756Component API without exposing another YAML concept.
+// Internal concrete component. Connection state owns the lifetime of the
+// register configuration: each new connected session is synchronised once.
 class BQ25756ComponentImpl : public BQ25756Component {
  public:
   void setup() override;
@@ -238,17 +239,22 @@ class BQ25756ComponentImpl : public BQ25756Component {
   bool write_registers(uint8_t reg, const uint8_t *data, size_t len) override;
 
  protected:
-  ::bq25756_core::Bq25756Configuration build_configuration_() const;
-  bool restore_manifest_configuration_();
-  bool audit_manifest_configuration_();
-  void mark_communication_lost_();
+  ::bq25756_core::Bq25756RegisterConfig build_register_config_() const;
+  bool sync_register_config_();
+  void set_connection_state_(::component_common::ConnectionState state);
+  void set_disconnected_();
+
+  // The base implementation predates the complete register config and performs
+  // a partial timer-driven audit. The concrete component intentionally disables
+  // that path because full sync is driven by connection-state transitions.
+  bool audit_configured_state_() override { return true; }
 
   bool io_failed_this_cycle_{false};
-  bool manifest_ready_{false};
+  bool register_config_synced_{false};
   uint8_t consecutive_failed_cycles_{0};
-  uint32_t next_manifest_audit_ms_{0};
+  ::component_common::ConnectionState connection_state_{
+      ::component_common::ConnectionState::DISCONNECTED};
   static constexpr uint8_t COMMUNICATION_FAILURE_THRESHOLD = 3;
-  static constexpr uint32_t MANIFEST_AUDIT_INTERVAL_MS = 10000;
 };
 
 class BQ25756ChargeEnableSwitch : public switch_::Switch, public Parented<BQ25756Component> {
