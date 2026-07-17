@@ -7,6 +7,10 @@
 
 namespace bq25756_core {
 
+// Protocol owns interpretation of register values: physical scaling,
+// encoders/decoders, typed measurements, status, and snapshots. Raw addresses,
+// masks, and fields belong exclusively to bq25756_registers.h.
+
 static constexpr float IAC_CURRENT_LSB_MA = 0.8f;
 static constexpr float IBAT_CURRENT_LSB_MA = 2.0f;
 static constexpr float VOLTAGE_LSB_MV = 2.0f;
