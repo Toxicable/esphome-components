@@ -44,6 +44,17 @@ using Bq25756RegisterConfigImage =
     std::array<component_common::RegisterImageEntry,
                CONFIGURATION_REGISTER_COUNT>;
 
+constexpr bool register_manifest_matches_catalog() {
+  for (size_t index = 0; index < REGISTER_COUNT; index++) {
+    const auto id = static_cast<RegisterId>(index);
+    if (REGISTER_MANIFEST[index].address != register_address(id) ||
+        REGISTER_MANIFEST[index].width != register_width(id)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 constexpr const component_common::RegisterManifestEntry &manifest_entry(
     RegisterId id) {
   return REGISTER_MANIFEST[static_cast<size_t>(id)];
@@ -98,6 +109,8 @@ constexpr Bq25756RegisterConfigImage make_register_config_image(
 static constexpr auto DEFAULT_REGISTER_CONFIG_IMAGE =
     make_register_config_image(Bq25756RegisterConfig{});
 
+static_assert(register_manifest_matches_catalog(),
+              "BQ25756 register manifest must match the register catalog");
 static_assert(component_common::configuration_image_layout_complete(
                   REGISTER_MANIFEST, DEFAULT_REGISTER_CONFIG_IMAGE),
               "BQ25756 register config must own every configurable register");
