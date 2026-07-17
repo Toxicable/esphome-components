@@ -3,42 +3,16 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 
 namespace component_common {
 
-enum class RegisterBitRole : uint8_t {
-  CONFIGURATION,
-  RUNTIME,
-  STATUS,
-  COMMAND,
-  RESERVED,
+struct RegisterMasks {
+  uint32_t configuration{0};
+  uint32_t runtime{0};
+  uint32_t status{0};
+  uint32_t command{0};
+  uint32_t reserved{0};
 };
-
-struct RegisterBitMask {
-  RegisterBitRole role;
-  uint32_t mask;
-};
-
-constexpr RegisterBitMask configuration_bits(uint32_t mask) {
-  return {RegisterBitRole::CONFIGURATION, mask};
-}
-
-constexpr RegisterBitMask runtime_bits(uint32_t mask) {
-  return {RegisterBitRole::RUNTIME, mask};
-}
-
-constexpr RegisterBitMask status_bits(uint32_t mask) {
-  return {RegisterBitRole::STATUS, mask};
-}
-
-constexpr RegisterBitMask command_bits(uint32_t mask) {
-  return {RegisterBitRole::COMMAND, mask};
-}
-
-constexpr RegisterBitMask reserved_bits(uint32_t mask) {
-  return {RegisterBitRole::RESERVED, mask};
-}
 
 struct RegisterManifestEntry {
   const char *name{nullptr};
@@ -51,35 +25,18 @@ struct RegisterManifestEntry {
   uint32_t reserved_mask{0};
 };
 
-constexpr void apply_register_bit_mask(RegisterManifestEntry &entry,
-                                       RegisterBitMask bits) {
-  switch (bits.role) {
-    case RegisterBitRole::CONFIGURATION:
-      entry.configuration_mask |= bits.mask;
-      break;
-    case RegisterBitRole::RUNTIME:
-      entry.runtime_mask |= bits.mask;
-      break;
-    case RegisterBitRole::STATUS:
-      entry.status_mask |= bits.mask;
-      break;
-    case RegisterBitRole::COMMAND:
-      entry.command_mask |= bits.mask;
-      break;
-    case RegisterBitRole::RESERVED:
-      entry.reserved_mask |= bits.mask;
-      break;
-  }
-}
-
-template<typename... Masks>
 constexpr RegisterManifestEntry make_register_manifest_entry(
-    const char *name, uint16_t address, uint8_t width, Masks... masks) {
-  static_assert((std::is_same_v<RegisterBitMask, std::decay_t<Masks>> && ...),
-                "register manifest masks must use named bit-role helpers");
-  RegisterManifestEntry entry{name, address, width};
-  (apply_register_bit_mask(entry, masks), ...);
-  return entry;
+    const char *name, uint16_t address, uint8_t width, RegisterMasks masks) {
+  return {
+      .name = name,
+      .address = address,
+      .width = width,
+      .configuration_mask = masks.configuration,
+      .runtime_mask = masks.runtime,
+      .status_mask = masks.status,
+      .command_mask = masks.command,
+      .reserved_mask = masks.reserved,
+  };
 }
 
 struct RegisterImageEntry {
