@@ -165,8 +165,8 @@ class BQ25756Component : public PollingComponent,
   void publish_calibration_status_(const char *status);
   void publish_configuration_status_(const char *status);
   void maybe_log_event_(
-    uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault, float iac_ma, float ibat_ma, float vac_mv, float vbat_mv
-  );
+      uint8_t status1, uint8_t status2, uint8_t status3, uint8_t fault,
+      float iac_ma, float ibat_ma, float vac_mv, float vbat_mv);
 
   ::bq25756_core::Bq25756Service service_;
   ::component_common::ChargerSnapshot charger_snapshot_{};
@@ -227,7 +227,10 @@ class BQ25756Component : public PollingComponent,
   uint8_t last_fault_{0};
 };
 
-class BQ25756ManagedComponent : public BQ25756Component {
+// ESPHome code generation instantiates this implementation class. It layers
+// configuration reconciliation and reconnect recovery over the established
+// public BQ25756Component API without exposing another YAML concept.
+class BQ25756ComponentImpl : public BQ25756Component {
  public:
   void setup() override;
   void update() override;
