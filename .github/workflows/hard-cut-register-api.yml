@@ -1,0 +1,42 @@
+name: Hard cut register API
+
+on:
+  push:
+    branches:
+      - agent/strict-register-manifest
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hard-cut-register-api
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/strict-register-manifest
+          fetch-depth: 0
+
+      - name: Apply typed register migration
+        run: python3 tools/hard_cut_register_api.py
+
+      - name: Verify host tests
+        run: bash ./check_host.bash
+
+      - name: Commit transformed sources
+        run: |
+          if git diff --quiet; then
+            echo "No migration changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add components/mcf8316d components/mcf8329a tests
+          git commit -m "Hard cut MCF register APIs to typed IDs"
+          git push origin HEAD:agent/strict-register-manifest
