@@ -28,10 +28,10 @@ external_components:
 uart:
   id: xgt_uart
   tx_pin:
-    number: GPIO2
+    number: GPIO15
     inverted: true
   rx_pin:
-    number: GPIO1
+    number: GPIO18
     inverted: true
   baud_rate: 9600
   parity: EVEN
@@ -91,8 +91,13 @@ makita_xgt:
 
 ## Notes
 
+- The MakitaDebugger board routes the XGT UART through U8: use `GPIO15` for TX
+  and `GPIO18` for RX on the connected BatteryBase ESP32-C6. Its level shifters
+  provide the required interface conversion, so no separate level shifter is
+  needed.
 - The upstream example used an ESP32-C3 because the battery link needs `9600 8E1` UART with inversion enabled.
-- A 5V to 3.3V level shifter is required between the battery data pin and the MCU UART.
+- A direct battery connection needs 5V-to-3.3V level translation between the
+  battery data pin and the MCU UART; MakitaDebugger already provides it.
 - The battery is polled synchronously; keep `update_interval` moderate, for example `30s` or `60s`.
 - `health` is derived the same way as the upstream sketch: raw capacity divided by `cell_size * parallel_count`.
 - `factory_reset` is intentionally optional because it can clear battery state and may damage or brick a pack.

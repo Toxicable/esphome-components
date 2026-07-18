@@ -4,6 +4,8 @@ Component-scoped notes for `components/makita_xgt`.
 
 - This component is UART-based and mirrors the command/response flow from `twaymouth/XGT-Tester`.
 - Required bus settings from the upstream implementation are `9600`, `8E1`, with UART inversion enabled; README should keep that explicit.
+- MakitaDebugger connects its translated XGT UART to the BatteryBase ESP32-C6 through U8:
+  GPIO15 is TX (`ESP_XGT_TX`) and GPIO18 is RX (`ESP_XGT_RX`).
 - Battery responses arrive bit-reversed, so both short and long frames must be nibble-reversed before CRC and payload decoding.
 - Short responses are validated with an 8-bit sum CRC using `0xCC` framing; the model response is a long `0xA5 0xA5` frame with a 16-bit additive CRC.
 - `send_command_()` now emits debug logs for wake/TX raw/RX raw/RX decoded/CRC status; keep those logs when adjusting UART protocol handling because they are the primary bring-up aid.
