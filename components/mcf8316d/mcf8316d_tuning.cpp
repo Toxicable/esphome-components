@@ -123,7 +123,7 @@ bool MCF8316DTuningController::apply_startup_tune_profile() {
 
   ok &= apply_masked_bits(
     "FAULT_CONFIG1 tuning",
-    REG_FAULT_CONFIG1,
+    register_address(RegisterId::FAULT_CONFIG1),
     FAULT_CONFIG1_HW_LOCK_ILIMIT_MASK | FAULT_CONFIG1_LOCK_ILIMIT_MODE_MASK |
       FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG1_LCK_RETRY_MASK |
       FAULT_CONFIG1_MTR_LCK_MODE_MASK,
@@ -135,7 +135,7 @@ bool MCF8316DTuningController::apply_startup_tune_profile() {
   );
   ok &= apply_masked_bits(
     "FAULT_CONFIG2 tuning",
-    REG_FAULT_CONFIG2,
+    register_address(RegisterId::FAULT_CONFIG2),
     FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK | FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK |
       FAULT_CONFIG2_LOCK2_EN_MASK,
     (STARTUP_TUNE_HW_LOCK_ILIMIT_DEG << FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_SHIFT) |
@@ -144,7 +144,7 @@ bool MCF8316DTuningController::apply_startup_tune_profile() {
   );
   ok &= apply_masked_bits(
     "MOTOR_STARTUP1 tuning",
-    REG_MOTOR_STARTUP1,
+    register_address(RegisterId::MOTOR_STARTUP1),
     MOTOR_STARTUP1_MTR_STARTUP_MASK | MOTOR_STARTUP1_ALIGN_TIME_MASK |
       MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK,
     (STARTUP_TUNE_MTR_STARTUP << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) |
@@ -154,7 +154,7 @@ bool MCF8316DTuningController::apply_startup_tune_profile() {
   );
   ok &= apply_masked_bits(
     "MOTOR_STARTUP2 tuning",
-    REG_MOTOR_STARTUP2,
+    register_address(RegisterId::MOTOR_STARTUP2),
     MOTOR_STARTUP2_OL_ILIMIT_MASK | MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK |
       MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_MASK | MOTOR_STARTUP2_ALIGN_ANGLE_MASK |
       MOTOR_STARTUP2_SLOW_FIRST_CYC_FREQ_MASK | MOTOR_STARTUP2_FIRST_CYCLE_FREQ_SEL_MASK,
@@ -167,25 +167,25 @@ bool MCF8316DTuningController::apply_startup_tune_profile() {
   );
   ok &= apply_masked_bits(
     "CLOSED_LOOP1 tuning",
-    REG_CLOSED_LOOP1,
+    register_address(RegisterId::CLOSED_LOOP1),
     CLOSED_LOOP1_PWM_FREQ_OUT_MASK,
     (STARTUP_TUNE_PWM_FREQ_OUT << CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT)
   );
   ok &= apply_masked_bits(
     "DEVICE_CONFIG2 tuning",
-    REG_DEVICE_CONFIG2,
+    register_address(RegisterId::DEVICE_CONFIG2),
     DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK,
     STARTUP_TUNE_DYNAMIC_CSA_GAIN_EN ? DEVICE_CONFIG2_DYNAMIC_CSA_GAIN_EN_MASK : 0u
   );
   ok &= apply_masked_bits(
     "GD_CONFIG1 tuning",
-    REG_GD_CONFIG1,
+    register_address(RegisterId::GD_CONFIG1),
     GD_CONFIG1_CSA_GAIN_MASK,
     (STARTUP_TUNE_CSA_GAIN << GD_CONFIG1_CSA_GAIN_SHIFT)
   );
   ok &= apply_masked_bits(
     "ISD_CONFIG tuning",
-    REG_ISD_CONFIG,
+    register_address(RegisterId::ISD_CONFIG),
     ISD_CONFIG_ISD_EN_MASK | ISD_CONFIG_BRAKE_EN_MASK | ISD_CONFIG_RESYNC_EN_MASK |
       ISD_CONFIG_BRK_CONFIG_MASK | ISD_CONFIG_BRK_TIME_MASK,
     (STARTUP_TUNE_ISD_EN ? ISD_CONFIG_ISD_EN_MASK : 0u) |
@@ -196,7 +196,7 @@ bool MCF8316DTuningController::apply_startup_tune_profile() {
   );
   ok &= apply_masked_bits(
     "CLOSED_LOOP4 tuning",
-    REG_CLOSED_LOOP4,
+    register_address(RegisterId::CLOSED_LOOP4),
     CLOSED_LOOP4_MAX_SPEED_MASK,
     (STARTUP_TUNE_MAX_SPEED << CLOSED_LOOP4_MAX_SPEED_SHIFT)
   );
@@ -240,7 +240,7 @@ bool MCF8316DTuningController::apply_hw_lock_report_only_profile() {
   }
 
   uint32_t before = 0;
-  if (!this->parent_->read_reg32(REG_FAULT_CONFIG2, before)) {
+  if (!this->parent_->read_reg32(RegisterId::FAULT_CONFIG2, before)) {
     ESP_LOGW(TUNING_TAG, "FAULT_CONFIG2 read failed");
     return false;
   }
@@ -248,13 +248,13 @@ bool MCF8316DTuningController::apply_hw_lock_report_only_profile() {
   const uint32_t mask = FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK;
   const uint32_t value = (LOCK_DISABLED_MODE << FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_SHIFT);
   const uint32_t next = (before & ~mask) | (value & mask);
-  if (next != before && !this->parent_->write_reg32(REG_FAULT_CONFIG2, next)) {
+  if (next != before && !this->parent_->write_reg32(RegisterId::FAULT_CONFIG2, next)) {
     ESP_LOGW(TUNING_TAG, "FAULT_CONFIG2 write failed: 0x%08X -> 0x%08X", before, next);
     return false;
   }
 
   uint32_t after = 0;
-  if (!this->parent_->read_reg32(REG_FAULT_CONFIG2, after)) {
+  if (!this->parent_->read_reg32(RegisterId::FAULT_CONFIG2, after)) {
     ESP_LOGW(TUNING_TAG, "FAULT_CONFIG2 verify read failed");
     return false;
   }
@@ -272,7 +272,7 @@ bool MCF8316DTuningController::apply_hw_lock_report_only_profile() {
   ok &= mode_ok;
 
   uint32_t fc1_before = 0;
-  if (!this->parent_->read_reg32(REG_FAULT_CONFIG1, fc1_before)) {
+  if (!this->parent_->read_reg32(RegisterId::FAULT_CONFIG1, fc1_before)) {
     ESP_LOGW(TUNING_TAG, "FAULT_CONFIG1 read failed");
     return false;
   }
@@ -281,13 +281,13 @@ bool MCF8316DTuningController::apply_hw_lock_report_only_profile() {
   const uint32_t fc1_value = (LOCK_DISABLED_MODE << FAULT_CONFIG1_LOCK_ILIMIT_MODE_SHIFT) |
                              (LOCK_DISABLED_MODE << FAULT_CONFIG1_MTR_LCK_MODE_SHIFT);
   const uint32_t fc1_next = (fc1_before & ~fc1_mask) | (fc1_value & fc1_mask);
-  if (fc1_next != fc1_before && !this->parent_->write_reg32(REG_FAULT_CONFIG1, fc1_next)) {
+  if (fc1_next != fc1_before && !this->parent_->write_reg32(RegisterId::FAULT_CONFIG1, fc1_next)) {
     ESP_LOGW(TUNING_TAG, "FAULT_CONFIG1 write failed: 0x%08X -> 0x%08X", fc1_before, fc1_next);
     return false;
   }
 
   uint32_t fc1_after = 0;
-  if (!this->parent_->read_reg32(REG_FAULT_CONFIG1, fc1_after)) {
+  if (!this->parent_->read_reg32(RegisterId::FAULT_CONFIG1, fc1_after)) {
     ESP_LOGW(TUNING_TAG, "FAULT_CONFIG1 verify read failed");
     return false;
   }
@@ -305,7 +305,7 @@ bool MCF8316DTuningController::apply_hw_lock_report_only_profile() {
   ok &= fc1_mode_ok;
 
   uint32_t s1_before = 0;
-  if (!this->parent_->read_reg32(REG_MOTOR_STARTUP1, s1_before)) {
+  if (!this->parent_->read_reg32(RegisterId::MOTOR_STARTUP1, s1_before)) {
     ESP_LOGW(TUNING_TAG, "MOTOR_STARTUP1 read failed");
     return false;
   }
@@ -313,13 +313,13 @@ bool MCF8316DTuningController::apply_hw_lock_report_only_profile() {
   const uint32_t s1_value = (DEBUG_ALIGN_MTR_STARTUP << MOTOR_STARTUP1_MTR_STARTUP_SHIFT) |
                             (DEBUG_ALIGN_TIME << MOTOR_STARTUP1_ALIGN_TIME_SHIFT);
   const uint32_t s1_next = (s1_before & ~s1_mask) | (s1_value & s1_mask);
-  if (s1_next != s1_before && !this->parent_->write_reg32(REG_MOTOR_STARTUP1, s1_next)) {
+  if (s1_next != s1_before && !this->parent_->write_reg32(RegisterId::MOTOR_STARTUP1, s1_next)) {
     ESP_LOGW(TUNING_TAG, "MOTOR_STARTUP1 write failed: 0x%08X -> 0x%08X", s1_before, s1_next);
     return false;
   }
 
   uint32_t s1_after = 0;
-  if (!this->parent_->read_reg32(REG_MOTOR_STARTUP1, s1_after)) {
+  if (!this->parent_->read_reg32(RegisterId::MOTOR_STARTUP1, s1_after)) {
     ESP_LOGW(TUNING_TAG, "MOTOR_STARTUP1 verify read failed");
     return false;
   }
@@ -457,16 +457,16 @@ void MCF8316DTuningController::apply_post_comms_setup() {
   }
 
   // Force manual mode by disabling any MPET command/config bits carried over at boot.
-  if (!this->parent_->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, 0)) {
+  if (!this->parent_->update_bits32(RegisterId::ALGO_DEBUG2, ALGO_DEBUG2_MPET_ALL_MASK, 0)) {
     ESP_LOGW(TUNING_TAG, "Failed to disable MPET control bits in ALGO_DEBUG2");
   } else {
     uint32_t algo_debug2 = 0;
-    if (this->parent_->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+    if (this->parent_->read_reg32(RegisterId::ALGO_DEBUG2, algo_debug2)) {
       ESP_LOGI(TUNING_TAG, "ALGO_DEBUG2 after MPET disable: 0x%08X", algo_debug2);
     }
   }
 
-  if (this->parent_->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_fault) &&
+  if (this->parent_->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, ctrl_fault) &&
       ((ctrl_fault & (FAULT_MPET_IPD | FAULT_MPET_BEMF)) != 0)) {
     ESP_LOGW(TUNING_TAG, "MPET fault latched at startup (0x%08X), attempting clear", ctrl_fault);
     this->parent_->pulse_clear_faults();
@@ -477,7 +477,7 @@ void MCF8316DTuningController::apply_post_comms_setup() {
 
 bool MCF8316DTuningController::ensure_buck_current_limit_for_manual_() {
   uint32_t gd_config2 = 0;
-  if (!this->parent_->read_reg32(REG_GD_CONFIG2, gd_config2)) {
+  if (!this->parent_->read_reg32(RegisterId::GD_CONFIG2, gd_config2)) {
     ESP_LOGW(TUNING_TAG, "Failed to read GD_CONFIG2 for BUCK_CL check");
     return false;
   }
@@ -493,13 +493,13 @@ bool MCF8316DTuningController::ensure_buck_current_limit_for_manual_() {
     "GD_CONFIG2 has BUCK_CL=150mA (gd2=0x%08X); setting to 600mA for manual validation",
     gd_config2
   );
-  if (!this->parent_->update_bits32(REG_GD_CONFIG2, GD_CONFIG2_BUCK_CL_MASK, 0)) {
+  if (!this->parent_->update_bits32(RegisterId::GD_CONFIG2, GD_CONFIG2_BUCK_CL_MASK, 0)) {
     ESP_LOGW(TUNING_TAG, "Failed to write GD_CONFIG2 BUCK_CL to 600mA");
     return false;
   }
 
   uint32_t gd_verify = 0;
-  if (!this->parent_->read_reg32(REG_GD_CONFIG2, gd_verify)) {
+  if (!this->parent_->read_reg32(RegisterId::GD_CONFIG2, gd_verify)) {
     ESP_LOGW(TUNING_TAG, "Failed to verify GD_CONFIG2 after BUCK_CL update");
     return false;
   }
@@ -516,9 +516,9 @@ bool MCF8316DTuningController::seed_closed_loop_params_if_zero_() {
   uint32_t closed_loop2 = 0;
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
-  if (!this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2) ||
-      !this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
-      !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+  if (!this->parent_->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2) ||
+      !this->parent_->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3) ||
+      !this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4)) {
     ESP_LOGW(TUNING_TAG, "Failed to read CLOSED_LOOP2/3/4 for MPET seed check");
     return false;
   }
@@ -610,13 +610,13 @@ bool MCF8316DTuningController::seed_closed_loop_params_if_zero_() {
 
   bool ok = true;
   if (closed_loop2_next != closed_loop2) {
-    ok &= this->parent_->write_reg32(REG_CLOSED_LOOP2, closed_loop2_next);
+    ok &= this->parent_->write_reg32(RegisterId::CLOSED_LOOP2, closed_loop2_next);
   }
   if (closed_loop3_next != closed_loop3) {
-    ok &= this->parent_->write_reg32(REG_CLOSED_LOOP3, closed_loop3_next);
+    ok &= this->parent_->write_reg32(RegisterId::CLOSED_LOOP3, closed_loop3_next);
   }
   if (closed_loop4_next != closed_loop4) {
-    ok &= this->parent_->write_reg32(REG_CLOSED_LOOP4, closed_loop4_next);
+    ok &= this->parent_->write_reg32(RegisterId::CLOSED_LOOP4, closed_loop4_next);
   }
   if (!ok) {
     ESP_LOGW(TUNING_TAG, "Failed writing one or more seeded CLOSED_LOOP registers");
@@ -626,9 +626,9 @@ bool MCF8316DTuningController::seed_closed_loop_params_if_zero_() {
   uint32_t verify2 = 0;
   uint32_t verify3 = 0;
   uint32_t verify4 = 0;
-  if (this->parent_->read_reg32(REG_CLOSED_LOOP2, verify2) &&
-      this->parent_->read_reg32(REG_CLOSED_LOOP3, verify3) &&
-      this->parent_->read_reg32(REG_CLOSED_LOOP4, verify4)) {
+  if (this->parent_->read_reg32(RegisterId::CLOSED_LOOP2, verify2) &&
+      this->parent_->read_reg32(RegisterId::CLOSED_LOOP3, verify3) &&
+      this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, verify4)) {
     ESP_LOGI(
       TUNING_TAG,
       "CLOSED_LOOP after seed: cl2=0x%08X cl3=0x%08X cl4=0x%08X",
@@ -648,11 +648,11 @@ void MCF8316DTuningController::log_mpet_diagnostics_(const char *context) {
   uint32_t mtr_params = 0;
   uint16_t algorithm_state = 0;
 
-  const bool ctrl_ok = this->parent_->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_fault);
-  const bool dbg2_ok = this->parent_->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
-  const bool mpet_ok = this->parent_->read_reg32(REG_ALGO_STATUS_MPET, algo_status_mpet);
-  const bool mtr_ok = this->parent_->read_reg32(REG_MTR_PARAMS, mtr_params);
-  const bool state_ok = this->parent_->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
+  const bool ctrl_ok = this->parent_->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, ctrl_fault);
+  const bool dbg2_ok = this->parent_->read_reg32(RegisterId::ALGO_DEBUG2, algo_debug2);
+  const bool mpet_ok = this->parent_->read_reg32(RegisterId::ALGO_STATUS_MPET, algo_status_mpet);
+  const bool mtr_ok = this->parent_->read_reg32(RegisterId::MTR_PARAMS, mtr_params);
+  const bool state_ok = this->parent_->read_reg16(RegisterId::ALGORITHM_STATE, algorithm_state);
 
   ESP_LOGI(
     TUNING_TAG,
@@ -730,9 +730,9 @@ void MCF8316DTuningController::log_mpet_entry_conditions(const char *context, ui
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
 
-  const bool cl2_ok = this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2);
-  const bool cl3_ok = this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3);
-  const bool cl4_ok = this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
+  const bool cl2_ok = this->parent_->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2);
+  const bool cl3_ok = this->parent_->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3);
+  const bool cl4_ok = this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4);
 
   if (cl2_ok && cl3_ok && cl4_ok) {
     const uint32_t motor_res = static_cast<uint32_t>(
@@ -1001,20 +1001,20 @@ bool MCF8316DTuningController::apply_startup_sweep_current_limits_(uint32_t curr
     (current_limit_code << MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT);
   const uint32_t s2_value = (current_limit_code << MOTOR_STARTUP2_OL_ILIMIT_SHIFT);
   if (!this->parent_->update_bits32(
-        REG_MOTOR_STARTUP1, MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK, s1_value
+        register_address(RegisterId::MOTOR_STARTUP1), MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK, s1_value
       )) {
     ESP_LOGW(TUNING_TAG, "Startup sweep MOTOR_STARTUP1 write failed");
     return false;
   }
-  if (!this->parent_->update_bits32(REG_MOTOR_STARTUP2, MOTOR_STARTUP2_OL_ILIMIT_MASK, s2_value)) {
+  if (!this->parent_->update_bits32(RegisterId::MOTOR_STARTUP2, MOTOR_STARTUP2_OL_ILIMIT_MASK, s2_value)) {
     ESP_LOGW(TUNING_TAG, "Startup sweep MOTOR_STARTUP2 write failed");
     return false;
   }
 
   uint32_t startup1 = 0;
   uint32_t startup2 = 0;
-  const bool startup1_ok = this->parent_->read_reg32(REG_MOTOR_STARTUP1, startup1);
-  const bool startup2_ok = this->parent_->read_reg32(REG_MOTOR_STARTUP2, startup2);
+  const bool startup1_ok = this->parent_->read_reg32(RegisterId::MOTOR_STARTUP1, startup1);
+  const bool startup2_ok = this->parent_->read_reg32(RegisterId::MOTOR_STARTUP2, startup2);
   if (startup1_ok && startup2_ok) {
     const uint32_t align_ilimit = (startup1 & MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_MASK) >>
                                   MOTOR_STARTUP1_ALIGN_OR_SLOW_CURRENT_ILIMIT_SHIFT;

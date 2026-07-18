@@ -13,10 +13,10 @@ class MCF8316DService {
  public:
   explicit MCF8316DService(RegisterBus *bus) : registers_(bus) {}
 
-  bool read_reg32(uint16_t offset, uint32_t &value) const;
-  bool read_reg16(uint16_t offset, uint16_t &value) const;
-  bool write_reg32(uint16_t offset, uint32_t value) const;
-  bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const;
+  bool read_reg32(RegisterId id, uint32_t &value) const;
+  bool read_reg16(RegisterId id, uint16_t &value) const;
+  bool write_reg32(RegisterId id, uint32_t value) const;
+  bool update_bits32(RegisterId id, uint32_t mask, uint32_t value) const;
 
   bool set_brake_input(bool brake_on) const;
   bool read_brake_input(uint8_t &brake_input_code) const;

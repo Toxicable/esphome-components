@@ -152,7 +152,7 @@ void MCF8329AComponent::update() {
   bool fault_active = false;
   bool fault_state_valid = false;
 
-  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
+  const bool algo_ok = this->read_reg32(RegisterId::ALGO_STATUS, algo_status);
   if (algo_ok) {
     this->publish_algo_status_(algo_status);
     this->log_algorithm_state_transition_(algo_status, "update");
@@ -160,13 +160,13 @@ void MCF8329AComponent::update() {
 
   this->recover_from_mcf_reset_if_needed_();
 
-  const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
+  const bool gate_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_fault_status);
   if (gate_ok) {
     fault_active |= (gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0;
     fault_state_valid = true;
   }
 
-  const bool controller_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, controller_fault_status);
+  const bool controller_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, controller_fault_status);
   if (controller_ok) {
     fault_active |= (controller_fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
     fault_state_valid = true;
@@ -195,7 +195,7 @@ void MCF8329AComponent::update() {
 
   if (this->motor_bemf_constant_sensor_ != nullptr) {
     uint32_t mtr_params = 0;
-    if (this->read_reg32(REG_MTR_PARAMS, mtr_params)) {
+    if (this->read_reg32(RegisterId::MTR_PARAMS, mtr_params)) {
       const uint32_t motor_bemf_const =
         (mtr_params & MTR_PARAMS_MOTOR_BEMF_CONST_MASK) >> MTR_PARAMS_MOTOR_BEMF_CONST_SHIFT;
       this->motor_bemf_constant_sensor_->publish_state(static_cast<float>(motor_bemf_const));
@@ -210,7 +210,7 @@ void MCF8329AComponent::update() {
     uint32_t closed_loop4 = 0;
     float max_speed_hz =
       this->cfg_max_speed_set_ ? this->service_.decode_max_speed_hz(this->cfg_max_speed_code_) : 0.0f;
-    if (this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+    if (this->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4)) {
       const uint16_t max_speed_code = static_cast<uint16_t>(
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >> CLOSED_LOOP4_MAX_SPEED_SHIFT
       );
@@ -228,19 +228,19 @@ void MCF8329AComponent::update() {
       bool speed_ref_open_loop_ok = false;
       bool fg_speed_fdbk_ok = false;
 
-      if (this->read_reg32(REG_SPEED_FDBK, raw_speed_fdbk)) {
+      if (this->read_reg32(RegisterId::SPEED_FDBK, raw_speed_fdbk)) {
         speed_fdbk_hz =
           this->service_.decode_speed_hz(static_cast<int32_t>(raw_speed_fdbk), max_speed_hz);
         speed_fdbk_ok = true;
       }
 
-      if (this->read_reg32(REG_SPEED_REF_OPEN_LOOP, raw_speed_ref_open_loop)) {
+      if (this->read_reg32(RegisterId::SPEED_REF_OPEN_LOOP, raw_speed_ref_open_loop)) {
         speed_ref_open_loop_hz =
           this->service_.decode_speed_hz(static_cast<int32_t>(raw_speed_ref_open_loop), max_speed_hz);
         speed_ref_open_loop_ok = true;
       }
 
-      if (this->read_reg32(REG_FG_SPEED_FDBK, raw_fg_speed_fdbk)) {
+      if (this->read_reg32(RegisterId::FG_SPEED_FDBK, raw_fg_speed_fdbk)) {
         fg_speed_fdbk_hz = this->service_.decode_fg_speed_hz(raw_fg_speed_fdbk, max_speed_hz);
         fg_speed_fdbk_ok = true;
       }
@@ -275,7 +275,7 @@ void MCF8329AComponent::update() {
     }
   }
 
-  if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw)) {
+  if (this->read_reg32(RegisterId::VM_VOLTAGE, vm_voltage_raw)) {
     const float vm_voltage = this->service_.decode_vm_voltage(vm_voltage_raw);
     if (this->vm_voltage_sensor_ != nullptr) {
       this->vm_voltage_sensor_->publish_state(vm_voltage);
@@ -410,7 +410,7 @@ void MCF8329AComponent::dump_config() {
   }
   uint32_t gd_config1 = 0;
   uint32_t gd_config2 = 0;
-  if (this->read_reg32(REG_GD_CONFIG1, gd_config1) && this->read_reg32(REG_GD_CONFIG2, gd_config2)) {
+  if (this->read_reg32(RegisterId::GD_CONFIG1, gd_config1) && this->read_reg32(RegisterId::GD_CONFIG2, gd_config2)) {
     const uint8_t csa_gain_code = static_cast<uint8_t>(
       (gd_config1 & GD_CONFIG1_CSA_GAIN_MASK) >> GD_CONFIG1_CSA_GAIN_SHIFT
     );
@@ -912,7 +912,7 @@ void MCF8329AComponent::apply_post_comms_setup_() {
 
   if (this->clear_mpet_on_startup_) {
     uint32_t controller_fault_status = 0;
-    if (this->read_reg32(REG_CONTROLLER_FAULT_STATUS, controller_fault_status) && (controller_fault_status & FAULT_MPET_BEMF) != 0u) {
+    if (this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, controller_fault_status) && (controller_fault_status & FAULT_MPET_BEMF) != 0u) {
       ESP_LOGW(TAG, "MPET_BEMF fault present after motor init; pulsing CLR_FLT once");
       this->pulse_clear_faults();
     }
@@ -933,8 +933,8 @@ void MCF8329AComponent::recover_from_mcf_reset_if_needed_() {
 
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
-  if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
-      !this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3) ||
+      !this->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4)) {
     return;
   }
 
@@ -980,7 +980,7 @@ bool MCF8329AComponent::apply_motor_config_() {
   bool ok = true;
 
   uint32_t gd_config1 = 0;
-  if (!this->read_reg32(REG_GD_CONFIG1, gd_config1)) {
+  if (!this->read_reg32(RegisterId::GD_CONFIG1, gd_config1)) {
     ESP_LOGW(TAG, "Failed to read GD_CONFIG1 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -993,12 +993,12 @@ bool MCF8329AComponent::apply_motor_config_() {
        GD_CONFIG1_CSA_GAIN_MASK);
   }
   if (gd_config1_next != gd_config1) {
-    ok &= this->write_reg32(REG_GD_CONFIG1, gd_config1_next);
+    ok &= this->write_reg32(RegisterId::GD_CONFIG1, gd_config1_next);
     ESP_LOGI(TAG, "GD_CONFIG1 motor cfg: 0x%08X -> 0x%08X", gd_config1, gd_config1_next);
   }
 
   uint32_t gd_config2 = 0;
-  if (!this->read_reg32(REG_GD_CONFIG2, gd_config2)) {
+  if (!this->read_reg32(RegisterId::GD_CONFIG2, gd_config2)) {
     ESP_LOGW(TAG, "Failed to read GD_CONFIG2 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1011,12 +1011,12 @@ bool MCF8329AComponent::apply_motor_config_() {
        GD_CONFIG2_BASE_CURRENT_MASK);
   }
   if (gd_config2_next != gd_config2) {
-    ok &= this->write_reg32(REG_GD_CONFIG2, gd_config2_next);
+    ok &= this->write_reg32(RegisterId::GD_CONFIG2, gd_config2_next);
     ESP_LOGI(TAG, "GD_CONFIG2 motor cfg: 0x%08X -> 0x%08X", gd_config2, gd_config2_next);
   }
 
   uint32_t fault_config1 = 0;
-  if (!this->read_reg32(REG_FAULT_CONFIG1, fault_config1)) {
+  if (!this->read_reg32(RegisterId::FAULT_CONFIG1, fault_config1)) {
     ESP_LOGW(TAG, "Failed to read FAULT_CONFIG1 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1062,12 +1062,12 @@ bool MCF8329AComponent::apply_motor_config_() {
        FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK);
   }
   if (fault_config1_next != fault_config1) {
-    ok &= this->write_reg32(REG_FAULT_CONFIG1, fault_config1_next);
+    ok &= this->write_reg32(RegisterId::FAULT_CONFIG1, fault_config1_next);
     ESP_LOGI(TAG, "FAULT_CONFIG1 motor cfg: 0x%08X -> 0x%08X", fault_config1, fault_config1_next);
   }
 
   uint32_t fault_config2 = 0;
-  if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2)) {
+  if (!this->read_reg32(RegisterId::FAULT_CONFIG2, fault_config2)) {
     ESP_LOGW(TAG, "Failed to read FAULT_CONFIG2 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1126,12 +1126,12 @@ bool MCF8329AComponent::apply_motor_config_() {
        FAULT_CONFIG2_HW_LOCK_ILIMIT_DEG_MASK);
   }
   if (fault_config2_next != fault_config2) {
-    ok &= this->write_reg32(REG_FAULT_CONFIG2, fault_config2_next);
+    ok &= this->write_reg32(RegisterId::FAULT_CONFIG2, fault_config2_next);
     ESP_LOGI(TAG, "FAULT_CONFIG2 motor cfg: 0x%08X -> 0x%08X", fault_config2, fault_config2_next);
   }
 
   uint32_t closed_loop2 = 0;
-  if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2)) {
     ESP_LOGW(TAG, "Failed to read CLOSED_LOOP2 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1160,12 +1160,12 @@ bool MCF8329AComponent::apply_motor_config_() {
     }
   }
   if (closed_loop2_next != closed_loop2) {
-    ok &= this->write_reg32(REG_CLOSED_LOOP2, closed_loop2_next);
+    ok &= this->write_reg32(RegisterId::CLOSED_LOOP2, closed_loop2_next);
     ESP_LOGI(TAG, "CLOSED_LOOP2 motor cfg: 0x%08X -> 0x%08X", closed_loop2, closed_loop2_next);
   }
 
   uint32_t int_algo1 = 0;
-  if (!this->read_reg32(REG_INT_ALGO_1, int_algo1)) {
+  if (!this->read_reg32(RegisterId::INT_ALGO_1, int_algo1)) {
     ESP_LOGW(TAG, "Failed to read INT_ALGO_1 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1192,12 +1192,12 @@ bool MCF8329AComponent::apply_motor_config_() {
                       INT_ALGO_1_MPET_OPEN_LOOP_SLEW_RATE_MASK);
   }
   if (int_algo1_next != int_algo1) {
-    ok &= this->write_reg32(REG_INT_ALGO_1, int_algo1_next);
+    ok &= this->write_reg32(RegisterId::INT_ALGO_1, int_algo1_next);
     ESP_LOGI(TAG, "INT_ALGO_1 motor cfg: 0x%08X -> 0x%08X", int_algo1, int_algo1_next);
   }
 
   uint32_t int_algo2 = 0;
-  if (!this->read_reg32(REG_INT_ALGO_2, int_algo2)) {
+  if (!this->read_reg32(RegisterId::INT_ALGO_2, int_algo2)) {
     ESP_LOGW(TAG, "Failed to read INT_ALGO_2 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1217,12 +1217,12 @@ bool MCF8329AComponent::apply_motor_config_() {
     }
   }
   if (int_algo2_next != int_algo2) {
-    ok &= this->write_reg32(REG_INT_ALGO_2, int_algo2_next);
+    ok &= this->write_reg32(RegisterId::INT_ALGO_2, int_algo2_next);
     ESP_LOGI(TAG, "INT_ALGO_2 motor cfg: 0x%08X -> 0x%08X", int_algo2, int_algo2_next);
   }
 
   uint32_t motor_startup1 = 0;
-  if (!this->read_reg32(REG_MOTOR_STARTUP1, motor_startup1)) {
+  if (!this->read_reg32(RegisterId::MOTOR_STARTUP1, motor_startup1)) {
     ESP_LOGW(TAG, "Failed to read MOTOR_STARTUP1 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1255,14 +1255,14 @@ bool MCF8329AComponent::apply_motor_config_() {
        MOTOR_STARTUP1_OL_ILIMIT_CONFIG_MASK);
   }
   if (motor_startup1_next != motor_startup1) {
-    ok &= this->write_reg32(REG_MOTOR_STARTUP1, motor_startup1_next);
+    ok &= this->write_reg32(RegisterId::MOTOR_STARTUP1, motor_startup1_next);
     ESP_LOGI(
       TAG, "MOTOR_STARTUP1 motor cfg: 0x%08X -> 0x%08X", motor_startup1, motor_startup1_next
     );
   }
 
   uint32_t motor_startup2 = 0;
-  if (!this->read_reg32(REG_MOTOR_STARTUP2, motor_startup2)) {
+  if (!this->read_reg32(RegisterId::MOTOR_STARTUP2, motor_startup2)) {
     ESP_LOGW(TAG, "Failed to read MOTOR_STARTUP2 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1307,21 +1307,21 @@ bool MCF8329AComponent::apply_motor_config_() {
        MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK);
   }
   if (motor_startup2_next != motor_startup2) {
-    ok &= this->write_reg32(REG_MOTOR_STARTUP2, motor_startup2_next);
+    ok &= this->write_reg32(RegisterId::MOTOR_STARTUP2, motor_startup2_next);
     ESP_LOGI(
       TAG, "MOTOR_STARTUP2 motor cfg: 0x%08X -> 0x%08X", motor_startup2, motor_startup2_next
     );
   }
 
   uint32_t closed_loop3 = 0;
-  if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3)) {
     ESP_LOGW(TAG, "Failed to read CLOSED_LOOP3 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
   }
   uint32_t closed_loop3_next = closed_loop3;
   uint32_t closed_loop4 = 0;
-  if (!this->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4)) {
     ESP_LOGW(TAG, "Failed to read CLOSED_LOOP4 for motor config");
     this->motor_config_summary_ = "read_error";
     return false;
@@ -1380,59 +1380,59 @@ bool MCF8329AComponent::apply_motor_config_() {
                          CLOSED_LOOP4_SPD_LOOP_KI_MASK);
   }
   if (closed_loop3_next != closed_loop3) {
-    ok &= this->write_reg32(REG_CLOSED_LOOP3, closed_loop3_next);
+    ok &= this->write_reg32(RegisterId::CLOSED_LOOP3, closed_loop3_next);
     ESP_LOGI(TAG, "CLOSED_LOOP3 motor cfg: 0x%08X -> 0x%08X", closed_loop3, closed_loop3_next);
   }
   if (closed_loop4_next != closed_loop4) {
-    ok &= this->write_reg32(REG_CLOSED_LOOP4, closed_loop4_next);
+    ok &= this->write_reg32(RegisterId::CLOSED_LOOP4, closed_loop4_next);
     ESP_LOGI(TAG, "CLOSED_LOOP4 motor cfg: 0x%08X -> 0x%08X", closed_loop4, closed_loop4_next);
   }
 
   uint32_t gd_config1_effective = gd_config1_next;
   uint32_t gd_config2_effective = gd_config2_next;
-  if (!this->read_reg32(REG_GD_CONFIG1, gd_config1_effective)) {
+  if (!this->read_reg32(RegisterId::GD_CONFIG1, gd_config1_effective)) {
     ESP_LOGW(TAG, "Failed to read back GD_CONFIG1 after motor config apply");
   }
-  if (!this->read_reg32(REG_GD_CONFIG2, gd_config2_effective)) {
+  if (!this->read_reg32(RegisterId::GD_CONFIG2, gd_config2_effective)) {
     ESP_LOGW(TAG, "Failed to read back GD_CONFIG2 after motor config apply");
   }
 
   uint32_t fault_config1_effective = fault_config1_next;
   uint32_t fault_config2_effective = fault_config2_next;
-  if (!this->read_reg32(REG_FAULT_CONFIG1, fault_config1_effective)) {
+  if (!this->read_reg32(RegisterId::FAULT_CONFIG1, fault_config1_effective)) {
     ESP_LOGW(TAG, "Failed to read back FAULT_CONFIG1 after motor config apply");
   }
-  if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2_effective)) {
+  if (!this->read_reg32(RegisterId::FAULT_CONFIG2, fault_config2_effective)) {
     ESP_LOGW(TAG, "Failed to read back FAULT_CONFIG2 after motor config apply");
   }
 
   uint32_t int_algo1_effective = int_algo1_next;
-  if (!this->read_reg32(REG_INT_ALGO_1, int_algo1_effective)) {
+  if (!this->read_reg32(RegisterId::INT_ALGO_1, int_algo1_effective)) {
     ESP_LOGW(TAG, "Failed to read back INT_ALGO_1 after motor config apply");
   }
   uint32_t int_algo2_effective = int_algo2_next;
-  if (!this->read_reg32(REG_INT_ALGO_2, int_algo2_effective)) {
+  if (!this->read_reg32(RegisterId::INT_ALGO_2, int_algo2_effective)) {
     ESP_LOGW(TAG, "Failed to read back INT_ALGO_2 after motor config apply");
   }
 
   uint32_t closed_loop2_effective = closed_loop2_next;
   uint32_t motor_startup1_effective = motor_startup1_next;
   uint32_t motor_startup2_effective = motor_startup2_next;
-  if (!this->read_reg32(REG_CLOSED_LOOP2, closed_loop2_effective)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2_effective)) {
     ESP_LOGW(TAG, "Failed to read back CLOSED_LOOP2 after motor config apply");
   }
-  if (!this->read_reg32(REG_MOTOR_STARTUP1, motor_startup1_effective)) {
+  if (!this->read_reg32(RegisterId::MOTOR_STARTUP1, motor_startup1_effective)) {
     ESP_LOGW(TAG, "Failed to read back MOTOR_STARTUP1 after motor config apply");
   }
-  if (!this->read_reg32(REG_MOTOR_STARTUP2, motor_startup2_effective)) {
+  if (!this->read_reg32(RegisterId::MOTOR_STARTUP2, motor_startup2_effective)) {
     ESP_LOGW(TAG, "Failed to read back MOTOR_STARTUP2 after motor config apply");
   }
   uint32_t closed_loop3_effective = closed_loop3_next;
-  if (!this->read_reg32(REG_CLOSED_LOOP3, closed_loop3_effective)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3_effective)) {
     ESP_LOGW(TAG, "Failed to read back CLOSED_LOOP3 after motor config apply");
   }
   uint32_t closed_loop4_effective = closed_loop4_next;
-  if (!this->read_reg32(REG_CLOSED_LOOP4, closed_loop4_effective)) {
+  if (!this->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4_effective)) {
     ESP_LOGW(TAG, "Failed to read back CLOSED_LOOP4 after motor config apply");
   }
 
@@ -1640,20 +1640,20 @@ bool MCF8329AComponent::apply_motor_config_() {
   return ok;
 }
 
-bool MCF8329AComponent::read_reg32(uint16_t offset, uint32_t& value) {
-  return this->service_.read_reg32(offset, value);
+bool MCF8329AComponent::read_reg32(RegisterId id, uint32_t& value) {
+  return this->service_.read_reg32(id, value);
 }
 
-bool MCF8329AComponent::read_reg16(uint16_t offset, uint16_t& value) {
-  return this->service_.read_reg16(offset, value);
+bool MCF8329AComponent::read_reg16(RegisterId id, uint16_t& value) {
+  return this->service_.read_reg16(id, value);
 }
 
-bool MCF8329AComponent::write_reg32(uint16_t offset, uint32_t value) {
-  return this->service_.write_reg32(offset, value);
+bool MCF8329AComponent::write_reg32(RegisterId id, uint32_t value) {
+  return this->service_.write_reg32(id, value);
 }
 
-bool MCF8329AComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
-  return this->service_.update_bits32(offset, mask, value);
+bool MCF8329AComponent::update_bits32(RegisterId id, uint32_t mask, uint32_t value) {
+  return this->service_.update_bits32(id, mask, value);
 }
 
 bool MCF8329AComponent::read_register32(uint16_t offset, uint32_t *value) {
@@ -1940,8 +1940,8 @@ void MCF8329AComponent::pulse_clear_faults() {
   uint32_t ctrl_before = 0;
   uint32_t gate_after = 0;
   uint32_t ctrl_after = 0;
-  const bool gate_before_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_before);
-  const bool ctrl_before_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_before);
+  const bool gate_before_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_before);
+  const bool ctrl_before_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, ctrl_before);
 
   // MPET_BEMF fault condition can remain true while MPET bits are set.
   (void)this->clear_mpet_bits_("clear_faults");
@@ -1951,8 +1951,8 @@ void MCF8329AComponent::pulse_clear_faults() {
     return;
   }
 
-  const bool gate_after_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_after);
-  const bool ctrl_after_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_after);
+  const bool gate_after_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_after);
+  const bool ctrl_after_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, ctrl_after);
 
   if (gate_before_ok || ctrl_before_ok || gate_after_ok || ctrl_after_ok) {
     ESP_LOGI(
@@ -2001,9 +2001,9 @@ bool MCF8329AComponent::read_probe_and_publish_() {
   bool fault_state_valid = false;
   bool ok = true;
 
-  const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
-  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
-  const bool controller_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, controller_fault_status);
+  const bool gate_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_fault_status);
+  const bool algo_ok = this->read_reg32(RegisterId::ALGO_STATUS, algo_status);
+  const bool controller_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, controller_fault_status);
   ok &= algo_ok;
   ok &= gate_ok;
   ok &= controller_ok;
@@ -2170,13 +2170,13 @@ void MCF8329AComponent::log_mpet_bemf_diagnostics_() {
   uint32_t closed_loop3 = 0;
   uint32_t closed_loop4 = 0;
 
-  const bool algo_debug1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
-  const bool algo_debug2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
-  const bool pin_config_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
-  const bool closed_loop2_ok = this->read_reg32(REG_CLOSED_LOOP2, closed_loop2);
-  const bool mtr_params_ok = this->read_reg32(REG_MTR_PARAMS, mtr_params);
-  const bool closed_loop3_ok = this->read_reg32(REG_CLOSED_LOOP3, closed_loop3);
-  const bool closed_loop4_ok = this->read_reg32(REG_CLOSED_LOOP4, closed_loop4);
+  const bool algo_debug1_ok = this->read_reg32(RegisterId::ALGO_DEBUG1, algo_debug1);
+  const bool algo_debug2_ok = this->read_reg32(RegisterId::ALGO_DEBUG2, algo_debug2);
+  const bool pin_config_ok = this->read_reg32(RegisterId::PIN_CONFIG, pin_config);
+  const bool closed_loop2_ok = this->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2);
+  const bool mtr_params_ok = this->read_reg32(RegisterId::MTR_PARAMS, mtr_params);
+  const bool closed_loop3_ok = this->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3);
+  const bool closed_loop4_ok = this->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4);
 
   float speed_cmd_percent = -1.0f;
   if (algo_debug1_ok) {
@@ -2266,9 +2266,9 @@ void MCF8329AComponent::log_hw_lock_diagnostics_() {
   uint32_t fault_config1 = 0;
   uint32_t fault_config2 = 0;
 
-  const bool algo_debug1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
-  const bool fault_config1_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
-  const bool fault_config2_ok = this->read_reg32(REG_FAULT_CONFIG2, fault_config2);
+  const bool algo_debug1_ok = this->read_reg32(RegisterId::ALGO_DEBUG1, algo_debug1);
+  const bool fault_config1_ok = this->read_reg32(RegisterId::FAULT_CONFIG1, fault_config1);
+  const bool fault_config2_ok = this->read_reg32(RegisterId::FAULT_CONFIG2, fault_config2);
 
   float speed_cmd_percent = -1.0f;
   if (algo_debug1_ok) {
@@ -2397,7 +2397,7 @@ const char* MCF8329AComponent::algorithm_state_to_string_(uint16_t state) const 
 
 void MCF8329AComponent::log_algorithm_state_transition_(uint32_t algo_status, const char* context) {
   uint16_t algo_state = 0;
-  if (!this->read_reg16(REG_ALGORITHM_STATE, algo_state)) {
+  if (!this->read_reg16(RegisterId::ALGORITHM_STATE, algo_state)) {
     if (!this->algorithm_state_read_error_latched_) {
       ESP_LOGW(TAG, "Unable to read ALGORITHM_STATE for %s logging", context);
       this->algorithm_state_read_error_latched_ = true;
@@ -2419,7 +2419,7 @@ void MCF8329AComponent::log_algorithm_state_transition_(uint32_t algo_status, co
   const bool sys_enable = (algo_status & ALGO_STATUS_SYS_ENABLE_FLAG_MASK) != 0u;
   float speed_cmd_percent = -1.0f;
   uint32_t algo_debug1 = 0;
-  if (this->read_reg32(REG_ALGO_DEBUG1, algo_debug1)) {
+  if (this->read_reg32(RegisterId::ALGO_DEBUG1, algo_debug1)) {
     const uint16_t digital_speed_ctrl =
       static_cast<uint16_t>((algo_debug1 & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK) >> 16);
     speed_cmd_percent = (static_cast<float>(digital_speed_ctrl) * 100.0f) / 32767.0f;
