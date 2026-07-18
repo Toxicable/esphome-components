@@ -70,7 +70,9 @@ def enum_block(name: str, entries: list[tuple[str, int]]) -> str:
 
 def info_block(
     enum_name: str,
-    prefix: str,
+    type_name: str,
+    constant_prefix: str,
+    api_name: str,
     entries: list[tuple[str, int]],
     request: dict[str, str],
     response: dict[str, str],
@@ -85,21 +87,20 @@ def info_block(
             f".request_width = OperationWidth::{req}, .response_width = OperationWidth::{resp}}},"
         )
     joined = "\n".join(rows)
-    upper = prefix.upper()
     return f"""
-using {prefix}Info = component_common::OperationInfo<{enum_name}>;
-inline constexpr size_t {upper}_COUNT = static_cast<size_t>({enum_name}::COUNT);
-inline constexpr std::array<{prefix}Info, {upper}_COUNT> {upper}_DEFINITIONS{{{{
+using {type_name}Info = component_common::OperationInfo<{enum_name}>;
+inline constexpr size_t {constant_prefix}_COUNT = static_cast<size_t>({enum_name}::COUNT);
+inline constexpr std::array<{type_name}Info, {constant_prefix}_COUNT> {constant_prefix}_DEFINITIONS{{{{
 {joined}
 }}}};
-static_assert(component_common::operation_definitions_have_all_ids_once({upper}_DEFINITIONS));
-static_assert(component_common::operation_definitions_have_unique_codes({upper}_DEFINITIONS));
-inline constexpr auto {upper}_INFO = component_common::index_operation_info_by_id({upper}_DEFINITIONS);
-constexpr const {prefix}Info &{prefix.lower()}_info({enum_name} id) {{
-  return component_common::operation_info({upper}_INFO, id);
+static_assert(component_common::operation_definitions_have_all_ids_once({constant_prefix}_DEFINITIONS));
+static_assert(component_common::operation_definitions_have_unique_codes({constant_prefix}_DEFINITIONS));
+inline constexpr auto {constant_prefix}_INFO = component_common::index_operation_info_by_id({constant_prefix}_DEFINITIONS);
+constexpr const {type_name}Info &{api_name}_info({enum_name} id) {{
+  return component_common::operation_info({constant_prefix}_INFO, id);
 }}
-constexpr uint16_t {prefix.lower()}_address({enum_name} id) {{
-  return {prefix.lower()}_info(id).code;
+constexpr uint16_t {api_name}_address({enum_name} id) {{
+  return {api_name}_info(id).code;
 }}
 """
 
@@ -149,9 +150,18 @@ using component_common::OperationWidth;
         + enum_block("DirectCommandId", direct)
         + enum_block("SubcommandId", subcommand)
         + enum_block("DataMemoryId", data_memory)
-        + info_block("DirectCommandId", "DirectCommand", direct, DIRECT_REQUEST, DIRECT_RESPONSE)
-        + info_block("SubcommandId", "Subcommand", subcommand, SUBCOMMAND_REQUEST, SUBCOMMAND_RESPONSE)
-        + info_block("DataMemoryId", "DataMemory", data_memory, {}, widths)
+        + info_block(
+            "DirectCommandId", "DirectCommand", "DIRECT_COMMAND", "direct_command",
+            direct, DIRECT_REQUEST, DIRECT_RESPONSE
+        )
+        + info_block(
+            "SubcommandId", "Subcommand", "SUBCOMMAND", "subcommand",
+            subcommand, SUBCOMMAND_REQUEST, SUBCOMMAND_RESPONSE
+        )
+        + info_block(
+            "DataMemoryId", "DataMemory", "DATA_MEMORY", "data_memory",
+            data_memory, widths, widths
+        )
         + "\n"
         + tail
     )
@@ -160,9 +170,9 @@ using component_common::OperationWidth;
 
 def migrate_callers() -> None:
     replacements = (
-        (r"hw::direct::([A-Z0-9_]+)", r"hw::directcommand_address(hw::DirectCommandId::\1)"),
+        (r"hw::direct::([A-Z0-9_]+)", r"hw::direct_command_address(hw::DirectCommandId::\1)"),
         (r"hw::subcommand::([A-Z0-9_]+)", r"hw::subcommand_address(hw::SubcommandId::\1)"),
-        (r"hw::data_memory::([A-Z0-9_]+)", r"hw::datamemory_address(hw::DataMemoryId::\1)"),
+        (r"hw::data_memory::([A-Z0-9_]+)", r"hw::data_memory_address(hw::DataMemoryId::\1)"),
     )
     for path in sorted(COMPONENT.glob("*.h")) + sorted(COMPONENT.glob("*.cpp")):
         if path == REGISTERS:
