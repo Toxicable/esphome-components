@@ -136,10 +136,10 @@ class MCF8316DComponent : public PollingComponent,
   bool write_register32(uint16_t offset, uint32_t value) override;
   void delay_microseconds(uint32_t delay_us) override;
 
-  bool read_reg32(uint16_t offset, uint32_t& value);
-  bool read_reg16(uint16_t offset, uint16_t& value);
-  bool write_reg32(uint16_t offset, uint32_t value);
-  bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value);
+  bool read_reg32(RegisterId id, uint32_t& value);
+  bool read_reg16(RegisterId id, uint16_t& value);
+  bool write_reg32(RegisterId id, uint32_t value);
+  bool update_bits32(RegisterId id, uint32_t mask, uint32_t value);
 
   bool set_brake_override(bool brake_on);
   bool set_direction_mode(const std::string& direction_mode);

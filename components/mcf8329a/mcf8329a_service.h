@@ -12,10 +12,10 @@ class MCF8329AService {
  public:
   explicit MCF8329AService(RegisterBus *bus) : registers_(bus, 100U) {}
 
-  bool read_reg32(uint16_t offset, uint32_t &value) const;
-  bool read_reg16(uint16_t offset, uint16_t &value) const;
-  bool write_reg32(uint16_t offset, uint32_t value) const;
-  bool update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const;
+  bool read_reg32(RegisterId id, uint32_t &value) const;
+  bool read_reg16(RegisterId id, uint16_t &value) const;
+  bool write_reg32(RegisterId id, uint32_t value) const;
+  bool update_bits32(RegisterId id, uint32_t mask, uint32_t value) const;
 
   float decode_vm_voltage(uint32_t raw) const;
   float decode_max_speed_hz(uint16_t code) const;

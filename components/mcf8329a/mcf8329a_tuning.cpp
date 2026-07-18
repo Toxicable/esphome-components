@@ -285,7 +285,7 @@ struct MCF8329ATuningController::Impl {
     if (this->parent_ == nullptr) {
       return false;
     }
-    return this->parent_->read_reg16(REG_ALGORITHM_STATE, algo_state);
+    return this->parent_->read_reg16(RegisterId::ALGORITHM_STATE, algo_state);
   }
 
   void clear_runtime_speed_command_(const char* reason) {
@@ -308,9 +308,9 @@ struct MCF8329ATuningController::Impl {
     uint32_t closed_loop3 = 0u;
     uint32_t closed_loop4 = 0u;
     uint32_t pin_config = 0u;
-    if (!this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
-        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4) ||
-        !this->parent_->read_reg32(REG_PIN_CONFIG, pin_config)) {
+    if (!this->parent_->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3) ||
+        !this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4) ||
+        !this->parent_->read_reg32(RegisterId::PIN_CONFIG, pin_config)) {
       return false;
     }
 
@@ -328,11 +328,11 @@ struct MCF8329ATuningController::Impl {
       closed_loop4 & ~(CLOSED_LOOP4_SPD_LOOP_KP_LSB_MASK | CLOSED_LOOP4_SPD_LOOP_KI_MASK);
     const uint32_t mpet_pin_config = pin_config | PIN_CONFIG_VDC_FILTER_DISABLE_MASK;
     if ((zero_mpet_closed_loop3 != closed_loop3 &&
-         !this->parent_->write_reg32(REG_CLOSED_LOOP3, zero_mpet_closed_loop3)) ||
+         !this->parent_->write_reg32(RegisterId::CLOSED_LOOP3, zero_mpet_closed_loop3)) ||
         (zero_kp_ki_closed_loop4 != closed_loop4 &&
-         !this->parent_->write_reg32(REG_CLOSED_LOOP4, zero_kp_ki_closed_loop4)) ||
+         !this->parent_->write_reg32(RegisterId::CLOSED_LOOP4, zero_kp_ki_closed_loop4)) ||
         (mpet_pin_config != pin_config &&
-         !this->parent_->write_reg32(REG_PIN_CONFIG, mpet_pin_config))) {
+         !this->parent_->write_reg32(RegisterId::PIN_CONFIG, mpet_pin_config))) {
       this->restore_mpet_speed_loop_(false);
       return false;
     }
@@ -350,7 +350,7 @@ struct MCF8329ATuningController::Impl {
       return false;
     }
     uint32_t closed_loop2 = 0u;
-    if (!this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2)) {
+    if (!this->parent_->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2)) {
       ESP_LOGW(TUNING_TAG, "MPET: failed to read CLOSED_LOOP2 motor parameters");
       return false;
     }
@@ -376,7 +376,7 @@ struct MCF8329ATuningController::Impl {
       return;
     }
     if (this->mpet_pin_config_saved_) {
-      (void)this->parent_->write_reg32(REG_PIN_CONFIG, this->mpet_saved_pin_config_);
+      (void)this->parent_->write_reg32(RegisterId::PIN_CONFIG, this->mpet_saved_pin_config_);
       this->mpet_pin_config_saved_ = false;
     }
     if (keep_mpet_results) {
@@ -384,8 +384,8 @@ struct MCF8329ATuningController::Impl {
       return;
     }
 
-    (void)this->parent_->write_reg32(REG_CLOSED_LOOP3, this->mpet_saved_closed_loop3_);
-    (void)this->parent_->write_reg32(REG_CLOSED_LOOP4, this->mpet_saved_closed_loop4_);
+    (void)this->parent_->write_reg32(RegisterId::CLOSED_LOOP3, this->mpet_saved_closed_loop3_);
+    (void)this->parent_->write_reg32(RegisterId::CLOSED_LOOP4, this->mpet_saved_closed_loop4_);
     this->mpet_speed_loop_saved_ = false;
     ESP_LOGI(TUNING_TAG, "MPET: restored SPD_LOOP_KP/KI after unsuccessful characterization");
   }
@@ -411,7 +411,7 @@ struct MCF8329ATuningController::Impl {
       ((static_cast<uint32_t>(candidate.lock_ilimit_deglitch_code) <<
         FAULT_CONFIG1_LOCK_ILIMIT_DEG_SHIFT) &
        FAULT_CONFIG1_LOCK_ILIMIT_DEG_MASK);
-    if (!this->parent_->update_bits32(REG_FAULT_CONFIG1, fault_cfg1_mask, fault_cfg1_value)) {
+    if (!this->parent_->update_bits32(RegisterId::FAULT_CONFIG1, fault_cfg1_mask, fault_cfg1_value)) {
       return false;
     }
 
@@ -424,7 +424,7 @@ struct MCF8329ATuningController::Impl {
     if (candidate.abn_bemf_lock_enable) {
       fault_cfg2_value |= FAULT_CONFIG2_LOCK2_EN_MASK;
     }
-    if (!this->parent_->update_bits32(REG_FAULT_CONFIG2, fault_cfg2_mask, fault_cfg2_value)) {
+    if (!this->parent_->update_bits32(RegisterId::FAULT_CONFIG2, fault_cfg2_mask, fault_cfg2_value)) {
       return false;
     }
 
@@ -453,7 +453,7 @@ struct MCF8329ATuningController::Impl {
     if (candidate.auto_handoff_enable) {
       startup2_value |= MOTOR_STARTUP2_AUTO_HANDOFF_EN_MASK;
     }
-    if (!this->parent_->update_bits32(REG_MOTOR_STARTUP2, startup2_mask, startup2_value)) {
+    if (!this->parent_->update_bits32(RegisterId::MOTOR_STARTUP2, startup2_mask, startup2_value)) {
       return false;
     }
 
@@ -461,7 +461,7 @@ struct MCF8329ATuningController::Impl {
       (static_cast<uint32_t>(candidate.cl_slow_acc_code) << INT_ALGO_2_CL_SLOW_ACC_SHIFT) &
       INT_ALGO_2_CL_SLOW_ACC_MASK;
     return this->parent_->update_bits32(
-      REG_INT_ALGO_2,
+      register_address(RegisterId::INT_ALGO_2),
       INT_ALGO_2_CL_SLOW_ACC_MASK,
       int_algo2_value
     );
@@ -637,7 +637,7 @@ struct MCF8329ATuningController::Impl {
     max_speed_hz = this->parent_->cfg_max_speed_set_
                      ? this->parent_->service_.decode_max_speed_hz(this->parent_->cfg_max_speed_code_)
                      : 0.0f;
-    if (this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+    if (this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4)) {
       const uint16_t max_speed_code = static_cast<uint16_t>(
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >>
         CLOSED_LOOP4_MAX_SPEED_SHIFT
@@ -651,9 +651,9 @@ struct MCF8329ATuningController::Impl {
     uint32_t raw_ref = 0;
     uint32_t raw_fdbk = 0;
     uint32_t raw_fg = 0;
-    if (!this->parent_->read_reg32(REG_SPEED_REF_OPEN_LOOP, raw_ref) ||
-        !this->parent_->read_reg32(REG_SPEED_FDBK, raw_fdbk) ||
-        !this->parent_->read_reg32(REG_FG_SPEED_FDBK, raw_fg)) {
+    if (!this->parent_->read_reg32(RegisterId::SPEED_REF_OPEN_LOOP, raw_ref) ||
+        !this->parent_->read_reg32(RegisterId::SPEED_FDBK, raw_fdbk) ||
+        !this->parent_->read_reg32(RegisterId::FG_SPEED_FDBK, raw_fg)) {
       return false;
     }
 
@@ -705,7 +705,7 @@ struct MCF8329ATuningController::Impl {
                            ? this->parent_->service_.decode_max_speed_hz(this->parent_->cfg_max_speed_code_)
                            : 0.0f;
     uint32_t closed_loop4 = 0;
-    if (this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4)) {
+    if (this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4)) {
       const uint16_t max_speed_code = static_cast<uint16_t>(
         (closed_loop4 & CLOSED_LOOP4_MAX_SPEED_MASK) >>
         CLOSED_LOOP4_MAX_SPEED_SHIFT
@@ -1221,10 +1221,10 @@ struct MCF8329ATuningController::Impl {
     uint32_t closed_loop3 = 0;
     uint32_t closed_loop4 = 0;
     uint32_t mtr_params = 0;
-    if (!this->parent_->read_reg32(REG_CLOSED_LOOP2, closed_loop2) ||
-        !this->parent_->read_reg32(REG_CLOSED_LOOP3, closed_loop3) ||
-        !this->parent_->read_reg32(REG_CLOSED_LOOP4, closed_loop4) ||
-        !this->parent_->read_reg32(REG_MTR_PARAMS, mtr_params)) {
+    if (!this->parent_->read_reg32(RegisterId::CLOSED_LOOP2, closed_loop2) ||
+        !this->parent_->read_reg32(RegisterId::CLOSED_LOOP3, closed_loop3) ||
+        !this->parent_->read_reg32(RegisterId::CLOSED_LOOP4, closed_loop4) ||
+        !this->parent_->read_reg32(RegisterId::MTR_PARAMS, mtr_params)) {
       ESP_LOGW(TUNING_TAG, "MPET finished but failed to read parameter registers");
       return;
     }
@@ -1279,7 +1279,7 @@ struct MCF8329ATuningController::Impl {
     if (this->parent_ == nullptr) {
       return false;
     }
-    return this->parent_->read_reg32(REG_ALGO_STATUS_MPET, status);
+    return this->parent_->read_reg32(RegisterId::ALGO_STATUS_MPET, status);
   }
 
   void log_mpet_profile_(const char* prefix) const {
@@ -1296,7 +1296,7 @@ struct MCF8329ATuningController::Impl {
                               this->parent_->cfg_mpet_use_dedicated_params_;
 
     uint32_t int_algo1 = 0;
-    if (this->parent_->read_reg32(REG_INT_ALGO_1, int_algo1)) {
+    if (this->parent_->read_reg32(RegisterId::INT_ALGO_1, int_algo1)) {
       mpet_curr_code = static_cast<uint8_t>(
         (int_algo1 & INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_MASK) >>
         INT_ALGO_1_MPET_OPEN_LOOP_CURR_REF_SHIFT
@@ -1312,7 +1312,7 @@ struct MCF8329ATuningController::Impl {
     }
 
     uint32_t int_algo2 = 0;
-    if (this->parent_->read_reg32(REG_INT_ALGO_2, int_algo2)) {
+    if (this->parent_->read_reg32(RegisterId::INT_ALGO_2, int_algo2)) {
       mpet_use_dedicated =
         (int_algo2 & INT_ALGO_2_MPET_KE_MEAS_PARAMETER_SELECT_MASK) != 0u;
     }

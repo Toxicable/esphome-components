@@ -4,20 +4,20 @@ namespace mcf8329a_core {
 
 using namespace regs;
 
-bool MCF8329AService::read_reg32(uint16_t offset, uint32_t &value) const {
-  return this->registers_.read32(offset, value);
+bool MCF8329AService::read_reg32(RegisterId id, uint32_t &value) const {
+  return this->registers_.read32(register_address(id), value);
 }
 
-bool MCF8329AService::read_reg16(uint16_t offset, uint16_t &value) const {
-  return this->registers_.read16(offset, value);
+bool MCF8329AService::read_reg16(RegisterId id, uint16_t &value) const {
+  return this->registers_.read16(register_address(id), value);
 }
 
-bool MCF8329AService::write_reg32(uint16_t offset, uint32_t value) const {
-  return this->registers_.write32(offset, value);
+bool MCF8329AService::write_reg32(RegisterId id, uint32_t value) const {
+  return this->registers_.write32(register_address(id), value);
 }
 
-bool MCF8329AService::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) const {
-  return this->registers_.update_bits32(offset, mask, value);
+bool MCF8329AService::update_bits32(RegisterId id, uint32_t mask, uint32_t value) const {
+  return this->registers_.update_bits32(register_address(id), mask, value);
 }
 
 float MCF8329AService::decode_vm_voltage(uint32_t raw) const {
@@ -46,12 +46,12 @@ float MCF8329AService::decode_open_to_closed_handoff_percent(uint8_t code) const
 
 bool MCF8329AService::set_brake_input(bool brake_on) const {
   const uint32_t value = brake_on ? PIN_CONFIG_BRAKE_INPUT_BRAKE : PIN_CONFIG_BRAKE_INPUT_NO_BRAKE;
-  return this->update_bits32(REG_PIN_CONFIG, PIN_CONFIG_BRAKE_INPUT_MASK, value);
+  return this->update_bits32(RegisterId::PIN_CONFIG, PIN_CONFIG_BRAKE_INPUT_MASK, value);
 }
 
 bool MCF8329AService::read_brake_input(uint8_t &brake_input_code) const {
   uint32_t pin_config = 0;
-  if (!this->read_reg32(REG_PIN_CONFIG, pin_config)) {
+  if (!this->read_reg32(RegisterId::PIN_CONFIG, pin_config)) {
     return false;
   }
   brake_input_code = static_cast<uint8_t>((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 2);
@@ -72,12 +72,12 @@ bool MCF8329AService::set_direction_input(DirectionInputMode mode) const {
       value = PERI_CONFIG1_DIR_INPUT_HARDWARE;
       break;
   }
-  return this->update_bits32(REG_PERI_CONFIG1, PERI_CONFIG1_DIR_INPUT_MASK, value);
+  return this->update_bits32(RegisterId::PERI_CONFIG1, PERI_CONFIG1_DIR_INPUT_MASK, value);
 }
 
 bool MCF8329AService::read_direction_input(uint8_t &direction_input_code) const {
   uint32_t peri_config1 = 0;
-  if (!this->read_reg32(REG_PERI_CONFIG1, peri_config1)) {
+  if (!this->read_reg32(RegisterId::PERI_CONFIG1, peri_config1)) {
     return false;
   }
   direction_input_code = static_cast<uint8_t>((peri_config1 & PERI_CONFIG1_DIR_INPUT_MASK) >> 19);
@@ -89,34 +89,34 @@ bool MCF8329AService::write_speed_command_raw(uint16_t digital_speed_ctrl) const
   const uint32_t value =
     ALGO_DEBUG1_OVERRIDE_MASK | ((static_cast<uint32_t>(clamped) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK);
   return this->update_bits32(
-    REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
+    register_address(RegisterId::ALGO_DEBUG1), ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
   );
 }
 
 bool MCF8329AService::release_speed_override() const {
-  return this->update_bits32(REG_ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK, 0u);
+  return this->update_bits32(RegisterId::ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK, 0u);
 }
 
 bool MCF8329AService::set_mpet_characterization_bits() const {
-  return this->update_bits32(REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_RUN_MASK, ALGO_DEBUG2_MPET_RUN_MASK);
+  return this->update_bits32(RegisterId::ALGO_DEBUG2, ALGO_DEBUG2_MPET_RUN_MASK, ALGO_DEBUG2_MPET_RUN_MASK);
 }
 
 bool MCF8329AService::write_mpet_results_to_shadow() const {
   return this->registers_.pulse_bits32(
-      REG_ALGO_DEBUG2, ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, 2000U);
+      register_address(RegisterId::ALGO_DEBUG2), ALGO_DEBUG2_MPET_WRITE_SHADOW_MASK, 2000U);
 }
 
 bool MCF8329AService::pulse_clear_faults() const {
-  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_CLR_FLT_MASK, 2000U, 2000U);
+  return this->registers_.pulse_bits32(register_address(RegisterId::ALGO_CTRL1), ALGO_CTRL1_CLR_FLT_MASK, 2000U, 2000U);
 }
 
 bool MCF8329AService::pulse_watchdog_tickle() const {
-  return this->registers_.pulse_bits32(REG_ALGO_CTRL1, ALGO_CTRL1_WATCHDOG_TICKLE_MASK);
+  return this->registers_.pulse_bits32(register_address(RegisterId::ALGO_CTRL1), ALGO_CTRL1_WATCHDOG_TICKLE_MASK);
 }
 
 bool MCF8329AService::clear_mpet_bits(bool *changed, uint32_t *before, uint32_t *after) const {
   uint32_t algo_debug2 = 0;
-  if (!this->read_reg32(REG_ALGO_DEBUG2, algo_debug2)) {
+  if (!this->read_reg32(RegisterId::ALGO_DEBUG2, algo_debug2)) {
     return false;
   }
   if (before != nullptr) {
@@ -135,7 +135,7 @@ bool MCF8329AService::clear_mpet_bits(bool *changed, uint32_t *before, uint32_t 
   }
 
   const uint32_t next = algo_debug2 & ~ALGO_DEBUG2_MPET_ALL_MASK;
-  if (!this->write_reg32(REG_ALGO_DEBUG2, next)) {
+  if (!this->write_reg32(RegisterId::ALGO_DEBUG2, next)) {
     return false;
   }
   if (changed != nullptr) {

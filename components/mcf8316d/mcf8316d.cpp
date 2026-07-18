@@ -145,16 +145,16 @@ void MCF8316DComponent::update() {
   bool fault_active = false;
   bool fault_state_valid = false;
 
-  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
+  const bool algo_ok = this->read_reg32(RegisterId::ALGO_STATUS, algo_status);
   if (algo_ok) {
     this->publish_algo_status_(algo_status);
   }
-  const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
+  const bool gate_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_fault_status);
   if (gate_ok) {
     fault_active |= (gate_fault_status & GATE_DRIVER_FAULT_ACTIVE_MASK) != 0;
     fault_state_valid = true;
   }
-  const bool controller_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status);
+  const bool controller_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, fault_status);
   if (controller_ok) {
     fault_active |= (fault_status & CONTROLLER_FAULT_ACTIVE_MASK) != 0;
     fault_state_valid = true;
@@ -193,7 +193,7 @@ void MCF8316DComponent::update() {
                                     run_state_diag_active || control_diag_active ||
                                     this->tuning_.needs_algorithm_state();
   if (need_algorithm_state) {
-    if (this->read_reg16(REG_ALGORITHM_STATE, algorithm_state)) {
+    if (this->read_reg16(RegisterId::ALGORITHM_STATE, algorithm_state)) {
       algorithm_state_valid = true;
       const char* const state_name = this->algorithm_state_to_string_(algorithm_state);
       if (this->algorithm_state_text_sensor_ != nullptr) {
@@ -271,7 +271,7 @@ void MCF8316DComponent::update() {
     this->last_buck_diag_log_ms_ = 0;
   }
 
-  if (this->read_reg32(REG_VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
+  if (this->read_reg32(RegisterId::VM_VOLTAGE, vm_voltage_raw) && this->vm_voltage_sensor_ != nullptr) {
     const uint32_t vm_adc_code_8 = (vm_voltage_raw & VM_VOLTAGE_ADC_MASK) >> VM_VOLTAGE_ADC_SHIFT;
     const uint32_t vm_adc_code_q11 = (vm_voltage_raw & VM_VOLTAGE_Q11_MASK) >> VM_VOLTAGE_Q11_SHIFT;
     const float vm_v = static_cast<float>(vm_adc_code_q11) * (60.0f / 2048.0f);
@@ -504,20 +504,20 @@ void MCF8316DComponent::apply_post_comms_setup_() {
   this->tuning_.apply_post_comms_setup();
 }
 
-bool MCF8316DComponent::read_reg32(uint16_t offset, uint32_t& value) {
-  return this->service_.read_reg32(offset, value);
+bool MCF8316DComponent::read_reg32(RegisterId id, uint32_t& value) {
+  return this->service_.read_reg32(id, value);
 }
 
-bool MCF8316DComponent::read_reg16(uint16_t offset, uint16_t& value) {
-  return this->service_.read_reg16(offset, value);
+bool MCF8316DComponent::read_reg16(RegisterId id, uint16_t& value) {
+  return this->service_.read_reg16(id, value);
 }
 
-bool MCF8316DComponent::write_reg32(uint16_t offset, uint32_t value) {
-  return this->service_.write_reg32(offset, value);
+bool MCF8316DComponent::write_reg32(RegisterId id, uint32_t value) {
+  return this->service_.write_reg32(id, value);
 }
 
-bool MCF8316DComponent::update_bits32(uint16_t offset, uint32_t mask, uint32_t value) {
-  return this->service_.update_bits32(offset, mask, value);
+bool MCF8316DComponent::update_bits32(RegisterId id, uint32_t mask, uint32_t value) {
+  return this->service_.update_bits32(id, mask, value);
 }
 
 bool MCF8316DComponent::read_register32(uint16_t offset, uint32_t *value) {
@@ -575,7 +575,7 @@ bool MCF8316DComponent::set_brake_override(bool brake_on) {
 
   uint8_t brake_input_value = 0u;
   uint32_t pin_config = 0;
-  if (this->service_.read_brake_input(brake_input_value) && this->read_reg32(REG_PIN_CONFIG, pin_config)) {
+  if (this->service_.read_brake_input(brake_input_value) && this->read_reg32(RegisterId::PIN_CONFIG, pin_config)) {
     ESP_LOGI(
       TAG,
       "Brake override write: request=%s pin_cfg=0x%08X brake_input=%u(%s)",
@@ -601,7 +601,7 @@ bool MCF8316DComponent::set_direction_mode(const std::string& direction_mode) {
 
   uint8_t direction_input_value = 0u;
   uint32_t peri_config1 = 0;
-  if (this->service_.read_direction_input(direction_input_value) && this->read_reg32(REG_PERI_CONFIG1, peri_config1)) {
+  if (this->service_.read_direction_input(direction_input_value) && this->read_reg32(RegisterId::PERI_CONFIG1, peri_config1)) {
     ESP_LOGI(
       TAG,
       "Direction write: request=%s peri_cfg1=0x%08X dir_input=%u(%s)",
@@ -632,16 +632,16 @@ void MCF8316DComponent::pulse_clear_faults() {
   uint32_t ctrl_before = 0;
   uint32_t gate_after = 0;
   uint32_t ctrl_after = 0;
-  const bool gate_before_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_before);
-  const bool ctrl_before_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_before);
+  const bool gate_before_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_before);
+  const bool ctrl_before_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, ctrl_before);
 
   if (!this->service_.pulse_clear_faults()) {
     ESP_LOGW(TAG, "Failed to pulse CLR_FLT");
     return;
   }
 
-  const bool gate_after_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_after);
-  const bool ctrl_after_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, ctrl_after);
+  const bool gate_after_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_after);
+  const bool ctrl_after_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, ctrl_after);
 
   if (gate_before_ok || ctrl_before_ok || gate_after_ok || ctrl_after_ok) {
     ESP_LOGI(
@@ -705,9 +705,9 @@ bool MCF8316DComponent::read_probe_and_publish_() {
   bool fault_state_valid = false;
   bool ok = true;
 
-  const bool gate_ok = this->read_reg32(REG_GATE_DRIVER_FAULT_STATUS, gate_fault_status);
-  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
-  const bool controller_ok = this->read_reg32(REG_CONTROLLER_FAULT_STATUS, fault_status);
+  const bool gate_ok = this->read_reg32(RegisterId::GATE_DRIVER_FAULT_STATUS, gate_fault_status);
+  const bool algo_ok = this->read_reg32(RegisterId::ALGO_STATUS, algo_status);
+  const bool controller_ok = this->read_reg32(RegisterId::CONTROLLER_FAULT_STATUS, fault_status);
   ok &= algo_ok;
   ok &= gate_ok;
   ok &= controller_ok;
@@ -859,7 +859,7 @@ void MCF8316DComponent::log_buck_fault_diagnostics_(
   const char* context, uint32_t gate_fault_status
 ) {
   uint32_t gd_config2 = 0;
-  const bool gd_ok = this->read_reg32(REG_GD_CONFIG2, gd_config2);
+  const bool gd_ok = this->read_reg32(RegisterId::GD_CONFIG2, gd_config2);
 
   const bool buck_ocp = (gate_fault_status & GATE_FAULT_BUCK_OCP) != 0;
   const bool buck_uv = (gate_fault_status & GATE_FAULT_BUCK_UV) != 0;
@@ -954,20 +954,20 @@ void MCF8316DComponent::log_lock_limit_diagnostics_(
   uint32_t isd_config = 0;
   uint32_t rev_drive_config = 0;
 
-  const bool state_ok = this->read_reg16(REG_ALGORITHM_STATE, algorithm_state);
-  const bool csa_fb_ok = this->read_reg16(REG_CSA_GAIN_FEEDBACK, csa_gain_feedback);
-  const bool algo_ok = this->read_reg32(REG_ALGO_STATUS, algo_status);
-  const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
-  const bool dbg2_ok = this->read_reg32(REG_ALGO_DEBUG2, algo_debug2);
-  const bool cl1_ok = this->read_reg32(REG_CLOSED_LOOP1, closed_loop1);
-  const bool dev2_ok = this->read_reg32(REG_DEVICE_CONFIG2, device_config2);
-  const bool fault_cfg_ok = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
-  const bool fault_cfg2_ok = this->read_reg32(REG_FAULT_CONFIG2, fault_config2);
-  const bool gd1_ok = this->read_reg32(REG_GD_CONFIG1, gd_config1);
-  const bool startup1_ok = this->read_reg32(REG_MOTOR_STARTUP1, startup1);
-  const bool startup2_ok = this->read_reg32(REG_MOTOR_STARTUP2, startup2);
-  const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
-  const bool rev_ok = this->read_reg32(REG_REV_DRIVE_CONFIG, rev_drive_config);
+  const bool state_ok = this->read_reg16(RegisterId::ALGORITHM_STATE, algorithm_state);
+  const bool csa_fb_ok = this->read_reg16(RegisterId::CSA_GAIN_FEEDBACK, csa_gain_feedback);
+  const bool algo_ok = this->read_reg32(RegisterId::ALGO_STATUS, algo_status);
+  const bool dbg1_ok = this->read_reg32(RegisterId::ALGO_DEBUG1, algo_debug1);
+  const bool dbg2_ok = this->read_reg32(RegisterId::ALGO_DEBUG2, algo_debug2);
+  const bool cl1_ok = this->read_reg32(RegisterId::CLOSED_LOOP1, closed_loop1);
+  const bool dev2_ok = this->read_reg32(RegisterId::DEVICE_CONFIG2, device_config2);
+  const bool fault_cfg_ok = this->read_reg32(RegisterId::FAULT_CONFIG1, fault_config1);
+  const bool fault_cfg2_ok = this->read_reg32(RegisterId::FAULT_CONFIG2, fault_config2);
+  const bool gd1_ok = this->read_reg32(RegisterId::GD_CONFIG1, gd_config1);
+  const bool startup1_ok = this->read_reg32(RegisterId::MOTOR_STARTUP1, startup1);
+  const bool startup2_ok = this->read_reg32(RegisterId::MOTOR_STARTUP2, startup2);
+  const bool isd_ok = this->read_reg32(RegisterId::ISD_CONFIG, isd_config);
+  const bool rev_ok = this->read_reg32(RegisterId::REV_DRIVE_CONFIG, rev_drive_config);
 
   ESP_LOGW(
     TAG,
@@ -1272,7 +1272,7 @@ bool MCF8316DComponent::should_force_speed_shutdown_(
   uint32_t fault_config1 = 0;
   bool fault_config1_valid = false;
   if ((remaining_faults & (FAULT_LOCK_LIMIT | motor_lock_faults)) != 0u) {
-    fault_config1_valid = this->read_reg32(REG_FAULT_CONFIG1, fault_config1);
+    fault_config1_valid = this->read_reg32(RegisterId::FAULT_CONFIG1, fault_config1);
     if (!fault_config1_valid) {
       return true;
     }
@@ -1296,7 +1296,7 @@ bool MCF8316DComponent::should_force_speed_shutdown_(
 
   if ((remaining_faults & FAULT_HW_LOCK_LIMIT) != 0u) {
     uint32_t fault_config2 = 0;
-    if (!this->read_reg32(REG_FAULT_CONFIG2, fault_config2)) {
+    if (!this->read_reg32(RegisterId::FAULT_CONFIG2, fault_config2)) {
       return true;
     }
     const uint32_t hw_lock_mode = (fault_config2 & FAULT_CONFIG2_HW_LOCK_ILIMIT_MODE_MASK) >>
@@ -1332,10 +1332,10 @@ void MCF8316DComponent::log_control_diagnostics_(
   uint32_t peri_config1 = 0;
   uint32_t algo_debug1 = 0;
   uint32_t isd_config = 0;
-  const bool pin_ok = this->read_reg32(REG_PIN_CONFIG, pin_config);
-  const bool peri_ok = this->read_reg32(REG_PERI_CONFIG1, peri_config1);
-  const bool dbg1_ok = this->read_reg32(REG_ALGO_DEBUG1, algo_debug1);
-  const bool isd_ok = this->read_reg32(REG_ISD_CONFIG, isd_config);
+  const bool pin_ok = this->read_reg32(RegisterId::PIN_CONFIG, pin_config);
+  const bool peri_ok = this->read_reg32(RegisterId::PERI_CONFIG1, peri_config1);
+  const bool dbg1_ok = this->read_reg32(RegisterId::ALGO_DEBUG1, algo_debug1);
+  const bool isd_ok = this->read_reg32(RegisterId::ISD_CONFIG, isd_config);
 
   const uint32_t brake_input_value =
     pin_ok ? ((pin_config & PIN_CONFIG_BRAKE_INPUT_MASK) >> 10) : 0u;

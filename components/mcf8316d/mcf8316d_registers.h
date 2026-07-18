@@ -93,34 +93,6 @@ constexpr uint16_t register_address(RegisterId id) {
   return register_info(id).address;
 }
 
-inline constexpr uint16_t REG_CONTROLLER_FAULT_STATUS = register_address(RegisterId::CONTROLLER_FAULT_STATUS);
-inline constexpr uint16_t REG_GATE_DRIVER_FAULT_STATUS = register_address(RegisterId::GATE_DRIVER_FAULT_STATUS);
-inline constexpr uint16_t REG_ALGO_STATUS = register_address(RegisterId::ALGO_STATUS);
-inline constexpr uint16_t REG_MTR_PARAMS = register_address(RegisterId::MTR_PARAMS);
-inline constexpr uint16_t REG_ALGO_STATUS_MPET = register_address(RegisterId::ALGO_STATUS_MPET);
-inline constexpr uint16_t REG_ALGO_CTRL1 = register_address(RegisterId::ALGO_CTRL1);
-inline constexpr uint16_t REG_ALGO_DEBUG1 = register_address(RegisterId::ALGO_DEBUG1);
-inline constexpr uint16_t REG_ALGO_DEBUG2 = register_address(RegisterId::ALGO_DEBUG2);
-inline constexpr uint16_t REG_ALGORITHM_STATE = register_address(RegisterId::ALGORITHM_STATE);
-inline constexpr uint16_t REG_ISD_CONFIG = register_address(RegisterId::ISD_CONFIG);
-inline constexpr uint16_t REG_REV_DRIVE_CONFIG = register_address(RegisterId::REV_DRIVE_CONFIG);
-inline constexpr uint16_t REG_MOTOR_STARTUP1 = register_address(RegisterId::MOTOR_STARTUP1);
-inline constexpr uint16_t REG_MOTOR_STARTUP2 = register_address(RegisterId::MOTOR_STARTUP2);
-inline constexpr uint16_t REG_CLOSED_LOOP1 = register_address(RegisterId::CLOSED_LOOP1);
-inline constexpr uint16_t REG_CLOSED_LOOP2 = register_address(RegisterId::CLOSED_LOOP2);
-inline constexpr uint16_t REG_CLOSED_LOOP3 = register_address(RegisterId::CLOSED_LOOP3);
-inline constexpr uint16_t REG_CLOSED_LOOP4 = register_address(RegisterId::CLOSED_LOOP4);
-inline constexpr uint16_t REG_FAULT_CONFIG1 = register_address(RegisterId::FAULT_CONFIG1);
-inline constexpr uint16_t REG_FAULT_CONFIG2 = register_address(RegisterId::FAULT_CONFIG2);
-inline constexpr uint16_t REG_PIN_CONFIG = register_address(RegisterId::PIN_CONFIG);
-inline constexpr uint16_t REG_DEVICE_CONFIG1 = register_address(RegisterId::DEVICE_CONFIG1);
-inline constexpr uint16_t REG_DEVICE_CONFIG2 = register_address(RegisterId::DEVICE_CONFIG2);
-inline constexpr uint16_t REG_PERI_CONFIG1 = register_address(RegisterId::PERI_CONFIG1);
-inline constexpr uint16_t REG_GD_CONFIG1 = register_address(RegisterId::GD_CONFIG1);
-inline constexpr uint16_t REG_GD_CONFIG2 = register_address(RegisterId::GD_CONFIG2);
-inline constexpr uint16_t REG_CSA_GAIN_FEEDBACK = register_address(RegisterId::CSA_GAIN_FEEDBACK);
-inline constexpr uint16_t REG_VOLTAGE_GAIN_FEEDBACK = register_address(RegisterId::VOLTAGE_GAIN_FEEDBACK);
-inline constexpr uint16_t REG_VM_VOLTAGE = register_address(RegisterId::VM_VOLTAGE);
 
 }  // namespace regs
 }  // namespace mcf8316d_core
