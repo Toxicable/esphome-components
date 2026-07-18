@@ -26,7 +26,18 @@ jobs:
         run: python3 tools/hard_cut_register_api.py
 
       - name: Verify host tests
-        run: bash ./check_host.bash
+        run: bash ./check_host.bash 2>&1 | tee hard-cut-host.log
+
+      - name: Upload hard cut diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hard-cut-register-api-failure
+          path: |
+            hard-cut-host.log
+            components/mcf8316d
+            components/mcf8329a
+          if-no-files-found: error
 
       - name: Commit transformed sources
         run: |
