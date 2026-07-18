@@ -10,6 +10,43 @@ namespace {
 
 namespace hw = bq76952_core::registers;
 
+void test_operation_metadata() {
+  static_assert(component_common::operation_definitions_have_all_ids_once(
+      hw::DIRECT_COMMAND_DEFINITIONS));
+  static_assert(component_common::operation_definitions_have_unique_codes(
+      hw::DIRECT_COMMAND_DEFINITIONS));
+  static_assert(component_common::operation_definitions_have_all_ids_once(
+      hw::SUBCOMMAND_DEFINITIONS));
+  static_assert(component_common::operation_definitions_have_unique_codes(
+      hw::SUBCOMMAND_DEFINITIONS));
+  static_assert(component_common::operation_definitions_have_all_ids_once(
+      hw::DATA_MEMORY_DEFINITIONS));
+  static_assert(component_common::operation_definitions_have_unique_codes(
+      hw::DATA_MEMORY_DEFINITIONS));
+
+  constexpr const auto &battery_status =
+      hw::direct_command_info(hw::DirectCommandId::BATTERY_STATUS);
+  static_assert(battery_status.code == 0x0012);
+  static_assert(battery_status.response_width ==
+                component_common::OperationWidth::U16);
+
+  constexpr const auto &reg12_control =
+      hw::subcommand_info(hw::SubcommandId::REG12_CONTROL);
+  static_assert(reg12_control.code == 0x0098);
+  static_assert(reg12_control.request_width ==
+                component_common::OperationWidth::U8);
+
+  constexpr const auto &cuv_delay =
+      hw::data_memory_info(hw::DataMemoryId::CUV_DELAY);
+  static_assert(cuv_delay.code == 0x9276);
+  static_assert(cuv_delay.request_width ==
+                component_common::OperationWidth::U16);
+  static_assert(cuv_delay.response_width ==
+                component_common::OperationWidth::U16);
+
+  assert(std::string_view(reg12_control.name) == "reg12_control");
+}
+
 void test_connection_and_operating_state() {
   assert(component_common::connection_state_to_string(
              component_common::ConnectionState::DISCONNECTED) ==
@@ -57,6 +94,7 @@ void test_fault_decode_and_formatting() {
 }  // namespace
 
 int main() {
+  test_operation_metadata();
   test_connection_and_operating_state();
   test_fault_decode_and_formatting();
   return 0;
