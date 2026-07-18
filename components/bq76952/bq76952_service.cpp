@@ -137,9 +137,9 @@ bool BQ76952Service::establish_connection() {
   uint16_t control_status = 0;
   uint16_t battery_status = 0;
   uint8_t fet_status = 0;
-  if (!this->transport_.read_u16(hw::direct::CONTROL_STATUS, control_status) ||
-      !this->transport_.read_u16(hw::direct::BATTERY_STATUS, battery_status) ||
-      !this->transport_.read_u8(hw::direct::FET_STATUS, fet_status)) {
+  if (!this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::CONTROL_STATUS), control_status) ||
+      !this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status) ||
+      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::FET_STATUS), fet_status)) {
     this->note_communication_failure();
     return false;
   }
@@ -326,7 +326,7 @@ bool BQ76952Service::apply_regulators(bool write, bool &matches) {
   }
 
   uint8_t current_reg12 = 0;
-  if (!this->transport_.read_data_memory_u8(hw::data_memory::REG12_CONFIG, current_reg12)) {
+  if (!this->transport_.read_data_memory_u8(hw::data_memory_address(hw::DataMemoryId::REG12_CONFIG), current_reg12)) {
     return false;
   }
   if (current_reg12 != desired_reg12) {
@@ -347,26 +347,26 @@ bool BQ76952Service::apply_regulators(bool write, bool &matches) {
         // Disable an enabled LDO before changing its voltage code. Apply the
         // live disable as well as the data-memory change so the regulator is
         // never driven at the old enable state with the new voltage selection.
-        if (!this->transport_.write_subcommand(hw::subcommand::REG12_CONTROL, &staged, 1) ||
-            !this->transport_.write_data_memory_u8(hw::data_memory::REG12_CONFIG, staged)) {
+        if (!this->transport_.write_subcommand(hw::subcommand_address(hw::SubcommandId::REG12_CONTROL), &staged, 1) ||
+            !this->transport_.write_data_memory_u8(hw::data_memory_address(hw::DataMemoryId::REG12_CONFIG), staged)) {
           return false;
         }
       }
-      if (!this->transport_.write_data_memory_u8(hw::data_memory::REG12_CONFIG, desired_reg12)) {
+      if (!this->transport_.write_data_memory_u8(hw::data_memory_address(hw::DataMemoryId::REG12_CONFIG), desired_reg12)) {
         return false;
       }
     }
   }
 
   const uint8_t desired_reg0 = reg.reg0_enabled ? hw::bits::reg0::ENABLE : 0;
-  return this->sync_u8(hw::data_memory::REG0_CONFIG, desired_reg0, hw::bits::reg0::ENABLE, write, matches, "REG0 configuration");
+  return this->sync_u8(hw::data_memory_address(hw::DataMemoryId::REG0_CONFIG), desired_reg0, hw::bits::reg0::ENABLE, write, matches, "REG0 configuration");
 }
 
 bool BQ76952Service::apply_thermistors(bool write, bool &matches) {
   const uint8_t desired[3] = {thermistor_config(this->config_.thermistors.ts1),
                               thermistor_config(this->config_.thermistors.ts2),
                               thermistor_config(this->config_.thermistors.ts3)};
-  const uint16_t addresses[3] = {hw::data_memory::TS1_CONFIG, hw::data_memory::TS2_CONFIG, hw::data_memory::TS3_CONFIG};
+  const uint16_t addresses[3] = {hw::data_memory_address(hw::DataMemoryId::TS1_CONFIG), hw::data_memory_address(hw::DataMemoryId::TS2_CONFIG), hw::data_memory_address(hw::DataMemoryId::TS3_CONFIG)};
   const char *labels[3] = {"TS1 configuration", "TS2 configuration", "TS3 configuration"};
   for (size_t i = 0; i < 3; i++) {
     if (!this->sync_u8(addresses[i], desired[i], 0xFF, write, matches, labels[i])) {
@@ -381,8 +381,8 @@ bool BQ76952Service::apply_fet_configuration(bool write, bool &matches) {
   // Restore these multifunction pins to their previous unused configuration.
   // Board-specific hardware inhibits must not be enabled globally by the
   // component because their external pull-up topology is not universal.
-  if (!this->sync_u8(hw::data_memory::CFETOFF_PIN_CONFIG, 0x00, 0xFF, write, matches, "CFETOFF pin configuration") ||
-      !this->sync_u8(hw::data_memory::DFETOFF_PIN_CONFIG, 0x00, 0xFF, write, matches, "DFETOFF pin configuration")) {
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CFETOFF_PIN_CONFIG), 0x00, 0xFF, write, matches, "CFETOFF pin configuration") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::DFETOFF_PIN_CONFIG), 0x00, 0xFF, write, matches, "DFETOFF pin configuration")) {
     return false;
   }
 
@@ -398,8 +398,8 @@ bool BQ76952Service::apply_fet_configuration(bool write, bool &matches) {
                                                           hw::bits::fet_options::FET_CONTROL_ENABLE |
                                                           hw::bits::fet_options::HOST_FET_ENABLE |
                                                           hw::bits::fet_options::SLEEP_CHARGE | hw::bits::fet_options::SERIES_FETS);
-  if (!this->sync_u8(hw::data_memory::FET_OPTIONS, desired_options, owned_options, write, matches, "FET options") ||
-      !this->sync_u8(hw::data_memory::CHARGE_PUMP_CONTROL, hw::bits::charge_pump::ENABLE,
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::FET_OPTIONS), desired_options, owned_options, write, matches, "FET options") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CHARGE_PUMP_CONTROL), hw::bits::charge_pump::ENABLE,
                      static_cast<uint8_t>(hw::bits::charge_pump::SOURCE_FOLLOWER_SLEEP | hw::bits::charge_pump::LOW_VOLTAGE |
                                           hw::bits::charge_pump::ENABLE),
                      write, matches, "charge-pump configuration")) {
@@ -408,31 +408,31 @@ bool BQ76952Service::apply_fet_configuration(bool write, bool &matches) {
 
   const uint16_t precharge_start = fet.precharge.enabled ? fet.precharge.start_cell_voltage_mv : 0;
   const uint16_t precharge_stop = fet.precharge.enabled ? fet.precharge.stop_cell_voltage_mv : 0;
-  if (!this->sync_u16(hw::data_memory::PRECHARGE_START_VOLTAGE, precharge_start, 0xFFFF, write, matches,
+  if (!this->sync_u16(hw::data_memory_address(hw::DataMemoryId::PRECHARGE_START_VOLTAGE), precharge_start, 0xFFFF, write, matches,
                       "precharge start voltage") ||
-      !this->sync_u16(hw::data_memory::PRECHARGE_STOP_VOLTAGE, precharge_stop, 0xFFFF, write, matches,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::PRECHARGE_STOP_VOLTAGE), precharge_stop, 0xFFFF, write, matches,
                       "precharge stop voltage")) {
     return false;
   }
 
   const uint8_t pdsg_timeout = fet.predischarge.enabled ? encode_10_unit(fet.predischarge.timeout_ms) : 0;
   const uint8_t pdsg_delta = fet.predischarge.enabled ? encode_10_unit(fet.predischarge.stop_delta_mv) : 0;
-  if (!this->sync_u8(hw::data_memory::PREDISCHARGE_TIMEOUT, pdsg_timeout, 0xFF, write, matches, "predischarge timeout") ||
-      !this->sync_u8(hw::data_memory::PREDISCHARGE_STOP_DELTA, pdsg_delta, 0xFF, write, matches,
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::PREDISCHARGE_TIMEOUT), pdsg_timeout, 0xFF, write, matches, "predischarge timeout") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::PREDISCHARGE_STOP_DELTA), pdsg_delta, 0xFF, write, matches,
                      "predischarge stop delta") ||
-      !this->sync_u16(hw::data_memory::BODY_DIODE_THRESHOLD, static_cast<uint16_t>(hw::policy::BODY_DIODE_THRESHOLD_MA), 0xFFFF,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::BODY_DIODE_THRESHOLD), static_cast<uint16_t>(hw::policy::BODY_DIODE_THRESHOLD_MA), 0xFFFF,
                       write, matches, "body-diode threshold")) {
     return false;
   }
 
   const uint16_t desired_power_config = hw::bits::power_config::SLEEP;
-  if (!this->sync_u16(hw::data_memory::POWER_CONFIG, desired_power_config, hw::bits::power_config::SLEEP, write, matches,
+  if (!this->sync_u16(hw::data_memory_address(hw::DataMemoryId::POWER_CONFIG), desired_power_config, hw::bits::power_config::SLEEP, write, matches,
                       "sleep startup policy")) {
     return false;
   }
 
   const uint16_t desired_mfg = fet.autonomous ? hw::bits::manufacturing_status_init::FET_ENABLE : 0;
-  return this->sync_u16(hw::data_memory::MANUFACTURING_STATUS_INIT, desired_mfg, hw::bits::manufacturing_status_init::FET_ENABLE, write, matches,
+  return this->sync_u16(hw::data_memory_address(hw::DataMemoryId::MANUFACTURING_STATUS_INIT), desired_mfg, hw::bits::manufacturing_status_init::FET_ENABLE, write, matches,
                         "autonomous FET startup policy");
 }
 
@@ -447,28 +447,28 @@ bool BQ76952Service::apply_balancing(bool write, bool &matches) {
                                    static_cast<float>(this->current_lsb_ua_))),
       0, 32767, "balancing current threshold");
 
-  if (!this->sync_u8(hw::data_memory::BALANCING_CONFIGURATION, desired_policy, owned_policy, write, matches,
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_CONFIGURATION), desired_policy, owned_policy, write, matches,
                      "balancing policy") ||
-      !this->sync_u16(hw::data_memory::DISCHARGE_CURRENT_THRESHOLD, current_threshold_user_a, 0xFFFF, write, matches,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::DISCHARGE_CURRENT_THRESHOLD), current_threshold_user_a, 0xFFFF, write, matches,
                       "discharge-state current threshold") ||
-      !this->sync_u16(hw::data_memory::CHARGE_CURRENT_THRESHOLD, current_threshold_user_a, 0xFFFF, write, matches,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::CHARGE_CURRENT_THRESHOLD), current_threshold_user_a, 0xFFFF, write, matches,
                       "charge-state current threshold") ||
-      !this->sync_u8(hw::data_memory::BALANCING_MIN_TEMPERATURE, static_cast<uint8_t>(balance.minimum_temperature_c), 0xFF, write,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_MIN_TEMPERATURE), static_cast<uint8_t>(balance.minimum_temperature_c), 0xFF, write,
                      matches, "balancing minimum temperature") ||
-      !this->sync_u8(hw::data_memory::BALANCING_MAX_TEMPERATURE, static_cast<uint8_t>(balance.maximum_temperature_c), 0xFF, write,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_MAX_TEMPERATURE), static_cast<uint8_t>(balance.maximum_temperature_c), 0xFF, write,
                      matches, "balancing maximum temperature") ||
-      !this->sync_u8(hw::data_memory::BALANCING_MAX_INTERNAL_TEMPERATURE,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_MAX_INTERNAL_TEMPERATURE),
                      static_cast<uint8_t>(hw::policy::BALANCING_MAX_INTERNAL_TEMPERATURE_C), 0xFF, write, matches,
                      "balancing maximum internal temperature") ||
-      !this->sync_u8(hw::data_memory::BALANCING_INTERVAL, hw::policy::BALANCING_INTERVAL_S, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_INTERVAL), hw::policy::BALANCING_INTERVAL_S, 0xFF, write, matches,
                      "balancing interval") ||
-      !this->sync_u8(hw::data_memory::BALANCING_MAX_CELLS, balance.maximum_balanced_cells, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_MAX_CELLS), balance.maximum_balanced_cells, 0xFF, write, matches,
                      "balancing maximum cell count") ||
-      !this->sync_u16(hw::data_memory::BALANCING_MIN_CELL_VOLTAGE, balance.minimum_cell_voltage_mv, 0xFFFF, write, matches,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::BALANCING_MIN_CELL_VOLTAGE), balance.minimum_cell_voltage_mv, 0xFFFF, write, matches,
                       "balancing minimum cell voltage") ||
-      !this->sync_u8(hw::data_memory::BALANCING_START_DELTA, clamp_u8(balance.start_delta_mv, 0, 255, "balancing start delta"),
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_START_DELTA), clamp_u8(balance.start_delta_mv, 0, 255, "balancing start delta"),
                      0xFF, write, matches, "balancing start delta") ||
-      !this->sync_u8(hw::data_memory::BALANCING_STOP_DELTA, clamp_u8(balance.stop_delta_mv, 0, 255, "balancing stop delta"),
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::BALANCING_STOP_DELTA), clamp_u8(balance.stop_delta_mv, 0, 255, "balancing stop delta"),
                      0xFF, write, matches, "balancing stop delta")) {
     return false;
   }
@@ -487,26 +487,26 @@ bool BQ76952Service::apply_protections(bool write, bool &matches) {
     enabled_c |= hw::bits::protection_c::PRECHARGE_TIMEOUT;
   }
 
-  if (!this->sync_u8(hw::data_memory::ENABLED_PROTECTIONS_A, enabled_a, enabled_a, write, matches, "enabled protections A") ||
-      !this->sync_u8(hw::data_memory::ENABLED_PROTECTIONS_B, enabled_b, enabled_b, write, matches, "enabled protections B") ||
-      !this->sync_u8(hw::data_memory::ENABLED_PROTECTIONS_C, enabled_c,
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::ENABLED_PROTECTIONS_A), enabled_a, enabled_a, write, matches, "enabled protections A") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::ENABLED_PROTECTIONS_B), enabled_b, enabled_b, write, matches, "enabled protections B") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::ENABLED_PROTECTIONS_C), enabled_c,
                      static_cast<uint8_t>(hw::bits::protection_c::OCD3 | hw::bits::protection_c::PRECHARGE_TIMEOUT), write, matches,
                      "enabled protections C") ||
-      !this->sync_u8(hw::data_memory::CHG_FET_PROTECTIONS_A,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CHG_FET_PROTECTIONS_A),
                      static_cast<uint8_t>(hw::bits::protection_a::COV | hw::bits::protection_a::OCC), enabled_a, write, matches,
                      "charge FET protections A") ||
-      !this->sync_u8(hw::data_memory::CHG_FET_PROTECTIONS_B, static_cast<uint8_t>(hw::bits::protection_b::OTC | hw::bits::protection_b::UTC),
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CHG_FET_PROTECTIONS_B), static_cast<uint8_t>(hw::bits::protection_b::OTC | hw::bits::protection_b::UTC),
                      enabled_b, write, matches, "charge FET protections B") ||
-      !this->sync_u8(hw::data_memory::CHG_FET_PROTECTIONS_C, this->config_.fet.precharge.enabled ? hw::bits::protection_c::PRECHARGE_TIMEOUT : 0,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CHG_FET_PROTECTIONS_C), this->config_.fet.precharge.enabled ? hw::bits::protection_c::PRECHARGE_TIMEOUT : 0,
                      static_cast<uint8_t>(hw::bits::protection_c::PRECHARGE_TIMEOUT | hw::bits::protection_c::OCD3), write, matches,
                      "charge FET protections C") ||
-      !this->sync_u8(hw::data_memory::DSG_FET_PROTECTIONS_A,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::DSG_FET_PROTECTIONS_A),
                      static_cast<uint8_t>(hw::bits::protection_a::CUV | hw::bits::protection_a::OCD1 | hw::bits::protection_a::OCD2 |
                                           hw::bits::protection_a::SCD),
                      enabled_a, write, matches, "discharge FET protections A") ||
-      !this->sync_u8(hw::data_memory::DSG_FET_PROTECTIONS_B, static_cast<uint8_t>(hw::bits::protection_b::OTD | hw::bits::protection_b::UTD),
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::DSG_FET_PROTECTIONS_B), static_cast<uint8_t>(hw::bits::protection_b::OTD | hw::bits::protection_b::UTD),
                      enabled_b, write, matches, "discharge FET protections B") ||
-      !this->sync_u8(hw::data_memory::DSG_FET_PROTECTIONS_C, hw::bits::protection_c::OCD3,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::DSG_FET_PROTECTIONS_C), hw::bits::protection_c::OCD3,
                      static_cast<uint8_t>(hw::bits::protection_c::OCD3 | hw::bits::protection_c::PRECHARGE_TIMEOUT), write, matches,
                      "discharge FET protections C")) {
     return false;
@@ -546,29 +546,29 @@ bool BQ76952Service::apply_protections(bool write, bool &matches) {
       static_cast<float>(this->current_lsb_ua_)));
   ocd3_code = std::max<int>(std::numeric_limits<int16_t>::min(), std::min(0, ocd3_code));
 
-  if (!this->sync_u8(hw::data_memory::CUV_THRESHOLD, cuv_threshold, 0xFF, write, matches, "CUV threshold") ||
-      !this->sync_u16(hw::data_memory::CUV_DELAY, cuv_delay, 0xFFFF, write, matches, "CUV delay") ||
-      !this->sync_u8(hw::data_memory::CUV_HYSTERESIS, cuv_hysteresis, 0xFF, write, matches, "CUV recovery hysteresis") ||
-      !this->sync_u8(hw::data_memory::COV_THRESHOLD, cov_threshold, 0xFF, write, matches, "COV threshold") ||
-      !this->sync_u16(hw::data_memory::COV_DELAY, cov_delay, 0xFFFF, write, matches, "COV delay") ||
-      !this->sync_u8(hw::data_memory::COV_HYSTERESIS, cov_hysteresis, 0xFF, write, matches, "COV recovery hysteresis") ||
-      !this->sync_u8(hw::data_memory::OCC_THRESHOLD, occ_threshold, 0xFF, write, matches, "OCC threshold") ||
-      !this->sync_u8(hw::data_memory::OCC_DELAY, occ_delay, 0xFF, write, matches, "OCC delay") ||
-      !this->sync_u8(hw::data_memory::OCD1_THRESHOLD, ocd1_threshold, 0xFF, write, matches, "OCD1 threshold") ||
-      !this->sync_u8(hw::data_memory::OCD1_DELAY, ocd1_delay, 0xFF, write, matches, "OCD1 delay") ||
-      !this->sync_u8(hw::data_memory::OCD2_THRESHOLD, ocd2_threshold, 0xFF, write, matches, "OCD2 threshold") ||
-      !this->sync_u8(hw::data_memory::OCD2_DELAY, ocd2_delay, 0xFF, write, matches, "OCD2 delay") ||
-      !this->sync_u16(hw::data_memory::OCD3_THRESHOLD, static_cast<uint16_t>(static_cast<int16_t>(ocd3_code)), 0xFFFF, write,
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CUV_THRESHOLD), cuv_threshold, 0xFF, write, matches, "CUV threshold") ||
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::CUV_DELAY), cuv_delay, 0xFFFF, write, matches, "CUV delay") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::CUV_HYSTERESIS), cuv_hysteresis, 0xFF, write, matches, "CUV recovery hysteresis") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::COV_THRESHOLD), cov_threshold, 0xFF, write, matches, "COV threshold") ||
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::COV_DELAY), cov_delay, 0xFFFF, write, matches, "COV delay") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::COV_HYSTERESIS), cov_hysteresis, 0xFF, write, matches, "COV recovery hysteresis") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCC_THRESHOLD), occ_threshold, 0xFF, write, matches, "OCC threshold") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCC_DELAY), occ_delay, 0xFF, write, matches, "OCC delay") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCD1_THRESHOLD), ocd1_threshold, 0xFF, write, matches, "OCD1 threshold") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCD1_DELAY), ocd1_delay, 0xFF, write, matches, "OCD1 delay") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCD2_THRESHOLD), ocd2_threshold, 0xFF, write, matches, "OCD2 threshold") ||
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCD2_DELAY), ocd2_delay, 0xFF, write, matches, "OCD2 delay") ||
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::OCD3_THRESHOLD), static_cast<uint16_t>(static_cast<int16_t>(ocd3_code)), 0xFFFF, write,
                       matches, "OCD3 threshold") ||
-      !this->sync_u8(hw::data_memory::OCD3_DELAY, protection.discharge_sustained_overcurrent.delay_s, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OCD3_DELAY), protection.discharge_sustained_overcurrent.delay_s, 0xFF, write, matches,
                      "OCD3 delay") ||
-      !this->sync_u8(hw::data_memory::SCD_THRESHOLD, encode_scd_threshold(protection.discharge_short_circuit.threshold_mv),
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::SCD_THRESHOLD), encode_scd_threshold(protection.discharge_short_circuit.threshold_mv),
                      0xFF, write, matches, "SCD threshold") ||
-      !this->sync_u8(hw::data_memory::SCD_DELAY, encode_scd_delay(protection.discharge_short_circuit.delay_us), 0xFF, write,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::SCD_DELAY), encode_scd_delay(protection.discharge_short_circuit.delay_us), 0xFF, write,
                      matches, "SCD delay") ||
-      !this->sync_u8(hw::data_memory::SCD_RECOVERY_TIME, protection.discharge_short_circuit.recovery_time_s, 0xFF, write,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::SCD_RECOVERY_TIME), protection.discharge_short_circuit.recovery_time_s, 0xFF, write,
                      matches, "SCD recovery time") ||
-      !this->sync_u8(hw::data_memory::PROTECTION_RECOVERY_TIME, protection.current_recovery_time_s, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::PROTECTION_RECOVERY_TIME), protection.current_recovery_time_s, 0xFF, write, matches,
                      "protection recovery time")) {
     return false;
   }
@@ -583,44 +583,44 @@ bool BQ76952Service::apply_protections(bool write, bool &matches) {
   const int8_t utd_recovery =
       static_cast<int8_t>(temperature.discharge_minimum_c + temperature.recovery_hysteresis_c);
 
-  if (!this->sync_u8(hw::data_memory::OTC_THRESHOLD, static_cast<uint8_t>(temperature.charge_maximum_c), 0xFF, write, matches,
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OTC_THRESHOLD), static_cast<uint8_t>(temperature.charge_maximum_c), 0xFF, write, matches,
                      "charge overtemperature threshold") ||
-      !this->sync_u8(hw::data_memory::OTC_DELAY, hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OTC_DELAY), hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
                      "charge overtemperature delay") ||
-      !this->sync_u8(hw::data_memory::OTC_RECOVERY, static_cast<uint8_t>(otc_recovery), 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OTC_RECOVERY), static_cast<uint8_t>(otc_recovery), 0xFF, write, matches,
                      "charge overtemperature recovery") ||
-      !this->sync_u8(hw::data_memory::OTD_THRESHOLD, static_cast<uint8_t>(temperature.discharge_maximum_c), 0xFF, write,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OTD_THRESHOLD), static_cast<uint8_t>(temperature.discharge_maximum_c), 0xFF, write,
                      matches, "discharge overtemperature threshold") ||
-      !this->sync_u8(hw::data_memory::OTD_DELAY, hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OTD_DELAY), hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
                      "discharge overtemperature delay") ||
-      !this->sync_u8(hw::data_memory::OTD_RECOVERY, static_cast<uint8_t>(otd_recovery), 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::OTD_RECOVERY), static_cast<uint8_t>(otd_recovery), 0xFF, write, matches,
                      "discharge overtemperature recovery") ||
-      !this->sync_u8(hw::data_memory::UTC_THRESHOLD, static_cast<uint8_t>(temperature.charge_minimum_c), 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::UTC_THRESHOLD), static_cast<uint8_t>(temperature.charge_minimum_c), 0xFF, write, matches,
                      "charge undertemperature threshold") ||
-      !this->sync_u8(hw::data_memory::UTC_DELAY, hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::UTC_DELAY), hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
                      "charge undertemperature delay") ||
-      !this->sync_u8(hw::data_memory::UTC_RECOVERY, static_cast<uint8_t>(utc_recovery), 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::UTC_RECOVERY), static_cast<uint8_t>(utc_recovery), 0xFF, write, matches,
                      "charge undertemperature recovery") ||
-      !this->sync_u8(hw::data_memory::UTD_THRESHOLD, static_cast<uint8_t>(temperature.discharge_minimum_c), 0xFF, write,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::UTD_THRESHOLD), static_cast<uint8_t>(temperature.discharge_minimum_c), 0xFF, write,
                      matches, "discharge undertemperature threshold") ||
-      !this->sync_u8(hw::data_memory::UTD_DELAY, hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::UTD_DELAY), hw::policy::TEMPERATURE_PROTECTION_DELAY_S, 0xFF, write, matches,
                      "discharge undertemperature delay") ||
-      !this->sync_u8(hw::data_memory::UTD_RECOVERY, static_cast<uint8_t>(utd_recovery), 0xFF, write, matches,
+      !this->sync_u8(hw::data_memory_address(hw::DataMemoryId::UTD_RECOVERY), static_cast<uint8_t>(utd_recovery), 0xFF, write, matches,
                      "discharge undertemperature recovery") ||
-      !this->sync_u16(hw::data_memory::PTO_CHARGE_THRESHOLD, static_cast<uint16_t>(hw::policy::PRECHARGE_TIMEOUT_CHARGE_THRESHOLD_MA), 0xFFFF,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::PTO_CHARGE_THRESHOLD), static_cast<uint16_t>(hw::policy::PRECHARGE_TIMEOUT_CHARGE_THRESHOLD_MA), 0xFFFF,
                       write, matches, "precharge-timeout current threshold") ||
-      !this->sync_u16(hw::data_memory::PTO_DELAY, hw::policy::PRECHARGE_TIMEOUT_DELAY_S, 0xFFFF, write, matches,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::PTO_DELAY), hw::policy::PRECHARGE_TIMEOUT_DELAY_S, 0xFFFF, write, matches,
                       "precharge-timeout delay") ||
-      !this->sync_u16(hw::data_memory::PTO_RESET, hw::policy::PRECHARGE_TIMEOUT_RESET_USER_AH, 0xFFFF, write, matches,
+      !this->sync_u16(hw::data_memory_address(hw::DataMemoryId::PTO_RESET), hw::policy::PRECHARGE_TIMEOUT_RESET_USER_AH, 0xFFFF, write, matches,
                       "precharge-timeout reset charge")) {
     return false;
   }
 
-  return this->sync_u16(hw::data_memory::VCELL_MODE, this->cell_mode_mask(), 0xFFFF, write, matches, "Vcell mode");
+  return this->sync_u16(hw::data_memory_address(hw::DataMemoryId::VCELL_MODE), this->cell_mode_mask(), 0xFFFF, write, matches, "Vcell mode");
 }
 
 bool BQ76952Service::apply_current_calibration(bool write, bool &matches) {
-  if (!this->sync_u8(hw::data_memory::COMM_TYPE, this->config_.i2c_crc_enabled ? hw::encoding::COMM_TYPE_I2C_CRC
+  if (!this->sync_u8(hw::data_memory_address(hw::DataMemoryId::COMM_TYPE), this->config_.i2c_crc_enabled ? hw::encoding::COMM_TYPE_I2C_CRC
                                                        : hw::encoding::COMM_TYPE_I2C_NO_CRC, 0xFF, write, matches,
                      "communication type")) {
     return false;
@@ -638,21 +638,21 @@ bool BQ76952Service::apply_current_calibration(bool write, bool &matches) {
   std::memcpy(capacity_bytes, &capacity_gain, sizeof(capacity_gain));
   const uint8_t mask[sizeof(float)] = {0xFF, 0xFF, 0xFF, 0xFF};
 
-  return this->sync_data(hw::data_memory::CC_GAIN, cc_bytes, mask, sizeof(cc_bytes), write, matches, "CC gain") &&
-         this->sync_data(hw::data_memory::CAPACITY_GAIN, capacity_bytes, mask, sizeof(capacity_bytes), write, matches,
+  return this->sync_data(hw::data_memory_address(hw::DataMemoryId::CC_GAIN), cc_bytes, mask, sizeof(cc_bytes), write, matches, "CC gain") &&
+         this->sync_data(hw::data_memory_address(hw::DataMemoryId::CAPACITY_GAIN), capacity_bytes, mask, sizeof(capacity_bytes), write, matches,
                          "capacity gain");
 }
 
 bool BQ76952Service::require_full_access() {
   uint16_t battery_status = 0;
-  if (!this->transport_.read_u16(hw::direct::BATTERY_STATUS, battery_status)) {
+  if (!this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status)) {
     return false;
   }
   return (battery_status & hw::bits::battery_status::SECURITY_MASK) == hw::bits::battery_status::FULL_ACCESS;
 }
 
 bool BQ76952Service::restore_runtime_state() {
-  if (!this->transport_.send_subcommand(hw::subcommand::SLEEP_ENABLE)) {
+  if (!this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::SLEEP_ENABLE))) {
     ESP_LOGW(TAG, "Failed enabling sleep");
     return false;
   }
@@ -667,13 +667,13 @@ bool BQ76952Service::restore_runtime_state() {
   if (this->config_.regulators.reg2_enabled) {
     desired_reg12 |= hw::bits::reg12::REG2_ENABLE;
   }
-  if (!this->transport_.write_subcommand(hw::subcommand::REG12_CONTROL, &desired_reg12, 1)) {
+  if (!this->transport_.write_subcommand(hw::subcommand_address(hw::SubcommandId::REG12_CONTROL), &desired_reg12, 1)) {
     ESP_LOGW(TAG, "Failed applying live REG1/REG2 state");
     return false;
   }
 
   uint8_t manufacturing_raw[2]{};
-  if (!this->transport_.read_subcommand(hw::subcommand::MANUFACTURING_STATUS, manufacturing_raw,
+  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::MANUFACTURING_STATUS), manufacturing_raw,
                                        sizeof(manufacturing_raw))) {
     return false;
   }
@@ -681,7 +681,7 @@ bool BQ76952Service::restore_runtime_state() {
       static_cast<uint16_t>(manufacturing_raw[0]) | (static_cast<uint16_t>(manufacturing_raw[1]) << 8);
   const bool currently_autonomous = (manufacturing_status & hw::bits::manufacturing_status::FET_ENABLE) != 0;
   if (currently_autonomous != this->config_.fet.autonomous &&
-      !this->transport_.send_subcommand(hw::subcommand::FET_ENABLE)) {
+      !this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::FET_ENABLE))) {
     ESP_LOGW(TAG, "Failed applying autonomous FET runtime policy");
     return false;
   }
@@ -692,7 +692,7 @@ bool BQ76952Service::restore_runtime_state() {
 
 bool BQ76952Service::load_unit_scaling() {
   uint8_t da_config = 0;
-  if (!this->transport_.read_subcommand(hw::subcommand::DA_CONFIGURATION, &da_config, 1)) {
+  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::DA_CONFIGURATION), &da_config, 1)) {
     ESP_LOGW(TAG, "Failed reading device measurement scaling; using defaults");
     this->current_lsb_ua_ = 1000;
     this->direct_voltage_centivolts_ = true;
@@ -719,7 +719,7 @@ uint8_t BQ76952Service::raw_cell_channel(uint8_t logical_cell) const {
 
 bool BQ76952Service::read_coulomb_counter(float &charge_ah) {
   uint8_t data[12]{};
-  if (!this->transport_.read_subcommand(hw::subcommand::DASTATUS6, data, sizeof(data))) {
+  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::DASTATUS6), data, sizeof(data))) {
     return false;
   }
   const int32_t integer = read_i32_le(data);
@@ -739,12 +739,12 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   uint8_t safety_a = 0;
   uint8_t safety_b = 0;
   uint8_t safety_c = 0;
-  if (!this->transport_.read_u16(hw::direct::CONTROL_STATUS, control_status) ||
-      !this->transport_.read_u16(hw::direct::BATTERY_STATUS, battery_status) ||
-      !this->transport_.read_u8(hw::direct::FET_STATUS, fet_status) ||
-      !this->transport_.read_u8(hw::direct::SAFETY_STATUS_A, safety_a) ||
-      !this->transport_.read_u8(hw::direct::SAFETY_STATUS_B, safety_b) ||
-      !this->transport_.read_u8(hw::direct::SAFETY_STATUS_C, safety_c)) {
+  if (!this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::CONTROL_STATUS), control_status) ||
+      !this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status) ||
+      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::FET_STATUS), fet_status) ||
+      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::SAFETY_STATUS_A), safety_a) ||
+      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::SAFETY_STATUS_B), safety_b) ||
+      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::SAFETY_STATUS_C), safety_c)) {
     return false;
   }
 
@@ -756,7 +756,7 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
 
   std::array<int16_t, 16> raw_cells{};
   for (uint8_t raw = 0; raw < raw_cells.size(); raw++) {
-    if (!this->transport_.read_i16(static_cast<uint8_t>(hw::direct::CELL1_VOLTAGE +
+    if (!this->transport_.read_i16(static_cast<uint8_t>(hw::direct_command_address(hw::DirectCommandId::CELL1_VOLTAGE) +
                                                raw * hw::encoding::CELL_VOLTAGE_REGISTER_STRIDE), raw_cells[raw])) {
       return false;
     }
@@ -779,11 +779,11 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   int16_t raw_ld = 0;
   int16_t raw_current = 0;
   int16_t raw_die_temperature = 0;
-  if (!this->transport_.read_i16(hw::direct::STACK_VOLTAGE, raw_stack) ||
-      !this->transport_.read_i16(hw::direct::PACK_VOLTAGE, raw_pack) ||
-      !this->transport_.read_i16(hw::direct::LD_VOLTAGE, raw_ld) ||
-      !this->transport_.read_i16(hw::direct::CC2_CURRENT, raw_current) ||
-      !this->transport_.read_i16(hw::direct::INTERNAL_TEMPERATURE, raw_die_temperature)) {
+  if (!this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::STACK_VOLTAGE), raw_stack) ||
+      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::PACK_VOLTAGE), raw_pack) ||
+      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::LD_VOLTAGE), raw_ld) ||
+      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::CC2_CURRENT), raw_current) ||
+      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::INTERNAL_TEMPERATURE), raw_die_temperature)) {
     return false;
   }
 
@@ -797,7 +797,7 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   snapshot.die_temperature_c = static_cast<float>(raw_die_temperature) / hw::encoding::TENTHS_KELVIN_PER_KELVIN -
                                  hw::encoding::CELSIUS_ZERO_KELVIN;
 
-  const uint8_t temperature_registers[3] = {hw::direct::TS1_TEMPERATURE, hw::direct::TS2_TEMPERATURE, hw::direct::TS3_TEMPERATURE};
+  const uint8_t temperature_registers[3] = {hw::direct_command_address(hw::DirectCommandId::TS1_TEMPERATURE), hw::direct_command_address(hw::DirectCommandId::TS2_TEMPERATURE), hw::direct_command_address(hw::DirectCommandId::TS3_TEMPERATURE)};
   const BQ76952ThermistorMode thermistor_modes[3] = {this->config_.thermistors.ts1, this->config_.thermistors.ts2,
                                                      this->config_.thermistors.ts3};
   for (size_t i = 0; i < 3; i++) {
@@ -849,7 +849,7 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
 
 bool BQ76952Service::set_output_enabled(bool enabled) {
   uint8_t manufacturing_raw[2]{};
-  if (!this->transport_.read_subcommand(hw::subcommand::MANUFACTURING_STATUS, manufacturing_raw,
+  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::MANUFACTURING_STATUS), manufacturing_raw,
                                        sizeof(manufacturing_raw))) {
     return false;
   }
@@ -860,7 +860,7 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
     return false;
   }
 
-  if (!this->transport_.send_subcommand(enabled ? hw::subcommand::ALL_FETS_ON : hw::subcommand::ALL_FETS_OFF)) {
+  if (!this->transport_.send_subcommand(enabled ? hw::subcommand_address(hw::SubcommandId::ALL_FETS_ON) : hw::subcommand_address(hw::SubcommandId::ALL_FETS_OFF))) {
     return false;
   }
   this->output_request_pending_ = true;
@@ -871,8 +871,8 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
 
 bool BQ76952Service::clear_alarm_latches() {
   uint16_t alarm_status = 0;
-  return this->transport_.read_u16(hw::direct::ALARM_STATUS, alarm_status) &&
-         (alarm_status == 0 || this->transport_.write_u16(hw::direct::ALARM_STATUS, alarm_status));
+  return this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::ALARM_STATUS), alarm_status) &&
+         (alarm_status == 0 || this->transport_.write_u16(hw::direct_command_address(hw::DirectCommandId::ALARM_STATUS), alarm_status));
 }
 
 bool BQ76952Service::program_factory_otp() {
@@ -885,13 +885,13 @@ bool BQ76952Service::program_factory_otp() {
 
   bool ok = true;
   uint8_t result[3]{};
-  if (!this->transport_.send_subcommand(hw::subcommand::OTP_WRITE_CHECK)) {
+  if (!this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::OTP_WRITE_CHECK))) {
     ok = false;
   } else {
     delay(1000);
   }
-  if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, 1000) ||
-      !this->transport_.read_transfer_buffer(hw::subcommand::OTP_WRITE_CHECK, result, sizeof(result)) ||
+  if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE_CHECK), 1000) ||
+      !this->transport_.read_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE_CHECK), result, sizeof(result)) ||
       (result[0] & 0x80U) == 0)) {
     ESP_LOGE(TAG, "OTP_WR_CHECK rejected programming");
     ok = false;
@@ -899,13 +899,13 @@ bool BQ76952Service::program_factory_otp() {
 
   if (ok) {
     std::fill_n(result, sizeof(result), 0);
-    if (!this->transport_.send_subcommand(hw::subcommand::OTP_WRITE)) {
+    if (!this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::OTP_WRITE))) {
       ok = false;
     } else {
       delay(1000);
     }
-    if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand::OTP_WRITE, 1000) ||
-        !this->transport_.read_transfer_buffer(hw::subcommand::OTP_WRITE, result, sizeof(result)) ||
+    if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE), 1000) ||
+        !this->transport_.read_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE), result, sizeof(result)) ||
         (result[0] & 0x80U) == 0)) {
       ESP_LOGE(TAG, "OTP_WRITE failed");
       ok = false;

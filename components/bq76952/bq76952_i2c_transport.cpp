@@ -167,7 +167,7 @@ bool BQ76952I2CTransport::write_bytes_with_mode(uint8_t command, const uint8_t *
 }
 
 bool BQ76952I2CTransport::send_subcommand(uint16_t subcommand) {
-  return this->write_u16(hw::direct::SUBCOMMAND, subcommand);
+  return this->write_u16(hw::direct_command_address(hw::DirectCommandId::SUBCOMMAND), subcommand);
 }
 
 bool BQ76952I2CTransport::wait_for_transfer_buffer(uint16_t expected_command, uint32_t timeout_ms) {
@@ -175,7 +175,7 @@ bool BQ76952I2CTransport::wait_for_transfer_buffer(uint16_t expected_command, ui
   const uint32_t started = millis();
   while ((millis() - started) <= timeout_ms) {
     uint16_t echo = 0;
-    if (!this->read_u16(hw::direct::SUBCOMMAND, echo)) {
+    if (!this->read_u16(hw::direct_command_address(hw::DirectCommandId::SUBCOMMAND), echo)) {
       return false;
     }
     if (echo == expected_command) {
@@ -194,7 +194,7 @@ bool BQ76952I2CTransport::verify_transfer_buffer(uint16_t command, const uint8_t
 
 bool BQ76952I2CTransport::read_transfer_buffer(uint16_t expected_command, uint8_t *data, size_t length) {
   uint8_t response_length = 0;
-  if (!this->read_u8(hw::direct::LENGTH, response_length) || response_length < hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES) {
+  if (!this->read_u8(hw::direct_command_address(hw::DirectCommandId::LENGTH), response_length) || response_length < hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES) {
     return false;
   }
 
@@ -206,12 +206,12 @@ bool BQ76952I2CTransport::read_transfer_buffer(uint16_t expected_command, uint8_
   }
 
   std::array<uint8_t, hw::transport::MAX_TRANSFER_PAYLOAD> payload{};
-  if (payload_length > 0 && !this->read_bytes(hw::direct::TRANSFER_BUFFER, payload.data(), payload_length)) {
+  if (payload_length > 0 && !this->read_bytes(hw::direct_command_address(hw::DirectCommandId::TRANSFER_BUFFER), payload.data(), payload_length)) {
     return false;
   }
 
   uint8_t checksum = 0;
-  if (!this->read_u8(hw::direct::CHECKSUM, checksum) ||
+  if (!this->read_u8(hw::direct_command_address(hw::DirectCommandId::CHECKSUM), checksum) ||
       !this->verify_transfer_buffer(expected_command, payload.data(), payload_length, checksum)) {
     ESP_LOGW(TAG, "Transfer-buffer checksum failed for command 0x%04X", expected_command);
     return false;
@@ -237,11 +237,11 @@ bool BQ76952I2CTransport::write_subcommand(uint16_t subcommand, const uint8_t *d
   if (!this->send_subcommand(subcommand)) {
     return false;
   }
-  if (length > 0 && !this->write_bytes(hw::direct::TRANSFER_BUFFER, data, length)) {
+  if (length > 0 && !this->write_bytes(hw::direct_command_address(hw::DirectCommandId::TRANSFER_BUFFER), data, length)) {
     return false;
   }
   const uint8_t footer[2] = {transfer_checksum(subcommand, data, length), static_cast<uint8_t>(length + hw::transport::TRANSFER_RESPONSE_OVERHEAD_BYTES)};
-  return this->write_bytes(hw::direct::CHECKSUM, footer, sizeof(footer));
+  return this->write_bytes(hw::direct_command_address(hw::DirectCommandId::CHECKSUM), footer, sizeof(footer));
 }
 
 bool BQ76952I2CTransport::read_data_memory(uint16_t address, uint8_t *data, size_t length) {
@@ -284,7 +284,7 @@ bool BQ76952I2CTransport::write_data_memory_u16(uint16_t address, uint16_t value
 }
 
 bool BQ76952I2CTransport::set_config_update(bool enabled) {
-  const uint16_t command = enabled ? hw::subcommand::SET_CONFIG_UPDATE : hw::subcommand::EXIT_CONFIG_UPDATE;
+  const uint16_t command = enabled ? hw::subcommand_address(hw::SubcommandId::SET_CONFIG_UPDATE) : hw::subcommand_address(hw::SubcommandId::EXIT_CONFIG_UPDATE);
   if (!this->send_subcommand(command)) {
     return false;
   }
@@ -299,7 +299,7 @@ bool BQ76952I2CTransport::set_config_update(bool enabled) {
   const uint32_t started = millis();
   while ((millis() - started) < hw::transport::CONFIG_UPDATE_TIMEOUT_MS) {
     uint16_t battery_status = 0;
-    if (!this->read_u16(hw::direct::BATTERY_STATUS, battery_status)) {
+    if (!this->read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status)) {
       return false;
     }
     if (((battery_status & hw::bits::battery_status::CONFIG_UPDATE) != 0) == enabled) {
