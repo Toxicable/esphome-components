@@ -4,53 +4,11 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: write
-
 concurrency:
   group: compile-checks-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  finalize-bq76952-register-model:
-    if: github.actor != 'github-actions[bot]' && ((github.event_name == 'push' && github.ref_name == 'agent/hard-cut-register-api') || (github.event_name == 'pull_request' && github.head_ref == 'agent/hard-cut-register-api'))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: agent/hard-cut-register-api
-          fetch-depth: 0
-
-      - name: Apply final register model cleanup
-        run: python3 tools/hard_cut_bq76952_transport.py
-
-      - name: Verify host tests
-        run: bash ./check_host.bash 2>&1 | tee final-bq76952-register-model.log
-
-      - name: Upload cleanup diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: final-bq76952-register-model-failure
-          path: |
-            final-bq76952-register-model.log
-            components/bq76952
-            components/component_common
-          if-no-files-found: error
-
-      - name: Commit cleaned sources
-        run: |
-          if git diff --quiet; then
-            echo "No cleanup changes"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Replace generic operation model with explicit BQ types"
-          git push origin HEAD:agent/hard-cut-register-api
-
   host-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15

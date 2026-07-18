@@ -137,9 +137,9 @@ bool BQ76952Service::establish_connection() {
   uint16_t control_status = 0;
   uint16_t battery_status = 0;
   uint8_t fet_status = 0;
-  if (!this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::CONTROL_STATUS), control_status) ||
-      !this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status) ||
-      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::FET_STATUS), fet_status)) {
+  if (!this->transport_.read_u16(hw::register_address(hw::RegisterId::CONTROL_STATUS), control_status) ||
+      !this->transport_.read_u16(hw::register_address(hw::RegisterId::BATTERY_STATUS), battery_status) ||
+      !this->transport_.read_u8(hw::register_address(hw::RegisterId::FET_STATUS), fet_status)) {
     this->note_communication_failure();
     return false;
   }
@@ -347,7 +347,7 @@ bool BQ76952Service::apply_regulators(bool write, bool &matches) {
         // Disable an enabled LDO before changing its voltage code. Apply the
         // live disable as well as the data-memory change so the regulator is
         // never driven at the old enable state with the new voltage selection.
-        if (!this->transport_.write_subcommand(hw::subcommand_address(hw::SubcommandId::REG12_CONTROL), &staged, 1) ||
+        if (!this->transport_.write_subcommand(hw::command_code(hw::CommandId::REG12_CONTROL), &staged, 1) ||
             !this->transport_.write_data_memory_u8(hw::data_memory_address(hw::DataMemoryId::REG12_CONFIG), staged)) {
           return false;
         }
@@ -645,14 +645,14 @@ bool BQ76952Service::apply_current_calibration(bool write, bool &matches) {
 
 bool BQ76952Service::require_full_access() {
   uint16_t battery_status = 0;
-  if (!this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status)) {
+  if (!this->transport_.read_u16(hw::register_address(hw::RegisterId::BATTERY_STATUS), battery_status)) {
     return false;
   }
   return (battery_status & hw::bits::battery_status::SECURITY_MASK) == hw::bits::battery_status::FULL_ACCESS;
 }
 
 bool BQ76952Service::restore_runtime_state() {
-  if (!this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::SLEEP_ENABLE))) {
+  if (!this->transport_.send_subcommand(hw::command_code(hw::CommandId::SLEEP_ENABLE))) {
     ESP_LOGW(TAG, "Failed enabling sleep");
     return false;
   }
@@ -667,13 +667,13 @@ bool BQ76952Service::restore_runtime_state() {
   if (this->config_.regulators.reg2_enabled) {
     desired_reg12 |= hw::bits::reg12::REG2_ENABLE;
   }
-  if (!this->transport_.write_subcommand(hw::subcommand_address(hw::SubcommandId::REG12_CONTROL), &desired_reg12, 1)) {
+  if (!this->transport_.write_subcommand(hw::command_code(hw::CommandId::REG12_CONTROL), &desired_reg12, 1)) {
     ESP_LOGW(TAG, "Failed applying live REG1/REG2 state");
     return false;
   }
 
   uint8_t manufacturing_raw[2]{};
-  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::MANUFACTURING_STATUS), manufacturing_raw,
+  if (!this->transport_.read_subcommand(hw::command_code(hw::CommandId::MANUFACTURING_STATUS), manufacturing_raw,
                                        sizeof(manufacturing_raw))) {
     return false;
   }
@@ -681,7 +681,7 @@ bool BQ76952Service::restore_runtime_state() {
       static_cast<uint16_t>(manufacturing_raw[0]) | (static_cast<uint16_t>(manufacturing_raw[1]) << 8);
   const bool currently_autonomous = (manufacturing_status & hw::bits::manufacturing_status::FET_ENABLE) != 0;
   if (currently_autonomous != this->config_.fet.autonomous &&
-      !this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::FET_ENABLE))) {
+      !this->transport_.send_subcommand(hw::command_code(hw::CommandId::FET_ENABLE))) {
     ESP_LOGW(TAG, "Failed applying autonomous FET runtime policy");
     return false;
   }
@@ -692,7 +692,7 @@ bool BQ76952Service::restore_runtime_state() {
 
 bool BQ76952Service::load_unit_scaling() {
   uint8_t da_config = 0;
-  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::DA_CONFIGURATION), &da_config, 1)) {
+  if (!this->transport_.read_subcommand(hw::command_code(hw::CommandId::DA_CONFIGURATION), &da_config, 1)) {
     ESP_LOGW(TAG, "Failed reading device measurement scaling; using defaults");
     this->current_lsb_ua_ = 1000;
     this->direct_voltage_centivolts_ = true;
@@ -719,7 +719,7 @@ uint8_t BQ76952Service::raw_cell_channel(uint8_t logical_cell) const {
 
 bool BQ76952Service::read_coulomb_counter(float &charge_ah) {
   uint8_t data[12]{};
-  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::DASTATUS6), data, sizeof(data))) {
+  if (!this->transport_.read_subcommand(hw::command_code(hw::CommandId::DASTATUS6), data, sizeof(data))) {
     return false;
   }
   const int32_t integer = read_i32_le(data);
@@ -739,12 +739,12 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   uint8_t safety_a = 0;
   uint8_t safety_b = 0;
   uint8_t safety_c = 0;
-  if (!this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::CONTROL_STATUS), control_status) ||
-      !this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::BATTERY_STATUS), battery_status) ||
-      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::FET_STATUS), fet_status) ||
-      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::SAFETY_STATUS_A), safety_a) ||
-      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::SAFETY_STATUS_B), safety_b) ||
-      !this->transport_.read_u8(hw::direct_command_address(hw::DirectCommandId::SAFETY_STATUS_C), safety_c)) {
+  if (!this->transport_.read_u16(hw::register_address(hw::RegisterId::CONTROL_STATUS), control_status) ||
+      !this->transport_.read_u16(hw::register_address(hw::RegisterId::BATTERY_STATUS), battery_status) ||
+      !this->transport_.read_u8(hw::register_address(hw::RegisterId::FET_STATUS), fet_status) ||
+      !this->transport_.read_u8(hw::register_address(hw::RegisterId::SAFETY_STATUS_A), safety_a) ||
+      !this->transport_.read_u8(hw::register_address(hw::RegisterId::SAFETY_STATUS_B), safety_b) ||
+      !this->transport_.read_u8(hw::register_address(hw::RegisterId::SAFETY_STATUS_C), safety_c)) {
     return false;
   }
 
@@ -756,7 +756,7 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
 
   std::array<int16_t, 16> raw_cells{};
   for (uint8_t raw = 0; raw < raw_cells.size(); raw++) {
-    if (!this->transport_.read_i16(static_cast<uint8_t>(hw::direct_command_address(hw::DirectCommandId::CELL1_VOLTAGE) +
+    if (!this->transport_.read_i16(static_cast<uint8_t>(hw::register_address(hw::RegisterId::CELL1_VOLTAGE) +
                                                raw * hw::encoding::CELL_VOLTAGE_REGISTER_STRIDE), raw_cells[raw])) {
       return false;
     }
@@ -779,11 +779,11 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   int16_t raw_ld = 0;
   int16_t raw_current = 0;
   int16_t raw_die_temperature = 0;
-  if (!this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::STACK_VOLTAGE), raw_stack) ||
-      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::PACK_VOLTAGE), raw_pack) ||
-      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::LD_VOLTAGE), raw_ld) ||
-      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::CC2_CURRENT), raw_current) ||
-      !this->transport_.read_i16(hw::direct_command_address(hw::DirectCommandId::INTERNAL_TEMPERATURE), raw_die_temperature)) {
+  if (!this->transport_.read_i16(hw::register_address(hw::RegisterId::STACK_VOLTAGE), raw_stack) ||
+      !this->transport_.read_i16(hw::register_address(hw::RegisterId::PACK_VOLTAGE), raw_pack) ||
+      !this->transport_.read_i16(hw::register_address(hw::RegisterId::LD_VOLTAGE), raw_ld) ||
+      !this->transport_.read_i16(hw::register_address(hw::RegisterId::CC2_CURRENT), raw_current) ||
+      !this->transport_.read_i16(hw::register_address(hw::RegisterId::INTERNAL_TEMPERATURE), raw_die_temperature)) {
     return false;
   }
 
@@ -797,7 +797,7 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
   snapshot.die_temperature_c = static_cast<float>(raw_die_temperature) / hw::encoding::TENTHS_KELVIN_PER_KELVIN -
                                  hw::encoding::CELSIUS_ZERO_KELVIN;
 
-  const uint8_t temperature_registers[3] = {hw::direct_command_address(hw::DirectCommandId::TS1_TEMPERATURE), hw::direct_command_address(hw::DirectCommandId::TS2_TEMPERATURE), hw::direct_command_address(hw::DirectCommandId::TS3_TEMPERATURE)};
+  const uint8_t temperature_registers[3] = {hw::register_address(hw::RegisterId::TS1_TEMPERATURE), hw::register_address(hw::RegisterId::TS2_TEMPERATURE), hw::register_address(hw::RegisterId::TS3_TEMPERATURE)};
   const BQ76952ThermistorMode thermistor_modes[3] = {this->config_.thermistors.ts1, this->config_.thermistors.ts2,
                                                      this->config_.thermistors.ts3};
   for (size_t i = 0; i < 3; i++) {
@@ -849,7 +849,7 @@ bool BQ76952Service::read_snapshot(::bq76952_core::Snapshot &snapshot) {
 
 bool BQ76952Service::set_output_enabled(bool enabled) {
   uint8_t manufacturing_raw[2]{};
-  if (!this->transport_.read_subcommand(hw::subcommand_address(hw::SubcommandId::MANUFACTURING_STATUS), manufacturing_raw,
+  if (!this->transport_.read_subcommand(hw::command_code(hw::CommandId::MANUFACTURING_STATUS), manufacturing_raw,
                                        sizeof(manufacturing_raw))) {
     return false;
   }
@@ -860,7 +860,7 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
     return false;
   }
 
-  if (!this->transport_.send_subcommand(enabled ? hw::subcommand_address(hw::SubcommandId::ALL_FETS_ON) : hw::subcommand_address(hw::SubcommandId::ALL_FETS_OFF))) {
+  if (!this->transport_.send_subcommand(enabled ? hw::command_code(hw::CommandId::ALL_FETS_ON) : hw::command_code(hw::CommandId::ALL_FETS_OFF))) {
     return false;
   }
   this->output_request_pending_ = true;
@@ -871,8 +871,8 @@ bool BQ76952Service::set_output_enabled(bool enabled) {
 
 bool BQ76952Service::clear_alarm_latches() {
   uint16_t alarm_status = 0;
-  return this->transport_.read_u16(hw::direct_command_address(hw::DirectCommandId::ALARM_STATUS), alarm_status) &&
-         (alarm_status == 0 || this->transport_.write_u16(hw::direct_command_address(hw::DirectCommandId::ALARM_STATUS), alarm_status));
+  return this->transport_.read_u16(hw::register_address(hw::RegisterId::ALARM_STATUS), alarm_status) &&
+         (alarm_status == 0 || this->transport_.write_u16(hw::register_address(hw::RegisterId::ALARM_STATUS), alarm_status));
 }
 
 bool BQ76952Service::program_factory_otp() {
@@ -885,13 +885,13 @@ bool BQ76952Service::program_factory_otp() {
 
   bool ok = true;
   uint8_t result[3]{};
-  if (!this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::OTP_WRITE_CHECK))) {
+  if (!this->transport_.send_subcommand(hw::command_code(hw::CommandId::OTP_WRITE_CHECK))) {
     ok = false;
   } else {
     delay(1000);
   }
-  if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE_CHECK), 1000) ||
-      !this->transport_.read_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE_CHECK), result, sizeof(result)) ||
+  if (ok && (!this->transport_.wait_for_transfer_buffer(hw::command_code(hw::CommandId::OTP_WRITE_CHECK), 1000) ||
+      !this->transport_.read_transfer_buffer(hw::command_code(hw::CommandId::OTP_WRITE_CHECK), result, sizeof(result)) ||
       (result[0] & 0x80U) == 0)) {
     ESP_LOGE(TAG, "OTP_WR_CHECK rejected programming");
     ok = false;
@@ -899,13 +899,13 @@ bool BQ76952Service::program_factory_otp() {
 
   if (ok) {
     std::fill_n(result, sizeof(result), 0);
-    if (!this->transport_.send_subcommand(hw::subcommand_address(hw::SubcommandId::OTP_WRITE))) {
+    if (!this->transport_.send_subcommand(hw::command_code(hw::CommandId::OTP_WRITE))) {
       ok = false;
     } else {
       delay(1000);
     }
-    if (ok && (!this->transport_.wait_for_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE), 1000) ||
-        !this->transport_.read_transfer_buffer(hw::subcommand_address(hw::SubcommandId::OTP_WRITE), result, sizeof(result)) ||
+    if (ok && (!this->transport_.wait_for_transfer_buffer(hw::command_code(hw::CommandId::OTP_WRITE), 1000) ||
+        !this->transport_.read_transfer_buffer(hw::command_code(hw::CommandId::OTP_WRITE), result, sizeof(result)) ||
         (result[0] & 0x80U) == 0)) {
       ESP_LOGE(TAG, "OTP_WRITE failed");
       ok = false;
