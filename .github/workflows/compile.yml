@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   hard-cut-register-api:
-    if: github.event_name == 'push' && github.ref_name == 'agent/hard-cut-register-api' && github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && ((github.event_name == 'push' && github.ref_name == 'agent/hard-cut-register-api') || (github.event_name == 'pull_request' && github.head_ref == 'agent/hard-cut-register-api'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
