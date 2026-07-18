@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+# One-shot migration. Delete this file after the transformed sources land.
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = ("mcf8316d", "mcf8329a")
 CALLS = ("read_reg32", "read_reg16", "write_reg32", "update_bits32")
