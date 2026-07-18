@@ -4,52 +4,11 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: write
-
 concurrency:
   group: compile-checks-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
-  hard-cut-bq76952-operations:
-    if: github.actor != 'github-actions[bot]' && ((github.event_name == 'push' && github.ref_name == 'agent/hard-cut-register-api') || (github.event_name == 'pull_request' && github.head_ref == 'agent/hard-cut-register-api'))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: agent/hard-cut-register-api
-          fetch-depth: 0
-
-      - name: Apply BQ76952 operation migration
-        run: python3 tools/hard_cut_bq76952_operations.py
-
-      - name: Verify host tests
-        run: bash ./check_host.bash 2>&1 | tee hard-cut-bq76952-host.log
-
-      - name: Upload BQ76952 migration diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hard-cut-bq76952-failure
-          path: |
-            hard-cut-bq76952-host.log
-            components/bq76952
-          if-no-files-found: error
-
-      - name: Commit transformed sources
-        run: |
-          if git diff --quiet; then
-            echo "No migration changes"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add components/bq76952 components/component_common/operation_info.h tests
-          git commit -m "Hard cut BQ76952 operations to typed IDs"
-          git push origin HEAD:agent/hard-cut-register-api
-
   host-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
