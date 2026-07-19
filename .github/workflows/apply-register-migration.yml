@@ -25,7 +25,14 @@ jobs:
       - name: Expand and apply migration
         run: |
           base64 --decode tools/apply_register_migration.py.gz.b64 | gzip --decompress > /tmp/apply_register_migration.py
-          python3 /tmp/apply_register_migration.py
+          python3 /tmp/apply_register_migration.py 2>&1 | tee migration-run.log
+
+      - name: Upload migration diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-run-log
+          path: migration-run.log
 
       - name: Validate host-independent code
         run: bash ./check_host.bash
