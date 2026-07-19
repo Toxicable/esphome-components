@@ -26,12 +26,7 @@ struct OutputCalibration {
   float zero_level{0.0f};
 
   // Calibrated current represented by DAC level 1.0 before safety clamping.
-  // Keep the old member spelling as a storage alias for the in-tree action
-  // template until all generated call sites have moved to the unit-suffixed name.
-  union {
-    float full_scale_current_a{0.0f};
-    float full_scale_current;
-  };
+  float full_scale_current_a{0.0f};
 };
 
 struct Calibration {
