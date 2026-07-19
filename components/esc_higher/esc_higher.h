@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "esc_higher_registers.h"
+
 #include "esphome/components/button/button.h"
 #include "esphome/components/i2c/i2c.h"
 #include "esphome/components/number/number.h"
@@ -410,12 +412,12 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
  protected:
   void maybe_log_command_result_(uint8_t last_cmd_seq, uint8_t last_cmd_error, uint8_t esc_state, uint8_t mc_state,
                                  uint8_t fault_detail, uint16_t current_faults, uint16_t occurred_faults);
-  bool read_register_(uint8_t reg, uint8_t* out, size_t len);
+  bool read_register_(::esc_higher_core::registers::RegisterId reg, uint8_t* out, size_t len);
   bool read_debug_info_(uint32_t* debug_seq, uint16_t* used_len, uint16_t* export_len, uint16_t* capacity,
                         uint16_t* dropped, uint16_t* crc16);
   bool read_debug_chunk_(uint16_t offset, uint8_t length, uint8_t* out);
   bool publish_debug_log_(uint32_t debug_seq, uint16_t export_len, uint16_t capacity, uint16_t dropped, uint16_t crc16);
-  bool write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2, uint8_t* seq_out = nullptr);
+  bool write_command_(::esc_higher_core::registers::CommandId opcode, int32_t param0, int32_t param1, int32_t param2, uint8_t* seq_out = nullptr);
   bool wait_for_command_result_(uint8_t seq, const char* label, uint32_t timeout_ms = 250);
   bool initialize_();
   bool configure_watchdog_();
@@ -439,31 +441,11 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
     return static_cast<int16_t>(u16_(b, off));
   }
 
-  static constexpr uint8_t REG_ID = 0x00;
-  static constexpr uint8_t REG_STATUS = 0x10;
-  static constexpr uint8_t REG_COMMAND = 0x20;
-  static constexpr uint8_t REG_TELEMETRY = 0x30;
-  static constexpr uint8_t REG_BRINGUP = 0x40;
-  static constexpr uint8_t REG_DEBUG_TELEMETRY = 0x50;
-  static constexpr uint8_t REG_DEBUG_INFO = 0x70;
-  static constexpr uint8_t REG_DEBUG_READ = 0x71;
-  static constexpr uint8_t REG_DEBUG_CTRL = 0x72;
-
-  // Config status register (read-only)
-  static constexpr uint8_t REG_CONFIG_STATUS = 0x93;
 
   static constexpr uint16_t CAP_DEBUG_LOG = 1u << 7;
   static constexpr uint16_t DEBUG_BUFFER_SIZE = 4096;
   static constexpr uint8_t DEBUG_READ_CHUNK_SIZE = 64;
 
-  static constexpr uint8_t OPCODE_START = 0x01;
-  static constexpr uint8_t OPCODE_STOP = 0x02;
-  static constexpr uint8_t OPCODE_CLEAR_FAULTS = 0x03;
-  static constexpr uint8_t OPCODE_SET_SPEED_RAMP = 0x04;
-  static constexpr uint8_t OPCODE_ESTOP = 0x05;
-  static constexpr uint8_t OPCODE_SET_WATCHDOG = 0x07;
-  static constexpr int32_t COMMAND_WATCHDOG_TIMEOUT_MS = 500;
-  static constexpr uint8_t OPCODE_RUN_BRINGUP_TEST = 0x09;
   static constexpr uint8_t BRINGUP_TEST_FULL_SPIN_SEQUENCE = 101;
   static constexpr uint8_t BRINGUP_TEST_BRIDGE_STATIC_VECTOR = 102;
   static constexpr uint8_t BRINGUP_TEST_FORCED_TIMER_DIFF_PWM = 103;
@@ -473,14 +455,7 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
   static constexpr int32_t BRINGUP_TEST_OPTIONS_DEFAULT = 0;
   static constexpr int32_t BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM = 1;
 
-  // Config provisioning commands
-  static constexpr uint8_t OPCODE_CONFIG_BEGIN = 0x10;
-  static constexpr uint8_t OPCODE_CONFIG_WRITE_CHUNK = 0x11;
-  static constexpr uint8_t OPCODE_CONFIG_VALIDATE = 0x12;
-  static constexpr uint8_t OPCODE_CONFIG_COMMIT = 0x13;
-  static constexpr uint8_t OPCODE_CONFIG_READ = 0x14;
-  static constexpr uint8_t OPCODE_CONFIG_ERASE = 0x15;
-  static constexpr uint8_t REG_CONFIG_DATA = 0x80;
+  // Config provisioning
   static constexpr uint8_t CONFIG_DATA_CHUNK_SIZE = 61;
   static constexpr uint8_t MOTOR_CONFIG_SCHEMA_VERSION = 3;
 

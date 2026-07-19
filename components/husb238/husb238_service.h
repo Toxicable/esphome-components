@@ -3,8 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "husb238_protocol.h"
 #include "husb238_bus.h"
+#include "husb238_protocol.h"
+#include "husb238_registers.h"
 
 namespace husb238_core {
 
@@ -22,6 +23,10 @@ class HusbService {
   uint8_t last_requested_voltage() const { return this->last_requested_voltage_; }
 
  private:
+  bool read_register_(registers::RegisterId id, uint8_t *value);
+  bool write_register_(registers::RegisterId id, uint8_t value);
+  bool write_command_(registers::CommandId id);
+
   RegisterBus *bus_{nullptr};
   uint8_t last_requested_voltage_{0};
 };

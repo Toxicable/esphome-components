@@ -4,16 +4,6 @@
 
 namespace husb238_core {
 
-static constexpr uint8_t REG_PD_STATUS0 = 0x00;
-static constexpr uint8_t REG_PD_STATUS1 = 0x01;
-static constexpr uint8_t REG_SRC_PDO_5V = 0x02;
-static constexpr uint8_t REG_SRC_PDO = 0x08;
-static constexpr uint8_t REG_GO_COMMAND = 0x09;
-
-static constexpr uint8_t CMD_REQUEST_SELECTED_PDO = 0x01;
-static constexpr uint8_t CMD_GET_SRC_CAP = 0x04;
-static constexpr uint8_t CMD_HARD_RESET = 0x10;
-
 struct Status {
   bool attached{false};
   bool cc2_connected{false};

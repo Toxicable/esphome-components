@@ -15,7 +15,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["button", "number", "select", "sensor", "text_sensor"]
+AUTO_LOAD = ["component_common", "button", "number", "select", "sensor", "text_sensor"]
 
 esc_higher_ns = cg.esphome_ns.namespace("esc_higher")
 ESCHigherComponent = esc_higher_ns.class_(

@@ -4,6 +4,7 @@ from esphome.components import i2c, output
 from esphome.const import CONF_ID
 
 DEPENDENCIES = ["i2c"]
+AUTO_LOAD = ["component_common"]
 
 mcp4726_ns = cg.esphome_ns.namespace("mcp4726")
 MCP4726Output = mcp4726_ns.class_(

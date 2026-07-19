@@ -1,21 +1,24 @@
 # esc_higher Context Index
 
-## Read Order
-1. `components/esc_higher/AGENTS_KNOWLEDGE.md`
-2. `components/esc_higher/i2c_interface.md`
-3. `components/esc_higher/i2c_guideline.md`
-4. `components/esc_higher/README.md`
-5. `components/esc_higher/__init__.py`
-6. `components/esc_higher/esc_higher.h`
-7. `components/esc_higher/esc_higher_text.h` (text sensor mappings)
-8. `components/esc_higher/esc_higher.cpp`
+## Read order
 
-## Edit Map
-- `__init__.py`: ESPHome schema and codegen wiring for the top-level `esc_higher:` block.
-- `esc_higher.h`: C++ component class surface.
-- `esc_higher_text.h`: enum-to-string and bitmask-to-names mappings for text sensors.
-- `esc_higher.cpp`: I2C transport, register reads/writes, and state publishing.
-- `README.md`: user-facing YAML configuration example.
-- `i2c_interface.md`: protocol source-of-truth for command/response format.
-- `i2c_guideline.md`: canonical field offsets/types for register payloads.
-- `AGENTS_KNOWLEDGE.md`: active component invariants for future edits.
+1. `AGENTS_KNOWLEDGE.md`
+2. `../../ARCHITECTURE.md`
+3. `i2c_interface.md`
+4. `i2c_guideline.md`
+5. `README.md`
+6. `esc_higher_registers.h`
+7. `__init__.py`
+8. `esc_higher.h`
+9. `esc_higher_text.h`
+10. `esc_higher.cpp`
+
+## Edit map
+
+- `esc_higher_registers.h`: typed block-register and command IDs, transfer sizes and compile-time validation.
+- `esc_higher.cpp`: ESPHome I2C transport, command sequencing, decoding and publication.
+- `esc_higher.h`: component/entity surface and non-wire policy constants.
+- `esc_higher_text.h`: enum and fault text mappings.
+- `i2c_interface.md` / `i2c_guideline.md`: STM32 wire-protocol source of truth.
+- `__init__.py`: schema and shared-helper loading.
+- `test_config.yaml`: pinned compile fixture.

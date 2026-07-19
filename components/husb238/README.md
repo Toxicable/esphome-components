@@ -1,30 +1,58 @@
-# ESPHome HUSB238 external component
+# HUSB238
 
-Local external component for the Hynetek HUSB238 USB-C PD sink controller.
+USB-C PD sink controller integration with typed register and command metadata, reusable protocol/service logic, and an ESPHome I2C wrapper.
 
-## Features
+```yaml
+external_components:
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ component_common, husb238 ]
 
-- I2C address defaults to `0x08`
-- Publishes actual negotiated voltage/current/power
-- Publishes attach state, CC orientation, PD command response, available PDOs
-- Select entity to request 5/9/12/15/18/20 V
-- Buttons for `Get_SRC_Cap` and hard reset
+i2c:
+  id: i2c_bus
+  sda: GPIO21
+  scl: GPIO22
+  frequency: 100kHz
 
-## Install
+husb238:
+  id: pd_sink
+  i2c_id: i2c_bus
+  address: 0x08
+  update_interval: 2s
 
-Copy `components/husb238` into the same directory as your ESPHome YAML, then use the `external_components` block shown in `example.yaml`.
+  # request_voltage: 20V
+  # request_on_boot: true
 
-## Notes
+  voltage:
+    name: USB PD Voltage
+  current:
+    name: USB PD Current
+  power:
+    name: USB PD Power
+  attached:
+    name: USB PD Attached
+  cc2_connected:
+    name: USB PD CC2 Connected
+  pd_response:
+    name: USB PD Response
+  available_pdos:
+    name: USB PD Available PDOs
+  voltage_select:
+    name: USB PD Request Voltage
+  refresh_capabilities_button:
+    name: USB PD Refresh Capabilities
+  hard_reset_button:
+    name: USB PD Hard Reset
+```
 
-The HUSB238 can also be configured by VSET/ISET resistors. Those still matter at startup, before the ESP has booted and issued any I2C command.
+The VSET/ISET resistors still define safe startup behaviour before firmware runs. Boot-time renegotiation is delayed until an attached source has been observed and the ESP startup grace period has passed.
 
-Boot-time PD renegotiation is deferred briefly after ESPHome startup instead of running inside `setup()`. That avoids changing the USB-C contract while the ESP32 is still bringing up subsystems like Wi-Fi.
+## Code organisation
 
-## Code organization
+- `husb238_registers.h`: typed register and command IDs with compile-time metadata validation.
+- `husb238_protocol.*`: status/PDO decoding and physical-unit conversion.
+- `husb238_bus.h`: raw-address transport boundary.
+- `husb238_service.*`: reusable typed device behaviour.
+- `husb238.h` / `husb238.cpp`: ESPHome wrapper and I2C adapter.
 
-This component follows the shared layout in `../../ARCHITECTURE.md`.
-
-- `husb238_protocol.*` contains the register map, command constants, status decoding, PDO decoding, and response-string mapping.
-- `husb238_bus.h` defines the host register bus interface.
-- `husb238_service.*` contains the reusable device behavior and talks through a small register-bus interface.
-- `husb238.h` / `husb238.cpp` are the ESPHome wrapper that owns YAML-facing entities, logging, and the ESPHome I2C adapter.
+The host suite verifies the typed service boundary, command encoding, register addresses and request sequencing.

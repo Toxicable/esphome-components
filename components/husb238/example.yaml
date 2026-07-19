@@ -1,9 +1,10 @@
 external_components:
-  - source:
-      type: local
-      path: components
+  - source: github://Toxicable/esphome-components@main
+    refresh: 0s
+    components: [ component_common, husb238 ]
 
 i2c:
+  id: i2c_bus
   sda: GPIO21
   scl: GPIO22
   scan: true
@@ -11,31 +12,31 @@ i2c:
 
 husb238:
   id: pd_sink
+  i2c_id: i2c_bus
   address: 0x08
   update_interval: 2s
 
-  # Optional. Firmware will request this a few seconds after ESPHome boots.
-  # Hardware VSET/ISET still decide the safe startup/default before firmware runs.
+  ## Optional. Firmware requests this after attachment and the startup grace period.
   request_voltage: 20V
   request_on_boot: true
 
   voltage:
-    name: "USB PD Voltage"
+    name: USB PD Voltage
   current:
-    name: "USB PD Current"
+    name: USB PD Current
   power:
-    name: "USB PD Power"
+    name: USB PD Power
   attached:
-    name: "USB PD Attached"
+    name: USB PD Attached
   cc2_connected:
-    name: "USB PD CC2 Connected"
+    name: USB PD CC2 Connected
   pd_response:
-    name: "USB PD Response"
+    name: USB PD Response
   available_pdos:
-    name: "USB PD Available PDOs"
+    name: USB PD Available PDOs
   voltage_select:
-    name: "USB PD Request Voltage"
+    name: USB PD Request Voltage
   refresh_capabilities_button:
-    name: "USB PD Refresh Capabilities"
+    name: USB PD Refresh Capabilities
   hard_reset_button:
-    name: "USB PD Hard Reset"
+    name: USB PD Hard Reset

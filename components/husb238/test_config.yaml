@@ -1,0 +1,47 @@
+esphome:
+  name: husb238-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ component_common, husb238 ]
+
+i2c:
+  id: i2c_bus
+  sda: GPIO35
+  scl: GPIO36
+  scan: false
+  frequency: 100kHz
+
+husb238:
+  id: pd_sink
+  i2c_id: i2c_bus
+  request_voltage: 20V
+  voltage:
+    name: Voltage
+  current:
+    name: Current
+  power:
+    name: Power
+  attached:
+    name: Attached
+  cc2_connected:
+    name: CC2 Connected
+  pd_response:
+    name: PD Response
+  available_pdos:
+    name: Available PDOs
+  voltage_select:
+    name: Request Voltage
+  refresh_capabilities_button:
+    name: Refresh Capabilities
+  hard_reset_button:
+    name: Hard Reset

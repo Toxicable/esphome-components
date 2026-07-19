@@ -327,6 +327,8 @@ Shared helpers must not contain chip-specific register numbers, fault enums, con
 
 Prefer named fields and physical units at the service boundary. Raw register access should be reserved for tightly scoped debugging or unsupported device features.
 
+Every retained component is classified by `tools/check_register_models.py`. Register-mapped devices must expose typed register or command IDs with compile-time metadata; GPIO, UART-stream, orchestrator and internal helper components are explicitly classified as non-register or internal rather than receiving invented register abstractions.
+
 ## State and fault contract
 
 Do not overload one text sensor with connection state, operating state, and hardware faults.

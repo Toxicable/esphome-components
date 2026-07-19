@@ -15,7 +15,7 @@ Implemented protocol model:
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [esc_higher]
+    components: [component_common, esc_higher]
 
 esc_higher:
   id: esc

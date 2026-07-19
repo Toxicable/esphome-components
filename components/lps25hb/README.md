@@ -1,34 +1,25 @@
 # LPS25HB
 
-Datasheet: https://www.st.com/resource/en/datasheet/lps25hb.pdf
-
-## What it does
-Reads temperature and barometric pressure from an ST LPS25HB sensor over I2C.
-
-## How to use it
-Minimal configuration:
+Lightweight one-shot pressure and temperature sensor integration. Register addresses are represented by typed IDs and compile-time metadata; the component remains a simple ESPHome adapter rather than adding unnecessary service layers.
 
 ```yaml
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ lps25hb ]
+    components: [ component_common, lps25hb ]
 
 i2c:
   id: i2c_bus
   sda: GPIO21
   scl: GPIO22
-  frequency: 400kHz
 
 lps25hb:
-  id: baro
+  id: barometric_sensor
   i2c_id: i2c_bus
-  address: 0x5C  # Optional / default
+  address: 0x5C
+  update_interval: 60s
   temperature:
-    name: "Temperature"
+    name: Temperature
   pressure:
-    name: "Pressure"
+    name: Pressure
 ```
-
-Notes:
-- Update interval defaults to `60s`.

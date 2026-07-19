@@ -347,7 +347,7 @@ template<typename... Ts> class ApplyCalibrationAction : public Action<Ts...> {
     calibration.voltage.scale = this->voltage_scale_.value(x...);
     calibration.voltage.offset = this->voltage_offset_.value(x...);
     calibration.output.zero_level = this->output_zero_level_.value(x...);
-    calibration.output.full_scale_current =
+    calibration.output.full_scale_current_a =
         this->output_full_scale_current_.value(x...);
     this->parent_->apply_calibration(calibration, this->persist_.value(x...));
   }

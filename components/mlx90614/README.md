@@ -14,7 +14,7 @@ ESPHome already includes an upstream `mlx90614` component for normal ambient/obj
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [ mlx90614 ]
+    components: [ component_common, mlx90614 ]
 
 i2c:
   id: i2c_bus
