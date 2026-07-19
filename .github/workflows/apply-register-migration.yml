@@ -35,7 +35,14 @@ jobs:
           path: migration-run.log
 
       - name: Validate host-independent code
-        run: bash ./check_host.bash
+        run: bash ./check_host.bash 2>&1 | tee host-run.log
+
+      - name: Upload host-check diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-run-log
+          path: host-run.log
 
       - name: Commit migration
         run: |
