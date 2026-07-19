@@ -34,47 +34,17 @@ jobs:
                   raise RuntimeError(f"{path}: expected {count} occurrences, found {actual}: {old!r}")
               p.write_text(text.replace(old, new))
 
-          Path("components/mcf8316d/mcf8316d_bus.h").write_text("""#pragma once
-
-#include "../mcf83xx_common/register_bus.h"
-#include "mcf8316d_registers.h"
-
-namespace mcf8316d_core {
-
-using RegisterBus = mcf83xx_common::RegisterBus;
-using RegisterId = regs::RegisterId;
-
-}  // namespace mcf8316d_core
-
-namespace esphome {
-namespace mcf8316d {
-
-using RegisterId = ::mcf8316d_core::RegisterId;
-
-}  // namespace mcf8316d
-}  // namespace esphome
-""")
-
-          Path("components/mcf8329a/mcf8329a_bus.h").write_text("""#pragma once
-
-#include "../mcf83xx_common/register_bus.h"
-#include "mcf8329a_registers.h"
-
-namespace mcf8329a_core {
-
-using RegisterBus = mcf83xx_common::RegisterBus;
-using RegisterId = regs::RegisterId;
-
-}  // namespace mcf8329a_core
-
-namespace esphome {
-namespace mcf8329a {
-
-using RegisterId = ::mcf8329a_core::RegisterId;
-
-}  // namespace mcf8329a
-}  // namespace esphome
-""")
+          for component in ("mcf8316d", "mcf8329a"):
+              path = f"components/{component}/{component}_bus.h"
+              replace(path, '#include "../mcf83xx_common/register_bus.h"\n', '#include "../mcf83xx_common/register_bus.h"\n#include "' + component + '_registers.h"\n')
+              replace(path, 'using RegisterBus = mcf83xx_common::RegisterBus;\n', 'using RegisterBus = mcf83xx_common::RegisterBus;\nusing RegisterId = regs::RegisterId;\n')
+              p = Path(path)
+              text = p.read_text()
+              suffix = '}  // namespace ' + component + '_core\n'
+              alias = suffix + '\nnamespace esphome {\nnamespace ' + component + ' {\n\nusing RegisterId = ::' + component + '_core::RegisterId;\n\n}  // namespace ' + component + '\n}  // namespace esphome\n'
+              if text.count(suffix) != 1:
+                  raise RuntimeError(f"{path}: missing namespace suffix")
+              p.write_text(text.replace(suffix, alias))
 
           bq = Path("components/bq76952/bq76952_registers.h")
           text = bq.read_text()
@@ -84,17 +54,8 @@ using RegisterId = ::mcf8329a_core::RegisterId;
           text = text.replace("definition.name[0] == '\x00'", "definition.name[0] == '\\0'")
           bq.write_text(text)
 
-          replace(
-              "components/programmable_load/programmable_load.h",
-              "calibration.output.full_scale_current =",
-              "calibration.output.full_scale_current_a =",
-          )
-
-          replace(
-              "components/esc_higher/esc_higher.cpp",
-              "constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;\n",
-              "constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;\nconstexpr int32_t COMMAND_WATCHDOG_TIMEOUT_MS = 500;\n",
-          )
+          replace("components/programmable_load/programmable_load.h", "calibration.output.full_scale_current =", "calibration.output.full_scale_current_a =")
+          replace("components/esc_higher/esc_higher.cpp", "constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;\n", "constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;\nconstexpr int32_t COMMAND_WATCHDOG_TIMEOUT_MS = 500;\n")
           PY
 
       - name: Validate host suite
