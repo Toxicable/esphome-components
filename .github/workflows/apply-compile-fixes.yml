@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - agent/migrate-all-components-common-patterns
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
