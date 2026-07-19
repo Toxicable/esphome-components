@@ -1,0 +1,35 @@
+name: Apply register migration
+
+on:
+  push:
+    branches:
+      - agent/migrate-all-components-common-patterns
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[register-migration]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/migrate-all-components-common-patterns
+          fetch-depth: 0
+
+      - name: Expand and apply migration
+        run: |
+          base64 --decode tools/apply_register_migration.py.gz.b64 | gzip --decompress > /tmp/apply_register_migration.py
+          python3 /tmp/apply_register_migration.py
+
+      - name: Validate host-independent code
+        run: bash ./check_host.bash
+
+      - name: Commit migration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Migrate remaining components to typed register patterns [register-migration]"
+          git push origin HEAD:agent/migrate-all-components-common-patterns
