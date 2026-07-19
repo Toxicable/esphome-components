@@ -54,3 +54,5 @@ The VSET/ISET resistors still define safe startup behaviour before firmware runs
 - `husb238_bus.h`: raw-address transport boundary.
 - `husb238_service.*`: reusable typed device behaviour.
 - `husb238.h` / `husb238.cpp`: ESPHome wrapper and I2C adapter.
+
+The host suite verifies the typed service boundary, command encoding, register addresses and request sequencing.
