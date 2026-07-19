@@ -29,3 +29,5 @@ These components keep numeric addresses and command codes inside chip-specific m
 - `mcf83xx_common`
 
 Small adapters remain lightweight. A typed register model does not require a service layer when the component has no reconciliation, sequencing or reusable device policy.
+
+The host suite validates metadata coverage and the CI matrix compiles every retained component that has an ESPHome fixture against the pinned ESPHome release.
