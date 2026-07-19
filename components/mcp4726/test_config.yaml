@@ -1,5 +1,5 @@
 esphome:
-  name: lps25hb-test
+  name: mcp4726-test
   min_version: 2026.5.3
 
 esp32:
@@ -12,7 +12,7 @@ external_components:
       type: local
       path: ..
     refresh: 0s
-    components: [ component_common, lps25hb ]
+    components: [ component_common, mcp4726 ]
 
 i2c:
   id: i2c_bus
@@ -20,12 +20,12 @@ i2c:
   scl: GPIO36
   scan: false
 
-lps25hb:
-  id: barometric_sensor
-  i2c_id: i2c_bus
-  address: 0x5C
-  update_interval: 10s
-  temperature:
-    name: Temperature
-  pressure:
-    name: Pressure
+output:
+  - platform: mcp4726
+    id: dac_output
+    i2c_id: i2c_bus
+    address: 0x60
+    vref: vref_buffered
+    gain: 1x
+    power_down: normal
+    zero_on_boot: true

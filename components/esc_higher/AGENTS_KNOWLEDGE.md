@@ -50,3 +50,5 @@ Component-scoped notes for `components/esc_higher`.
 - Home Assistant-facing speed entities are RPM-based even though the STM32 wire format remains `dHz`.
 - Config provisioning uses `CONFIG_DATA` register chunks; begin/validate/commit/erase command writes must wait for matching `STATUS.last_cmd_seq` and check `STATUS.last_cmd_error`.
 - Host bring-up commands now carry an explicit test ID. Supported IDs are `101` (`full_spin_sequence`, default), `102` (`bridge_static_vector_test`), and `103` (`forced_timer_diff_pwm`); `BRINGUP.test_id` remains the report field.
+
+- Register and command access uses typed IDs from `esc_higher_registers.h`; raw addresses/opcodes belong only in that metadata file.

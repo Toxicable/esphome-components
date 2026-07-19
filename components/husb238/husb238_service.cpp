@@ -2,64 +2,72 @@
 
 namespace husb238_core {
 
+bool HusbService::read_register_(registers::RegisterId id, uint8_t *value) {
+  return this->bus_ != nullptr && value != nullptr &&
+         this->bus_->read_register(registers::register_address(id), value);
+}
+
+bool HusbService::write_register_(registers::RegisterId id, uint8_t value) {
+  return this->bus_ != nullptr && this->bus_->write_register(registers::register_address(id), value);
+}
+
+bool HusbService::write_command_(registers::CommandId id) {
+  return this->write_register_(registers::RegisterId::GO_COMMAND, registers::command_code(id));
+}
+
 bool HusbService::probe() {
   uint8_t value = 0;
-  return this->bus_ != nullptr && this->bus_->read_register(REG_PD_STATUS0, &value);
+  return this->read_register_(registers::RegisterId::PD_STATUS0, &value);
 }
 
 bool HusbService::read_status(Status *status) {
-  if (this->bus_ == nullptr || status == nullptr)
-    return false;
+  if (status == nullptr) return false;
 
   uint8_t status0 = 0;
   uint8_t status1 = 0;
-  if (!this->bus_->read_register(REG_PD_STATUS0, &status0) || !this->bus_->read_register(REG_PD_STATUS1, &status1))
+  if (!this->read_register_(registers::RegisterId::PD_STATUS0, &status0) ||
+      !this->read_register_(registers::RegisterId::PD_STATUS1, &status1)) {
     return false;
+  }
 
   *status = parse_status(status0, status1);
   return true;
 }
 
 bool HusbService::read_source_pdos(SourcePdo *pdos, size_t count) {
-  if (this->bus_ == nullptr || pdos == nullptr || count < 6)
-    return false;
+  if (pdos == nullptr || count < 6) return false;
 
-  for (uint8_t i = 0; i < 6; i++) {
+  for (size_t index = 0; index < 6; index++) {
     uint8_t value = 0;
-    if (!this->bus_->read_register(REG_SRC_PDO_5V + i, &value))
-      return false;
-    pdos[i] = parse_source_pdo(i, value);
+    if (!this->read_register_(registers::source_pdo_register(index), &value)) return false;
+    pdos[index] = parse_source_pdo(static_cast<uint8_t>(index), value);
   }
 
   return true;
 }
 
 bool HusbService::request_voltage(uint8_t voltage) {
-  if (this->bus_ == nullptr)
-    return false;
-
   const uint8_t pdo_code = pdo_select_code(voltage);
-  if (pdo_code == 0)
-    return false;
+  if (pdo_code == 0) return false;
 
-  if (!this->bus_->write_register(REG_SRC_PDO, pdo_code << 4))
+  if (!this->write_register_(registers::RegisterId::SELECTED_PDO, static_cast<uint8_t>(pdo_code << 4))) {
     return false;
+  }
 
   this->bus_->delay_ms(5);
 
-  if (!this->bus_->write_register(REG_GO_COMMAND, CMD_REQUEST_SELECTED_PDO))
-    return false;
+  if (!this->write_command_(registers::CommandId::REQUEST_SELECTED_PDO)) return false;
 
   this->last_requested_voltage_ = voltage;
   return true;
 }
 
 bool HusbService::request_source_capabilities() {
-  return this->bus_ != nullptr && this->bus_->write_register(REG_GO_COMMAND, CMD_GET_SRC_CAP);
+  return this->write_command_(registers::CommandId::GET_SOURCE_CAPABILITIES);
 }
 
 bool HusbService::hard_reset() {
-  return this->bus_ != nullptr && this->bus_->write_register(REG_GO_COMMAND, CMD_HARD_RESET);
+  return this->write_command_(registers::CommandId::HARD_RESET);
 }
 
 }  // namespace husb238_core

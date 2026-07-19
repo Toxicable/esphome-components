@@ -20,20 +20,19 @@ Status describes maintenance intent only. It does not imply that an active compo
 | Component | Status | Known use or reason retained | Direction |
 | --- | --- | --- | --- |
 | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
-| `bq76922` | experimental | No deployed configuration or compile fixture found | Require an owner, real board YAML, and tests before promotion; otherwise retire instead of maintaining parallel BQ769x2 implementations. |
 | `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
 | `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
 | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
-| `esc_higher` | active | ESC Higher board and boat configuration | Maintain as the board-facing ESC integration. |
-| `husb238` | active | Programmable-load configurations | Maintain as the USB-PD sink integration. |
+| `esc_higher` | active | ESC Higher board and boat configuration | Typed block-register and command model; keep wire layout in chip-specific metadata. |
+| `husb238` | active | Programmable-load configurations | Typed register/command service with raw addresses confined to the bus boundary. |
 | `l04xmtw` | active | Pool-cleaner configuration | Maintain while the current sensor hardware remains in use. |
-| `lps25hb` | experimental | Present in current RoomSensor hardware work, but no deployed YAML consumer was found | Keep lightweight and compile-covered; promote when a real configuration is committed. |
+| `lps25hb` | experimental | Present in current RoomSensor hardware work, but no deployed YAML consumer was found | Lightweight adapter using typed register metadata and compile coverage. |
 | `makita_xgt` | active | Project and hardware references | Maintain while the battery-interface project remains current. |
 | `mcf8316d` | active | ESC Low hardware | Public MCF8316D integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
 | `mcf8329a` | active | Boat and pool-cleaner configurations | Public MCF8329A integration; keep chip registers, tuning and YAML here while using `mcf83xx_common` for family mechanics. |
 | `mcf83xx_common` | internal | Shared by active MCF8316D and MCF8329A components | Keep limited to the register-bus contract, family framing, read-modify-write and pulse mechanics. |
-| `mcp4726` | active | Programmable-load configuration | Maintain as the DAC integration used by the load controller. |
-| `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not available in the upstream component | Keep compile-covered and explicitly allowlisted only when `object2` is required; otherwise use upstream ESPHome. |
+| `mcp4726` | active | Programmable-load configuration | Typed volatile-command encoder while preserving the ESPHome output-platform YAML. |
+| `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not available in the upstream component | Typed SMBus register model; explicitly allowlist only for `object2`, otherwise use upstream ESPHome. |
 | `programmable_load` | active | Programmable-load board/project | Typed orchestrator with exclusive manual/procedure ownership, hard hardware limits, aggregate faults and explicit calibration diagnostics/actions. |
 
 ## Removed components

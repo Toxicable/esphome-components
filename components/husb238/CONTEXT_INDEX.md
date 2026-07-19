@@ -1,23 +1,23 @@
 # HUSB238 Context Index
 
-## Read Order
-1. `components/husb238/AGENTS_KNOWLEDGE.md`
-2. `ARCHITECTURE.md`
-3. `components/husb238/README.md`
-4. `components/husb238/__init__.py`
-5. `components/husb238/husb238_bus.h`
-6. `components/husb238/husb238_protocol.h`
-7. `components/husb238/husb238_protocol.cpp`
-8. `components/husb238/husb238_service.h`
-9. `components/husb238/husb238_service.cpp`
-10. `components/husb238/husb238.h`
-11. `components/husb238/husb238.cpp`
+## Read order
 
-## Edit Map
-- `__init__.py`: ESPHome schema, entity wiring, codegen bindings.
-- `husb238_bus.h`: host register bus boundary for reusable core code.
-- `husb238_protocol.*`: register map, command constants, status/PDO decoding, response strings.
-- `husb238_service.*`: reusable HUSB238 behavior built on `RegisterBus`.
-- `husb238.h` / `husb238.cpp`: ESPHome component wrapper, logging, entities, and I2C adapter.
-- `README.md`: user-facing configuration and supported entities.
-- `AGENTS_KNOWLEDGE.md`: active component invariants and gotchas.
+1. `AGENTS_KNOWLEDGE.md`
+2. `../../ARCHITECTURE.md`
+3. `README.md`
+4. `__init__.py`
+5. `husb238_registers.h`
+6. `husb238_bus.h`
+7. `husb238_protocol.*`
+8. `husb238_service.*`
+9. `husb238.h` / `husb238.cpp`
+
+## Edit map
+
+- `husb238_registers.h`: register/command IDs, addresses, widths, names and validation.
+- `husb238_protocol.*`: decoding and unit conversion with no transport dependency.
+- `husb238_bus.h`: raw numeric-address boundary implemented by the platform wrapper.
+- `husb238_service.*`: typed register/command operations and device behaviour.
+- `husb238.h` / `husb238.cpp`: ESPHome entities, logging, scheduling and I2C adaptation.
+- `__init__.py`: YAML schema and `component_common` loading.
+- `test_config.yaml`: pinned ESPHome compile fixture.

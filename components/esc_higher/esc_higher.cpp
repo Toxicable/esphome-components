@@ -17,6 +17,8 @@
 namespace esphome {
 namespace esc_higher {
 
+using namespace ::esc_higher_core::registers;
+
 static const char* const TAG = "esc_higher";
 namespace {
 constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
@@ -156,7 +158,7 @@ void ESCHigherComponent::maybe_log_command_result_(uint8_t last_cmd_seq, uint8_t
 
   if (last_cmd_error == 28) {
     uint8_t config_status[49]{0};
-    if (this->read_register_(REG_CONFIG_STATUS, config_status, sizeof(config_status))) {
+    if (this->read_register_(RegisterId::CONFIG_STATUS, config_status, sizeof(config_status))) {
       char config_name[33]{0};
       std::memcpy(config_name, &config_status[13], 32);
       ESP_LOGW(
@@ -199,11 +201,16 @@ void ESCHigherComponent::setup() {
   }
 }
 
-bool ESCHigherComponent::read_register_(uint8_t reg, uint8_t* out, size_t len) {
-  const i2c::ErrorCode err = this->write_read(&reg, 1, out, len);
-  if (err == i2c::ERROR_OK)
-    return true;
-  ESP_LOGW(TAG, "Read reg 0x%02X failed (%s)", reg, i2c_error_to_cstr(err));
+bool ESCHigherComponent::read_register_(RegisterId reg, uint8_t* out, size_t len) {
+  const auto &info = register_info(reg);
+  if (out == nullptr || !component_common::payload_size_matches(info.read_size, len)) {
+    ESP_LOGE(TAG, "Invalid read size for %s: %u", info.name, static_cast<unsigned>(len));
+    return false;
+  }
+  const uint8_t address = register_address(reg);
+  const i2c::ErrorCode err = this->write_read(&address, 1, out, len);
+  if (err == i2c::ERROR_OK) return true;
+  ESP_LOGW(TAG, "Read %s (0x%02X) failed (%s)", info.name, address, i2c_error_to_cstr(err));
   return false;
 }
 
@@ -216,7 +223,7 @@ bool ESCHigherComponent::read_debug_info_(
   uint16_t* crc16
 ) {
   uint8_t info[16]{0};
-  uint8_t reg = REG_DEBUG_INFO;
+  uint8_t reg = register_address(RegisterId::DEBUG_INFO);
   if (this->write_read(&reg, 1, info, sizeof(info)) != i2c::ERROR_OK) {
     ESP_LOGE(TAG, "Failed to read DEBUG_INFO");
     return false;
@@ -240,7 +247,7 @@ bool ESCHigherComponent::read_debug_info_(
 bool ESCHigherComponent::read_debug_chunk_(uint16_t offset, uint8_t length, uint8_t* out) {
   if (length == 0)
     return true;
-  uint8_t tx[4]{REG_DEBUG_READ, static_cast<uint8_t>(offset & 0xFF), static_cast<uint8_t>((offset >> 8) & 0xFF), length};
+  uint8_t tx[4]{register_address(RegisterId::DEBUG_READ), static_cast<uint8_t>(offset & 0xFF), static_cast<uint8_t>((offset >> 8) & 0xFF), length};
   const i2c::ErrorCode err = this->write_read(tx, sizeof(tx), out, length);
   if (err == i2c::ERROR_OK)
     return true;
@@ -402,12 +409,12 @@ bool ESCHigherComponent::publish_debug_log_(
   publish_text(this->debug_log_text_sensor_, summary);
   return true;
 }
-bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t param1, int32_t param2, uint8_t* seq_out) {
+bool ESCHigherComponent::write_command_(CommandId opcode, int32_t param0, int32_t param1, int32_t param2, uint8_t* seq_out) {
   uint8_t tx[17]{0};
   const uint8_t seq = this->command_seq_++;
-  tx[0] = REG_COMMAND;
+  tx[0] = register_address(RegisterId::COMMAND);
   tx[1] = seq;
-  tx[2] = opcode;
+  tx[2] = command_code(opcode);
   tx[3] = 0;
   tx[4] = 0;
   tx[5] = static_cast<uint8_t>(param0 & 0xFF);
@@ -426,13 +433,13 @@ bool ESCHigherComponent::write_command_(uint8_t opcode, int32_t param0, int32_t 
     *seq_out = seq;
 
   ESP_LOGI(TAG, "Cmd %s (seq %u, p0=%d, p1=%d, p2=%d)",
-           opcode_to_cstr(opcode), tx[1], param0, param1, param2);
+           opcode_to_cstr(command_code(opcode)), tx[1], param0, param1, param2);
 
   const i2c::ErrorCode err = this->write(tx, sizeof(tx));
   if (err == i2c::ERROR_OK)
     return true;
   ESP_LOGW(TAG, "Cmd %s (seq %u, p0=%d, p1=%d, p2=%d) failed: %s",
-           opcode_to_cstr(opcode), tx[1], param0, param1, param2, i2c_error_to_cstr(err));
+           opcode_to_cstr(command_code(opcode)), tx[1], param0, param1, param2, i2c_error_to_cstr(err));
   return false;
 }
 
@@ -440,7 +447,7 @@ bool ESCHigherComponent::wait_for_command_result_(uint8_t seq, const char* label
   const uint32_t start = millis();
   while ((millis() - start) <= timeout_ms) {
     uint8_t status[16]{0};
-    if (this->read_register_(REG_STATUS, status, sizeof(status))) {
+    if (this->read_register_(RegisterId::STATUS, status, sizeof(status))) {
       if (status[3] == seq) {
         this->maybe_log_command_result_(status[3], status[4], status[1], status[2], status[5], u16_(status, 6),
                                         u16_(status, 8));
@@ -458,7 +465,7 @@ bool ESCHigherComponent::wait_for_command_result_(uint8_t seq, const char* label
 
 bool ESCHigherComponent::configure_watchdog_() {
   ESP_LOGI(TAG, "Setting command watchdog to %u ms", static_cast<unsigned>(COMMAND_WATCHDOG_TIMEOUT_MS));
-  if (this->write_command_(OPCODE_SET_WATCHDOG, COMMAND_WATCHDOG_TIMEOUT_MS, 0, 0))
+  if (this->write_command_(CommandId::SET_WATCHDOG, COMMAND_WATCHDOG_TIMEOUT_MS, 0, 0))
     return true;
   ESP_LOGW(TAG, "Failed to configure command watchdog");
   return false;
@@ -466,7 +473,7 @@ bool ESCHigherComponent::configure_watchdog_() {
 
 bool ESCHigherComponent::initialize_() {
   uint8_t id[8]{0};
-  if (!this->read_register_(REG_ID, id, sizeof(id))) {
+  if (!this->read_register_(RegisterId::ID, id, sizeof(id))) {
     ESP_LOGW(TAG, "Failed to read ID register");
     return false;
   }
@@ -498,23 +505,23 @@ bool ESCHigherComponent::initialize_() {
 }
 
 bool ESCHigherComponent::start_motor() {
-  return this->write_command_(OPCODE_START, 0, 0, 0);
+  return this->write_command_(CommandId::START, 0, 0, 0);
 }
 
 bool ESCHigherComponent::stop_motor() {
-  return this->write_command_(OPCODE_STOP, 0, 0, 0);
+  return this->write_command_(CommandId::STOP, 0, 0, 0);
 }
 
 bool ESCHigherComponent::clear_faults() {
-  return this->write_command_(OPCODE_CLEAR_FAULTS, 0, 0, 0);
+  return this->write_command_(CommandId::CLEAR_FAULTS, 0, 0, 0);
 }
 
 bool ESCHigherComponent::estop() {
-  return this->write_command_(OPCODE_ESTOP, 0, 0, 0);
+  return this->write_command_(CommandId::ESTOP, 0, 0, 0);
 }
 
 bool ESCHigherComponent::set_speed_ramp() {
-  return this->write_command_(OPCODE_SET_SPEED_RAMP, speed_ramp_target_dhz_, speed_ramp_time_ms_, 0);
+  return this->write_command_(CommandId::SET_SPEED_RAMP, speed_ramp_target_dhz_, speed_ramp_time_ms_, 0);
 }
 
 void ESCHigherComponent::set_mc_revup(uint8_t idx, uint16_t duration_ms, int16_t final_speed_unit, int16_t final_current_mA) {
@@ -544,13 +551,13 @@ bool ESCHigherComponent::run_bringup_test() {
     options |= BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM;
 
   this->force_next_bringup_debug_read_ = true;
-  return this->write_command_(OPCODE_RUN_BRINGUP_TEST, test_id, duration_ms, options);
+  return this->write_command_(CommandId::RUN_BRINGUP_TEST, test_id, duration_ms, options);
 }
 
 bool ESCHigherComponent::run_bridge_static_vector_test() {
   this->force_next_bringup_debug_read_ = true;
   return this->write_command_(
-    OPCODE_RUN_BRINGUP_TEST,
+    CommandId::RUN_BRINGUP_TEST,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR,
     BRINGUP_TEST_BRIDGE_STATIC_VECTOR_DURATION_MS,
     BRINGUP_TEST_OPTIONS_DEFAULT
@@ -560,7 +567,7 @@ bool ESCHigherComponent::run_bridge_static_vector_test() {
 bool ESCHigherComponent::run_forced_timer_diff_pwm_test() {
   this->force_next_bringup_debug_read_ = true;
   return this->write_command_(
-    OPCODE_RUN_BRINGUP_TEST,
+    CommandId::RUN_BRINGUP_TEST,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM,
     BRINGUP_TEST_FORCED_TIMER_DIFF_PWM_DURATION_MS,
     BRINGUP_TEST_OPTIONS_DEFAULT | BRINGUP_OPT_ALLOW_FORCED_TIMER_DIFF_PWM
@@ -591,7 +598,7 @@ bool ESCHigherComponent::set_speed_target_dhz_and_send(int32_t target_dhz) {
 
 bool ESCHigherComponent::config_begin(uint16_t size, uint8_t schema, uint32_t crc) {
   uint8_t seq = 0;
-  if (!this->write_command_(OPCODE_CONFIG_BEGIN, static_cast<int32_t>(size), static_cast<int32_t>(schema), static_cast<int32_t>(crc), &seq))
+  if (!this->write_command_(CommandId::CONFIG_BEGIN, static_cast<int32_t>(size), static_cast<int32_t>(schema), static_cast<int32_t>(crc), &seq))
     return false;
   return this->wait_for_command_result_(seq, "config_begin");
 }
@@ -604,14 +611,14 @@ bool ESCHigherComponent::config_write_chunk(uint16_t offset, const uint8_t* data
     return false;
   }
   uint8_t tx[CONFIG_DATA_CHUNK_SIZE + 3];
-  tx[0] = REG_CONFIG_DATA;
+  tx[0] = register_address(RegisterId::CONFIG_DATA);
   tx[1] = static_cast<uint8_t>(offset & 0xFF);
   tx[2] = static_cast<uint8_t>((offset >> 8) & 0xFF);
   std::memcpy(tx + 3, data, len);
   const i2c::ErrorCode err = this->write(tx, 3 + len);
   if (err == i2c::ERROR_OK) {
     uint8_t status[16]{0};
-    if (this->read_register_(REG_STATUS, status, sizeof(status)) && status[4] != 0) {
+    if (this->read_register_(RegisterId::STATUS, status, sizeof(status)) && status[4] != 0) {
       ESP_LOGW(TAG, "Config write chunk offset=%u len=%u rejected: %s",
                static_cast<unsigned>(offset), static_cast<unsigned>(len), last_cmd_error_to_cstr(status[4]));
       return false;
@@ -625,21 +632,21 @@ bool ESCHigherComponent::config_write_chunk(uint16_t offset, const uint8_t* data
 
 bool ESCHigherComponent::config_validate() {
   uint8_t seq = 0;
-  if (!this->write_command_(OPCODE_CONFIG_VALIDATE, 0, 0, 0, &seq))
+  if (!this->write_command_(CommandId::CONFIG_VALIDATE, 0, 0, 0, &seq))
     return false;
   return this->wait_for_command_result_(seq, "config_validate");
 }
 
 bool ESCHigherComponent::config_commit() {
   uint8_t seq = 0;
-  if (!this->write_command_(OPCODE_CONFIG_COMMIT, 0, 0, 0, &seq))
+  if (!this->write_command_(CommandId::CONFIG_COMMIT, 0, 0, 0, &seq))
     return false;
   return this->wait_for_command_result_(seq, "config_commit");
 }
 
 bool ESCHigherComponent::config_erase() {
   uint8_t seq = 0;
-  if (!this->write_command_(OPCODE_CONFIG_ERASE, 0, 0, 0, &seq))
+  if (!this->write_command_(CommandId::CONFIG_ERASE, 0, 0, 0, &seq))
     return false;
   return this->wait_for_command_result_(seq, "config_erase");
 }
@@ -795,7 +802,7 @@ void ESCHigherComponent::update() {
     capabilities_sensor_ != nullptr
   ) {
     uint8_t id[8]{0};
-    if (this->read_register_(REG_ID, id, sizeof(id))) {
+    if (this->read_register_(RegisterId::ID, id, sizeof(id))) {
       publish_sensor(proto_major_sensor_, id[0]);
       publish_sensor(proto_minor_sensor_, id[1]);
       publish_sensor(fw_major_sensor_, id[2]);
@@ -811,7 +818,7 @@ void ESCHigherComponent::update() {
 
   {
     uint8_t status[16]{0};
-    if (this->read_register_(REG_STATUS, status, sizeof(status))) {
+    if (this->read_register_(RegisterId::STATUS, status, sizeof(status))) {
       this->maybe_log_command_result_(status[3], status[4], status[1], status[2], status[5], u16_(status, 6),
                                       u16_(status, 8));
       publish_sensor(status_seq_sensor_, status[0]);
@@ -852,7 +859,7 @@ void ESCHigherComponent::update() {
 
   {
     uint8_t tel[48]{0};
-    if (this->read_register_(REG_TELEMETRY, tel, sizeof(tel))) {
+    if (this->read_register_(RegisterId::TELEMETRY, tel, sizeof(tel))) {
       this->maybe_log_command_result_(tel[26], tel[3], tel[1], tel[2], tel[27], u16_(tel, 6), 0);
       publish_sensor(telemetry_seq_sensor_, tel[0]);
       publish_sensor(esc_state_sensor_, tel[1]);
@@ -887,7 +894,7 @@ void ESCHigherComponent::update() {
 
   {
     uint8_t bringup[64]{0};
-    if (this->read_register_(REG_BRINGUP, bringup, sizeof(bringup))) {
+    if (this->read_register_(RegisterId::BRINGUP, bringup, sizeof(bringup))) {
       publish_sensor(bringup_seq_sensor_, bringup[0]);
       publish_sensor(bringup_active_sensor_, bringup[1]);
       publish_sensor(bringup_test_id_sensor_, bringup[2]);
@@ -998,7 +1005,7 @@ void ESCHigherComponent::update() {
                             (debug_seq_sensor_ != nullptr);
     if (has_debug_sensor) {
       uint8_t debug[32]{0};
-      if (this->read_register_(REG_DEBUG_TELEMETRY, debug, sizeof(debug))) {
+      if (this->read_register_(RegisterId::DEBUG_TELEMETRY, debug, sizeof(debug))) {
         publish_sensor(debug_seq_sensor_, debug[0]);
         publish_sensor(debug_v_alpha_raw_s16_sensor_, i16_(debug, 2));
         publish_sensor(debug_v_beta_raw_s16_sensor_, i16_(debug, 4));

@@ -10,11 +10,7 @@ namespace mcp4726 {
 static const char *const TAG = "mcp4726.output";
 
 void MCP4726Output::setup() {
-  if (this->zero_on_boot_) {
-    if (!this->write_code_(0)) {
-      this->mark_failed();
-    }
-  }
+  if (this->zero_on_boot_ && !this->write_code_(0)) this->mark_failed();
 }
 
 void MCP4726Output::dump_config() {
@@ -24,40 +20,22 @@ void MCP4726Output::dump_config() {
   ESP_LOGCONFIG(TAG, "  Gain: %s", this->gain_name_());
   ESP_LOGCONFIG(TAG, "  Power down: %s", this->power_down_name_());
   ESP_LOGCONFIG(TAG, "  Zero on boot: %s", YESNO(this->zero_on_boot_));
-  if (this->is_failed()) {
-    ESP_LOGE(TAG, "Communication with MCP4726 failed");
-  }
+  if (this->is_failed()) ESP_LOGE(TAG, "Communication with MCP4726 failed");
 }
 
 void MCP4726Output::write_state(float state) {
   if (state < 0.0f) state = 0.0f;
   if (state > 1.0f) state = 1.0f;
-
-  const uint16_t code = static_cast<uint16_t>(lroundf(state * 4095.0f));
-  this->write_code_(code);
-}
-
-uint8_t MCP4726Output::command_byte_() const {
-  // Write Volatile Memory command for MCP47x6:
-  // C2:C0 = 010, then VREF1:VREF0, PD1:PD0, G.
-  return static_cast<uint8_t>(0x40 | ((this->vref_ & 0x03) << 3) |
-                              ((this->power_down_ & 0x03) << 1) |
-                              (this->gain_ & 0x01));
+  this->write_code_(static_cast<uint16_t>(lroundf(state * 4095.0f)));
 }
 
 bool MCP4726Output::write_code_(uint16_t code) {
-  if (code > 4095) code = 4095;
+  const auto bytes = mcp4726_core::encode_volatile_write(
+      {.vref = this->vref_, .power_down = this->power_down_, .gain = this->gain_}, code);
 
-  const uint16_t data = static_cast<uint16_t>(code << 4);  // MCP4726 D11..D0 left-aligned in 16-bit data field
-  const uint8_t bytes[3] = {
-      this->command_byte_(),
-      static_cast<uint8_t>(data >> 8),
-      static_cast<uint8_t>(data & 0xFF),
-  };
-
-  const auto err = this->write(bytes, sizeof(bytes));
-  if (err != i2c::ERROR_OK) {
-    ESP_LOGE(TAG, "I2C write failed: %d", err);
+  const auto error = this->write(bytes.data(), bytes.size());
+  if (error != i2c::ERROR_OK) {
+    ESP_LOGE(TAG, "I2C write failed: %d", error);
     this->status_set_warning();
     return false;
   }

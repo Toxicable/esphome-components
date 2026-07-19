@@ -12,7 +12,7 @@ external_components:
       type: local
       path: ..
     refresh: 0s
-    components: [ mlx90614 ]
+    components: [ component_common, mlx90614 ]
 
 i2c:
   id: i2c_bus

@@ -5,9 +5,20 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$repo_root"
 
 python3 tools/check_component_inventory.py
+python3 tools/check_register_models.py
 
 python3 tools/check_core_purity.py \
   components/component_common \
+  components/esc_higher/esc_higher_registers.h \
+  components/husb238/husb238_registers.h \
+  components/husb238/husb238_protocol.h \
+  components/husb238/husb238_protocol.cpp \
+  components/husb238/husb238_bus.h \
+  components/husb238/husb238_service.h \
+  components/husb238/husb238_service.cpp \
+  components/lps25hb/lps25hb_registers.h \
+  components/mcp4726/mcp4726_protocol.h \
+  components/mlx90614/mlx90614_registers.h \
   components/bq25756 \
   components/bq76952/bq76952_registers.h \
   components/bq76952/bq76952_status.h \
@@ -65,6 +76,11 @@ run_test() {
 
 run_test component_common_test \
   tests/component_common_test.cpp
+
+run_test register_components_test \
+  tests/register_components_test.cpp \
+  components/husb238/husb238_protocol.cpp \
+  components/husb238/husb238_service.cpp
 
 run_test bq25756_service_test \
   tests/bq25756_service_test.cpp \

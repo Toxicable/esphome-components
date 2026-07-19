@@ -10,7 +10,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["sensor"]
+AUTO_LOAD = ["component_common", "sensor"]
 
 mlx_ns = cg.esphome_ns.namespace("mlx90614")
 MLX90614Component = mlx_ns.class_("MLX90614Component", cg.PollingComponent, i2c.I2CDevice)

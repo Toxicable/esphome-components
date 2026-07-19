@@ -11,7 +11,7 @@ external_components:
       type: local
       path: ..
     refresh: 0s
-    components: [ esc_higher ]
+    components: [ component_common, esc_higher ]
 
 i2c:
   id: i2c_bus
