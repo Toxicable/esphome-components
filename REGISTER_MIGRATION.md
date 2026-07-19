@@ -30,4 +30,4 @@ These components keep numeric addresses and command codes inside chip-specific m
 
 Small adapters remain lightweight. A typed register model does not require a service layer when the component has no reconciliation, sequencing or reusable device policy.
 
-The host suite validates metadata coverage and the CI matrix compiles every retained component that has an ESPHome fixture against the pinned ESPHome release.
+The host suite validates metadata coverage. The pinned ESPHome matrix includes every retained component with a committed compile fixture, including HUSB238 and MCP4726.
