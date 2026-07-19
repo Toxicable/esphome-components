@@ -71,7 +71,7 @@ bool MCF8316DService::write_speed_command_percent(float speed_percent) const {
   uint32_t value = ALGO_DEBUG1_OVERRIDE_MASK;
   value |= (static_cast<uint32_t>(digital_speed_ctrl) << 16) & ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK;
   return this->update_bits32(
-    register_address(RegisterId::ALGO_DEBUG1), ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
+    RegisterId::ALGO_DEBUG1, ALGO_DEBUG1_OVERRIDE_MASK | ALGO_DEBUG1_DIGITAL_SPEED_CTRL_MASK, value
   );
 }
 
