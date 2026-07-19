@@ -12,6 +12,8 @@ namespace registers {
 
 using component_common::PayloadWidth;
 
+inline constexpr int32_t COMMAND_WATCHDOG_TIMEOUT_MS = 500;
+
 enum class RegisterId : uint8_t {
   ID,
   STATUS,
