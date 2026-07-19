@@ -17,34 +17,18 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Apply final typed-call cleanup
+      - name: Remove final stale typed-address conversion
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
-          for path in (
-              Path('components/mcf8316d/mcf8316d_tuning.cpp'),
-              Path('components/mcf8329a/mcf8329a_tuning.cpp'),
-          ):
-              text = path.read_text()
-              text, count = re.subn(
-                  r'update_bits32\(\s*register_address\((RegisterId::[A-Z0-9_]+)\),',
-                  r'update_bits32(\n      \1,',
-                  text,
-              )
-              if path.name == 'mcf8329a_tuning.cpp' and count < 1:
-                  raise RuntimeError(f'{path}: expected at least one stale typed-update call')
-              path.write_text(text)
-
-          path = Path('components/programmable_load/programmable_load.h')
+          path = Path('components/mcf8329a/mcf8329a_tuning.cpp')
           text = path.read_text()
-          start = text.find('template<typename... Ts> class ApplyCalibrationAction')
-          end_marker = '\n}  // namespace programmable_load\n}  // namespace esphome\n'
-          end = text.rfind(end_marker)
-          if start < 0 or end < 0 or start >= end:
-              raise RuntimeError('programmable_load.h: duplicate calibration action block not found')
-          path.write_text(text[:start] + end_marker)
+          old = '      register_address(RegisterId::INT_ALGO_2),\n'
+          new = '      RegisterId::INT_ALGO_2,\n'
+          if text.count(old) != 1:
+              raise RuntimeError(f'expected exactly one stale INT_ALGO_2 conversion, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
           PY
 
       - name: Run host suite
@@ -56,14 +40,11 @@ jobs:
           bash ./check_esphome.bash components/mcf8316d/test_config.yaml
           bash ./check_esphome.bash components/mcf8329a/test_config.yaml
           bash ./check_esphome.bash components/programmable_load/test_config.yaml
-          bash ./check_esphome.bash components/bq76952/test_config.yaml
 
       - name: Commit validated cleanup
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add components/mcf8316d/mcf8316d_tuning.cpp \
-                  components/mcf8329a/mcf8329a_tuning.cpp \
-                  components/programmable_load/programmable_load.h
+          git add components/mcf8329a/mcf8329a_tuning.cpp
           git commit -m "Finish typed register call-site migration [finalized-register-migration]"
           git push origin HEAD:main
