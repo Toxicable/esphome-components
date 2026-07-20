@@ -19,6 +19,7 @@ Status describes maintenance intent only. It does not imply that an active compo
 
 | Component | Status | Known use or reason retained | Direction |
 | --- | --- | --- | --- |
+| `bq25628` | active | Solar_Outdoors outdoor-node configuration | Keep as the BQ25628E ADC telemetry integration. |
 | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
 | `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
 | `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |

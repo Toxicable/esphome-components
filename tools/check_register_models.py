@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = ROOT / "components"
 
 TYPED_REGISTER_COMPONENTS = {
+    "bq25628": "bq25628_registers.h",
     "bq25756": "bq25756_registers.h",
     "bq76952": "bq76952_registers.h",
     "esc_higher": "esc_higher_registers.h",

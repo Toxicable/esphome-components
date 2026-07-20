@@ -19,6 +19,12 @@ python3 tools/check_core_purity.py \
   components/lps25hb/lps25hb_registers.h \
   components/mcp4726/mcp4726_protocol.h \
   components/mlx90614/mlx90614_registers.h \
+  components/bq25628/bq25628_registers.h \
+  components/bq25628/bq25628_protocol.h \
+  components/bq25628/bq25628_protocol.cpp \
+  components/bq25628/bq25628_bus.h \
+  components/bq25628/bq25628_service.h \
+  components/bq25628/bq25628_service.cpp \
   components/bq25756 \
   components/bq76952/bq76952_registers.h \
   components/bq76952/bq76952_status.h \
@@ -81,6 +87,11 @@ run_test register_components_test \
   tests/register_components_test.cpp \
   components/husb238/husb238_protocol.cpp \
   components/husb238/husb238_service.cpp
+
+run_test bq25628_service_test \
+  tests/bq25628_service_test.cpp \
+  components/bq25628/bq25628_protocol.cpp \
+  components/bq25628/bq25628_service.cpp
 
 run_test bq25756_service_test \
   tests/bq25756_service_test.cpp \

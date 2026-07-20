@@ -1,0 +1,28 @@
+esphome:
+  name: bq25628-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-c6-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [ component_common, bq25628 ]
+
+i2c:
+  id: charger_bus
+  sda: GPIO7
+  scl: GPIO6
+  frequency: 100kHz
+
+bq25628:
+  id: charger
+  i2c_id: charger_bus
+  measurements:
+    battery_voltage:
+      name: "Battery Voltage"

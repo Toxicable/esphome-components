@@ -96,41 +96,34 @@ MakitaXGTComponent::ReadStatus MakitaXGTComponent::send_command_(
   uint8_t& rx_length
 ) {
   rx_length = 0;
-  for (uint8_t attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) {
-      delay(RETRY_DELAY_MS);
+  this->flush_rx_();
+  ESP_LOGD(TAG, "TX %s", label);
+  this->log_bytes_("TX raw", command, command_length);
+  this->write_array(command, command_length);
+  this->flush();
+
+  if (!this->read_frame_(command, command_length, buffer, rx_length)) {
+    if (rx_length > 0) {
+      this->log_bytes_("RX partial", buffer, rx_length);
     }
-    this->flush_rx_();
-    ESP_LOGD(TAG, "TX %s attempt %u", label, attempt + 1);
-    this->log_bytes_("TX raw", command, command_length);
-    this->write_array(command, command_length);
-    this->flush();
-
-    if (!this->read_frame_(command, command_length, buffer, rx_length)) {
-      if (rx_length > 0) {
-        this->log_bytes_("RX partial", buffer, rx_length);
-      }
-      ESP_LOGW(TAG, "RX timeout for %s on attempt %u (%u bytes after echo)", label, attempt + 1, rx_length);
-      continue;
-    }
-
-    this->log_bytes_("RX raw", buffer, rx_length);
-
-    for (uint8_t i = 0; i < rx_length; i++) {
-      buffer[i] = this->reverse_bits_(buffer[i]);
-    }
-
-    this->log_bytes_("RX decoded", buffer, rx_length);
-
-    if (!this->check_crc_(buffer, rx_length)) {
-      ESP_LOGW(TAG, "CRC mismatch for %s response", label);
-      return ReadStatus::CRC_ERROR;
-    }
-    ESP_LOGD(TAG, "RX %s CRC OK (%u bytes)", label, rx_length);
-    return ReadStatus::OK;
+    ESP_LOGW(TAG, "RX timeout for %s (%u bytes after echo)", label, rx_length);
+    return ReadStatus::RX_ERROR;
   }
 
-  return ReadStatus::RX_ERROR;
+  this->log_bytes_("RX raw", buffer, rx_length);
+
+  for (uint8_t i = 0; i < rx_length; i++) {
+    buffer[i] = this->reverse_bits_(buffer[i]);
+  }
+
+  this->log_bytes_("RX decoded", buffer, rx_length);
+
+  if (!this->check_crc_(buffer, rx_length)) {
+    ESP_LOGW(TAG, "CRC mismatch for %s response", label);
+    return ReadStatus::CRC_ERROR;
+  }
+  ESP_LOGD(TAG, "RX %s CRC OK (%u bytes)", label, rx_length);
+  return ReadStatus::OK;
 }
 
 bool MakitaXGTComponent::read_frame_(const uint8_t* command, uint8_t command_length, uint8_t* buffer, uint8_t& rx_length) {

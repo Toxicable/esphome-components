@@ -102,10 +102,9 @@ class MakitaXGTComponent : public PollingComponent, public uart::UARTDevice {
   static constexpr uint8_t CELL_VOLTAGE_CMD_TEMPLATE[8] = {0x33, 0x23, 0x03, 0xC0, 0x00, 0x00, 0x00, 0xCC};
   static constexpr std::array<uint8_t, 16> BIT_REVERSE_LOOKUP_{{0x0, 0x8, 0x4, 0xC, 0x2, 0xA, 0x6, 0xE, 0x1, 0x9, 0x5, 0xD, 0x3, 0xB, 0x7, 0xF}};
   static constexpr uint8_t FRAME_MAX = 32;
-  static constexpr uint32_t WAKE_DELAY_MS = 70;
+  static constexpr uint32_t WAKE_DELAY_MS = 100;
   static constexpr uint32_t RESPONSE_TIMEOUT_MS = 80;
   static constexpr uint32_t INTER_BYTE_TIMEOUT_MS = 5;
-  static constexpr uint32_t RETRY_DELAY_MS = 50;
 };
 
 class MakitaXGTResetButton : public button::Button {
