@@ -75,8 +75,8 @@ void BQ25756ComponentImpl::set_connection_state_(
   }
 
   ESP_LOGI(TAG, "Connection state: %s -> %s",
-           ::component_common::connection_state_to_string(this->connection_state_).data(),
-           ::component_common::connection_state_to_string(state).data());
+           ::component_common::connection_state_to_string(this->connection_state_),
+           ::component_common::connection_state_to_string(state));
   this->connection_state_ = state;
 
   if (state == ::component_common::ConnectionState::DISCONNECTED) {
@@ -142,7 +142,6 @@ void BQ25756ComponentImpl::set_disconnected_() {
   this->initialized_ = false;
   this->register_config_synced_ = false;
   this->charger_snapshot_.valid = false;
-  this->next_init_retry_ms_ = millis() + INIT_RETRY_INTERVAL_MS;
   this->set_connection_state_(
       ::component_common::ConnectionState::DISCONNECTED);
   this->status_set_warning();
@@ -171,7 +170,6 @@ void BQ25756ComponentImpl::setup() {
       this->set_disconnected_();
     } else {
       this->initialized_ = false;
-      this->next_init_retry_ms_ = millis() + INIT_RETRY_INTERVAL_MS;
       this->status_set_warning();
     }
     return;
@@ -183,8 +181,7 @@ void BQ25756ComponentImpl::update() {
   this->io_failed_this_cycle_ = false;
 
   if (this->connection_state_ ==
-          ::component_common::ConnectionState::DISCONNECTED &&
-      static_cast<int32_t>(millis() - this->next_init_retry_ms_) >= 0) {
+          ::component_common::ConnectionState::DISCONNECTED) {
     this->set_connection_state_(
         ::component_common::ConnectionState::CONNECTING);
   }
@@ -220,7 +217,6 @@ void BQ25756ComponentImpl::update() {
         this->set_disconnected_();
       } else {
         this->initialized_ = false;
-        this->next_init_retry_ms_ = millis() + INIT_RETRY_INTERVAL_MS;
         this->status_set_warning();
       }
       return;

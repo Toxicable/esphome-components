@@ -75,7 +75,6 @@ class BQ76952Service {
   bool output_request_pending_{false};
   bool output_request_expected_enabled_{false};
   uint32_t output_request_started_ms_{0};
-  uint32_t next_configuration_retry_ms_{0};
   uint32_t next_configuration_audit_ms_{0};
 };
 

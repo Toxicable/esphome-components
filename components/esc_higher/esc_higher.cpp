@@ -21,8 +21,6 @@ using namespace ::esc_higher_core::registers;
 
 static const char* const TAG = "esc_higher";
 namespace {
-constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
-
 template<typename T> void publish_sensor(sensor::Sensor* sensor, T value) {
   if (sensor != nullptr)
     sensor->publish_state(value);
@@ -187,7 +185,6 @@ void ESCHigherComponent::maybe_log_command_result_(uint8_t last_cmd_seq, uint8_t
 void ESCHigherComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up esc_higher...");
   this->initialized_ = false;
-  this->next_init_retry_ms_ = 0;
   this->debug_log_read_failed_ = false;
   this->last_bringup_report_seq_ = 0xFF;
   this->last_logged_cmd_seq_ = 0xFF;
@@ -782,12 +779,8 @@ bool ESCHigherComponent::config_provision_with_crc() {
 
 void ESCHigherComponent::update() {
   if (!this->initialized_) {
-    const uint32_t now = millis();
-    if (now < this->next_init_retry_ms_)
-      return;
     if (!this->initialize_()) {
       this->status_set_warning();
-      this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
       return;
     }
     this->initialized_ = true;

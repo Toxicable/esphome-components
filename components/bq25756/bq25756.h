@@ -158,6 +158,7 @@ class BQ25756Component : public PollingComponent,
   bool configured_state_matches_();
   virtual bool audit_configured_state_();
   bool ensure_adc_enabled_();
+  void log_i2c_failure_(const char *operation) const;
   void log_adc_configuration_(const ::bq25756_core::AdcConfigurationState &state,
                               ::bq25756_core::AdcEnsureResult result);
   bool apply_battery_target_();
@@ -195,8 +196,6 @@ class BQ25756Component : public PollingComponent,
   number::Number *calibration_voltage_number_{nullptr};
 
   bool initialized_{false};
-  uint32_t next_init_retry_ms_{0};
-  static constexpr uint32_t INIT_RETRY_INTERVAL_MS = 1000;
   uint32_t next_configuration_audit_ms_{0};
   static constexpr uint32_t CONFIGURATION_AUDIT_INTERVAL_MS = 10000;
   static constexpr uint32_t CALIBRATION_ADC_SETTLE_MS = 100;
@@ -208,6 +207,7 @@ class BQ25756Component : public PollingComponent,
   bool disable_ichg_pin_{false};
   bool disable_pfm_{false};
   bool has_charge_voltage_limit_mv_{false};
+  i2c::ErrorCode last_i2c_error_{i2c::ERROR_OK};
   bool has_charge_current_limit_ma_{false};
   bool has_input_current_dpm_limit_ma_{false};
   bool has_input_voltage_dpm_limit_mv_{false};

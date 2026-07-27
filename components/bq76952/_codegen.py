@@ -159,7 +159,7 @@ async def to_code(config):
     cg.add(var.set_config(_build_cpp_config(config)))
 
     sensor_setters = (
-        (schema.CONF_BAT_VOLTAGE, var.set_bat_voltage_sensor),
+        (schema.CONF_BATTERY_VOLTAGE, var.set_battery_voltage_sensor),
         (schema.CONF_PACK_VOLTAGE, var.set_pack_voltage_sensor),
         (schema.CONF_LD_VOLTAGE, var.set_ld_voltage_sensor),
         (

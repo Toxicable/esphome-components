@@ -129,7 +129,6 @@ void BQ76952Service::setup() {
   }
   this->connection_state_ = component_common::ConnectionState::CONNECTING;
   this->soc_.setup(this->config_.cell_chemistry);
-  this->next_configuration_retry_ms_ = 0;
   this->next_configuration_audit_ms_ = 0;
 }
 
@@ -182,7 +181,7 @@ bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
 
   const uint32_t now = millis();
   const bool needs_restore = !this->configured_;
-  if ((needs_restore && static_cast<int32_t>(now - this->next_configuration_retry_ms_) >= 0) ||
+  if (needs_restore ||
       (!needs_restore && static_cast<int32_t>(now - this->next_configuration_audit_ms_) >= 0)) {
     const ConfigurationSyncMode mode =
         needs_restore ? ConfigurationSyncMode::RESTORE_RUNTIME_STATE : ConfigurationSyncMode::AUDIT_AND_REPAIR;
@@ -191,7 +190,6 @@ bool BQ76952Service::poll(::bq76952_core::Snapshot &snapshot) {
       this->next_configuration_audit_ms_ = now + hw::policy::CONFIG_AUDIT_INTERVAL_MS;
     } else {
       this->configured_ = false;
-      this->next_configuration_retry_ms_ = now + hw::policy::CONFIG_RETRY_INTERVAL_MS;
     }
   }
 

@@ -98,7 +98,6 @@ void MCF8329AComponent::start_mpet_characterization() {
 void MCF8329AComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up mcf8329a");
   this->normal_operation_ready_ = false;
-  this->deferred_comms_last_retry_ms_ = 0u;
   this->deferred_comms_last_scan_ms_ = 0u;
   this->algorithm_state_valid_ = false;
   this->algorithm_state_read_error_latched_ = false;
@@ -120,9 +119,7 @@ void MCF8329AComponent::setup() {
     ESP_LOGW(TAG, "I2C scan failed; continuing with communication retries");
     this->status_set_warning();
   }
-  if (!this->establish_communications_(
-        STARTUP_COMMS_ATTEMPTS, STARTUP_COMMS_RETRY_DELAY_MS, true
-      )) {
+  if (!this->establish_communications_()) {
     ESP_LOGW(
       TAG,
       "Unable to establish communications with I2C device 0x%02X during setup; deferring normal "
@@ -704,12 +701,10 @@ void MCF8329AComponent::dump_config() {
   );
   ESP_LOGCONFIG(
     TAG,
-    "  Motor config comm gate: scan 0x%02X..0x%02X, attempts=%u, retry=%ums, deferred_retry=%ums",
+    "  Motor config comm gate: single communication attempt per update; diagnostic scan 0x%02X..0x%02X every %ums",
     static_cast<unsigned>(I2C_SCAN_ADDRESS_MIN),
     static_cast<unsigned>(I2C_SCAN_ADDRESS_MAX),
-    static_cast<unsigned>(STARTUP_COMMS_ATTEMPTS),
-    static_cast<unsigned>(STARTUP_COMMS_RETRY_DELAY_MS),
-    static_cast<unsigned>(DEFERRED_COMMS_RETRY_INTERVAL_MS)
+    static_cast<unsigned>(DEFERRED_SCAN_INTERVAL_MS)
   );
 }
 
@@ -797,53 +792,26 @@ bool MCF8329AComponent::scan_i2c_bus_() {
   return device_count > 0u;
 }
 
-bool MCF8329AComponent::establish_communications_(
-  uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays
-) {
-  if (attempts == 0u) {
+bool MCF8329AComponent::establish_communications_() {
+  i2c::ErrorCode ack_error = i2c::ERROR_UNKNOWN;
+  if (!this->probe_device_ack_(ack_error)) {
+    ESP_LOGW(
+      TAG,
+      "I2C probe for address 0x%02X failed: %s (%d)",
+      this->address_,
+      this->i2c_error_to_string_(ack_error),
+      static_cast<int>(ack_error)
+    );
     return false;
   }
 
-  for (uint8_t attempt = 1u; attempt <= attempts; attempt++) {
-    i2c::ErrorCode ack_error = i2c::ERROR_UNKNOWN;
-    if (!this->probe_device_ack_(ack_error)) {
-      ESP_LOGW(
-        TAG,
-        "Comms attempt %u/%u: address 0x%02X probe failed: %s (%d)",
-        static_cast<unsigned>(attempt),
-        static_cast<unsigned>(attempts),
-        this->address_,
-        this->i2c_error_to_string_(ack_error),
-        static_cast<int>(ack_error)
-      );
-    } else if (this->read_probe_and_publish_()) {
-      ESP_LOGI(
-        TAG,
-        "I2C communications established with 0x%02X (attempt %u/%u)",
-        this->address_,
-        static_cast<unsigned>(attempt),
-        static_cast<unsigned>(attempts)
-      );
-      return true;
-    } else {
-      ESP_LOGW(
-        TAG,
-        "Comms attempt %u/%u: address 0x%02X ACKed but register probe failed",
-        static_cast<unsigned>(attempt),
-        static_cast<unsigned>(attempts),
-        this->address_
-      );
-    }
-
-    if (attempt < attempts && retry_delay_ms > 0u) {
-      if (log_retry_delays) {
-        ESP_LOGW(TAG, "Retrying communications in %ums", static_cast<unsigned>(retry_delay_ms));
-      }
-      delay(retry_delay_ms);
-    }
+  if (!this->read_probe_and_publish_()) {
+    ESP_LOGW(TAG, "I2C address 0x%02X ACKed but register probe failed", this->address_);
+    return false;
   }
 
-  return false;
+  ESP_LOGI(TAG, "I2C communications established with 0x%02X", this->address_);
+  return true;
 }
 
 void MCF8329AComponent::process_deferred_startup_() {
@@ -852,18 +820,13 @@ void MCF8329AComponent::process_deferred_startup_() {
                            (now - this->deferred_comms_last_scan_ms_) >= DEFERRED_SCAN_INTERVAL_MS;
   if (should_scan) {
     if (!this->scan_i2c_bus_()) {
-      ESP_LOGW(TAG, "Deferred I2C scan failed; keeping deferred retry mode");
+      ESP_LOGW(TAG, "Deferred I2C scan failed; waiting for the next update to try communications again");
       this->status_set_warning();
     }
     this->deferred_comms_last_scan_ms_ = now;
   }
 
-  if (this->deferred_comms_last_retry_ms_ != 0u && (now - this->deferred_comms_last_retry_ms_) < DEFERRED_COMMS_RETRY_INTERVAL_MS) {
-    return;
-  }
-  this->deferred_comms_last_retry_ms_ = now;
-
-  if (!this->establish_communications_(1u, 0u, false)) {
+  if (!this->establish_communications_()) {
     this->status_set_warning();
     return;
   }

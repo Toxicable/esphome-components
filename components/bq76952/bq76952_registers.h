@@ -453,7 +453,6 @@ inline constexpr uint32_t CONFIG_UPDATE_POLL_INTERVAL_US = 1'000;
 // Product policy deliberately fixed outside user-facing YAML.
 namespace policy {
 inline constexpr uint32_t CONFIG_AUDIT_INTERVAL_MS = 60'000;
-inline constexpr uint32_t CONFIG_RETRY_INTERVAL_MS = 1'000;
 inline constexpr uint32_t OUTPUT_REQUEST_TIMEOUT_MS = 1'500;
 inline constexpr uint8_t TEMPERATURE_PROTECTION_DELAY_S = 2;
 inline constexpr int16_t BODY_DIODE_THRESHOLD_MA = 50;

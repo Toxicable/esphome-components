@@ -101,7 +101,7 @@ CONF_DISCHARGE_MINIMUM_C = "discharge_minimum_c"
 CONF_DISCHARGE_MAXIMUM_C = "discharge_maximum_c"
 CONF_RECOVERY_HYSTERESIS_C = "recovery_hysteresis_c"
 
-CONF_BAT_VOLTAGE = "bat_voltage"
+CONF_BATTERY_VOLTAGE = "battery_voltage"
 CONF_PACK_VOLTAGE = "pack_voltage"
 CONF_LD_VOLTAGE = "ld_voltage"
 CONF_LARGEST_INTERCELL_VOLTAGE = "largest_intercell_voltage"
@@ -419,7 +419,7 @@ schema = {
     cv.Required(CONF_BALANCING): BALANCING_SCHEMA,
     cv.Required(CONF_PROTECTIONS): PROTECTION_SCHEMA,
     cv.Required(CONF_SOC): SOC_SCHEMA,
-    cv.Optional(CONF_BAT_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
+    cv.Optional(CONF_BATTERY_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_PACK_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_LD_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,
     cv.Optional(CONF_LARGEST_INTERCELL_VOLTAGE): VOLTAGE_SENSOR_SCHEMA,

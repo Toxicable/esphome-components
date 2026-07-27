@@ -193,7 +193,7 @@ class MCF8316DComponent : public PollingComponent,
   friend class MCF8316DTuningController;
 
   bool read_probe_and_publish_();
-  bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
+  bool establish_communications_();
   bool probe_device_ack_(i2c::ErrorCode& error_code) const;
   bool scan_i2c_bus_();
   void process_deferred_startup_();
@@ -238,7 +238,6 @@ class MCF8316DComponent : public PollingComponent,
   bool fault_latched_{false};
   bool allow_retry_notice_active_{false};
   bool normal_operation_ready_{false};
-  uint32_t deferred_comms_last_retry_ms_{0};
   uint32_t deferred_comms_last_scan_ms_{0};
   uint16_t last_run_state_diag_value_{0xFFFFu};
   uint16_t last_control_diag_state_{0xFFFFu};

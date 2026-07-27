@@ -500,7 +500,6 @@ class ESCHigherComponent : public PollingComponent, public i2c::I2CDevice {
 
   uint8_t bringup_test_id_{BRINGUP_TEST_FULL_SPIN_SEQUENCE};
   bool initialized_{false};
-  uint32_t next_init_retry_ms_{0};
   uint16_t capabilities_{0};
   uint8_t max_block_len_{0};
   bool debug_log_supported_{false};

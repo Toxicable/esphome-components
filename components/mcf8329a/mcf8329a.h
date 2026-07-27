@@ -351,7 +351,7 @@ class MCF8329AComponent : public PollingComponent,
   friend class MCF8329ATuningController;
 
   bool read_probe_and_publish_();
-  bool establish_communications_(uint8_t attempts, uint32_t retry_delay_ms, bool log_retry_delays);
+  bool establish_communications_();
   bool probe_device_ack_(i2c::ErrorCode& error_code) const;
   bool scan_i2c_bus_();
   void process_deferred_startup_();
@@ -390,9 +390,6 @@ class MCF8329AComponent : public PollingComponent,
   );
 
 
-  static constexpr uint8_t STARTUP_COMMS_ATTEMPTS = 20u;
-  static constexpr uint32_t STARTUP_COMMS_RETRY_DELAY_MS = 250u;
-  static constexpr uint32_t DEFERRED_COMMS_RETRY_INTERVAL_MS = 1000u;
   static constexpr uint32_t DEFERRED_SCAN_INTERVAL_MS = 5000u;
   static constexpr uint32_t STARTUP_PROFILE_CHECK_INTERVAL_MS = 1000u;
   static constexpr uint32_t STARTUP_PROFILE_RECOVERY_COOLDOWN_MS = 3000u;
@@ -495,7 +492,6 @@ class MCF8329AComponent : public PollingComponent,
   uint32_t last_speed_diag_log_ms_{0};
   bool fault_latched_{false};
   bool normal_operation_ready_{false};
-  uint32_t deferred_comms_last_retry_ms_{0};
   uint32_t deferred_comms_last_scan_ms_{0};
   std::string last_fault_summary_{"none"};
   std::string motor_config_summary_{"default"};

@@ -28,7 +28,6 @@ bool BQ25756Component::set_watchdog_code(uint8_t code) {
 
 void BQ25756Component::setup() {
   this->initialized_ = false;
-  this->next_init_retry_ms_ = 0;
   this->next_configuration_audit_ms_ = 0;
   this->load_calibration_();
   this->publish_calibration_status_(
@@ -37,10 +36,9 @@ void BQ25756Component::setup() {
                                                                   : "not_calibrated"));
 
   if (!this->initialize_()) {
-    ESP_LOGW(TAG, "BQ25756 init not ready at startup; will retry");
-    this->status_set_warning();
-    this->next_init_retry_ms_ = millis() + INIT_RETRY_INTERVAL_MS;
-    return;
+  ESP_LOGW(TAG, "BQ25756 init not ready at startup; the next update will try again");
+  this->status_set_warning();
+  return;
   }
 
   this->publish_configuration_status_("configured");
@@ -175,7 +173,7 @@ bool BQ25756Component::calibrate_from_configured_voltage() {
 bool BQ25756Component::initialize_() {
   uint8_t part_info = 0;
   if (!this->service_.read_byte(::bq25756_core::REG3D_PART_INFORMATION, part_info)) {
-    ESP_LOGW(TAG, "Failed to read REG3D (part information); device not responding yet");
+    this->log_i2c_failure_("read REG3D (part information)");
     return false;
   }
 
@@ -303,12 +301,8 @@ bool BQ25756Component::audit_configured_state_() {
 void BQ25756Component::update() {
   if (!this->initialized_) {
     const uint32_t now = millis();
-    if (now < this->next_init_retry_ms_) {
-      return;
-    }
     if (!this->initialize_()) {
       this->status_set_warning();
-      this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
       return;
     }
     this->publish_configuration_status_("configured");
@@ -505,21 +499,37 @@ bool BQ25756Component::read_registers(uint8_t reg, uint8_t *data, size_t len) {
     return true;
   }
   uint8_t reg_addr = reg;
-  if (this->write_read(&reg_addr, 1, data, len) == i2c::ERROR_OK) {
+  this->last_i2c_error_ = this->write_read(&reg_addr, 1, data, len);
+  if (this->last_i2c_error_ == i2c::ERROR_OK) {
     return true;
   }
 
-  if (this->write(&reg_addr, 1) != i2c::ERROR_OK) {
+  this->last_i2c_error_ = this->write(&reg_addr, 1);
+  if (this->last_i2c_error_ != i2c::ERROR_OK) {
     return false;
   }
-  return this->read(data, len) == i2c::ERROR_OK;
+  this->last_i2c_error_ = this->read(data, len);
+  return this->last_i2c_error_ == i2c::ERROR_OK;
 }
 
 bool BQ25756Component::write_registers(uint8_t reg, const uint8_t *data, size_t len) {
   if (len == 0) {
     return true;
   }
-  return this->write_bytes(reg, data, len);
+  this->last_i2c_error_ = this->write_register(reg, data, len);
+  return this->last_i2c_error_ == i2c::ERROR_OK;
+}
+
+void BQ25756Component::log_i2c_failure_(const char *operation) const {
+  if (this->last_i2c_error_ == i2c::ERROR_TIMEOUT) {
+    ESP_LOGW(TAG, "Failed to %s: I2C timeout", operation);
+    return;
+  }
+  if (this->last_i2c_error_ == i2c::ERROR_NOT_ACKNOWLEDGED) {
+    ESP_LOGW(TAG, "Failed to %s: I2C NACK", operation);
+    return;
+  }
+  ESP_LOGW(TAG, "Failed to %s: I2C error %d", operation, static_cast<int>(this->last_i2c_error_));
 }
 
 void BQ25756Component::publish_status_texts_(const ::bq25756_core::Status &status) {

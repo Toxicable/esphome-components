@@ -461,7 +461,7 @@ struct MCF8329ATuningController::Impl {
       (static_cast<uint32_t>(candidate.cl_slow_acc_code) << INT_ALGO_2_CL_SLOW_ACC_SHIFT) &
       INT_ALGO_2_CL_SLOW_ACC_MASK;
     return this->parent_->update_bits32(
-      register_address(RegisterId::INT_ALGO_2),
+      RegisterId::INT_ALGO_2,
       INT_ALGO_2_CL_SLOW_ACC_MASK,
       int_algo2_value
     );
