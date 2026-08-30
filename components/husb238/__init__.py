@@ -13,7 +13,7 @@ from esphome.const import (
 )
 
 DEPENDENCIES = ["i2c"]
-AUTO_LOAD = ["sensor", "binary_sensor", "text_sensor", "select", "button"]
+AUTO_LOAD = ["component_common", "sensor", "binary_sensor", "text_sensor", "select", "button"]
 
 husb238_ns = cg.esphome_ns.namespace("husb238")
 HUSB238Component = husb238_ns.class_("HUSB238Component", cg.PollingComponent, i2c.I2CDevice)
