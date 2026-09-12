@@ -14,7 +14,7 @@ DEPENDENCIES = ["i2c"]
 AUTO_LOAD = ["mcf83xx_common", "sensor", "binary_sensor", "switch", "number", "select", "button", "text_sensor"]
 
 mcf8329a_ns = cg.esphome_ns.namespace("mcf8329a")
-MCF8329AComponent = mcf8329a_ns.class_("MCF8329AComponent", cg.PollingComponent, i2c.I2CDevice)
+MCF8329AComponent = mcf8329a_ns.class_("MCF8329AConfiguredComponent", cg.PollingComponent, i2c.I2CDevice)
 MCF8329ABrakeSwitch = mcf8329a_ns.class_("MCF8329ABrakeSwitch", switch_.Switch)
 MCF8329ADirectionSelect = mcf8329a_ns.class_("MCF8329ADirectionSelect", select.Select)
 MCF8329ASpeedNumber = mcf8329a_ns.class_("MCF8329ASpeedNumber", number.Number)
@@ -49,6 +49,7 @@ CONF_LOCK_ABN_SPEED_THRESHOLD_PERCENT = "lock_abn_speed_threshold_percent"
 CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT = "abnormal_bemf_threshold_percent"
 CONF_NO_MOTOR_THRESHOLD_PERCENT = "no_motor_threshold_percent"
 CONF_MAX_SPEED_HZ = "max_speed_hz"
+CONF_PWM_FREQUENCY_KHZ = "pwm_frequency_khz"
 CONF_OPEN_LOOP_ILIMIT_PERCENT = "open_loop_ilimit_percent"
 CONF_OPEN_LOOP_LIMIT_SOURCE = "open_loop_limit_source"
 CONF_OPEN_LOOP_ACCEL_HZ_PER_S = "open_loop_accel_hz_per_s"
@@ -148,6 +149,23 @@ CSA_GAIN_V_PER_V_TO_CODE = {
     10: 1,
     20: 2,
     40: 3,
+}
+
+PWM_FREQUENCY_KHZ_TO_CODE = {
+    10: 0,
+    15: 1,
+    20: 2,
+    25: 3,
+    30: 4,
+    35: 5,
+    40: 6,
+    45: 7,
+    50: 8,
+    55: 9,
+    60: 10,
+    65: 11,
+    70: 12,
+    75: 13,
 }
 
 OPEN_LOOP_LIMIT_SOURCE_OPTIONS = {
@@ -451,6 +469,10 @@ def validate_max_speed_hz(value):
     return value
 
 
+def validate_pwm_frequency_khz(value):
+    return validate_int_from_map(value, PWM_FREQUENCY_KHZ_TO_CODE, "PWM frequency kHz")
+
+
 def validate_csa_gain_v_per_v(value):
     return validate_int_from_map(value, CSA_GAIN_V_PER_V_TO_CODE, "CSA gain")
 
@@ -691,6 +713,7 @@ REQUIRED_MOTOR_SETTER_SPECS = (
     (CONF_BRAKE_MODE_CFG, "set_cfg_brake_mode", None),
     (CONF_MODE_CFG, "set_cfg_mode", None),
     (CONF_MAX_SPEED_HZ, "set_cfg_max_speed_code", encode_max_speed_hz),
+    (CONF_PWM_FREQUENCY_KHZ, "set_cfg_pwm_frequency_code", lambda value: PWM_FREQUENCY_KHZ_TO_CODE[value]),
 )
 
 OPTIONAL_MOTOR_SETTER_SPECS = (
@@ -855,6 +878,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ABNORMAL_BEMF_THRESHOLD_PERCENT): validate_abnormal_bemf_threshold_percent,
             cv.Optional(CONF_NO_MOTOR_THRESHOLD_PERCENT): validate_no_motor_threshold_percent,
             cv.Required(CONF_MAX_SPEED_HZ): validate_max_speed_hz,
+            cv.Required(CONF_PWM_FREQUENCY_KHZ): validate_pwm_frequency_khz,
             cv.Optional(CONF_OPEN_LOOP_ILIMIT_PERCENT): validate_lock_ilimit_percent,
             cv.Optional(CONF_OPEN_LOOP_LIMIT_SOURCE): cv.enum(
                 OPEN_LOOP_LIMIT_SOURCE_OPTIONS, lower=True
