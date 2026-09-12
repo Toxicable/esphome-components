@@ -19,7 +19,8 @@ Component-scoped active guidance for `components/mcf8329a`.
 - `mcf8329a.cpp`, `mcf8329a_protocol.cpp`, `mcf8329a_service.cpp`, and `mcf8329a_tuning.cpp` compile as normal sibling translation units; do not include `.cpp` files into other `.cpp` files.
 
 ## Config and Guardrails
-- Required YAML keys: `mode`, `brake_mode`, `motor_bemf_const`, `max_speed_hz`.
+- Required YAML keys: `mode`, `brake_mode`, `motor_bemf_const`, `max_speed_hz`, `pwm_frequency_khz`.
+- `pwm_frequency_khz` maps directly to `CLOSED_LOOP1.PWM_FREQ_OUT`; supported values are 10 through 75 kHz in 5 kHz steps. The configured value is applied after normal/deferred startup and after detected MCF reset recovery.
 - Hardware baseline required before tuning keys: `csa_gain_v_per_v`, `base_current_amps`, `phase_current_limit_percent`, `open_loop_limit_source`, `lock_mode`.
 - `allow_unsafe_current_limits` defaults to `false` and gates >50% current-limit settings plus `lock_mode: disabled`.
 - Legacy `startup_*` keys are intentionally removed and must raise migration errors.
@@ -38,6 +39,7 @@ Component-scoped active guidance for `components/mcf8329a`.
 
 ## Register/Decode Notes
 - `ALGORITHM_STATE` offset is `0x0196`.
+- `CLOSED_LOOP1` offset is `0x0088`; `PWM_FREQ_OUT` is bits `[18:15]` (`0x0` = 10 kHz through `0xD` = 75 kHz).
 - `CSA_GAIN_FEEDBACK`/`VOLTAGE_GAIN_FEEDBACK`/`VM_VOLTAGE` are `0x0450`/`0x0458`/`0x045C`.
 - `PIN_CONFIG.BRAKE_INPUT` is bits `[3:2]`; `PERI_CONFIG1.DIR_INPUT` is bits `[20:19]`.
 - `ALGO_CTRL1.CLR_FLT` is bit `29`; `WATCHDOG_TICKLE` is bit `10`.
