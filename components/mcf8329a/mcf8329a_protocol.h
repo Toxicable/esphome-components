@@ -64,6 +64,8 @@ inline constexpr uint32_t MOTOR_STARTUP2_OPN_CL_HANDOFF_THR_SHIFT = 13;
 inline constexpr uint32_t MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_MASK = (0x7u << 0);
 inline constexpr uint32_t MOTOR_STARTUP2_THETA_ERROR_RAMP_RATE_SHIFT = 0;
 
+inline constexpr uint32_t CLOSED_LOOP1_PWM_FREQ_OUT_MASK = (0xFu << 15);
+inline constexpr uint32_t CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT = 15;
 inline constexpr uint32_t CLOSED_LOOP2_MTR_STOP_MASK = (0x7u << 28);
 inline constexpr uint32_t CLOSED_LOOP2_MTR_STOP_SHIFT = 28;
 inline constexpr uint32_t CLOSED_LOOP2_MTR_STOP_BRK_TIME_MASK = (0xFu << 24);
