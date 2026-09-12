@@ -12,6 +12,7 @@
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/core/component.h"
+#include "esphome/core/log.h"
 
 #include "mcf8329a_bus.h"
 #include "mcf8329a_protocol.h"
@@ -519,6 +520,84 @@ class MCF8329AComponent : public PollingComponent,
   sensor::Sensor* speed_ref_open_loop_hz_sensor_{nullptr};
   sensor::Sensor* fg_speed_fdbk_hz_sensor_{nullptr};
   text_sensor::TextSensor* current_fault_text_sensor_{nullptr};
+};
+
+class MCF8329AConfiguredComponent final : public MCF8329AComponent {
+ public:
+  void set_cfg_pwm_frequency_code(uint8_t code) {
+    this->cfg_pwm_frequency_code_ = code & 0x0Fu;
+    this->cfg_pwm_frequency_set_ = true;
+  }
+
+  void setup() override {
+    MCF8329AComponent::setup();
+    if (this->normal_operation_ready_) {
+      (void)this->apply_cfg_pwm_frequency_("setup");
+    }
+  }
+
+  void update() override {
+    const bool was_ready = this->normal_operation_ready_;
+    const uint32_t recovery_before = this->startup_profile_last_recovery_ms_;
+    MCF8329AComponent::update();
+
+    if ((!was_ready && this->normal_operation_ready_) ||
+        this->startup_profile_last_recovery_ms_ != recovery_before) {
+      (void)this->apply_cfg_pwm_frequency_("recovery");
+    }
+  }
+
+  void dump_config() override {
+    MCF8329AComponent::dump_config();
+    if (this->cfg_pwm_frequency_set_) {
+      ESP_LOGCONFIG(
+        "mcf8329a",
+        "  Motor config PWM frequency: %u kHz (code=%u)",
+        static_cast<unsigned>(this->cfg_pwm_frequency_khz_()),
+        static_cast<unsigned>(this->cfg_pwm_frequency_code_)
+      );
+    }
+  }
+
+ protected:
+  bool apply_cfg_pwm_frequency_(const char* context) {
+    if (!this->cfg_pwm_frequency_set_) {
+      return true;
+    }
+
+    using namespace ::mcf8329a_core::regs;
+    uint32_t closed_loop1 = 0;
+    if (!this->read_reg32(RegisterId::CLOSED_LOOP1, closed_loop1)) {
+      ESP_LOGW("mcf8329a", "Failed to read CLOSED_LOOP1 while applying PWM frequency (%s)", context);
+      return false;
+    }
+
+    const uint32_t closed_loop1_next =
+      (closed_loop1 & ~CLOSED_LOOP1_PWM_FREQ_OUT_MASK) |
+      ((static_cast<uint32_t>(this->cfg_pwm_frequency_code_) << CLOSED_LOOP1_PWM_FREQ_OUT_SHIFT) &
+       CLOSED_LOOP1_PWM_FREQ_OUT_MASK);
+    if (closed_loop1_next != closed_loop1 &&
+        !this->write_reg32(RegisterId::CLOSED_LOOP1, closed_loop1_next)) {
+      ESP_LOGW("mcf8329a", "Failed to write configured PWM frequency (%s)", context);
+      return false;
+    }
+
+    ESP_LOGI(
+      "mcf8329a",
+      "PWM frequency configured to %u kHz (code=%u, context=%s)",
+      static_cast<unsigned>(this->cfg_pwm_frequency_khz_()),
+      static_cast<unsigned>(this->cfg_pwm_frequency_code_),
+      context
+    );
+    return true;
+  }
+
+  uint8_t cfg_pwm_frequency_khz_() const {
+    return static_cast<uint8_t>(10u + (this->cfg_pwm_frequency_code_ * 5u));
+  }
+
+  bool cfg_pwm_frequency_set_{false};
+  uint8_t cfg_pwm_frequency_code_{0};
 };
 
 }  // namespace mcf8329a
