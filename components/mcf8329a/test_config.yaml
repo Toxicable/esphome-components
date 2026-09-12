@@ -49,6 +49,7 @@ mcf8329a:
   brake_mode: recirculation
   motor_bemf_const: 0x5F
   max_speed_hz: 900
+  pwm_frequency_khz: 10
 
   align_time: 100ms
   direction_mode: cw
