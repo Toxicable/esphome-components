@@ -4,7 +4,7 @@ Manual ESPHome I2C component for TI MCF8329A (ESP32 + esp-idf).
 
 This component provides:
 - runtime control (`brake`, `direction`, `speed_percent`, `clear_faults`, `watchdog_tickle`, `tune_initial_params`, `run_mpet`)
-- motor-config register apply at setup
+- motor-config register apply at setup, including explicit PWM output frequency
 - fault summary text + runtime telemetry
 - optional handoff telemetry (`speed_fdbk_hz`, `speed_ref_open_loop_hz`, `fg_speed_fdbk_hz`)
 - optional speed command shaping (`speed_ramp_up_percent_per_s`, `speed_ramp_down_percent_per_s`, `start_boost_percent`, `start_boost_hold_ms`)
@@ -40,6 +40,8 @@ mcf8329a:
   motor_bemf_const: 0x5F
   ## (kV * (4.2 * Bs) * (Rp / 2)) / 60
   max_speed_hz: 900
+  ## CLOSED_LOOP1.PWM_FREQ_OUT; valid values: 10, 15, ... 75 kHz
+  pwm_frequency_khz: 10
 
   # 750kV, 12 pole, 4S
   # motor_bemf_const: 0x39
@@ -161,6 +163,8 @@ mcf8329a:
   #   name: "FG Speed Fdbk Hz"
 ```
 
+`pwm_frequency_khz` is required so the drive frequency is never inherited implicitly from EEPROM/reset state. Supported values map directly to `CLOSED_LOOP1.PWM_FREQ_OUT`: `10, 15, 20, ... 75` kHz. The component reapplies the configured value after normal/deferred startup and after detected MCF reset recovery.
+
 Safety guardrails:
 - By default, validation blocks:
   - `phase_current_limit_percent`, `align_or_slow_current_limit_percent`, `open_loop_ilimit_percent`,
@@ -192,6 +196,7 @@ Auto bring-up buttons:
 Use this as a safe starting point for no-load bench bring-up:
 - `motor_bemf_const: 0x5F`
 - `max_speed_hz: 900`
+- `pwm_frequency_khz: 10`
 - `mode: double_align`
 - `brake_mode: recirculation`
 - `align_time: 100ms`
@@ -220,6 +225,7 @@ Config that worked for 270kV
 ```
   motor_bemf_const: 0x5F
   max_speed_hz: 900
+  pwm_frequency_khz: 10
 
   mode: double_align
   align_time: 300ms
