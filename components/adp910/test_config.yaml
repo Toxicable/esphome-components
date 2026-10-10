@@ -1,0 +1,30 @@
+esphome:
+  name: adp910-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    refresh: 0s
+    components: [adp910]
+
+i2c:
+  id: pressure_i2c
+  sda: GPIO4
+  scl: GPIO6
+  frequency: 100kHz
+
+adp910:
+  id: differential_pressure
+  i2c_id: pressure_i2c
+  address: 0x25
+  pressure:
+    name: Differential Pressure
+  temperature:
+    name: Temperature
