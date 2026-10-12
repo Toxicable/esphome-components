@@ -60,6 +60,7 @@ CONF_TS3 = "ts3"
 CONF_FET = "fet"
 CONF_AUTONOMOUS = "autonomous"
 CONF_SLEEP_CHARGE_ENABLED = "sleep_charge_enabled"
+CONF_PHYSICAL_OFF_SWITCH_ENABLE = "physical_off_switch_enable"
 CONF_PRECHARGE = "precharge"
 CONF_PREDISCHARGE = "predischarge"
 CONF_ENABLED = "enabled"
@@ -220,6 +221,7 @@ FET_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_AUTONOMOUS): cv.boolean,
         cv.Required(CONF_SLEEP_CHARGE_ENABLED): cv.boolean,
+        cv.Required(CONF_PHYSICAL_OFF_SWITCH_ENABLE): cv.boolean,
         cv.Required(CONF_PRECHARGE): PRECHARGE_SCHEMA,
         cv.Required(CONF_PREDISCHARGE): PREDISCHARGE_SCHEMA,
     }
@@ -311,11 +313,18 @@ VOLTAGE_SENSOR_SCHEMA = sensor.sensor_schema(
 
 def _validate_config(config):
     cell_count = config[CONF_CELL_COUNT]
+    regulators = config[CONF_REGULATORS]
+    physical_off_switch_enable = config[CONF_FET][CONF_PHYSICAL_OFF_SWITCH_ENABLE]
     precharge = config[CONF_FET][CONF_PRECHARGE]
     predischarge = config[CONF_FET][CONF_PREDISCHARGE]
     balancing = config[CONF_BALANCING]
     protections = config[CONF_PROTECTIONS]
     soc = config[CONF_SOC]
+
+    if physical_off_switch_enable and not regulators[CONF_REG1_ENABLED]:
+        raise cv.Invalid(
+            "fet.physical_off_switch_enable requires regulators.reg1_enabled"
+        )
 
     if soc[CONF_EMPTY_CELL_VOLTAGE_MV] >= soc[CONF_FULL_CELL_VOLTAGE_MV]:
         raise cv.Invalid("soc.empty_cell_voltage_mv must be below soc.full_cell_voltage_mv")

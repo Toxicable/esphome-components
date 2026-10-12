@@ -37,6 +37,8 @@ Component-scoped rules for `components/bq76952`.
 - `soc.empty_cell_voltage_mv` and `soc.full_cell_voltage_mv` define SoC capacity-learning endpoints independently of CUV/COV safety thresholds.
 - REG0, REG1, and REG2 states are explicit. REG1/REG2 voltage codes are supplied even when disabled.
 - TS1/TS2/TS3 are explicit `disabled`, `18k`, or `180k` modes.
+- `fet.physical_off_switch_enable` is the single board-policy setting for the fixed pull-up-to-ground switch topology; when true it enables active-low ALT on both CFETOFF and DFETOFF, and when false both pins are unused.
+- The physical switch topology pulls both inputs up through REG1, so enabling `fet.physical_off_switch_enable` requires `regulators.reg1_enabled: true`; schema validation rejects the invalid combination.
 - Protection masks are derived from fixed policy, not exposed as raw user bitmasks.
 
 ## Transport robustness

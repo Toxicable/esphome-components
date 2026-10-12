@@ -63,6 +63,8 @@ struct BQ76952FetConfig {
   bool autonomous{false};
   bool sleep_charge_enabled{false};
 
+  // Both board FET-off inputs use the fixed active-low ALT switch topology.
+  bool physical_off_switch_enable{false};
   BQ76952PrechargeConfig precharge{};
   BQ76952PredischargeConfig predischarge{};
 };

@@ -49,6 +49,7 @@ bq76952:
   fet:
     autonomous: true
     sleep_charge_enabled: true
+    physical_off_switch_enable: false
     precharge:
       enabled: false
       start_cell_voltage_mv: 2500

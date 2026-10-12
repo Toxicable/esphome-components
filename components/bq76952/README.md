@@ -49,6 +49,9 @@ bq76952:
     autonomous: true
     sleep_charge_enabled: true
 
+    # Enable the board-wired, active-low FET-off switch on both pins.
+    physical_off_switch_enable: true
+
     # Reduced-current charging path for deeply depleted cells.
     precharge:
       enabled: false

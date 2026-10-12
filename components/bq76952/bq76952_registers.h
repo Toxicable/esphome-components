@@ -354,6 +354,12 @@ inline constexpr uint8_t HOST_FET_ENABLE = 1U << 2;
 inline constexpr uint8_t SLEEP_CHARGE = 1U << 1;
 inline constexpr uint8_t SERIES_FETS = 1U << 0;
 }
+namespace fet_off_pin_config {
+// PIN_FXN[1:0]=10 selects the ALT FET-off function. OPT5 selects active-low
+// polarity for the board's pull-up-to-ground physical switch.
+inline constexpr uint8_t DISABLED = 0x00;
+inline constexpr uint8_t ACTIVE_LOW_ALT = (1U << 7) | (1U << 1);
+}
 namespace charge_pump {
 inline constexpr uint8_t SOURCE_FOLLOWER_SLEEP = 1U << 2;
 inline constexpr uint8_t LOW_VOLTAGE = 1U << 1;

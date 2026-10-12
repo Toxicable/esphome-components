@@ -50,6 +50,7 @@ def _build_cpp_config(config):
         types.BQ76952FetConfig,
         ("autonomous", config[schema.CONF_FET][schema.CONF_AUTONOMOUS]),
         ("sleep_charge_enabled", config[schema.CONF_FET][schema.CONF_SLEEP_CHARGE_ENABLED]),
+        ("physical_off_switch_enable", config[schema.CONF_FET][schema.CONF_PHYSICAL_OFF_SWITCH_ENABLE]),
         ("precharge", precharge),
         ("predischarge", predischarge),
     )

@@ -8,7 +8,6 @@ BQ76952CurrentGainPolicy = bq76952_ns.enum(
     "BQ76952CurrentGainPolicy", is_class=True
 )
 BQ76952ThermistorMode = bq76952_ns.enum("BQ76952ThermistorMode", is_class=True)
-
 BQ76952RegulatorConfig = bq76952_ns.struct("BQ76952RegulatorConfig")
 BQ76952ThermistorConfig = bq76952_ns.struct("BQ76952ThermistorConfig")
 BQ76952PrechargeConfig = bq76952_ns.struct("BQ76952PrechargeConfig")
