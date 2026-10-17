@@ -20,6 +20,7 @@ Status describes maintenance intent only. It does not imply that an active compo
 | Component | Status | Known use or reason retained | Direction |
 | --- | --- | --- | --- |
 | `adp910` | active | DiffPressure HVAC ducting pressure-sensor configuration | Keep as the shared ADP910 I2C integration. |
+| `astral_ble_ph_orp` | experimental | AstralPool Halo pool probe BLE advertisements; payload interpretation is still being confirmed | Decode pH, ORP, and probe temperature from manufacturer data. |
 | `bq25628` | active | Solar_Outdoors outdoor-node configuration | Keep as the BQ25628E ADC telemetry integration. |
 | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
 | `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
