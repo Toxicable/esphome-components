@@ -1,11 +1,11 @@
-#include "cistpm.h"
+#include "astral_ble_ph_orp.h"
 
 #include "esphome/core/log.h"
 
 namespace esphome {
-namespace cistpm {
+namespace astral_ble_ph_orp {
 
-static const char *const TAG = "cistpm";
+static const char *const TAG = "astral_ble_ph_orp";
 static constexpr uint16_t MANUFACTURER_ID = 0x0447;
 static constexpr uint8_t PAYLOAD_VERSION = 0x04;
 static constexpr uint8_t PH_PAYLOAD_TYPE = 0x00;
@@ -14,7 +14,7 @@ static constexpr size_t MIN_PAYLOAD_SIZE = 20;
 static constexpr size_t VALUE_OFFSET = 15;
 static constexpr size_t TEMPERATURE_OFFSET = 18;
 
-bool CISTPMComponent::parse_device(const esp32_ble_tracker::ESPBTDevice &device) {
+bool AstralBlePhOrpComponent::parse_device(const esp32_ble_tracker::ESPBTDevice &device) {
   bool recognized = false;
 
   for (const auto &manufacturer_data : device.get_manufacturer_datas()) {
@@ -61,11 +61,11 @@ bool CISTPMComponent::parse_device(const esp32_ble_tracker::ESPBTDevice &device)
   return recognized;
 }
 
-void CISTPMComponent::dump_config() {
-  ESP_LOGCONFIG(TAG, "CISTPM BLE water-quality probe:");
+void AstralBlePhOrpComponent::dump_config() {
+  ESP_LOGCONFIG(TAG, "AstralPool Halo BLE water-quality probe:");
   ESP_LOGCONFIG(TAG, "  Manufacturer ID: 0x%04X", MANUFACTURER_ID);
   ESP_LOGCONFIG(TAG, "  Advertisement decoding is experimental; verify readings against a calibrated reference.");
 }
 
-}  // namespace cistpm
+}  // namespace astral_ble_ph_orp
 }  // namespace esphome

@@ -20,10 +20,10 @@ Status describes maintenance intent only. It does not imply that an active compo
 | Component | Status | Known use or reason retained | Direction |
 | --- | --- | --- | --- |
 | `adp910` | active | DiffPressure HVAC ducting pressure-sensor configuration | Keep as the shared ADP910 I2C integration. |
+| `astral_ble_ph_orp` | experimental | AstralPool Halo pool probe BLE advertisements; payload interpretation is still being confirmed | Decode pH, ORP, and probe temperature from manufacturer data. |
 | `bq25628` | active | Solar_Outdoors outdoor-node configuration | Keep as the BQ25628E ADC telemetry integration. |
 | `bq25756` | active | Programmable-load charger and boat configuration | Primary charger implementation; refactor configuration and service boundaries without changing YAML unnecessarily. |
 | `bq76952` | active | Boat/BMS configurations | Primary BMS implementation. Preserve complete desired state, typed connection/operating/fault snapshots, and the explicit manufacturing boundary. |
-| `cistpm` | experimental | CISTPM pool probe BLE advertisements; payload interpretation is still being confirmed | Decode pH, ORP, and probe temperature from manufacturer data. |
 | `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
 | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
 | `esc_higher` | active | ESC Higher board and boat configuration | Typed block-register and command model; keep wire layout in chip-specific metadata. |

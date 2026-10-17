@@ -1,6 +1,6 @@
-# CISTPM BLE water-quality probes
+# AstralPool Halo BLE water-quality probes
 
-This experimental ESPHome external component listens for CISTPM pH and ORP probe advertisements and publishes pH, ORP in millivolts, and each probe's reported temperature.
+This experimental ESPHome external component listens for AstralPool Halo pH and ORP probe advertisements and publishes pH, ORP in millivolts, and each probe's reported temperature.
 
 ## External component
 
@@ -8,7 +8,7 @@ This experimental ESPHome external component listens for CISTPM pH and ORP probe
 external_components:
   - source: github://Toxicable/esphome-components@main
     refresh: 0s
-    components: [cistpm]
+    components: [astral_ble_ph_orp]
 ```
 
 The node must use an ESP32 with Bluetooth enabled and an `esp32_ble_tracker` configured. When the tracker has an explicit ID, set `esp32_ble_id` to that ID.
@@ -19,7 +19,7 @@ The node must use an ESP32 with Bluetooth enabled and an `esp32_ble_tracker` con
 esp32_ble_tracker:
   id: ble_tracker
 
-cistpm:
+astral_ble_ph_orp:
   esp32_ble_id: ble_tracker
   ph:
     name: Pool pH

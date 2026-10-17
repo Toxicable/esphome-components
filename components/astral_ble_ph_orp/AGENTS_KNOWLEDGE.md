@@ -1,4 +1,4 @@
-# CISTPM active invariants
+# AstralPool Halo active invariants
 
 - This is an experimental, receive-only ESP32 BLE manufacturer-data decoder.
 - Keep protocol offsets and scaling documented as provisional until matched against live readings or vendor documentation.

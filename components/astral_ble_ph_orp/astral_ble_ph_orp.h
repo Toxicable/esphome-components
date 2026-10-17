@@ -5,9 +5,9 @@
 #include "esphome/core/component.h"
 
 namespace esphome {
-namespace cistpm {
+namespace astral_ble_ph_orp {
 
-class CISTPMComponent : public Component, public esp32_ble_tracker::ESPBTDeviceListener {
+class AstralBlePhOrpComponent : public Component, public esp32_ble_tracker::ESPBTDeviceListener {
  public:
   void set_ph_sensor(sensor::Sensor *sensor) { this->ph_sensor_ = sensor; }
   void set_ph_temperature_sensor(sensor::Sensor *sensor) { this->ph_temperature_sensor_ = sensor; }
@@ -28,5 +28,5 @@ class CISTPMComponent : public Component, public esp32_ble_tracker::ESPBTDeviceL
   uint64_t orp_address_{0};
 };
 
-}  // namespace cistpm
+}  // namespace astral_ble_ph_orp
 }  // namespace esphome

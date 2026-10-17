@@ -13,9 +13,9 @@ from esphome.const import (
 DEPENDENCIES = ["esp32_ble_tracker"]
 AUTO_LOAD = ["sensor"]
 
-cistpm_ns = cg.esphome_ns.namespace("cistpm")
-CISTPMComponent = cistpm_ns.class_(
-    "CISTPMComponent", cg.Component, esp32_ble_tracker.ESPBTDeviceListener
+astral_ble_ph_orp_ns = cg.esphome_ns.namespace("astral_ble_ph_orp")
+AstralBlePhOrpComponent = astral_ble_ph_orp_ns.class_(
+    "AstralBlePhOrpComponent", cg.Component, esp32_ble_tracker.ESPBTDeviceListener
 )
 
 CONF_PH = "ph"
@@ -57,14 +57,14 @@ def _require_sensor(config):
         key in config
         for key in (CONF_PH, CONF_PH_TEMPERATURE, CONF_ORP, CONF_ORP_TEMPERATURE)
     ):
-        raise cv.Invalid("Configure at least one CISTPM sensor")
+        raise cv.Invalid("Configure at least one AstralPool Halo sensor")
     return config
 
 
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(CISTPMComponent),
+            cv.GenerateID(): cv.declare_id(AstralBlePhOrpComponent),
             cv.Optional(CONF_PH): _ph_sensor_schema(),
             cv.Optional(CONF_PH_TEMPERATURE): _temperature_sensor_schema(),
             cv.Optional(CONF_PH_MAC_ADDRESS): cv.mac_address,
