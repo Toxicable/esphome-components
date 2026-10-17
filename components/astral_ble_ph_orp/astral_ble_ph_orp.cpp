@@ -25,19 +25,20 @@ bool AstralBlePhOrpComponent::parse_device(const esp32_ble_tracker::ESPBTDevice 
     if (data.size() < MIN_PAYLOAD_SIZE || data[0] != PAYLOAD_VERSION)
       continue;
 
+    const uint32_t value_raw = static_cast<uint32_t>(data[VALUE_OFFSET]) |
+                               (static_cast<uint32_t>(data[VALUE_OFFSET + 1]) << 8) |
+                               (static_cast<uint32_t>(data[VALUE_OFFSET + 2]) << 16);
     const uint16_t temperature_raw = static_cast<uint16_t>(data[TEMPERATURE_OFFSET]) |
                                      (static_cast<uint16_t>(data[TEMPERATURE_OFFSET + 1]) << 8);
-    const float temperature_c = temperature_raw / 100.0f;
+    const float temperature_c = temperature_raw / 100.0f - 10.0f;
 
     if (data[1] == PH_PAYLOAD_TYPE) {
       recognized = true;
       if (this->ph_address_ != 0 && device.address_uint64() != this->ph_address_)
         continue;
 
-      const uint16_t value_raw = static_cast<uint16_t>(data[VALUE_OFFSET]) |
-                                 (static_cast<uint16_t>(data[VALUE_OFFSET + 1]) << 8);
       if (this->ph_sensor_ != nullptr)
-        this->ph_sensor_->publish_state(value_raw / 256.0f);
+        this->ph_sensor_->publish_state(value_raw / 25600.0f);
       if (this->ph_temperature_sensor_ != nullptr)
         this->ph_temperature_sensor_->publish_state(temperature_c);
       continue;
@@ -48,9 +49,6 @@ bool AstralBlePhOrpComponent::parse_device(const esp32_ble_tracker::ESPBTDevice 
       if (this->orp_address_ != 0 && device.address_uint64() != this->orp_address_)
         continue;
 
-      const uint32_t value_raw = static_cast<uint32_t>(data[VALUE_OFFSET]) |
-                                 (static_cast<uint32_t>(data[VALUE_OFFSET + 1]) << 8) |
-                                 (static_cast<uint32_t>(data[VALUE_OFFSET + 2]) << 16);
       if (this->orp_sensor_ != nullptr)
         this->orp_sensor_->publish_state(value_raw / 256.0f);
       if (this->orp_temperature_sensor_ != nullptr)
