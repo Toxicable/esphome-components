@@ -43,8 +43,19 @@ The component currently filters manufacturer ID `0x0447` and a 24-byte payload b
 
 | Field | Bytes | Current interpretation |
 | --- | --- | --- |
-| pH | 15–16 | Little-endian unsigned Q8.8, divided by 256 |
-| ORP | 15–17 | Little-endian unsigned Q16.8, divided by 256, reported as mV |
-| Probe temperature | 18–19 | Little-endian unsigned integer, divided by 100, reported as °C |
+| pH | 15–17 | Little-endian unsigned 24-bit value, divided by 25,600 |
+| ORP | 15–17 | Little-endian unsigned 24-bit value, divided by 256, reported as mV |
+| Probe temperature | 18–19 | Little-endian unsigned 16-bit value, divided by 100 then minus 10 °C |
 
-These offsets and scales are provisional. They produce plausible readings from captured advertisements, but they have not yet been confirmed against vendor documentation or synchronized measurements from a calibrated reference. Treat resulting entities as experimental until that comparison is done.
+### Captured advertisements (17 October 2026)
+
+The following manufacturer data was captured directly from the HPH and HORP devices with an ESPHome BLE scanner (the two-byte manufacturer ID `0x0447` is not part of the hex strings):
+
+| Probe | Manufacturer data | Decoded values |
+| --- | --- | --- |
+| HPH | `040001008b862300f0010001000200e20403ca0b00000000` | pH 7.7288, temperature 20.18 °C |
+| HORP | `040101006c762300f0010001000200ca6c02bc0b00000000` | ORP 620.79 mV, temperature 20.04 °C |
+
+At the time, the last HCHLOR readings available were **pH 7.8** and **ORP 623 mV**, but they were more than two hours older than these advertisements. Nearby pool water was measured at approximately **20.2 °C**.
+
+**The byte offsets and scales are still provisional.** The decoded values match the available reference measurements reasonably closely, but the reference readings were not simultaneous and vendor documentation has not confirmed the encoding. Treat the entities as experimental until further verified.
