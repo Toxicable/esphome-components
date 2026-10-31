@@ -1,0 +1,30 @@
+esphome:
+  name: xiao-sed-test
+  min_version: 2026.9.0
+
+nrf52:
+  board: xiao_ble
+  framework:
+    libc_nano: false
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    components: [xiao_openthread_sed]
+
+logger:
+  baud_rate: 0
+
+network:
+  enable_ipv6: true
+
+openthread:
+  device_type: MTD
+  poll_period: 10s
+  ## Synthetic compile-only network-key TLV, not a deployable dataset.
+  tlv: "051000112233445566778899aabbccddeeff"
+
+xiao_openthread_sed:
+
+api:

@@ -13,3 +13,4 @@ Shared ESPHome adapter for `toxic-boards/boards/CapacitiveLevelSensor`, revision
 - Reapply configuration after I2C failure or a detected chip reset; retry deadlines must handle millis() rollover.
 - Board EN and dedicated-bus high-impedance sequencing belong to the host. This component does not control power or convert capacitance to water level.
 - Use integer `sample_rate` values only; no alternate string spellings.
+- The nRF52840/Zephyr consumer is `toxic-boards/projects/HydroponicsResoviourLevel/esphome.yaml`. Its shared-bus population omits sensor R1/R2 and fits H1; firmware leaves EN untouched and keeps the sensor on.

@@ -2,6 +2,8 @@
 
 Applies the Zephyr build settings used by the Seeed XIAO nRF52840 as an
 OpenThread Sleepy End Device (SED), with USB device and serial support disabled.
+The UART device-tree nodes are disabled as well, allowing API-only logging with
+`logger: {baud_rate: 0}` without linking unavailable serial devices.
 This removes unused interfaces from the firmware build; it does not implement a
 sleep scheduler or set the runtime Thread poll period.
 
