@@ -1,0 +1,46 @@
+esphome:
+  name: fdc1004-test
+  min_version: 2026.5.3
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ..
+    components: [ fdc1004 ]
+
+i2c:
+  id: i2c_bus
+  sda: GPIO35
+  scl: GPIO36
+  scan: false
+
+fdc1004:
+  id: capsense
+  i2c_id: i2c_bus
+  sample_rate: 400
+  cin1:
+    name: CIN1
+  cin2:
+    name: CIN2
+    capdac: 1
+  cin3:
+    name: CIN3
+    capdac: 16
+  cin4:
+    name: CIN4
+    capdac: 31
+  cin1_offset:
+    name: CIN1 Offset
+  cin2_offset:
+    name: CIN2 Offset
+  cin3_offset:
+    name: CIN3 Offset
+  cin4_offset:
+    name: CIN4 Offset
+  zero_now:
+    name: Zero Now

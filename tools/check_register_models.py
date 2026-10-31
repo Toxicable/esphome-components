@@ -15,6 +15,7 @@ TYPED_REGISTER_COMPONENTS = {
     "bq25756": "bq25756_registers.h",
     "bq76952": "bq76952_registers.h",
     "esc_higher": "esc_higher_registers.h",
+    "fdc1004": "fdc1004_registers.h",
     "husb238": "husb238_registers.h",
     "lps25hb": "lps25hb_registers.h",
     "mcf8316d": "mcf8316d_registers.h",
