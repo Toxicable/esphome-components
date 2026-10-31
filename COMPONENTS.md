@@ -27,6 +27,7 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `component_common` | internal | Header-only register, charger, and connection-state contracts used by active components | Keep small, host-independent, allocation-free, and policy-free. |
 | `drv8243` | active | Train-controller configuration | Keep small and device-focused; do not force a heavyweight architecture onto it. |
 | `esc_higher` | active | ESC Higher board and boat configuration | Typed block-register and command model; keep wire layout in chip-specific metadata. |
+| `fdc1004` | experimental | CapacitiveLevelSensor revision 1.0; four external electrodes, no deployed firmware yet | Shared capacitance adapter; keep compile coverage and add application calibration in the consumer. |
 | `husb238` | active | Programmable-load configurations | Typed register/command service with raw addresses confined to the bus boundary. |
 | `l04xmtw` | active | Pool-cleaner configuration | Maintain while the current sensor hardware remains in use. |
 | `lps25hb` | experimental | Present in current RoomSensor hardware work, but no deployed YAML consumer was found | Lightweight adapter using typed register metadata and compile coverage. |
@@ -44,7 +45,6 @@ The following packages were removed in July 2026 after code searches found no re
 
 - `bq25798` — PoolCleaner had already migrated to `bq25756`; only a stale external-component allowlist entry remained.
 - `bq769x0` — superseded by the actively maintained BQ76952 path.
-- `fdc1004` — no current firmware or board consumer found.
 - `web_dial` — no current firmware or board consumer found.
 
 ## Removal checklist
