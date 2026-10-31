@@ -1,6 +1,6 @@
 import esphome.config_validation as cv
 
-from esphome.components.zephyr import zephyr_add_prj_conf
+from esphome.components.zephyr import zephyr_add_overlay, zephyr_add_prj_conf
 from esphome.core import CORE
 
 DEPENDENCIES = ["nrf52", "openthread"]
@@ -19,3 +19,9 @@ async def to_code(config):
     zephyr_add_prj_conf("OPENTHREAD_POLL_PERIOD", poll_period.total_milliseconds)
     zephyr_add_prj_conf("USB_DEVICE_STACK", False)
     zephyr_add_prj_conf("SERIAL", False)
+    # Disabled drivers must also have disabled device-tree nodes. The Zephyr
+    # logger references those nodes even when baud_rate is zero.
+    zephyr_add_overlay('''
+        &uart0 { status = "disabled"; };
+        &uart1 { status = "disabled"; };
+    ''')
