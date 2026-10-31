@@ -38,6 +38,8 @@ Status describes maintenance intent only. It does not imply that an active compo
 | `mcp4726` | active | Programmable-load configuration | Typed volatile-command encoder while preserving the ESPHome output-platform YAML. |
 | `mlx90614` | legacy | Local implementation provides dual-zone/object-2 behavior not available in the upstream component | Typed SMBus register model; explicitly allowlist only for `object2`, otherwise use upstream ESPHome. |
 | `programmable_load` | active | Programmable-load board/project | Typed orchestrator with exclusive manual/procedure ownership, hard hardware limits, aggregate faults and explicit calibration diagnostics/actions. |
+| `xiao_openthread_sed` | active | XIAOSolar nRF52840 Thread measurement firmware | Apply XIAO Zephyr SED settings and mirror the YAML poll period into startup Kconfig; application sleep/report cadence stays in YAML. |
+| `zephyr_mcumgr` | experimental | XIAOSolar Thread UDP OTA smoke test | Override ESPHome's bundled Zephyr MCUmgr integration for the XIAO factory bootloader partition layout. |
 
 ## Removed components
 
