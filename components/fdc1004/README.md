@@ -64,3 +64,7 @@ This component is the shared driver for CapacitiveLevelSensor revision 1.0. It p
 The host owns EN and power sequencing. Before disabling the board, make the dedicated SDA/SCL pins high-impedance with host pull-ups disabled. Restore the bus only after powering the sensor. If H1 is fitted, keep EN high. Initialization retries do not perform this GPIO/bus sequencing.
 
 Register definitions and scaling follow TI FDC1004 datasheet SNOSCY5C, sections 6.5.3 and 6.6. See [the repository architecture](../../ARCHITECTURE.md) for the small-adapter structure.
+
+## Power-cycled measurements
+
+The host owns the supply GPIO and bus sequencing. After restoring power and the bus, call `reinitialize()` to reapply all measurement settings, wait for conversion completion, then call `read_measurements()`. Its result is true only when every enabled channel was read successfully. On a failed cycle, call `invalidate_measurements()` so old capacitance/level values are not presented as a fresh sample. Release the bus before cutting power; power-on resets the FDC1004 configuration.

@@ -17,6 +17,7 @@ Use `tools/pdf_to_text.py` to generate `<pdf>.txt` from PDFs, and provide the `.
 - `./check_py.bash` runs Python syntax checks via `py_compile` without creating `__pycache__` files in the repo.
 - `python3 tools/check_component_inventory.py` verifies that every ESPHome package under `components/` has exactly one current row in `COMPONENTS.md`.
 - `bash ./check_host.bash` runs the inventory check, compiles and runs host-side core tests, and rejects ESPHome dependencies in selected reusable files.
+- `python3 tools/check_sensor_power.py` exercises the actual FDC1004 power-cycle API and XIAO I2C PM adapter with fake hardware, including reset, missing-data and transport-error cases.
 - `bash ./check_esphome.bash` compiles every committed `test_config.yaml` and verifies expected-invalid schema fixtures. Run it in the devcontainer so it uses the pinned ESPHome release and toolchain.
 - The devcontainer pins ESPHome and persists VS Code/code-server plus PlatformIO state in named volumes so Coder rebuilds do not lose extensions or re-download ESP-IDF tooling.
 

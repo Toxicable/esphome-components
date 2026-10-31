@@ -1,6 +1,11 @@
 esphome:
   name: xiao-sed-test
   min_version: 2026.9.0
+  on_boot:
+    then:
+      - lambda: |-
+          esphome::xiao_openthread_sed::suspend_i2c();
+          esphome::xiao_openthread_sed::resume_i2c();
 
 nrf52:
   board: xiao_ble
@@ -28,3 +33,9 @@ openthread:
 xiao_openthread_sed:
 
 api:
+
+i2c:
+  sda: P0.04
+  scl: P0.05
+  frequency: 100kHz
+  scan: false

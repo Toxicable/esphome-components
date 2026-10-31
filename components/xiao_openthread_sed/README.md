@@ -31,3 +31,5 @@ xiao_openthread_sed:
 that value into Zephyr Kconfig for startup, before ESPHome applies its runtime
 setting. Keep application report cadence, awake work, and any timed wait in the
 project YAML, beside the sensors and API behavior they serve.
+
+When the application configures I2C, this component also enables Zephyr device power management. `esphome::xiao_openthread_sed::suspend_i2c()` disables the XIAO i2c1 controller and releases SDA/SCL with no pulls; `resume_i2c()` restores it. Both return success/failure and accept an already requested state. The application must exclusively own the bus, suspend it before removing sensor power, and restore sensor power before resuming the bus. GPIO control and sampling/wait timing remain in project YAML.

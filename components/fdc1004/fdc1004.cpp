@@ -1,5 +1,7 @@
 #include "fdc1004.h"
 
+#include <limits>
+
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
@@ -161,24 +163,48 @@ void FDC1004Component::dump_config() {
 }
 
 void FDC1004Component::update() {
+  (void)this->read_measurements();
+}
+
+bool FDC1004Component::reinitialize() {
+  this->initialized_ = false;
+  this->next_init_retry_ms_ = millis();
+  if (this->is_failed() || !this->initialize_()) {
+    this->status_set_warning();
+    return false;
+  }
+  this->status_clear_warning();
+  return true;
+}
+
+void FDC1004Component::invalidate_measurements() {
+  this->status_set_warning();
+  for (auto* sensor : this->channel_sensors_) {
+    if (sensor != nullptr) {
+      sensor->publish_state(std::numeric_limits<float>::quiet_NaN());
+    }
+  }
+}
+
+bool FDC1004Component::read_measurements() {
   if (this->is_failed()) {
-    return;
+    return false;
   }
 
   const uint32_t now = millis();
   if (!this->initialized_) {
     if (static_cast<int32_t>(now - this->next_init_retry_ms_) < 0) {
-      return;
+      return false;
     }
 
     if (!this->initialize_()) {
       this->status_set_warning();
       this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
-      return;
+      return false;
     }
 
     this->status_clear_warning();
-    return;
+    return false;
   }
 
   uint16_t fdc_conf = 0;
@@ -187,7 +213,7 @@ void FDC1004Component::update() {
     this->initialized_ = false;
     this->status_set_warning();
     this->next_init_retry_ms_ = now + INIT_RETRY_INTERVAL_MS;
-    return;
+    return false;
   }
 
   // A power cycle can reset the chip between polls without causing an I2C error.
@@ -196,7 +222,7 @@ void FDC1004Component::update() {
     this->initialized_ = false;
     this->status_set_warning();
     this->next_init_retry_ms_ = now;
-    return;
+    return false;
   }
 
   uint8_t done_mask = 0;
@@ -210,7 +236,7 @@ void FDC1004Component::update() {
   done_mask &= this->enabled_mask_;
   if (done_mask == 0) {
     ESP_LOGV(TAG, "No completed measurements yet");
-    return;
+    return false;
   }
 
   bool all_reads_ok = true;
@@ -236,6 +262,7 @@ void FDC1004Component::update() {
   } else {
     this->status_set_warning();
   }
+  return all_reads_ok && done_mask == this->enabled_mask_;
 }
 
 bool FDC1004Component::initialize_() {

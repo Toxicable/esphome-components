@@ -6,6 +6,7 @@ cd "$repo_root"
 
 python3 tools/check_component_inventory.py
 python3 tools/check_register_models.py
+python3 tools/check_sensor_power.py
 
 python3 tools/check_core_purity.py \
   components/component_common \

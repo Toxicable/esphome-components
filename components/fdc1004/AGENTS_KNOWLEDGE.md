@@ -14,3 +14,4 @@ Shared ESPHome adapter for `toxic-boards/boards/CapacitiveLevelSensor`, revision
 - Board EN and dedicated-bus high-impedance sequencing belong to the host. This component does not control power or convert capacitance to water level.
 - Use integer `sample_rate` values only; no alternate string spellings.
 - The nRF52840/Zephyr consumer is `toxic-boards/projects/HydroponicsResoviourLevel/esphome.yaml`. Its `PROJECT.yaml` owns application population and EN sequencing; do not duplicate those choices in the shared driver.
+- Power-cycling hosts call `reinitialize()` after restoring supply/bus, wait for conversion, then `read_measurements()`; it returns true only when every enabled channel was freshly read. Publish unknown through `invalidate_measurements()` on cycle failure.

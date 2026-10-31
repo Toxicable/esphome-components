@@ -19,6 +19,9 @@ async def to_code(config):
     zephyr_add_prj_conf("OPENTHREAD_POLL_PERIOD", poll_period.total_milliseconds)
     zephyr_add_prj_conf("USB_DEVICE_STACK", False)
     zephyr_add_prj_conf("SERIAL", False)
+    if "i2c" in CORE.config:
+        # The application suspends TWIM before switching off sensor power.
+        zephyr_add_prj_conf("PM_DEVICE", True)
     # Disabled drivers must also have disabled device-tree nodes. The Zephyr
     # logger references those nodes even when baud_rate is zero.
     zephyr_add_overlay('''

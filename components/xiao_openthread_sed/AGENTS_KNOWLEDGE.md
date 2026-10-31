@@ -5,3 +5,4 @@
 - Keep app reporting, wake cadence, and timed waits in project YAML; this component has no scheduler.
 - Disable uart0/uart1 device-tree nodes together with SERIAL; otherwise Zephyr's logger can reference an unbuilt UART device even with baud_rate: 0. API-only logging must not enable a UART or USB stack.
 - Known consumers include `toxic-boards/projects/dev-xiaosolar/esphome.yaml` and `toxic-boards/projects/HydroponicsResoviourLevel/esphome.yaml`; compile both when changing SED settings.
+- With I2C configured, enable Zephyr PM_DEVICE and expose `suspend_i2c()` / `resume_i2c()` for the XIAO i2c1 controller. Suspend disables TWIM and applies the no-pull sleep pinctrl state. The application must own the bus exclusively and suspend it before disabling sensor power; a failed suspend must not cut the supply.

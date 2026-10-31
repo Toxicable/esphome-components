@@ -5,3 +5,5 @@ Read `AGENTS_KNOWLEDGE.md`, then `__init__.py` for the Zephyr settings and
 
 `test_config.yaml` covers API-only logging with UART/USB disabled. The real
 consumers in `AGENTS_KNOWLEDGE.md` cover the application scheduler and I2C sensor.
+
+`i2c_power.h/.cpp` owns the dedicated-bus suspend/resume operations; application YAML owns supply GPIO and measurement timing.

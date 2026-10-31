@@ -20,6 +20,9 @@ class FDC1004Component : public PollingComponent, public i2c::I2CDevice {
   void set_offset_sensor(uint8_t index, sensor::Sensor* sensor);
   void set_sample_rate(uint16_t sample_rate_sps);
   void tare_to_current();
+  bool reinitialize();
+  bool read_measurements();
+  void invalidate_measurements();
 
   void setup() override;
   void update() override;
