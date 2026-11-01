@@ -1,5 +1,5 @@
 #ifdef USE_ZEPHYR
-#include "ota_zephyr_mcumgr.h"
+#include "toxic_solar_ota.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 #include <zephyr/sys/math_extras.h>
@@ -20,14 +20,14 @@ struct img_mgmt_upload_req {
 };
 // NOLINTEND(readability-identifier-naming,google-runtime-int)
 
-namespace esphome::zephyr_mcumgr {
+namespace esphome::toxic_solar {
 
 static_assert(sizeof(struct img_mgmt_upload_action) == 8, "ABI mismatch");
 static_assert(sizeof(struct img_mgmt_upload_req) == 8, "ABI mismatch");
 static_assert(offsetof(struct img_mgmt_upload_req, image) == 0, "ABI mismatch");
 static_assert(offsetof(struct img_mgmt_upload_req, off) == 4, "ABI mismatch");
 
-static const char *const TAG = "zephyr_mcumgr";
+static const char *const TAG = "toxic_solar";
 static OTAComponent *global_ota_component;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 static enum mgmt_cb_return mcumgr_img_mgmt_cb(uint32_t event, enum mgmt_cb_return prev_status, int32_t *rc,
@@ -139,5 +139,5 @@ void OTAComponent::update_stopped() {
   });
 }
 
-}  // namespace esphome::zephyr_mcumgr
+}  // namespace esphome::toxic_solar
 #endif

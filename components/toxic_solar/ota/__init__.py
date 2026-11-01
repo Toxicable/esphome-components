@@ -28,7 +28,7 @@ from esphome.types import ConfigType
 CODEOWNERS = ["@tomaszduda23"]
 DEPENDENCIES = ["zephyr"]
 
-ZephyrMcumgrOTAComponent = cg.esphome_ns.namespace("zephyr_mcumgr").class_(
+ToxicSolarOTAComponent = cg.esphome_ns.namespace("toxic_solar").class_(
     "OTAComponent", OTAComponent
 )
 
@@ -56,7 +56,7 @@ UARTS = {
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.GenerateID(): cv.declare_id(ZephyrMcumgrOTAComponent),
+            cv.GenerateID(): cv.declare_id(ToxicSolarOTAComponent),
             cv.Optional(CONF_TRANSPORT, default={CONF_BLE: True}): cv.Schema(
                 {
                     cv.Optional(CONF_BLE, default=False): cv.boolean,

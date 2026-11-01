@@ -6,7 +6,7 @@
 
 struct img_mgmt_upload_check;
 
-namespace esphome::zephyr_mcumgr {
+namespace esphome::toxic_solar {
 
 class OTAComponent : public ota::OTAComponent {
  public:
@@ -25,5 +25,5 @@ class OTAComponent : public ota::OTAComponent {
   mgmt_callback img_mgmt_callback_{};
 };
 
-}  // namespace esphome::zephyr_mcumgr
+}  // namespace esphome::toxic_solar
 #endif
